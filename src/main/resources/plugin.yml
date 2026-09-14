@@ -4,6 +4,8 @@ version: '${version}'
 main: dev.vapee.core.VapeeCore
 api-version: '1.21.11'
 load: POSTWORLD
+depend:
+  - LuckPerms
 
 commands:
   vapeecore:

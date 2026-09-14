@@ -4,6 +4,8 @@ import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
+import dev.vapee.core.permission.LuckPermsService;
+import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import org.bukkit.command.PluginCommand;
@@ -16,6 +18,7 @@ public final class VapeeCore extends JavaPlugin {
     private ConfigService configService;
     private MessageService messageService;
     private ModuleManager moduleManager;
+    private PermissionModule permissionModule;
     private PlayerModule playerModule;
 
     @Override
@@ -26,11 +29,16 @@ public final class VapeeCore extends JavaPlugin {
         messageService = new MessageService(configService);
         moduleManager = new ModuleManager(getLogger());
 
+        permissionModule = new PermissionModule(this);
         playerModule = new PlayerModule(this, configService, messageService);
+        moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
         moduleManager.enableAll();
 
-        registerCommands(playerModule.getPlayerService());
+        registerCommands(
+                playerModule.getPlayerService(),
+                permissionModule.getLuckPermsService()
+        );
 
         getLogger().info("VapeeCore " + getPluginMeta().getVersion()
                 + " enabled with " + moduleManager.getModules().size() + " module(s)."
@@ -46,7 +54,7 @@ public final class VapeeCore extends JavaPlugin {
         getLogger().info("VapeeCore disabled.");
     }
 
-    private void registerCommands(PlayerService playerService) {
+    private void registerCommands(PlayerService playerService, LuckPermsService luckPermsService) {
         PluginCommand coreCommand = Objects.requireNonNull(
                 getCommand("vapeecore"),
                 "Command 'vapeecore' is missing from plugin.yml"
@@ -56,7 +64,8 @@ public final class VapeeCore extends JavaPlugin {
                 configService,
                 messageService,
                 moduleManager,
-                playerService
+                playerService,
+                luckPermsService
         ));
     }
 }

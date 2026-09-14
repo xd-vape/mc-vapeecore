@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class PlayerService {
@@ -88,8 +89,11 @@ public final class PlayerService {
             try {
                 repository.save(player);
             } catch (RuntimeException exception) {
-                logger.warning("Player " + player.getUniqueId()
-                        + " could not be saved during save-all; continuing with remaining players."
+                logger.log(
+                        Level.SEVERE,
+                        "Player " + player.getUniqueId()
+                                + " could not be saved during save-all; continuing with remaining players.",
+                        exception
                 );
             }
         }

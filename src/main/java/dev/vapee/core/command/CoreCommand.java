@@ -4,10 +4,12 @@ import dev.vapee.core.VapeeCore;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
+import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.player.PlayerService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Locale;
@@ -22,19 +24,22 @@ public final class CoreCommand implements CommandExecutor {
     private final MessageService messageService;
     private final ModuleManager moduleManager;
     private final PlayerService playerService;
+    private final LuckPermsService luckPermsService;
 
     public CoreCommand(
             VapeeCore plugin,
             ConfigService configService,
             MessageService messageService,
             ModuleManager moduleManager,
-            PlayerService playerService
+            PlayerService playerService,
+            LuckPermsService luckPermsService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.moduleManager = Objects.requireNonNull(moduleManager, "moduleManager");
         this.playerService = Objects.requireNonNull(playerService, "playerService");
+        this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
     }
 
     @Override
@@ -81,6 +86,14 @@ public final class CoreCommand implements CommandExecutor {
         messageService.send(sender, "<gray>Loaded Players:</gray> <white>"
                 + playerService.getLoadedPlayers().size() + "</white>"
         );
+        messageService.send(sender, "<gray>LuckPerms:</gray> <green>Connected</green>");
+        if (sender instanceof Player player) {
+            luckPermsService.getPrimaryGroup(player.getUniqueId()).ifPresent(primaryGroup ->
+                    messageService.send(sender, "<gray>Primary Group:</gray> <white>"
+                            + primaryGroup + "</white>"
+                    )
+            );
+        }
         String debugStatus = configService.isDebugEnabled() ? "<green>Enabled</green>" : "<red>Disabled</red>";
         messageService.send(sender, "<gray>Debug:</gray> " + debugStatus);
     }
