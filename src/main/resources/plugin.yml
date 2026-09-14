@@ -13,8 +13,25 @@ commands:
       - core
     description: Main command for VapeeCore
     usage: /vapeecore [version|reload]
+  spawn:
+    description: Teleports a player to the lobby spawn
+    usage: /spawn
+    permission: vapeecore.lobby.spawn
+  setspawn:
+    description: Sets the lobby spawn to the current position
+    usage: /setspawn
+    permission: vapeecore.lobby.setspawn
 
 permissions:
   vapeecore.admin:
     description: Administrative VapeeCore permission
+    default: op
+  vapeecore.lobby.spawn:
+    description: Allows teleporting to the lobby spawn
+    default: true
+  vapeecore.lobby.setspawn:
+    description: Allows setting the lobby spawn
+    default: op
+  vapeecore.lobby.build:
+    description: Bypasses lobby build, drop and pickup protection
     default: op

@@ -2,6 +2,7 @@ package dev.vapee.core;
 
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.config.ConfigService;
+import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.permission.LuckPermsService;
@@ -20,6 +21,7 @@ public final class VapeeCore extends JavaPlugin {
     private ModuleManager moduleManager;
     private PermissionModule permissionModule;
     private PlayerModule playerModule;
+    private LobbyModule lobbyModule;
 
     @Override
     public void onEnable() {
@@ -31,8 +33,10 @@ public final class VapeeCore extends JavaPlugin {
 
         permissionModule = new PermissionModule(this);
         playerModule = new PlayerModule(this, configService, messageService);
+        lobbyModule = new LobbyModule(this, messageService);
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
+        moduleManager.register(lobbyModule);
         moduleManager.enableAll();
 
         registerCommands(

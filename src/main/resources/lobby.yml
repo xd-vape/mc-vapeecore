@@ -1,0 +1,13 @@
+teleport:
+  on-join: true
+  on-respawn: true
+
+void-rescue: true
+
+protection:
+  damage: true
+  hunger: true
+  block-break: true
+  block-place: true
+  item-drop: true
+  item-pickup: true

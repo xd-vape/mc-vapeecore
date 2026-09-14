@@ -23,6 +23,7 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 
 - `command`: Commands und deren Subcommands
 - `config`: zentraler Zugriff auf die Bukkit-Konfiguration
+- `lobby`: Lobby-Spawn, Teleports und auf die Lobby-Welt begrenzter Schutz
 - `message`: Adventure- und MiniMessage-Ausgabe
 - `module`: kleiner Lifecycle-Extension-Point für zukünftige Systeme
 - `permission`: lesender Zugriff auf LuckPerms-Gruppen und Meta-Daten
@@ -34,4 +35,6 @@ Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Zum Profil gehören
 
 Permissions, Gruppen, Primary Groups, Prefixe, Suffixe, Meta-Daten, Contexts und Vererbung werden ausschließlich von LuckPerms verwaltet. VapeeCore liest die bereits von LuckPerms aufgelösten Daten und speichert sie weder im `CorePlayer` noch in den Player-YAML-Dateien. Normale Permission-Checks erfolgen weiterhin über Bukkit/Paper.
 
-Lobby, Chat, Economy, Scoreboard, Tablist, Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.
+Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. Join-Teleport, Lobby-Respawn, Void Rescue sowie Damage-, Hunger-, Block- und Item-Schutz gelten ausschließlich in der Welt aus `spawn.world`. Spieler mit `vapeecore.lobby.build` dürfen dort bauen sowie Items droppen und aufnehmen. `/core reload` lädt weiterhin nur `config.yml` neu.
+
+Chat, Economy, Scoreboard, Tablist, Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.
