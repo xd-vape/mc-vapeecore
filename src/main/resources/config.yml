@@ -1,0 +1,8 @@
+server:
+  name: "Vapee Community"
+
+messages:
+  prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
+
+settings:
+  debug: false
