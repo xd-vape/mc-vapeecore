@@ -3,6 +3,8 @@ package dev.vapee.core.command;
 import dev.vapee.core.VapeeCore;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.module.ModuleManager;
+import dev.vapee.core.player.PlayerService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -18,11 +20,21 @@ public final class CoreCommand implements CommandExecutor {
     private final VapeeCore plugin;
     private final ConfigService configService;
     private final MessageService messageService;
+    private final ModuleManager moduleManager;
+    private final PlayerService playerService;
 
-    public CoreCommand(VapeeCore plugin, ConfigService configService, MessageService messageService) {
+    public CoreCommand(
+            VapeeCore plugin,
+            ConfigService configService,
+            MessageService messageService,
+            ModuleManager moduleManager,
+            PlayerService playerService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.moduleManager = Objects.requireNonNull(moduleManager, "moduleManager");
+        this.playerService = Objects.requireNonNull(playerService, "playerService");
     }
 
     @Override
@@ -63,6 +75,14 @@ public final class CoreCommand implements CommandExecutor {
         messageService.send(sender, "<gray>Version:</gray> <white>" + plugin.getPluginMeta().getVersion() + "</white>");
         messageService.send(sender, "<gray>Server:</gray> <white>" + plugin.getServer().getVersion() + "</white>");
         messageService.send(sender, "<gray>Status:</gray> <green>Running</green>");
+        messageService.send(sender, "<gray>Active Modules:</gray> <white>"
+                + moduleManager.getEnabledModules().size() + "</white>"
+        );
+        messageService.send(sender, "<gray>Loaded Players:</gray> <white>"
+                + playerService.getLoadedPlayers().size() + "</white>"
+        );
+        String debugStatus = configService.isDebugEnabled() ? "<green>Enabled</green>" : "<red>Disabled</red>";
+        messageService.send(sender, "<gray>Debug:</gray> " + debugStatus);
     }
 
     private void sendVersion(CommandSender sender) {

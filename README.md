@@ -1,6 +1,6 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt stellt aktuell ein kleines, erweiterbares Grundgerüst mit zentraler Konfiguration, MiniMessage-Nachrichten und einem internen Modul-Extension-Point bereit.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt stellt aktuell ein kleines, erweiterbares Grundgerüst mit zentraler Konfiguration, MiniMessage-Nachrichten, einem internen Modul-Extension-Point und einer lokalen Player Foundation bereit.
 
 ## Voraussetzungen
 
@@ -23,5 +23,9 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `listener`: schlanke Paper-Event-Listener
 - `message`: Adventure- und MiniMessage-Ausgabe
 - `module`: kleiner Lifecycle-Extension-Point für zukünftige Systeme
+- `player`: Player-Domainmodell, aktiver Cache und Join-/Quit-Lifecycle
+- `player.repository`: austauschbare Persistence mit lokaler YAML-Implementierung
+
+Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Die lokale Persistence legt pro UUID eine Datei unter `plugins/VapeeCore/players/<uuid>.yml` an. Bukkit-`Player`-Instanzen werden nicht im Domainmodell gespeichert.
 
 Größere Funktionen werden erst bei konkretem Bedarf als klar abgegrenzte Features ergänzt. Minigames können später als eigenständige Module oder separate Plugins entwickelt werden.

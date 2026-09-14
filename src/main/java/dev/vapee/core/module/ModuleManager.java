@@ -71,6 +71,10 @@ public final class ModuleManager {
         return List.copyOf(modules);
     }
 
+    public List<CoreModule> getEnabledModules() {
+        return List.copyOf(enabledModules);
+    }
+
     private void disableEnabledModules(String phase) {
         for (int index = enabledModules.size() - 1; index >= 0; index--) {
             CoreModule module = enabledModules.get(index);
