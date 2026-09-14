@@ -4,6 +4,7 @@ import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.repository.FilePlayerRepository;
+import dev.vapee.core.player.settings.PlayerSettingsService;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -18,6 +19,7 @@ public final class PlayerModule implements CoreModule {
 
     private FilePlayerRepository repository;
     private PlayerService playerService;
+    private PlayerSettingsService playerSettingsService;
     private PlayerListener playerListener;
 
     public PlayerModule(JavaPlugin plugin, ConfigService configService, MessageService messageService) {
@@ -38,6 +40,7 @@ public final class PlayerModule implements CoreModule {
         newRepository.initialize();
 
         PlayerService newPlayerService = new PlayerService(newRepository, plugin.getLogger());
+        PlayerSettingsService newPlayerSettingsService = new PlayerSettingsService(newPlayerService);
         PlayerListener newPlayerListener = new PlayerListener(
                 newPlayerService,
                 configService,
@@ -49,6 +52,7 @@ public final class PlayerModule implements CoreModule {
 
         repository = newRepository;
         playerService = newPlayerService;
+        playerSettingsService = newPlayerSettingsService;
         playerListener = newPlayerListener;
     }
 
@@ -63,11 +67,16 @@ public final class PlayerModule implements CoreModule {
         }
 
         playerListener = null;
+        playerSettingsService = null;
         playerService = null;
         repository = null;
     }
 
     public PlayerService getPlayerService() {
         return Objects.requireNonNull(playerService, "PlayerModule is not enabled");
+    }
+
+    public PlayerSettingsService getPlayerSettingsService() {
+        return Objects.requireNonNull(playerSettingsService, "PlayerModule is not enabled");
     }
 }

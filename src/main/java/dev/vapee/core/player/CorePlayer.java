@@ -1,5 +1,7 @@
 package dev.vapee.core.player;
 
+import dev.vapee.core.player.settings.PlayerSettings;
+
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -8,14 +10,22 @@ public final class CorePlayer {
 
     private final UUID uniqueId;
     private final Instant firstJoin;
+    private final PlayerSettings settings;
     private String name;
     private Instant lastJoin;
 
-    public CorePlayer(UUID uniqueId, String name, Instant firstJoin, Instant lastJoin) {
+    public CorePlayer(
+            UUID uniqueId,
+            String name,
+            Instant firstJoin,
+            Instant lastJoin,
+            PlayerSettings settings
+    ) {
         this.uniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
         this.name = requireName(name);
         this.firstJoin = Objects.requireNonNull(firstJoin, "firstJoin");
         this.lastJoin = requireValidLastJoin(lastJoin);
+        this.settings = Objects.requireNonNull(settings, "settings");
     }
 
     public UUID getUniqueId() {
@@ -32,6 +42,10 @@ public final class CorePlayer {
 
     public Instant getLastJoin() {
         return lastJoin;
+    }
+
+    public PlayerSettings getSettings() {
+        return settings;
     }
 
     public void updateName(String name) {

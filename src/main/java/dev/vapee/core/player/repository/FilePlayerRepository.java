@@ -1,6 +1,7 @@
 package dev.vapee.core.player.repository;
 
 import dev.vapee.core.player.CorePlayer;
+import dev.vapee.core.player.settings.PlayerSettings;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -81,6 +82,9 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("name", player.getName());
             configuration.set("first-join", player.getFirstJoin().toEpochMilli());
             configuration.set("last-join", player.getLastJoin().toEpochMilli());
+            configuration.set("settings.scoreboard", player.getSettings().isScoreboardEnabled());
+            configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
+            configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
             configuration.save(temporaryFile.toFile());
 
             replacePlayerFile(temporaryFile, playerFile);
@@ -105,13 +109,15 @@ public final class FilePlayerRepository implements PlayerRepository {
 
         long firstJoinMillis = readEpochMillis(configuration, playerFile, "first-join");
         long lastJoinMillis = readEpochMillis(configuration, playerFile, "last-join");
+        PlayerSettings settings = readSettings(uniqueId, playerFile, configuration);
 
         try {
             return new CorePlayer(
                     uniqueId,
                     name,
                     Instant.ofEpochMilli(firstJoinMillis),
-                    Instant.ofEpochMilli(lastJoinMillis)
+                    Instant.ofEpochMilli(lastJoinMillis),
+                    settings
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -124,6 +130,70 @@ public final class FilePlayerRepository implements PlayerRepository {
             throw invalidPlayerFile(playerFile, "Missing or invalid '" + key + "'");
         }
         return ((Number) value).longValue();
+    }
+
+    private PlayerSettings readSettings(
+            UUID uniqueId,
+            Path playerFile,
+            YamlConfiguration configuration
+    ) {
+        PlayerSettings settings = PlayerSettings.defaults();
+        if (!configuration.contains("settings")) {
+            return settings;
+        }
+        if (!configuration.isConfigurationSection("settings")) {
+            logInvalidSetting(uniqueId, playerFile, "settings", "expected a YAML section");
+            return settings;
+        }
+
+        settings.setScoreboardEnabled(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.scoreboard",
+                settings.isScoreboardEnabled()
+        ));
+        settings.setSoundsEnabled(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.sounds",
+                settings.isSoundsEnabled()
+        ));
+        settings.setPrivateMessagesEnabled(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.private-messages",
+                settings.isPrivateMessagesEnabled()
+        ));
+        return settings;
+    }
+
+    private boolean readBooleanSetting(
+            UUID uniqueId,
+            Path playerFile,
+            YamlConfiguration configuration,
+            String key,
+            boolean defaultValue
+    ) {
+        if (!configuration.contains(key)) {
+            return defaultValue;
+        }
+
+        Object value = configuration.get(key);
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+
+        logInvalidSetting(uniqueId, playerFile, key, "expected a boolean");
+        return defaultValue;
+    }
+
+    private void logInvalidSetting(UUID uniqueId, Path playerFile, String key, String reason) {
+        logger.warning("Invalid player setting '" + key + "' for " + uniqueId + " in "
+                + playerFile + ": " + reason + "; using its default value."
+        );
     }
 
     private void replacePlayerFile(Path temporaryFile, Path playerFile) throws IOException {

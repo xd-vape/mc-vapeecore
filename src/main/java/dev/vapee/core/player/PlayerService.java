@@ -1,6 +1,7 @@
 package dev.vapee.core.player;
 
 import dev.vapee.core.player.repository.PlayerRepository;
+import dev.vapee.core.player.settings.PlayerSettings;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -45,7 +46,7 @@ public final class PlayerService {
             return player;
         }
 
-        CorePlayer player = new CorePlayer(uniqueId, name, now, now);
+        CorePlayer player = new CorePlayer(uniqueId, name, now, now, PlayerSettings.defaults());
         repository.save(player);
         loadedPlayers.put(uniqueId, player);
         return player;
