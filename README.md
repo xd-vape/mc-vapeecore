@@ -1,6 +1,6 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine Coin-Economy und eine lesende LuckPerms-Integration bereit.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine Coin-Economy, globalen Chat und eine lesende LuckPerms-Integration bereit.
 
 ## Voraussetzungen
 
@@ -22,6 +22,7 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 ## Architektur
 
 - `command`: Commands und deren Subcommands
+- `chat`: globaler Adventure-Chat mit LuckPerms-Prefix und -Suffix
 - `config`: zentraler Zugriff auf die Bukkit-Konfiguration
 - `economy`: internes Coin-Wallet, EconomyService und Coin-Commands
 - `lobby`: Lobby-Spawn, Teleports und auf die Lobby-Welt begrenzter Schutz
@@ -52,4 +53,6 @@ Permissions, Gruppen, Primary Groups, Prefixe, Suffixe, Meta-Daten, Contexts und
 
 Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. Join-Teleport, Lobby-Respawn, Void Rescue sowie Damage-, Hunger-, Block- und Item-Schutz gelten ausschließlich in der Welt aus `spawn.world`. Spieler mit `vapeecore.lobby.build` dürfen dort bauen sowie Items droppen und aufnehmen. `/core reload` lädt weiterhin nur `config.yml` neu.
 
-Chat, Scoreboard, Tablist, Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.
+Das `ChatModule` formatiert den globalen Chat über Papers `AsyncChatEvent` und einen viewer-unabhängigen `ChatRenderer`. Das Format liegt in `plugins/VapeeCore/chat.yml`; LuckPerms-Prefix und -Suffix können dort als `legacy-ampersand`, `mini-message` oder `plain` interpretiert werden. Das Serverformat ist MiniMessage, die originale Playernachricht wird jedoch als Adventure Component eingesetzt und niemals als MiniMessage ausgewertet. Private Nachrichten und Chat-Channels sind nicht Bestandteil dieser Phase. `/core reload` lädt weder `lobby.yml` noch `chat.yml` neu.
+
+Scoreboard, Tablist, Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.

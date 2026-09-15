@@ -4,6 +4,7 @@ import dev.vapee.core.config.ConfigService;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 
 import java.util.Objects;
 
@@ -19,6 +20,13 @@ public final class MessageService {
 
     public Component deserialize(String message) {
         return miniMessage.deserialize(Objects.requireNonNull(message, "message"));
+    }
+
+    public Component deserialize(String message, TagResolver resolver) {
+        return miniMessage.deserialize(
+                Objects.requireNonNull(message, "message"),
+                Objects.requireNonNull(resolver, "resolver")
+        );
     }
 
     public void send(Audience audience, String message) {

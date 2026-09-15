@@ -1,5 +1,6 @@
 package dev.vapee.core;
 
+import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyModule;
@@ -24,6 +25,7 @@ public final class VapeeCore extends JavaPlugin {
     private PlayerModule playerModule;
     private EconomyModule economyModule;
     private LobbyModule lobbyModule;
+    private ChatModule chatModule;
 
     @Override
     public void onEnable() {
@@ -37,10 +39,12 @@ public final class VapeeCore extends JavaPlugin {
         playerModule = new PlayerModule(this, configService, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService);
         lobbyModule = new LobbyModule(this, messageService);
+        chatModule = new ChatModule(this, permissionModule, messageService);
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
         moduleManager.register(economyModule);
         moduleManager.register(lobbyModule);
+        moduleManager.register(chatModule);
         moduleManager.enableAll();
 
         registerCommands(

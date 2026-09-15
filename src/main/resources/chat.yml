@@ -1,0 +1,6 @@
+enabled: true
+
+format: "<prefix><name><suffix><dark_gray> » </dark_gray><white><message></white>"
+
+luckperms-meta:
+  format: "legacy-ampersand"
