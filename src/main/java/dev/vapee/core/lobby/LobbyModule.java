@@ -5,13 +5,15 @@ import dev.vapee.core.lobby.command.SpawnCommand;
 import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.reload.ReloadParticipant;
+import dev.vapee.core.reload.ReloadPlan;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
 
-public final class LobbyModule implements CoreModule {
+public final class LobbyModule implements CoreModule, ReloadParticipant {
 
     private final JavaPlugin plugin;
     private final MessageService messageService;
@@ -82,6 +84,31 @@ public final class LobbyModule implements CoreModule {
 
     public LobbyService getLobbyService() {
         return Objects.requireNonNull(lobbyService, "LobbyModule is not enabled");
+    }
+
+    @Override
+    public String getReloadName() {
+        return "lobby.yml";
+    }
+
+    @Override
+    public ReloadPlan prepareReload() {
+        LobbyConfig activeConfig = Objects.requireNonNull(lobbyConfig, "LobbyModule is not enabled");
+        LobbyService activeService = Objects.requireNonNull(lobbyService, "LobbyModule is not enabled");
+        LobbyConfig.State previousConfigState = activeConfig.getState();
+        LobbyConfig.State preparedConfigState = activeConfig.prepareReloadState();
+        var previousSpawn = activeService.getSpawn();
+
+        return ReloadPlan.of(
+                () -> {
+                    activeConfig.applyState(preparedConfigState);
+                    activeService.applySpawn(preparedConfigState.spawn());
+                },
+                () -> {
+                    activeConfig.applyState(previousConfigState);
+                    activeService.applySpawn(previousSpawn);
+                }
+        );
     }
 
     private PluginCommand requireCommand(String name) {

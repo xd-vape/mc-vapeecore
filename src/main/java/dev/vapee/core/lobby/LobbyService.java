@@ -77,9 +77,13 @@ public final class LobbyService {
         );
 
         lobbyConfig.saveSpawn(newSpawn);
-        spawn = newSpawn;
-        warnedMissingWorldName = null;
+        applySpawn(Optional.of(newSpawn));
         return true;
+    }
+
+    public void applySpawn(Optional<LobbySpawn> newSpawn) {
+        spawn = Objects.requireNonNull(newSpawn, "newSpawn").orElse(null);
+        warnedMissingWorldName = null;
     }
 
     public boolean teleportToSpawn(Player player) {

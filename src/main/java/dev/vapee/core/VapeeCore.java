@@ -12,9 +12,11 @@ import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.presentation.PresentationModule;
+import dev.vapee.core.reload.ReloadService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.List;
 import java.util.Objects;
 
 public final class VapeeCore extends JavaPlugin {
@@ -59,9 +61,14 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(presentationModule);
         moduleManager.enableAll();
 
+        ReloadService reloadService = new ReloadService(
+                getLogger(),
+                List.of(configService, lobbyModule, chatModule, presentationModule)
+        );
         registerCommands(
                 playerModule.getPlayerService(),
-                permissionModule.getLuckPermsService()
+                permissionModule.getLuckPermsService(),
+                reloadService
         );
 
         getLogger().info("VapeeCore " + getPluginMeta().getVersion()
@@ -78,7 +85,11 @@ public final class VapeeCore extends JavaPlugin {
         getLogger().info("VapeeCore disabled.");
     }
 
-    private void registerCommands(PlayerService playerService, LuckPermsService luckPermsService) {
+    private void registerCommands(
+            PlayerService playerService,
+            LuckPermsService luckPermsService,
+            ReloadService reloadService
+    ) {
         PluginCommand coreCommand = Objects.requireNonNull(
                 getCommand("vapeecore"),
                 "Command 'vapeecore' is missing from plugin.yml"
@@ -89,7 +100,8 @@ public final class VapeeCore extends JavaPlugin {
                 messageService,
                 moduleManager,
                 playerService,
-                luckPermsService
+                luckPermsService,
+                reloadService
         ));
     }
 }

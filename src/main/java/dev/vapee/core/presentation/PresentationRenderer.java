@@ -14,6 +14,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,15 +38,12 @@ public final class PresentationRenderer {
     private final MessageService messageService;
     private final LuckPermsService luckPermsService;
     private final EconomyService economyService;
-    private final PresentationConfig.MetaFormat metaFormat;
     private final Logger logger;
     private final LegacyComponentSerializer legacySerializer;
     private final MiniMessage strictMiniMessage;
-    private final String scoreboardTitle;
-    private final List<String> scoreboardLines;
-    private final String tablistNameFormat;
-    private final List<String> tablistHeader;
-    private final List<String> tablistFooter;
+    private final Path configFile;
+
+    private volatile RenderState state;
 
     public PresentationRenderer(
             JavaPlugin plugin,
@@ -61,52 +59,69 @@ public final class PresentationRenderer {
         this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
         PresentationConfig validatedConfig = Objects.requireNonNull(presentationConfig, "presentationConfig");
-        this.metaFormat = validatedConfig.getMetaFormat();
         this.logger = plugin.getLogger();
         this.legacySerializer = LegacyComponentSerializer.legacyAmpersand();
         this.strictMiniMessage = MiniMessage.builder().strict(true).build();
+        this.configFile = validatedConfig.getConfigFile();
+        this.state = prepareState(validatedConfig.getState());
+    }
 
-        this.scoreboardTitle = validateTemplate(
+    public RenderState getState() {
+        return state;
+    }
+
+    public RenderState prepareState(PresentationConfig.State configState) {
+        PresentationConfig.State validatedConfigState = Objects.requireNonNull(configState, "configState");
+        String scoreboardTitle = validateTemplate(
                 "scoreboard.title",
-                validatedConfig.getScoreboardTitle(),
-                SCOREBOARD_TITLE_FALLBACK,
-                validatedConfig
+                validatedConfigState.scoreboardTitle(),
+                SCOREBOARD_TITLE_FALLBACK
         );
-        this.scoreboardLines = validateTemplates(
+        List<String> scoreboardLines = validateTemplates(
                 "scoreboard.lines",
-                validatedConfig.getScoreboardLines(),
-                SCOREBOARD_LINE_FALLBACK,
-                validatedConfig
+                validatedConfigState.scoreboardLines(),
+                SCOREBOARD_LINE_FALLBACK
         );
-        this.tablistNameFormat = validateTemplate(
+        String tablistNameFormat = validateTemplate(
                 "tablist.name-format",
-                validatedConfig.getTablistNameFormat(),
-                TABLIST_NAME_FALLBACK,
-                validatedConfig
+                validatedConfigState.tablistNameFormat(),
+                TABLIST_NAME_FALLBACK
         );
-        this.tablistHeader = validateTemplates(
+        List<String> tablistHeader = validateTemplates(
                 "tablist.header",
-                validatedConfig.getTablistHeader(),
-                TABLIST_HEADER_FALLBACK,
-                validatedConfig
+                validatedConfigState.tablistHeader(),
+                TABLIST_HEADER_FALLBACK
         );
-        this.tablistFooter = validateTemplates(
+        List<String> tablistFooter = validateTemplates(
                 "tablist.footer",
-                validatedConfig.getTablistFooter(),
-                TABLIST_FOOTER_FALLBACK,
-                validatedConfig
+                validatedConfigState.tablistFooter(),
+                TABLIST_FOOTER_FALLBACK
         );
+
+        return new RenderState(
+                validatedConfigState.metaFormat(),
+                scoreboardTitle,
+                scoreboardLines,
+                tablistNameFormat,
+                tablistHeader,
+                tablistFooter
+        );
+    }
+
+    public void applyState(RenderState newState) {
+        state = Objects.requireNonNull(newState, "newState");
     }
 
     public RenderedPresentation render(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
-        TagResolver placeholders = createPlaceholders(validatedPlayer);
+        RenderState currentState = state;
+        TagResolver placeholders = createPlaceholders(validatedPlayer, currentState.metaFormat());
 
-        Component renderedScoreboardTitle = renderTemplate(scoreboardTitle, placeholders);
-        List<Component> renderedScoreboardLines = renderTemplates(scoreboardLines, placeholders);
-        Component renderedTablistName = renderTemplate(tablistNameFormat, placeholders);
-        Component renderedTablistHeader = renderMultiline(tablistHeader, placeholders);
-        Component renderedTablistFooter = renderMultiline(tablistFooter, placeholders);
+        Component renderedScoreboardTitle = renderTemplate(currentState.scoreboardTitle(), placeholders);
+        List<Component> renderedScoreboardLines = renderTemplates(currentState.scoreboardLines(), placeholders);
+        Component renderedTablistName = renderTemplate(currentState.tablistNameFormat(), placeholders);
+        Component renderedTablistHeader = renderMultiline(currentState.tablistHeader(), placeholders);
+        Component renderedTablistFooter = renderMultiline(currentState.tablistFooter(), placeholders);
 
         return new RenderedPresentation(
                 renderedScoreboardTitle,
@@ -118,6 +133,10 @@ public final class PresentationRenderer {
     }
 
     public Component renderMeta(String rawMeta) {
+        return renderMeta(rawMeta, state.metaFormat());
+    }
+
+    private Component renderMeta(String rawMeta, PresentationConfig.MetaFormat metaFormat) {
         String value = Objects.requireNonNull(rawMeta, "rawMeta");
         return switch (metaFormat) {
             case LEGACY_AMPERSAND -> legacySerializer.deserialize(value);
@@ -126,13 +145,13 @@ public final class PresentationRenderer {
         };
     }
 
-    private TagResolver createPlaceholders(Player player) {
+    private TagResolver createPlaceholders(Player player, PresentationConfig.MetaFormat metaFormat) {
         UUID uniqueId = player.getUniqueId();
         Component prefix = luckPermsService.getPrefix(uniqueId)
-                .map(this::renderMeta)
+                .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
         Component suffix = luckPermsService.getSuffix(uniqueId)
-                .map(this::renderMeta)
+                .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
         Component group = luckPermsService.getPrimaryGroup(uniqueId)
                 .map(Component::text)
@@ -180,16 +199,14 @@ public final class PresentationRenderer {
     private List<String> validateTemplates(
             String path,
             List<String> templates,
-            String fallback,
-            PresentationConfig presentationConfig
+            String fallback
     ) {
         List<String> validatedTemplates = new ArrayList<>(templates.size());
         for (int index = 0; index < templates.size(); index++) {
             validatedTemplates.add(validateTemplate(
                     path + "[" + index + "]",
                     templates.get(index),
-                    fallback,
-                    presentationConfig
+                    fallback
             ));
         }
         return List.copyOf(validatedTemplates);
@@ -198,8 +215,7 @@ public final class PresentationRenderer {
     private String validateTemplate(
             String path,
             String template,
-            String fallback,
-            PresentationConfig presentationConfig
+            String fallback
     ) {
         try {
             strictMiniMessage.deserialize(template, emptyPlaceholders());
@@ -208,7 +224,7 @@ public final class PresentationRenderer {
             logger.log(
                     Level.WARNING,
                     "Invalid MiniMessage template '" + path + "' in "
-                            + presentationConfig.getConfigFile() + "; using the internal fallback. "
+                            + configFile + "; using the internal fallback. "
                             + "The file was left unchanged.",
                     exception
             );
@@ -227,6 +243,25 @@ public final class PresentationRenderer {
                 Placeholder.component("online", Component.empty()),
                 Placeholder.component("max_players", Component.empty())
         );
+    }
+
+    public record RenderState(
+            PresentationConfig.MetaFormat metaFormat,
+            String scoreboardTitle,
+            List<String> scoreboardLines,
+            String tablistNameFormat,
+            List<String> tablistHeader,
+            List<String> tablistFooter
+    ) {
+
+        public RenderState {
+            Objects.requireNonNull(metaFormat, "metaFormat");
+            Objects.requireNonNull(scoreboardTitle, "scoreboardTitle");
+            scoreboardLines = List.copyOf(Objects.requireNonNull(scoreboardLines, "scoreboardLines"));
+            Objects.requireNonNull(tablistNameFormat, "tablistNameFormat");
+            tablistHeader = List.copyOf(Objects.requireNonNull(tablistHeader, "tablistHeader"));
+            tablistFooter = List.copyOf(Objects.requireNonNull(tablistFooter, "tablistFooter"));
+        }
     }
 
     public record RenderedPresentation(

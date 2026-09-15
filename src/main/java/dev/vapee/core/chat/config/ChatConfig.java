@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class ChatConfig {
@@ -24,9 +23,7 @@ public final class ChatConfig {
     private final Logger logger;
     private final Path configFile;
 
-    private volatile boolean enabled = true;
-    private volatile String format = DEFAULT_FORMAT;
-    private volatile MetaFormat metaFormat = MetaFormat.LEGACY_AMPERSAND;
+    private volatile State state = State.defaults();
 
     public ChatConfig(JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -39,10 +36,42 @@ public final class ChatConfig {
 
     public void initialize() {
         createDefaultFile();
-        reload();
+        state = readState();
     }
 
-    public void reload() {
+    public State prepareReloadState() {
+        return readState();
+    }
+
+    public State getState() {
+        return state;
+    }
+
+    public void applyState(State newState) {
+        state = Objects.requireNonNull(newState, "newState");
+    }
+
+    public boolean isEnabled() {
+        return state.enabled();
+    }
+
+    public String getFormat() {
+        return state.format();
+    }
+
+    public MetaFormat getMetaFormat() {
+        return state.metaFormat();
+    }
+
+    public Path getConfigFile() {
+        return configFile;
+    }
+
+    private State readState() {
+        if (!Files.isRegularFile(configFile)) {
+            throw new IllegalStateException("Required configuration file does not exist: " + configFile);
+        }
+
         YamlConfiguration configuration = new YamlConfiguration();
         try {
             configuration.load(configFile.toFile());
@@ -50,25 +79,27 @@ public final class ChatConfig {
             throw configFailure("load chat configuration", exception);
         }
 
-        boolean loadedEnabled = configuration.getBoolean("enabled", true);
-        String loadedFormat = readFormat(configuration);
-        MetaFormat loadedMetaFormat = readMetaFormat(configuration);
-
-        enabled = loadedEnabled;
-        format = loadedFormat;
-        metaFormat = loadedMetaFormat;
+        return new State(
+                readBoolean(configuration, "enabled", true),
+                readFormat(configuration),
+                readMetaFormat(configuration)
+        );
     }
 
-    public boolean isEnabled() {
-        return enabled;
-    }
+    private boolean readBoolean(YamlConfiguration configuration, String path, boolean defaultValue) {
+        if (!configuration.contains(path)) {
+            return defaultValue;
+        }
 
-    public String getFormat() {
-        return format;
-    }
+        Object value = configuration.get(path);
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
 
-    public MetaFormat getMetaFormat() {
-        return metaFormat;
+        logger.warning("Invalid chat setting '" + path + "' in " + configFile
+                + ": expected a boolean; using '" + defaultValue + "'. The file was left unchanged."
+        );
+        return defaultValue;
     }
 
     private String readFormat(YamlConfiguration configuration) {
@@ -130,8 +161,19 @@ public final class ChatConfig {
 
     private IllegalStateException configFailure(String operation, Throwable cause) {
         String message = "Could not " + operation + " at " + configFile + ".";
-        logger.log(Level.SEVERE, message, cause);
         return new IllegalStateException(message, cause);
+    }
+
+    public record State(boolean enabled, String format, MetaFormat metaFormat) {
+
+        public State {
+            Objects.requireNonNull(format, "format");
+            Objects.requireNonNull(metaFormat, "metaFormat");
+        }
+
+        private static State defaults() {
+            return new State(true, DEFAULT_FORMAT, MetaFormat.LEGACY_AMPERSAND);
+        }
     }
 
     public enum MetaFormat {

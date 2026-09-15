@@ -5,12 +5,14 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
+import dev.vapee.core.reload.ReloadParticipant;
+import dev.vapee.core.reload.ReloadPlan;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
 
-public final class ChatModule implements CoreModule {
+public final class ChatModule implements CoreModule, ReloadParticipant {
 
     private final JavaPlugin plugin;
     private final PermissionModule permissionModule;
@@ -42,7 +44,7 @@ public final class ChatModule implements CoreModule {
                 messageService,
                 plugin.getLogger()
         );
-        ChatListener newChatListener = new ChatListener(newChatConfig, newChatService);
+        ChatListener newChatListener = new ChatListener(newChatService);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newChatListener, plugin);
@@ -70,5 +72,31 @@ public final class ChatModule implements CoreModule {
 
     public ChatService getChatService() {
         return Objects.requireNonNull(chatService, "ChatModule is not enabled");
+    }
+
+    @Override
+    public String getReloadName() {
+        return "chat.yml";
+    }
+
+    @Override
+    public ReloadPlan prepareReload() {
+        ChatConfig activeConfig = Objects.requireNonNull(chatConfig, "ChatModule is not enabled");
+        ChatService activeService = Objects.requireNonNull(chatService, "ChatModule is not enabled");
+        ChatConfig.State previousConfigState = activeConfig.getState();
+        ChatConfig.State preparedConfigState = activeConfig.prepareReloadState();
+        ChatService.RuntimeState previousRuntimeState = activeService.getState();
+        ChatService.RuntimeState preparedRuntimeState = activeService.prepareState(preparedConfigState);
+
+        return ReloadPlan.of(
+                () -> {
+                    activeConfig.applyState(preparedConfigState);
+                    activeService.applyState(preparedRuntimeState);
+                },
+                () -> {
+                    activeConfig.applyState(previousConfigState);
+                    activeService.applyState(previousRuntimeState);
+                }
+        );
     }
 }

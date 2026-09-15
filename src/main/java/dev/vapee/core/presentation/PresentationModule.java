@@ -14,13 +14,15 @@ import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.presentation.config.PresentationConfig;
 import dev.vapee.core.presentation.scoreboard.ScoreboardService;
 import dev.vapee.core.presentation.tablist.TablistService;
+import dev.vapee.core.reload.ReloadParticipant;
+import dev.vapee.core.reload.ReloadPlan;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Objects;
 
-public final class PresentationModule implements CoreModule {
+public final class PresentationModule implements CoreModule, ReloadParticipant {
 
     private final JavaPlugin plugin;
     private final ConfigService configService;
@@ -93,26 +95,25 @@ public final class PresentationModule implements CoreModule {
                 newTablistService
         );
 
-        PresentationListener newPresentationListener = null;
+        PresentationListener newPresentationListener = new PresentationListener(plugin, newPresentationService);
         BukkitTask newUpdateTask = null;
-        if (newPresentationConfig.isEnabled()) {
-            newPresentationListener = new PresentationListener(plugin, newPresentationService);
-            try {
-                plugin.getServer().getPluginManager().registerEvents(newPresentationListener, plugin);
+        try {
+            plugin.getServer().getPluginManager().registerEvents(newPresentationListener, plugin);
+            if (newPresentationConfig.isEnabled()) {
                 newUpdateTask = plugin.getServer().getScheduler().runTaskTimer(
                         plugin,
                         newPresentationService::updateAll,
                         1L,
                         newPresentationConfig.getUpdateIntervalTicks()
                 );
-            } catch (RuntimeException exception) {
-                if (newUpdateTask != null) {
-                    newUpdateTask.cancel();
-                }
-                HandlerList.unregisterAll(newPresentationListener);
-                newPresentationService.removeAll();
-                throw exception;
             }
+        } catch (RuntimeException exception) {
+            if (newUpdateTask != null) {
+                newUpdateTask.cancel();
+            }
+            HandlerList.unregisterAll(newPresentationListener);
+            newPresentationService.removeAll();
+            throw exception;
         }
 
         presentationConfig = newPresentationConfig;
@@ -158,5 +159,117 @@ public final class PresentationModule implements CoreModule {
 
     public PresentationService getPresentationService() {
         return Objects.requireNonNull(presentationService, "PresentationModule is not enabled");
+    }
+
+    @Override
+    public String getReloadName() {
+        return "presentation.yml";
+    }
+
+    @Override
+    public ReloadPlan prepareReload() {
+        PresentationConfig activeConfig = Objects.requireNonNull(
+                presentationConfig,
+                "PresentationModule is not enabled"
+        );
+        PresentationRenderer activeRenderer = Objects.requireNonNull(
+                presentationRenderer,
+                "PresentationModule is not enabled"
+        );
+        PresentationService activeService = Objects.requireNonNull(
+                presentationService,
+                "PresentationModule is not enabled"
+        );
+
+        PresentationConfig.State previousConfigState = activeConfig.getState();
+        PresentationConfig.State preparedConfigState = activeConfig.prepareReloadState();
+        PresentationRenderer.RenderState previousRenderState = activeRenderer.getState();
+        PresentationRenderer.RenderState preparedRenderState = activeRenderer.prepareState(preparedConfigState);
+        BukkitTask previousTask = updateTask;
+
+        return new ReloadPlan() {
+            private BukkitTask replacementTask;
+
+            @Override
+            public void apply() {
+                boolean replaceTask = preparedConfigState.enabled()
+                        && (previousTask == null
+                        || previousTask.isCancelled()
+                        || !previousConfigState.enabled()
+                        || previousConfigState.updateIntervalTicks()
+                        != preparedConfigState.updateIntervalTicks());
+
+                if (replaceTask) {
+                    replacementTask = scheduleUpdateTask(
+                            activeService,
+                            preparedConfigState.updateIntervalTicks()
+                    );
+                }
+
+                activeConfig.applyState(preparedConfigState);
+                activeRenderer.applyState(preparedRenderState);
+
+                if (preparedConfigState.enabled()) {
+                    activeService.updateAll();
+                } else {
+                    activeService.removeAll();
+                }
+
+                if (replaceTask) {
+                    updateTask = replacementTask;
+                    if (previousTask != null) {
+                        previousTask.cancel();
+                    }
+                } else if (!preparedConfigState.enabled()) {
+                    updateTask = null;
+                    if (previousTask != null) {
+                        previousTask.cancel();
+                    }
+                } else {
+                    updateTask = previousTask;
+                }
+            }
+
+            @Override
+            public void rollback() {
+                activeConfig.applyState(previousConfigState);
+                activeRenderer.applyState(previousRenderState);
+
+                BukkitTask currentTask = updateTask;
+                if (currentTask != null && currentTask != previousTask && !currentTask.isCancelled()) {
+                    currentTask.cancel();
+                }
+                if (replacementTask != null
+                        && replacementTask != currentTask
+                        && replacementTask != previousTask
+                        && !replacementTask.isCancelled()) {
+                    replacementTask.cancel();
+                }
+
+                if (previousConfigState.enabled()) {
+                    if (previousTask != null && !previousTask.isCancelled()) {
+                        updateTask = previousTask;
+                    } else {
+                        updateTask = scheduleUpdateTask(
+                                activeService,
+                                previousConfigState.updateIntervalTicks()
+                        );
+                    }
+                    activeService.updateAll();
+                } else {
+                    updateTask = null;
+                    activeService.removeAll();
+                }
+            }
+        };
+    }
+
+    private BukkitTask scheduleUpdateTask(PresentationService service, long intervalTicks) {
+        return plugin.getServer().getScheduler().runTaskTimer(
+                plugin,
+                service::updateAll,
+                1L,
+                intervalTicks
+        );
     }
 }

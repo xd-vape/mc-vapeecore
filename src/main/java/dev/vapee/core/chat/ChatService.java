@@ -11,6 +11,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.entity.Player;
 
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -22,8 +23,9 @@ public final class ChatService {
     private final MessageService messageService;
     private final Logger logger;
     private final LegacyComponentSerializer legacySerializer;
-    private final String chatFormat;
-    private final ChatConfig.MetaFormat metaFormat;
+    private final Path configFile;
+
+    private volatile RuntimeState state;
 
     public ChatService(
             LuckPermsService luckPermsService,
@@ -36,22 +38,44 @@ public final class ChatService {
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.legacySerializer = LegacyComponentSerializer.legacyAmpersand();
-        this.chatFormat = validateFormat(validatedChatConfig.getFormat());
-        this.metaFormat = validatedChatConfig.getMetaFormat();
+        this.configFile = validatedChatConfig.getConfigFile();
+        this.state = prepareState(validatedChatConfig.getState());
+    }
+
+    public boolean isEnabled() {
+        return state.enabled();
+    }
+
+    public RuntimeState getState() {
+        return state;
+    }
+
+    public RuntimeState prepareState(ChatConfig.State configState) {
+        ChatConfig.State validatedConfigState = Objects.requireNonNull(configState, "configState");
+        return new RuntimeState(
+                validatedConfigState.enabled(),
+                validateFormat(validatedConfigState.format()),
+                validatedConfigState.metaFormat()
+        );
+    }
+
+    public void applyState(RuntimeState newState) {
+        state = Objects.requireNonNull(newState, "newState");
     }
 
     public Component render(Player source, Component sourceDisplayName, Component message) {
         Player validatedSource = Objects.requireNonNull(source, "source");
         Component validatedDisplayName = Objects.requireNonNull(sourceDisplayName, "sourceDisplayName");
         Component validatedMessage = Objects.requireNonNull(message, "message");
+        RuntimeState currentState = state;
 
         try {
             UUID uniqueId = validatedSource.getUniqueId();
             Component prefix = luckPermsService.getPrefix(uniqueId)
-                    .map(this::deserializeMeta)
+                    .map(value -> deserializeMeta(value, currentState.metaFormat()))
                     .orElse(Component.empty());
             Component suffix = luckPermsService.getSuffix(uniqueId)
-                    .map(this::deserializeMeta)
+                    .map(value -> deserializeMeta(value, currentState.metaFormat()))
                     .orElse(Component.empty());
 
             TagResolver placeholders = TagResolver.resolver(
@@ -60,7 +84,7 @@ public final class ChatService {
                     Placeholder.component("suffix", suffix),
                     Placeholder.component("message", validatedMessage)
             );
-            return messageService.deserialize(chatFormat, placeholders);
+            return messageService.deserialize(currentState.chatFormat(), placeholders);
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
@@ -72,7 +96,7 @@ public final class ChatService {
         }
     }
 
-    private Component deserializeMeta(String value) {
+    private Component deserializeMeta(String value, ChatConfig.MetaFormat metaFormat) {
         return switch (metaFormat) {
             case LEGACY_AMPERSAND -> legacySerializer.deserialize(value);
             case MINI_MESSAGE -> messageService.deserialize(value);
@@ -97,7 +121,8 @@ public final class ChatService {
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
-                    "Invalid MiniMessage chat format; using the internal default. The file was left unchanged.",
+                    "Invalid MiniMessage chat format in " + configFile
+                            + "; using the internal default. The file was left unchanged.",
                     exception
             );
             return ChatConfig.DEFAULT_FORMAT;
@@ -108,5 +133,17 @@ public final class ChatService {
         return sourceDisplayName
                 .append(Component.text(" » ", NamedTextColor.DARK_GRAY))
                 .append(message);
+    }
+
+    public record RuntimeState(
+            boolean enabled,
+            String chatFormat,
+            ChatConfig.MetaFormat metaFormat
+    ) {
+
+        public RuntimeState {
+            Objects.requireNonNull(chatFormat, "chatFormat");
+            Objects.requireNonNull(metaFormat, "metaFormat");
+        }
     }
 }

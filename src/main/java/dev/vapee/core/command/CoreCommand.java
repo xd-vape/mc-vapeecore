@@ -6,6 +6,8 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.player.PlayerService;
+import dev.vapee.core.reload.ReloadResult;
+import dev.vapee.core.reload.ReloadService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -25,6 +27,7 @@ public final class CoreCommand implements CommandExecutor {
     private final ModuleManager moduleManager;
     private final PlayerService playerService;
     private final LuckPermsService luckPermsService;
+    private final ReloadService reloadService;
 
     public CoreCommand(
             VapeeCore plugin,
@@ -32,7 +35,8 @@ public final class CoreCommand implements CommandExecutor {
             MessageService messageService,
             ModuleManager moduleManager,
             PlayerService playerService,
-            LuckPermsService luckPermsService
+            LuckPermsService luckPermsService,
+            ReloadService reloadService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
@@ -40,6 +44,7 @@ public final class CoreCommand implements CommandExecutor {
         this.moduleManager = Objects.requireNonNull(moduleManager, "moduleManager");
         this.playerService = Objects.requireNonNull(playerService, "playerService");
         this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
+        this.reloadService = Objects.requireNonNull(reloadService, "reloadService");
     }
 
     @Override
@@ -112,8 +117,39 @@ public final class CoreCommand implements CommandExecutor {
             return;
         }
 
-        configService.reload();
-        messageService.send(sender, "<green>VapeeCore configuration reloaded.</green>");
+        ReloadResult result = reloadService.reload();
+        switch (result.status()) {
+            case SUCCESS -> messageService.send(
+                    sender,
+                    "<green>VapeeCore configuration reloaded successfully.</green>"
+            );
+            case PREPARE_FAILED -> {
+                messageService.send(sender, "<red>Reload validation failed for "
+                        + result.failedComponent() + ". No changes were applied.</red>"
+                );
+                messageService.send(sender, "<gray>Check the server log.</gray>");
+            }
+            case APPLY_FAILED -> {
+                messageService.send(sender, "<red>Reload failed while applying "
+                        + result.failedComponent() + ".</red>"
+                );
+                messageService.send(sender, "<gray>The previous runtime configuration was restored. "
+                        + "Check the server log.</gray>"
+                );
+            }
+            case ROLLBACK_INCOMPLETE -> {
+                messageService.send(sender, "<red>Reload failed and the previous state could not be restored "
+                        + "completely.</red>"
+                );
+                messageService.send(sender, "<yellow>A controlled server restart is recommended. "
+                        + "Check the server log.</yellow>"
+                );
+            }
+            case ALREADY_RUNNING -> messageService.send(
+                    sender,
+                    "<yellow>A VapeeCore configuration reload is already running.</yellow>"
+            );
+        }
     }
 
     private void sendUsage(CommandSender sender) {

@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class PresentationConfig {
@@ -44,17 +43,7 @@ public final class PresentationConfig {
     private final Logger logger;
     private final Path configFile;
 
-    private boolean enabled = true;
-    private long updateIntervalTicks = DEFAULT_UPDATE_INTERVAL_TICKS;
-    private MetaFormat metaFormat = MetaFormat.LEGACY_AMPERSAND;
-    private boolean scoreboardEnabled = true;
-    private boolean scoreboardLobbyOnly = true;
-    private String scoreboardTitle = DEFAULT_SCOREBOARD_TITLE;
-    private List<String> scoreboardLines = DEFAULT_SCOREBOARD_LINES;
-    private boolean tablistEnabled = true;
-    private String tablistNameFormat = DEFAULT_TABLIST_NAME_FORMAT;
-    private List<String> tablistHeader = DEFAULT_TABLIST_HEADER;
-    private List<String> tablistFooter = DEFAULT_TABLIST_FOOTER;
+    private volatile State state = State.defaults();
 
     public PresentationConfig(JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -67,23 +56,32 @@ public final class PresentationConfig {
 
     public void initialize() {
         createDefaultFile();
-        reload();
+        state = readState();
     }
 
-    public void reload() {
+    public State prepareReloadState() {
+        return readState();
+    }
+
+    public State getState() {
+        return state;
+    }
+
+    public void applyState(State newState) {
+        state = Objects.requireNonNull(newState, "newState");
+    }
+
+    private State readState() {
+        if (!Files.isRegularFile(configFile)) {
+            throw new IllegalStateException("Required configuration file does not exist: " + configFile);
+        }
+
         YamlConfiguration configuration = new YamlConfiguration();
         try {
             configuration.load(configFile.toFile());
         } catch (IOException | InvalidConfigurationException exception) {
             throw configFailure("load presentation configuration", exception);
         }
-
-        enabled = readBoolean(configuration, "enabled", true);
-        updateIntervalTicks = readUpdateInterval(configuration);
-        metaFormat = readMetaFormat(configuration);
-        scoreboardEnabled = readBoolean(configuration, "scoreboard.enabled", true);
-        scoreboardLobbyOnly = readBoolean(configuration, "scoreboard.lobby-only", true);
-        scoreboardTitle = readString(configuration, "scoreboard.title", DEFAULT_SCOREBOARD_TITLE);
 
         List<String> loadedScoreboardLines = readStringList(
                 configuration,
@@ -97,68 +95,63 @@ public final class PresentationConfig {
             );
             loadedScoreboardLines = loadedScoreboardLines.subList(0, MAX_SCOREBOARD_LINES);
         }
-        scoreboardLines = List.copyOf(loadedScoreboardLines);
-
-        tablistEnabled = readBoolean(configuration, "tablist.enabled", true);
-        tablistNameFormat = readString(
-                configuration,
-                "tablist.name-format",
-                DEFAULT_TABLIST_NAME_FORMAT
+        return new State(
+                readBoolean(configuration, "enabled", true),
+                readUpdateInterval(configuration),
+                readMetaFormat(configuration),
+                readBoolean(configuration, "scoreboard.enabled", true),
+                readBoolean(configuration, "scoreboard.lobby-only", true),
+                readString(configuration, "scoreboard.title", DEFAULT_SCOREBOARD_TITLE),
+                loadedScoreboardLines,
+                readBoolean(configuration, "tablist.enabled", true),
+                readString(configuration, "tablist.name-format", DEFAULT_TABLIST_NAME_FORMAT),
+                readStringList(configuration, "tablist.header", DEFAULT_TABLIST_HEADER),
+                readStringList(configuration, "tablist.footer", DEFAULT_TABLIST_FOOTER)
         );
-        tablistHeader = List.copyOf(readStringList(
-                configuration,
-                "tablist.header",
-                DEFAULT_TABLIST_HEADER
-        ));
-        tablistFooter = List.copyOf(readStringList(
-                configuration,
-                "tablist.footer",
-                DEFAULT_TABLIST_FOOTER
-        ));
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return state.enabled();
     }
 
     public long getUpdateIntervalTicks() {
-        return updateIntervalTicks;
+        return state.updateIntervalTicks();
     }
 
     public MetaFormat getMetaFormat() {
-        return metaFormat;
+        return state.metaFormat();
     }
 
     public boolean isScoreboardEnabled() {
-        return scoreboardEnabled;
+        return state.scoreboardEnabled();
     }
 
     public boolean isScoreboardLobbyOnly() {
-        return scoreboardLobbyOnly;
+        return state.scoreboardLobbyOnly();
     }
 
     public String getScoreboardTitle() {
-        return scoreboardTitle;
+        return state.scoreboardTitle();
     }
 
     public List<String> getScoreboardLines() {
-        return scoreboardLines;
+        return state.scoreboardLines();
     }
 
     public boolean isTablistEnabled() {
-        return tablistEnabled;
+        return state.tablistEnabled();
     }
 
     public String getTablistNameFormat() {
-        return tablistNameFormat;
+        return state.tablistNameFormat();
     }
 
     public List<String> getTablistHeader() {
-        return tablistHeader;
+        return state.tablistHeader();
     }
 
     public List<String> getTablistFooter() {
-        return tablistFooter;
+        return state.tablistFooter();
     }
 
     public Path getConfigFile() {
@@ -291,8 +284,50 @@ public final class PresentationConfig {
 
     private IllegalStateException configFailure(String operation, Throwable cause) {
         String message = "Could not " + operation + " at " + configFile + ".";
-        logger.log(Level.SEVERE, message, cause);
         return new IllegalStateException(message, cause);
+    }
+
+    public record State(
+            boolean enabled,
+            long updateIntervalTicks,
+            MetaFormat metaFormat,
+            boolean scoreboardEnabled,
+            boolean scoreboardLobbyOnly,
+            String scoreboardTitle,
+            List<String> scoreboardLines,
+            boolean tablistEnabled,
+            String tablistNameFormat,
+            List<String> tablistHeader,
+            List<String> tablistFooter
+    ) {
+
+        public State {
+            if (updateIntervalTicks <= 0L) {
+                throw new IllegalArgumentException("Presentation update interval must be positive");
+            }
+            Objects.requireNonNull(metaFormat, "metaFormat");
+            Objects.requireNonNull(scoreboardTitle, "scoreboardTitle");
+            scoreboardLines = List.copyOf(Objects.requireNonNull(scoreboardLines, "scoreboardLines"));
+            Objects.requireNonNull(tablistNameFormat, "tablistNameFormat");
+            tablistHeader = List.copyOf(Objects.requireNonNull(tablistHeader, "tablistHeader"));
+            tablistFooter = List.copyOf(Objects.requireNonNull(tablistFooter, "tablistFooter"));
+        }
+
+        private static State defaults() {
+            return new State(
+                    true,
+                    DEFAULT_UPDATE_INTERVAL_TICKS,
+                    MetaFormat.LEGACY_AMPERSAND,
+                    true,
+                    true,
+                    DEFAULT_SCOREBOARD_TITLE,
+                    DEFAULT_SCOREBOARD_LINES,
+                    true,
+                    DEFAULT_TABLIST_NAME_FORMAT,
+                    DEFAULT_TABLIST_HEADER,
+                    DEFAULT_TABLIST_FOOTER
+            );
+        }
     }
 
     public enum MetaFormat {
