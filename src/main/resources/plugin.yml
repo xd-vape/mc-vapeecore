@@ -21,6 +21,10 @@ commands:
     description: Sets the lobby spawn to the current position
     usage: /setspawn
     permission: vapeecore.lobby.setspawn
+  coins:
+    description: View and manage coin balances
+    usage: /coins [get|add|remove|set]
+    permission: vapeecore.economy.coins
 
 permissions:
   vapeecore.admin:
@@ -34,4 +38,10 @@ permissions:
     default: op
   vapeecore.lobby.build:
     description: Bypasses lobby build, drop and pickup protection
+    default: op
+  vapeecore.economy.coins:
+    description: Allows viewing your own coin balance
+    default: true
+  vapeecore.economy.admin:
+    description: Allows managing online player coin balances
     default: op

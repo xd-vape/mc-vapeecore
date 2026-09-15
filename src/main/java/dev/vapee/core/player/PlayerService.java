@@ -1,5 +1,6 @@
 package dev.vapee.core.player;
 
+import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.repository.PlayerRepository;
 import dev.vapee.core.player.settings.PlayerSettings;
 
@@ -46,7 +47,14 @@ public final class PlayerService {
             return player;
         }
 
-        CorePlayer player = new CorePlayer(uniqueId, name, now, now, PlayerSettings.defaults());
+        CorePlayer player = new CorePlayer(
+                uniqueId,
+                name,
+                now,
+                now,
+                PlayerSettings.defaults(),
+                CoinWallet.empty()
+        );
         repository.save(player);
         loadedPlayers.put(uniqueId, player);
         return player;

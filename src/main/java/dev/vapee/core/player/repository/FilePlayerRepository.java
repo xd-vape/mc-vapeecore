@@ -1,5 +1,6 @@
 package dev.vapee.core.player.repository;
 
+import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.settings.PlayerSettings;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -85,6 +86,7 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.scoreboard", player.getSettings().isScoreboardEnabled());
             configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
+            configuration.set("economy.coins", player.getWallet().getCoins());
             configuration.save(temporaryFile.toFile());
 
             replacePlayerFile(temporaryFile, playerFile);
@@ -110,6 +112,7 @@ public final class FilePlayerRepository implements PlayerRepository {
         long firstJoinMillis = readEpochMillis(configuration, playerFile, "first-join");
         long lastJoinMillis = readEpochMillis(configuration, playerFile, "last-join");
         PlayerSettings settings = readSettings(uniqueId, playerFile, configuration);
+        CoinWallet wallet = readWallet(playerFile, configuration);
 
         try {
             return new CorePlayer(
@@ -117,7 +120,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     name,
                     Instant.ofEpochMilli(firstJoinMillis),
                     Instant.ofEpochMilli(lastJoinMillis),
-                    settings
+                    settings,
+                    wallet
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -168,6 +172,30 @@ public final class FilePlayerRepository implements PlayerRepository {
                 settings.isPrivateMessagesEnabled()
         ));
         return settings;
+    }
+
+    private CoinWallet readWallet(Path playerFile, YamlConfiguration configuration) {
+        if (!configuration.contains("economy")) {
+            return CoinWallet.empty();
+        }
+        if (!configuration.isConfigurationSection("economy")) {
+            throw invalidPlayerFile(playerFile, "'economy' must be a YAML section");
+        }
+        if (!configuration.contains("economy.coins")) {
+            return CoinWallet.empty();
+        }
+
+        Object value = configuration.get("economy.coins");
+        if (!(value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long)) {
+            throw invalidPlayerFile(playerFile, "Missing or invalid 'economy.coins'");
+        }
+
+        long coins = ((Number) value).longValue();
+        try {
+            return CoinWallet.of(coins);
+        } catch (IllegalArgumentException exception) {
+            throw invalidPlayerFile(playerFile, "Invalid 'economy.coins': balance must not be negative", exception);
+        }
     }
 
     private boolean readBooleanSetting(

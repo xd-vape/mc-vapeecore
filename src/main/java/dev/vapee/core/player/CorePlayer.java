@@ -1,5 +1,6 @@
 package dev.vapee.core.player;
 
+import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.settings.PlayerSettings;
 
 import java.time.Instant;
@@ -11,6 +12,7 @@ public final class CorePlayer {
     private final UUID uniqueId;
     private final Instant firstJoin;
     private final PlayerSettings settings;
+    private final CoinWallet wallet;
     private String name;
     private Instant lastJoin;
 
@@ -19,13 +21,15 @@ public final class CorePlayer {
             String name,
             Instant firstJoin,
             Instant lastJoin,
-            PlayerSettings settings
+            PlayerSettings settings,
+            CoinWallet wallet
     ) {
         this.uniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
         this.name = requireName(name);
         this.firstJoin = Objects.requireNonNull(firstJoin, "firstJoin");
         this.lastJoin = requireValidLastJoin(lastJoin);
         this.settings = Objects.requireNonNull(settings, "settings");
+        this.wallet = Objects.requireNonNull(wallet, "wallet");
     }
 
     public UUID getUniqueId() {
@@ -46,6 +50,10 @@ public final class CorePlayer {
 
     public PlayerSettings getSettings() {
         return settings;
+    }
+
+    public CoinWallet getWallet() {
+        return wallet;
     }
 
     public void updateName(String name) {
