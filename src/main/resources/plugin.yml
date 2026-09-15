@@ -25,6 +25,16 @@ commands:
     description: View and manage coin balances
     usage: /coins [get|add|remove|set]
     permission: vapeecore.economy.coins
+  msg:
+    description: Send a private message to an online player
+    usage: /msg <player> <message>
+    permission: vapeecore.message.use
+  reply:
+    aliases:
+      - r
+    description: Reply to your last private conversation
+    usage: /reply <message>
+    permission: vapeecore.message.use
 
 permissions:
   vapeecore.admin:
@@ -45,3 +55,6 @@ permissions:
   vapeecore.economy.admin:
     description: Allows managing online player coin balances
     default: op
+  vapeecore.message.use:
+    description: Allows using private messages
+    default: true

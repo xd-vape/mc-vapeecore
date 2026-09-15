@@ -1,0 +1,5 @@
+enabled: true
+
+format:
+  outgoing: "<dark_gray>[</dark_gray><gray>You</gray><dark_gray> → </dark_gray><recipient><dark_gray>]</dark_gray> <white><message></white>"
+  incoming: "<dark_gray>[</dark_gray><sender><dark_gray> → </dark_gray><gray>You</gray><dark_gray>]</dark_gray> <white><message></white>"
