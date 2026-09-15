@@ -1,6 +1,6 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine Coin-Economy, globalen Chat und eine lesende LuckPerms-Integration bereit.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine Coin-Economy, globalen Chat, Player-Presentation und eine lesende LuckPerms-Integration bereit.
 
 ## Voraussetzungen
 
@@ -32,6 +32,7 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `player`: Player-Domainmodell, aktiver Cache und Join-/Quit-Lifecycle
 - `player.repository`: austauschbare Persistence mit lokaler YAML-Implementierung
 - `player.settings`: persistente Player-Settings und interne Zugriffsschicht für andere Module
+- `presentation`: Lobby-Sidebar und serverweite Adventure-Tablist
 
 Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Zum Profil gehören die Einstellungen `scoreboard`, `sounds` und `private-messages`, die standardmäßig aktiviert sind. Andere Module greifen über den `PlayerSettingsService` darauf zu. Die lokale Persistence legt pro UUID eine Datei unter `plugins/VapeeCore/players/<uuid>.yml` an und speichert die Settings dort im Abschnitt `settings`. Alte Player-Dateien ohne diesen Abschnitt werden mit den Default-Werten geladen und beim nächsten regulären Save automatisch erweitert. Bukkit-`Player`-Instanzen werden nicht im Domainmodell gespeichert.
 
@@ -55,4 +56,6 @@ Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/
 
 Das `ChatModule` formatiert den globalen Chat über Papers `AsyncChatEvent` und einen viewer-unabhängigen `ChatRenderer`. Das Format liegt in `plugins/VapeeCore/chat.yml`; LuckPerms-Prefix und -Suffix können dort als `legacy-ampersand`, `mini-message` oder `plain` interpretiert werden. Das Serverformat ist MiniMessage, die originale Playernachricht wird jedoch als Adventure Component eingesetzt und niemals als MiniMessage ausgewertet. Private Nachrichten und Chat-Channels sind nicht Bestandteil dieser Phase. `/core reload` lädt weder `lobby.yml` noch `chat.yml` neu.
 
-Scoreboard, Tablist, Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.
+Das `PresentationModule` aktualisiert über einen gemeinsamen synchronen Task standardmäßig einmal pro Sekunde die persönliche Sidebar und Tablist. Die Templates liegen in `plugins/VapeeCore/presentation.yml` und verwenden Adventure/MiniMessage mit sicheren Component-Platzhaltern für Servername, Displayname, LuckPerms-Prefix, -Suffix und Primary Group, Coins sowie Onlinezahlen. Die Sidebar nutzt Papers moderne Component- und NumberFormat-Scoreboard-APIs, respektiert `PlayerSettings.scoreboardEnabled` und ist standardmäßig ausschließlich in der konfigurierten Lobby-Welt aktiv. Die Tablist ist serverweit; Rank-Sortierung und Minigame-Scoreboards sind bewusst nicht enthalten. `/core reload` lädt weiterhin weder `lobby.yml`, `chat.yml` noch `presentation.yml` neu.
+
+Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.

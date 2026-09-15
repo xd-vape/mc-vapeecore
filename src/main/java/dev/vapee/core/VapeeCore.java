@@ -11,6 +11,7 @@ import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
+import dev.vapee.core.presentation.PresentationModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,6 +27,7 @@ public final class VapeeCore extends JavaPlugin {
     private EconomyModule economyModule;
     private LobbyModule lobbyModule;
     private ChatModule chatModule;
+    private PresentationModule presentationModule;
 
     @Override
     public void onEnable() {
@@ -40,11 +42,21 @@ public final class VapeeCore extends JavaPlugin {
         economyModule = new EconomyModule(this, playerModule, messageService);
         lobbyModule = new LobbyModule(this, messageService);
         chatModule = new ChatModule(this, permissionModule, messageService);
+        presentationModule = new PresentationModule(
+                this,
+                configService,
+                messageService,
+                permissionModule,
+                playerModule,
+                economyModule,
+                lobbyModule
+        );
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
         moduleManager.register(economyModule);
         moduleManager.register(lobbyModule);
         moduleManager.register(chatModule);
+        moduleManager.register(presentationModule);
         moduleManager.enableAll();
 
         registerCommands(

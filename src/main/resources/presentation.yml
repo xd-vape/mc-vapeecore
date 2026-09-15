@@ -1,0 +1,28 @@
+enabled: true
+
+update-interval-ticks: 20
+
+luckperms-meta:
+  format: "legacy-ampersand"
+
+scoreboard:
+  enabled: true
+  lobby-only: true
+  title: "<aqua><bold><server></bold></aqua>"
+  lines:
+    - ""
+    - "<gray>Rank:</gray> <white><group></white>"
+    - "<gray>Coins:</gray> <gold><coins></gold>"
+    - ""
+    - "<gray>Online:</gray> <white><online>/<max_players></white>"
+    - ""
+
+tablist:
+  enabled: true
+  name-format: "<prefix><name><suffix>"
+  header:
+    - "<aqua><bold><server></bold></aqua>"
+    - "<gray>Welcome <white><name></white></gray>"
+  footer:
+    - "<gray>Online: <white><online>/<max_players></white></gray>"
+    - "<gray>Coins: <gold><coins></gold></gray>"
