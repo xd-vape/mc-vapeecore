@@ -5,6 +5,7 @@ import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyModule;
 import dev.vapee.core.lobby.LobbyModule;
+import dev.vapee.core.lobby.experience.LobbyExperienceModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.permission.LuckPermsService;
@@ -36,6 +37,7 @@ public final class VapeeCore extends JavaPlugin {
     private PrivateMessageModule privateMessageModule;
     private PresentationModule presentationModule;
     private SettingsModule settingsModule;
+    private LobbyExperienceModule lobbyExperienceModule;
 
     @Override
     public void onEnable() {
@@ -67,6 +69,13 @@ public final class VapeeCore extends JavaPlugin {
                 presentationModule,
                 messageService
         );
+        lobbyExperienceModule = new LobbyExperienceModule(
+                this,
+                lobbyModule,
+                playerModule,
+                settingsModule,
+                messageService
+        );
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
         moduleManager.register(socialModule);
@@ -76,6 +85,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(privateMessageModule);
         moduleManager.register(presentationModule);
         moduleManager.register(settingsModule);
+        moduleManager.register(lobbyExperienceModule);
         moduleManager.enableAll();
 
         ReloadService reloadService = new ReloadService(

@@ -86,6 +86,10 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         return Objects.requireNonNull(lobbyService, "LobbyModule is not enabled");
     }
 
+    public LobbyConfig getLobbyConfig() {
+        return Objects.requireNonNull(lobbyConfig, "LobbyModule is not enabled");
+    }
+
     @Override
     public String getReloadName() {
         return "lobby.yml";

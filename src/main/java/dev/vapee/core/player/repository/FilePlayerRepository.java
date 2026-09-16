@@ -89,6 +89,7 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.scoreboard", player.getSettings().isScoreboardEnabled());
             configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
+            configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
             configuration.set("economy.coins", player.getWallet().getCoins());
             List<String> ignoredPlayers = player.getSocial().getIgnoredPlayers().stream()
                     .map(UUID::toString)
@@ -180,6 +181,13 @@ public final class FilePlayerRepository implements PlayerRepository {
                 configuration,
                 "settings.private-messages",
                 settings.isPrivateMessagesEnabled()
+        ));
+        settings.setLobbyPlayersVisible(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.lobby-players-visible",
+                settings.isLobbyPlayersVisible()
         ));
         return settings;
     }

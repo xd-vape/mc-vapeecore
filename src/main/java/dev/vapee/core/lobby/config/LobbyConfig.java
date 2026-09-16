@@ -1,6 +1,9 @@
 package dev.vapee.core.lobby.config;
 
 import dev.vapee.core.lobby.LobbySpawn;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -11,15 +14,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class LobbyConfig {
 
     private static final String RESOURCE_NAME = "lobby.yml";
+    public static final String DEFAULT_JOIN_MESSAGE_FORMAT =
+            "<dark_gray>[<green>+<dark_gray>] <white><name>";
+    public static final String DEFAULT_QUIT_MESSAGE_FORMAT =
+            "<dark_gray>[<red>-<dark_gray>] <white><name>";
 
     private final JavaPlugin plugin;
     private final Logger logger;
     private final Path configFile;
+    private final MiniMessage strictMiniMessage = MiniMessage.builder().strict(true).build();
 
     private volatile State state = State.defaults();
 
@@ -102,6 +111,14 @@ public final class LobbyConfig {
         return state.itemPickupProtection();
     }
 
+    public MessageSettings getJoinMessageSettings() {
+        return state.joinMessage();
+    }
+
+    public MessageSettings getQuitMessageSettings() {
+        return state.quitMessage();
+    }
+
     private void createDefaultFile() {
         try {
             Files.createDirectories(configFile.getParent());
@@ -135,8 +152,70 @@ public final class LobbyConfig {
                 readBoolean(configuration, "protection.block-break"),
                 readBoolean(configuration, "protection.block-place"),
                 readBoolean(configuration, "protection.item-drop"),
-                readBoolean(configuration, "protection.item-pickup")
+                readBoolean(configuration, "protection.item-pickup"),
+                readMessageSettings(
+                        configuration,
+                        "messages.join",
+                        DEFAULT_JOIN_MESSAGE_FORMAT
+                ),
+                readMessageSettings(
+                        configuration,
+                        "messages.quit",
+                        DEFAULT_QUIT_MESSAGE_FORMAT
+                )
         );
+    }
+
+    private MessageSettings readMessageSettings(
+            YamlConfiguration configuration,
+            String path,
+            String defaultFormat
+    ) {
+        if (configuration.contains(path) && !configuration.isConfigurationSection(path)) {
+            logger.warning("Invalid lobby setting '" + path + "' in " + configFile
+                    + ": expected a YAML section; using internal defaults. The file was left unchanged."
+            );
+            return new MessageSettings(true, defaultFormat);
+        }
+
+        boolean enabled = readBoolean(configuration, path + ".enabled");
+        String format = defaultFormat;
+        if (configuration.contains(path + ".format")) {
+            Object value = configuration.get(path + ".format");
+            if (value instanceof String stringValue) {
+                format = validateMessageFormat(path + ".format", stringValue, defaultFormat);
+            } else {
+                logger.warning("Invalid lobby setting '" + path + ".format' in " + configFile
+                        + ": expected a string; using the internal fallback. The file was left unchanged."
+                );
+            }
+        }
+        return new MessageSettings(enabled, format);
+    }
+
+    private String validateMessageFormat(String path, String format, String defaultFormat) {
+        // The documented defaults intentionally use MiniMessage's normal implicit
+        // style closing. They are trusted constants; custom templates are checked
+        // with strict parsing so malformed reload input still falls back safely.
+        if (format.equals(defaultFormat)) {
+            return format;
+        }
+
+        try {
+            strictMiniMessage.deserialize(
+                    format,
+                    Placeholder.component("name", Component.empty())
+            );
+            return format;
+        } catch (RuntimeException exception) {
+            logger.log(
+                    Level.WARNING,
+                    "Invalid MiniMessage template '" + path + "' in " + configFile
+                            + "; using the internal fallback. The file was left unchanged.",
+                    exception
+            );
+            return defaultFormat;
+        }
     }
 
     private Optional<LobbySpawn> readSpawn(
@@ -248,11 +327,15 @@ public final class LobbyConfig {
             boolean blockBreakProtection,
             boolean blockPlaceProtection,
             boolean itemDropProtection,
-            boolean itemPickupProtection
+            boolean itemPickupProtection,
+            MessageSettings joinMessage,
+            MessageSettings quitMessage
     ) {
 
         public State {
             spawn = Objects.requireNonNull(spawn, "spawn");
+            joinMessage = Objects.requireNonNull(joinMessage, "joinMessage");
+            quitMessage = Objects.requireNonNull(quitMessage, "quitMessage");
         }
 
         private static State defaults() {
@@ -266,7 +349,9 @@ public final class LobbyConfig {
                     true,
                     true,
                     true,
-                    true
+                    true,
+                    new MessageSettings(true, DEFAULT_JOIN_MESSAGE_FORMAT),
+                    new MessageSettings(true, DEFAULT_QUIT_MESSAGE_FORMAT)
             );
         }
 
@@ -281,8 +366,17 @@ public final class LobbyConfig {
                     blockBreakProtection,
                     blockPlaceProtection,
                     itemDropProtection,
-                    itemPickupProtection
+                    itemPickupProtection,
+                    joinMessage,
+                    quitMessage
             );
+        }
+    }
+
+    public record MessageSettings(boolean enabled, String format) {
+
+        public MessageSettings {
+            format = Objects.requireNonNull(format, "format");
         }
     }
 }

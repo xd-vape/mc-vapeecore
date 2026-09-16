@@ -33,6 +33,10 @@ public final class PlayerSettingsService {
         return getSettings(uniqueId).map(PlayerSettings::isPrivateMessagesEnabled);
     }
 
+    public Optional<Boolean> areLobbyPlayersVisible(UUID uniqueId) {
+        return getSettings(uniqueId).map(PlayerSettings::isLobbyPlayersVisible);
+    }
+
     public boolean setScoreboardEnabled(UUID uniqueId, boolean enabled) {
         return updateSettings(
                 uniqueId,
@@ -57,6 +61,15 @@ public final class PlayerSettingsService {
                 enabled,
                 PlayerSettings::isPrivateMessagesEnabled,
                 PlayerSettings::setPrivateMessagesEnabled
+        );
+    }
+
+    public boolean setLobbyPlayersVisible(UUID uniqueId, boolean visible) {
+        return updateSettings(
+                uniqueId,
+                visible,
+                PlayerSettings::isLobbyPlayersVisible,
+                PlayerSettings::setLobbyPlayersVisible
         );
     }
 

@@ -1,6 +1,6 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche und eine lesende LuckPerms-Integration bereit.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Integration bereit.
 
 ## Voraussetzungen
 
@@ -26,6 +26,7 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `config`: zentraler Zugriff auf die Bukkit-Konfiguration
 - `economy`: internes Coin-Wallet, EconomyService und Coin-Commands
 - `lobby`: Lobby-Spawn, Teleports und auf die Lobby-Welt begrenzter Schutz
+- `lobby.experience`: Lobby-Hotbar, Navigator, Settings-Shortcut, Join-/Quit-UX und weltgebundene Player-Visibility
 - `message`: Adventure- und MiniMessage-Ausgabe
 - `module`: kleiner Lifecycle-Extension-Point für zukünftige Systeme
 - `permission`: lesender Zugriff auf LuckPerms-Gruppen und Meta-Daten
@@ -39,9 +40,9 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `settings`: sichere Ingame-Oberfläche für die bereits persistenten Player-Settings
 - `social`: Ignore-Service, threadsichere Runtime-Projektion, Lifecycle und Commands
 
-Die neun Module starten in der gerichteten Reihenfolge `Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings` und werden beim Shutdown vollständig rückwärts deaktiviert. Dadurch können Chat und PrivateMessage den bereits aktiven Social-Snapshot nutzen, während Player-Persistence beim Shutdown erst nach Social gespeichert wird.
+Die zehn Module starten in der gerichteten Reihenfolge `Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → LobbyExperience` und werden beim Shutdown vollständig rückwärts deaktiviert. Dadurch kann LobbyExperience die bereits aktiven Lobby-, Player- und Settings-Services verwenden, während Chat und PrivateMessage weiterhin den Social-Snapshot nutzen und Player-Persistence beim Shutdown erst nach den konsumierenden Modulen gespeichert wird.
 
-Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Zum Profil gehören die Einstellungen `scoreboard`, `sounds` und `private-messages`, die standardmäßig aktiviert sind, das Coin-Wallet und `PlayerSocial`. Andere Module greifen über klar abgegrenzte Services darauf zu. Die lokale Persistence legt pro UUID eine Datei unter `plugins/VapeeCore/players/<uuid>.yml` an. Alte Player-Dateien ohne `settings`, `economy` oder `social` werden mit den jeweiligen Default-Werten geladen und beim nächsten regulären Save automatisch erweitert. Bukkit-`Player`-Instanzen werden nicht im Domainmodell gespeichert.
+Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Zum Profil gehören die Einstellungen `scoreboard`, `sounds`, `private-messages` und `lobby-players-visible`, die standardmäßig aktiviert sind, das Coin-Wallet und `PlayerSocial`. Andere Module greifen über klar abgegrenzte Services darauf zu. Die lokale Persistence legt pro UUID eine Datei unter `plugins/VapeeCore/players/<uuid>.yml` an. Alte Player-Dateien ohne einzelne Settings oder ohne `settings`, `economy` beziehungsweise `social` werden mit den jeweiligen Default-Werten geladen und beim nächsten regulären Save automatisch erweitert. Bukkit-`Player`-Instanzen werden nicht im Domainmodell gespeichert.
 
 Jedes Player-Profil besitzt außerdem ein Coin-Wallet mit einer nicht negativen ganzzahligen `long`-Balance und dem Defaultwert `0`. Die Coins werden als `economy.coins` in derselben Player-YAML gespeichert; alte Dateien werden beim nächsten regulären Save automatisch ergänzt. Andere Module greifen ausschließlich über den `EconomyService` darauf zu. `/coins` zeigt den eigenen Kontostand, während `/coins get|add|remove|set` ausschließlich online befindliche, geladene Spieler administriert. Es gibt bewusst keine Vault-Anbindung, Offline-Mutationen, weiteren Währungen oder Spieler-zu-Spieler-Transfers.
 
@@ -53,6 +54,7 @@ settings:
   scoreboard: true
   sounds: true
   private-messages: true
+  lobby-players-visible: true
 economy:
   coins: 2500
 social:
@@ -72,14 +74,34 @@ Permissions, Gruppen, Primary Groups, Prefixe, Suffixe, Meta-Daten, Contexts und
 
 Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. Join-Teleport, Lobby-Respawn, Void Rescue sowie Damage-, Hunger-, Block- und Item-Schutz gelten ausschließlich in der Welt aus `spawn.world`. Spieler mit `vapeecore.lobby.build` dürfen dort bauen sowie Items droppen und aufnehmen.
 
+Das nach `SettingsModule` gestartete `LobbyExperienceModule` ergänzt diese technische Lobby um drei PDC-markierte Hotbar-Items: Navigator in Slot 0 (`COMPASS`), Player-Visibility in Slot 4 (`LIME_DYE` oder `GRAY_DYE`) und Settings in Slot 8 (`COMPARATOR`). Die Items werden nur in der konfigurierten Lobby-Welt gesetzt. Vorhandene VapeeCore-Lobby-Items werden vorher dedupliziert; normale Items in reservierten Slots werden ausschließlich in einen freien, nicht reservierten Storage-Slot verschoben. Ist kein solcher Slot verfügbar, bleibt das normale Item unangetastet und das betreffende Lobby-Item wird nicht erzwungen. Es gibt ausdrücklich keinen Inventory-Wipe. Drop, Offhand-Swap, Click-, Shift-, Number-Key-, Double-Click- und Drag-Manipulationen der PDC-markierten Items werden verhindert, ohne normale Items pauschal zu sperren.
+
+Der Navigator ist ein geschütztes 27-Slot-Inventar mit eigenem, ownergebundenem `NavigatorInventoryHolder`; Titel- oder Material-Erkennung wird nicht verwendet. Slot 11 teleportiert über den bestehenden `LobbyService` zum Lobby-Spawn, Slots 13 und 15 zeigen ausschließlich kontrollierte Coming-Soon-Meldungen für Activities und Minigames, Slot 22 schließt das Menü. Es wird in Phase 13 weder ein Activity-/Game-System noch eine Proxy-Integration aufgebaut. Das Settings-Hotbar-Item öffnet direkt das vorhandene Phase-11-`SettingsMenu`; `/settings` und alle übrigen bestehenden Commands bleiben unverändert verfügbar.
+
+Player-Visibility ist einseitig und ausschließlich auf andere Spieler in der Lobby-Welt begrenzt. `false` versteckt für den jeweiligen Viewer andere Lobby-Spieler über Papers `hidePlayer(plugin, target)`, beeinflusst aber weder Chat, private Nachrichten, Ignore, Scoreboard noch andere Welten. Beim Betreten werden beide Sicht-Richtungen gegen die jeweiligen persistenten Präferenzen synchronisiert; beim Verlassen, Quit und Plugin-Disable werden die von VapeeCore gesetzten Hide-Zustände mit `showPlayer` restauriert. Die persistente Wahrheit bleibt `settings.lobby-players-visible` in der Player-YAML; es gibt keinen separaten Visibility-Cache. Ein fehlender Key wird rückwärtskompatibel als `true` geladen. Ein fehlgeschlagener Save wird durch den bestehenden `PlayerSettingsService` auf den vorherigen Domainwert zurückgerollt, bevor Sichtbarkeit oder Hotbar-Darstellung geändert werden. Lobby-Visibility ist ausdrücklich nicht mit dem Ignore-System gekoppelt.
+
+Join- und Quit-Nachrichten werden ebenfalls aus der bestehenden `lobby.yml` gelesen:
+
+```yaml
+messages:
+  join:
+    enabled: true
+    format: "<dark_gray>[<green>+<dark_gray>] <white><name>"
+  quit:
+    enabled: true
+    format: "<dark_gray>[<red>-<dark_gray>] <white><name>"
+```
+
+Bei `enabled: false` wird die jeweilige Nachricht vollständig unterdrückt; es gibt keinen Vanilla-Fallback. `<name>` wird als Adventure Component eingesetzt und nicht in einen MiniMessage-String eingebaut. Fehlende Keys verwenden interne Defaults. Ungültige Templates erzeugen eine Warnung und verwenden einen sicheren internen Default, ohne `lobby.yml` zu verändern. Da `LobbyModule` weiterhin alleiniger Reload-Teilnehmer für `lobby.yml` ist und LobbyExperience dessen aktuellen State liest, gelten Änderungen nach `/core reload` ohne einen sechsten Reload-Teilnehmer.
+
 Das `ChatModule` formatiert den globalen Chat über Papers `AsyncChatEvent` und einen viewer-unabhängigen `ChatRenderer`. Das Format liegt in `plugins/VapeeCore/chat.yml`; LuckPerms-Prefix und -Suffix können dort als `legacy-ampersand`, `mini-message` oder `plain` interpretiert werden. Das Serverformat ist MiniMessage, die originale Playernachricht wird jedoch als Adventure Component eingesetzt und niemals als MiniMessage ausgewertet. Chat-Channels sind nicht Bestandteil dieser Phase.
 
 Das `PrivateMessageModule` stellt `/msg <player> <message>` sowie `/reply <message>` mit dem Alias `/r` für ausschließlich online befindliche Spieler bereit. Darstellung und globaler Aktivierungsstatus liegen in `plugins/VapeeCore/private-messages.yml`. Spielertext wird als sichere Adventure Component eingesetzt und weder als MiniMessage noch als Legacy-Farbcode ausgewertet. `PlayerSettings.privateMessagesEnabled` bedeutet ausschließlich „private Nachrichten empfangen“: Ein Spieler mit deaktiviertem Empfang darf weiterhin selbst schreiben. Der letzte erfolgreiche Gesprächspartner wird nur für die aktuelle Session im Speicher gehalten; ein Quit entfernt alle zugehörigen Reply-Verweise. Es gibt bewusst keine Offline-Nachrichten, Mailbox oder SocialSpy.
 
 Das `PresentationModule` aktualisiert über einen gemeinsamen synchronen Task standardmäßig einmal pro Sekunde die persönliche Sidebar und Tablist. Die Templates liegen in `plugins/VapeeCore/presentation.yml` und verwenden Adventure/MiniMessage mit sicheren Component-Platzhaltern für Servername, Displayname, LuckPerms-Prefix, -Suffix und Primary Group, Coins sowie Onlinezahlen. Die Sidebar nutzt Papers moderne Component- und NumberFormat-Scoreboard-APIs, respektiert `PlayerSettings.scoreboardEnabled` und ist standardmäßig ausschließlich in der konfigurierten Lobby-Welt aktiv. Die Tablist ist serverweit; Rank-Sortierung und Minigame-Scoreboards sind bewusst nicht enthalten.
 
-Das `SettingsModule` stellt `/settings` für Spieler mit `vapeecore.settings.use` bereit. Das 27-Slot-Inventar schaltet Scoreboard, VapeeCore-eigene UI-Feedback-Sounds und den Empfang privater Nachrichten um. Die Werte werden unmittelbar über den bestehenden `PlayerSettingsService` in derselben Player-YAML gespeichert; es gibt weder eine zweite Settings-Persistence noch eine `settings.yml`. Ein Scoreboard-Toggle lässt die Presentation sofort den gültigen Scope neu bewerten. Das PM-Setting wirkt ebenfalls sofort und steuert ausschließlich den Empfang—das eigene Senden bleibt möglich. `SettingsModule` ist kein `ReloadParticipant`.
+Das `SettingsModule` stellt `/settings` für Spieler mit `vapeecore.settings.use` bereit. Das unveränderte 27-Slot-Inventar schaltet Scoreboard, VapeeCore-eigene UI-Feedback-Sounds und den Empfang privater Nachrichten um. Visibility wird bewusst nur über das Lobby-Hotbar-Item bedient, damit keine zyklische Abhängigkeit entsteht. Die Werte werden unmittelbar über den bestehenden `PlayerSettingsService` in derselben Player-YAML gespeichert; es gibt weder eine zweite Settings-Persistence noch eine `settings.yml`. Ein Scoreboard-Toggle lässt die Presentation sofort den gültigen Scope neu bewerten. Das PM-Setting wirkt ebenfalls sofort und steuert ausschließlich den Empfang—das eigene Senden bleibt möglich. `SettingsModule` ist kein `ReloadParticipant`.
 
 `/core reload` liest `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml` in einer gemeinsamen zweiphasigen Transaktion neu. Zuerst werden alle fünf Dateien in dieser Reihenfolge vollständig vorbereitet und validiert; erst danach werden ihre Runtime-Zustände in derselben Reihenfolge angewendet. Ein Prepare-Fehler verändert daher keinen aktiven Zustand. Bei einem unerwarteten Apply-Fehler werden bereits übernommene Zustände rückwärts zurückgerollt. Message-Prefix, Servername, Debug-Modus, Lobby-Regeln, Chat- und PM-Format sowie Scoreboard- und Tablist-Templates werden ohne Serverneustart aktiv; auch der Presentation-Task passt sich sicher an `enabled` und `update-interval-ticks` an. Ein PM-Reload behält bestehende Conversation-Beziehungen. Der Reload schreibt keine Configdateien, lädt keine Playerdaten und verändert weder Social-State, Economy noch LuckPerms.
 
-Voice-System, Community-Funktionen und Minigames werden bei Bedarf als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt.
+Voice-System, Activities, Community-Funktionen und Minigames werden erst in späteren Phasen als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt. Phase 13 enthält kein Activity-, Game- oder Minigame-Framework.

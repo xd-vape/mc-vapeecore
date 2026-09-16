@@ -92,4 +92,8 @@ public final class SettingsModule implements CoreModule {
         presentationService = null;
         playerSettingsService = null;
     }
+
+    public SettingsMenu getSettingsMenu() {
+        return Objects.requireNonNull(settingsMenu, "SettingsModule is not enabled");
+    }
 }

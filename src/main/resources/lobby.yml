@@ -11,3 +11,11 @@ protection:
   block-place: true
   item-drop: true
   item-pickup: true
+
+messages:
+  join:
+    enabled: true
+    format: "<dark_gray>[<green>+<dark_gray>] <white><name>"
+  quit:
+    enabled: true
+    format: "<dark_gray>[<red>-<dark_gray>] <white><name>"
