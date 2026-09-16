@@ -14,6 +14,7 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.reload.ReloadService;
+import dev.vapee.core.settings.SettingsModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -32,6 +33,7 @@ public final class VapeeCore extends JavaPlugin {
     private ChatModule chatModule;
     private PrivateMessageModule privateMessageModule;
     private PresentationModule presentationModule;
+    private SettingsModule settingsModule;
 
     @Override
     public void onEnable() {
@@ -56,6 +58,12 @@ public final class VapeeCore extends JavaPlugin {
                 economyModule,
                 lobbyModule
         );
+        settingsModule = new SettingsModule(
+                this,
+                playerModule,
+                presentationModule,
+                messageService
+        );
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
         moduleManager.register(economyModule);
@@ -63,6 +71,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(chatModule);
         moduleManager.register(privateMessageModule);
         moduleManager.register(presentationModule);
+        moduleManager.register(settingsModule);
         moduleManager.enableAll();
 
         ReloadService reloadService = new ReloadService(

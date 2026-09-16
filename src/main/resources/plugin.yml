@@ -35,6 +35,10 @@ commands:
     description: Reply to your last private conversation
     usage: /reply <message>
     permission: vapeecore.message.use
+  settings:
+    description: Opens your player settings
+    usage: /settings
+    permission: vapeecore.settings.use
 
 permissions:
   vapeecore.admin:
@@ -57,4 +61,7 @@ permissions:
     default: op
   vapeecore.message.use:
     description: Allows using private messages
+    default: true
+  vapeecore.settings.use:
+    description: Allows opening the player settings
     default: true

@@ -6,7 +6,8 @@ import dev.vapee.core.player.PlayerService;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 public final class PlayerSettingsService {
 
@@ -33,25 +34,57 @@ public final class PlayerSettingsService {
     }
 
     public boolean setScoreboardEnabled(UUID uniqueId, boolean enabled) {
-        return updateSettings(uniqueId, settings -> settings.setScoreboardEnabled(enabled));
+        return updateSettings(
+                uniqueId,
+                enabled,
+                PlayerSettings::isScoreboardEnabled,
+                PlayerSettings::setScoreboardEnabled
+        );
     }
 
     public boolean setSoundsEnabled(UUID uniqueId, boolean enabled) {
-        return updateSettings(uniqueId, settings -> settings.setSoundsEnabled(enabled));
+        return updateSettings(
+                uniqueId,
+                enabled,
+                PlayerSettings::isSoundsEnabled,
+                PlayerSettings::setSoundsEnabled
+        );
     }
 
     public boolean setPrivateMessagesEnabled(UUID uniqueId, boolean enabled) {
-        return updateSettings(uniqueId, settings -> settings.setPrivateMessagesEnabled(enabled));
+        return updateSettings(
+                uniqueId,
+                enabled,
+                PlayerSettings::isPrivateMessagesEnabled,
+                PlayerSettings::setPrivateMessagesEnabled
+        );
     }
 
-    private boolean updateSettings(UUID uniqueId, Consumer<PlayerSettings> update) {
-        Optional<PlayerSettings> settings = getSettings(uniqueId);
-        if (settings.isEmpty()) {
+    private boolean updateSettings(
+            UUID uniqueId,
+            boolean enabled,
+            Predicate<PlayerSettings> currentValue,
+            BiConsumer<PlayerSettings, Boolean> update
+    ) {
+        UUID validatedUniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
+        Optional<PlayerSettings> optionalSettings = getSettings(validatedUniqueId);
+        if (optionalSettings.isEmpty()) {
             return false;
         }
 
-        update.accept(settings.get());
-        playerService.savePlayer(uniqueId);
+        PlayerSettings settings = optionalSettings.get();
+        boolean previousValue = currentValue.test(settings);
+        if (previousValue == enabled) {
+            return true;
+        }
+
+        update.accept(settings, enabled);
+        try {
+            playerService.savePlayer(validatedUniqueId);
+        } catch (RuntimeException exception) {
+            update.accept(settings, previousValue);
+            throw exception;
+        }
         return true;
     }
 }
