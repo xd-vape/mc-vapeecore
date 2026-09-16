@@ -9,6 +9,8 @@ import dev.vapee.core.privatemessage.command.ReplyCommand;
 import dev.vapee.core.privatemessage.config.PrivateMessageConfig;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
+import dev.vapee.core.social.SocialModule;
+import dev.vapee.core.social.SocialService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,6 +21,7 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
 
     private final JavaPlugin plugin;
     private final PlayerModule playerModule;
+    private final SocialModule socialModule;
     private final MessageService messageService;
 
     private PrivateMessageConfig privateMessageConfig;
@@ -27,9 +30,15 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
     private PluginCommand messageCommand;
     private PluginCommand replyCommand;
 
-    public PrivateMessageModule(JavaPlugin plugin, PlayerModule playerModule, MessageService messageService) {
+    public PrivateMessageModule(
+            JavaPlugin plugin,
+            PlayerModule playerModule,
+            SocialModule socialModule,
+            MessageService messageService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
+        this.socialModule = Objects.requireNonNull(socialModule, "socialModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -41,11 +50,13 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
     @Override
     public void enable() {
         PlayerSettingsService playerSettingsService = playerModule.getPlayerSettingsService();
+        SocialService socialService = socialModule.getSocialService();
         PrivateMessageConfig newConfig = new PrivateMessageConfig(plugin);
         newConfig.initialize();
         PrivateMessageService newService = new PrivateMessageService(
                 plugin.getServer(),
                 playerSettingsService,
+                socialService,
                 messageService,
                 plugin.getLogger(),
                 newConfig

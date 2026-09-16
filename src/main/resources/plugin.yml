@@ -39,6 +39,18 @@ commands:
     description: Opens your player settings
     usage: /settings
     permission: vapeecore.settings.use
+  ignore:
+    description: Ignore an online player
+    usage: /ignore <player>
+    permission: vapeecore.social.ignore
+  unignore:
+    description: Stop ignoring a player
+    usage: /unignore <player|uuid>
+    permission: vapeecore.social.ignore
+  ignorelist:
+    description: Shows your ignored players
+    usage: /ignorelist
+    permission: vapeecore.social.ignore
 
 permissions:
   vapeecore.admin:
@@ -64,4 +76,7 @@ permissions:
     default: true
   vapeecore.settings.use:
     description: Allows opening the player settings
+    default: true
+  vapeecore.social.ignore:
+    description: Allows managing your ignored players
     default: true

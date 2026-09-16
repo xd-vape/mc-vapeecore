@@ -91,6 +91,8 @@ public final class MessageCommand implements CommandExecutor {
             case SENDER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
             case RECIPIENT_NOT_LOADED -> messageService.send(player, "<red>That player's profile is not available.</red>");
             case RECIPIENT_DISABLED -> messageService.send(player, "<red>That player is not accepting private messages.</red>");
+            case SENDER_IGNORES_RECIPIENT -> messageService.send(player, "<red>You are ignoring that player.</red>");
+            case RECIPIENT_IGNORES_SENDER -> messageService.send(player, "<red>That player is not accepting private messages.</red>");
             case TARGET_OFFLINE -> messageService.send(player, "<red>That player is no longer online.</red>");
             case CANNOT_MESSAGE_SELF -> messageService.send(player, "<red>You cannot message yourself.</red>");
             case NO_REPLY_TARGET -> messageService.send(player, "<red>You have no player to reply to.</red>");

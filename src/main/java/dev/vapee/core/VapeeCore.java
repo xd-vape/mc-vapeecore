@@ -15,6 +15,7 @@ import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.reload.ReloadService;
 import dev.vapee.core.settings.SettingsModule;
+import dev.vapee.core.social.SocialModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -28,6 +29,7 @@ public final class VapeeCore extends JavaPlugin {
     private ModuleManager moduleManager;
     private PermissionModule permissionModule;
     private PlayerModule playerModule;
+    private SocialModule socialModule;
     private EconomyModule economyModule;
     private LobbyModule lobbyModule;
     private ChatModule chatModule;
@@ -45,10 +47,11 @@ public final class VapeeCore extends JavaPlugin {
 
         permissionModule = new PermissionModule(this);
         playerModule = new PlayerModule(this, configService, messageService);
+        socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService);
         lobbyModule = new LobbyModule(this, messageService);
-        chatModule = new ChatModule(this, permissionModule, messageService);
-        privateMessageModule = new PrivateMessageModule(this, playerModule, messageService);
+        chatModule = new ChatModule(this, permissionModule, socialModule, messageService);
+        privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
         presentationModule = new PresentationModule(
                 this,
                 configService,
@@ -66,6 +69,7 @@ public final class VapeeCore extends JavaPlugin {
         );
         moduleManager.register(permissionModule);
         moduleManager.register(playerModule);
+        moduleManager.register(socialModule);
         moduleManager.register(economyModule);
         moduleManager.register(lobbyModule);
         moduleManager.register(chatModule);

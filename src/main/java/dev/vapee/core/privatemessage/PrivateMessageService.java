@@ -3,6 +3,7 @@ package dev.vapee.core.privatemessage;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.privatemessage.config.PrivateMessageConfig;
+import dev.vapee.core.social.SocialService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -24,6 +25,7 @@ public final class PrivateMessageService {
 
     private final Server server;
     private final PlayerSettingsService playerSettingsService;
+    private final SocialService socialService;
     private final TemplateDeserializer templateDeserializer;
     private final Logger logger;
     private final Path configFile;
@@ -35,6 +37,7 @@ public final class PrivateMessageService {
     public PrivateMessageService(
             Server server,
             PlayerSettingsService playerSettingsService,
+            SocialService socialService,
             MessageService messageService,
             Logger logger,
             PrivateMessageConfig privateMessageConfig
@@ -42,6 +45,7 @@ public final class PrivateMessageService {
         this(
                 server,
                 playerSettingsService,
+                socialService,
                 Objects.requireNonNull(messageService, "messageService")::deserialize,
                 logger,
                 Objects.requireNonNull(privateMessageConfig, "privateMessageConfig").getConfigFile(),
@@ -52,6 +56,7 @@ public final class PrivateMessageService {
     PrivateMessageService(
             Server server,
             PlayerSettingsService playerSettingsService,
+            SocialService socialService,
             TemplateDeserializer templateDeserializer,
             Logger logger,
             Path configFile,
@@ -59,6 +64,7 @@ public final class PrivateMessageService {
     ) {
         this.server = Objects.requireNonNull(server, "server");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
+        this.socialService = Objects.requireNonNull(socialService, "socialService");
         this.templateDeserializer = Objects.requireNonNull(templateDeserializer, "templateDeserializer");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.configFile = Objects.requireNonNull(configFile, "configFile");
@@ -94,6 +100,12 @@ public final class PrivateMessageService {
         }
         if (!recipientSetting.get()) {
             return PrivateMessageResult.RECIPIENT_DISABLED;
+        }
+        if (socialService.isIgnoring(senderUniqueId, recipientUniqueId)) {
+            return PrivateMessageResult.SENDER_IGNORES_RECIPIENT;
+        }
+        if (socialService.isIgnoring(recipientUniqueId, senderUniqueId)) {
+            return PrivateMessageResult.RECIPIENT_IGNORES_SENDER;
         }
 
         Component message = Component.text(validatedMessage);

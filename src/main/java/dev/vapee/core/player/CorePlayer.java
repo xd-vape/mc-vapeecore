@@ -2,6 +2,7 @@ package dev.vapee.core.player;
 
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.settings.PlayerSettings;
+import dev.vapee.core.player.social.PlayerSocial;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -13,6 +14,7 @@ public final class CorePlayer {
     private final Instant firstJoin;
     private final PlayerSettings settings;
     private final CoinWallet wallet;
+    private final PlayerSocial social;
     private String name;
     private Instant lastJoin;
 
@@ -22,7 +24,8 @@ public final class CorePlayer {
             Instant firstJoin,
             Instant lastJoin,
             PlayerSettings settings,
-            CoinWallet wallet
+            CoinWallet wallet,
+            PlayerSocial social
     ) {
         this.uniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
         this.name = requireName(name);
@@ -30,6 +33,10 @@ public final class CorePlayer {
         this.lastJoin = requireValidLastJoin(lastJoin);
         this.settings = Objects.requireNonNull(settings, "settings");
         this.wallet = Objects.requireNonNull(wallet, "wallet");
+        this.social = Objects.requireNonNull(social, "social");
+        if (social.isIgnoring(uniqueId)) {
+            throw new IllegalArgumentException("A player cannot ignore themselves");
+        }
     }
 
     public UUID getUniqueId() {
@@ -54,6 +61,10 @@ public final class CorePlayer {
 
     public CoinWallet getWallet() {
         return wallet;
+    }
+
+    public PlayerSocial getSocial() {
+        return social;
     }
 
     public void updateName(String name) {

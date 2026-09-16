@@ -7,6 +7,8 @@ import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
+import dev.vapee.core.social.SocialModule;
+import dev.vapee.core.social.SocialService;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -16,15 +18,22 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
 
     private final JavaPlugin plugin;
     private final PermissionModule permissionModule;
+    private final SocialModule socialModule;
     private final MessageService messageService;
 
     private ChatConfig chatConfig;
     private ChatService chatService;
     private ChatListener chatListener;
 
-    public ChatModule(JavaPlugin plugin, PermissionModule permissionModule, MessageService messageService) {
+    public ChatModule(
+            JavaPlugin plugin,
+            PermissionModule permissionModule,
+            SocialModule socialModule,
+            MessageService messageService
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.permissionModule = Objects.requireNonNull(permissionModule, "permissionModule");
+        this.socialModule = Objects.requireNonNull(socialModule, "socialModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -36,6 +45,7 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
     @Override
     public void enable() {
         LuckPermsService luckPermsService = permissionModule.getLuckPermsService();
+        SocialService socialService = socialModule.getSocialService();
         ChatConfig newChatConfig = new ChatConfig(plugin);
         newChatConfig.initialize();
         ChatService newChatService = new ChatService(
@@ -44,7 +54,7 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
                 messageService,
                 plugin.getLogger()
         );
-        ChatListener newChatListener = new ChatListener(newChatService);
+        ChatListener newChatListener = new ChatListener(newChatService, socialService);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newChatListener, plugin);

@@ -3,6 +3,7 @@ package dev.vapee.core.player.repository;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.settings.PlayerSettings;
+import dev.vapee.core.player.social.PlayerSocial;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -12,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -87,6 +90,11 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
             configuration.set("economy.coins", player.getWallet().getCoins());
+            List<String> ignoredPlayers = player.getSocial().getIgnoredPlayers().stream()
+                    .map(UUID::toString)
+                    .sorted()
+                    .toList();
+            configuration.set("social.ignored", ignoredPlayers);
             configuration.save(temporaryFile.toFile());
 
             replacePlayerFile(temporaryFile, playerFile);
@@ -113,6 +121,7 @@ public final class FilePlayerRepository implements PlayerRepository {
         long lastJoinMillis = readEpochMillis(configuration, playerFile, "last-join");
         PlayerSettings settings = readSettings(uniqueId, playerFile, configuration);
         CoinWallet wallet = readWallet(playerFile, configuration);
+        PlayerSocial social = readSocial(uniqueId, playerFile, configuration);
 
         try {
             return new CorePlayer(
@@ -121,7 +130,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     Instant.ofEpochMilli(firstJoinMillis),
                     Instant.ofEpochMilli(lastJoinMillis),
                     settings,
-                    wallet
+                    wallet,
+                    social
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -196,6 +206,53 @@ public final class FilePlayerRepository implements PlayerRepository {
         } catch (IllegalArgumentException exception) {
             throw invalidPlayerFile(playerFile, "Invalid 'economy.coins': balance must not be negative", exception);
         }
+    }
+
+    private PlayerSocial readSocial(
+            UUID owner,
+            Path playerFile,
+            YamlConfiguration configuration
+    ) {
+        if (!configuration.contains("social")) {
+            return PlayerSocial.empty();
+        }
+        if (!configuration.isConfigurationSection("social")) {
+            throw invalidPlayerFile(playerFile, "'social' must be a YAML section");
+        }
+        if (!configuration.contains("social.ignored")) {
+            return PlayerSocial.empty();
+        }
+        if (!configuration.isList("social.ignored")) {
+            throw invalidPlayerFile(playerFile, "'social.ignored' must be a list");
+        }
+
+        List<?> values = configuration.getList("social.ignored");
+        if (values == null) {
+            throw invalidPlayerFile(playerFile, "'social.ignored' must be a list");
+        }
+
+        HashSet<UUID> ignoredPlayers = new HashSet<>();
+        for (Object value : values) {
+            if (!(value instanceof String stringValue)) {
+                throw invalidPlayerFile(playerFile, "Every 'social.ignored' entry must be a UUID string");
+            }
+
+            UUID ignoredPlayer;
+            try {
+                ignoredPlayer = UUID.fromString(stringValue);
+            } catch (IllegalArgumentException exception) {
+                throw invalidPlayerFile(
+                        playerFile,
+                        "Invalid UUID in 'social.ignored': " + stringValue,
+                        exception
+                );
+            }
+            if (owner.equals(ignoredPlayer)) {
+                throw invalidPlayerFile(playerFile, "'social.ignored' must not contain the player's own UUID");
+            }
+            ignoredPlayers.add(ignoredPlayer);
+        }
+        return PlayerSocial.of(ignoredPlayers);
     }
 
     private boolean readBooleanSetting(

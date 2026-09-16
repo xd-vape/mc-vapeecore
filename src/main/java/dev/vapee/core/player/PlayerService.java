@@ -3,6 +3,7 @@ package dev.vapee.core.player;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.player.repository.PlayerRepository;
 import dev.vapee.core.player.settings.PlayerSettings;
+import dev.vapee.core.player.social.PlayerSocial;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -53,7 +54,8 @@ public final class PlayerService {
                 now,
                 now,
                 PlayerSettings.defaults(),
-                CoinWallet.empty()
+                CoinWallet.empty(),
+                PlayerSocial.empty()
         );
         repository.save(player);
         loadedPlayers.put(uniqueId, player);
@@ -62,6 +64,15 @@ public final class PlayerService {
 
     public Optional<CorePlayer> getPlayer(UUID uniqueId) {
         return Optional.ofNullable(loadedPlayers.get(Objects.requireNonNull(uniqueId, "uniqueId")));
+    }
+
+    public Optional<CorePlayer> findKnownPlayer(UUID uniqueId) {
+        UUID validatedUniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
+        CorePlayer loadedPlayer = loadedPlayers.get(validatedUniqueId);
+        if (loadedPlayer != null) {
+            return Optional.of(loadedPlayer);
+        }
+        return repository.findByUniqueId(validatedUniqueId);
     }
 
     public boolean isLoaded(UUID uniqueId) {
