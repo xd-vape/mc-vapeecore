@@ -1,10 +1,14 @@
 package dev.vapee.core.lobby.experience;
 
+import dev.vapee.core.activity.ActivityModule;
+import dev.vapee.core.activity.navigation.ActivityCatalog;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.experience.navigator.NavigatorListener;
 import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
+import dev.vapee.core.lobby.experience.navigator.activity.ActivitiesListener;
+import dev.vapee.core.lobby.experience.navigator.activity.ActivitiesMenu;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
@@ -25,26 +29,31 @@ public final class LobbyExperienceModule implements CoreModule {
     private final LobbyModule lobbyModule;
     private final PlayerModule playerModule;
     private final SettingsModule settingsModule;
+    private final ActivityModule activityModule;
     private final MessageService messageService;
 
     private LobbyVisibilityService visibilityService;
     private NavigatorMenu navigatorMenu;
+    private ActivitiesMenu activitiesMenu;
     private LobbyItemService lobbyItemService;
     private LobbyExperienceListener experienceListener;
     private LobbyItemListener itemListener;
     private NavigatorListener navigatorListener;
+    private ActivitiesListener activitiesListener;
 
     public LobbyExperienceModule(
             JavaPlugin plugin,
             LobbyModule lobbyModule,
             PlayerModule playerModule,
             SettingsModule settingsModule,
+            ActivityModule activityModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.settingsModule = Objects.requireNonNull(settingsModule, "settingsModule");
+        this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -60,6 +69,7 @@ public final class LobbyExperienceModule implements CoreModule {
         PlayerService newPlayerService = playerModule.getPlayerService();
         PlayerSettingsService newPlayerSettingsService = playerModule.getPlayerSettingsService();
         SettingsMenu newSettingsMenu = settingsModule.getSettingsMenu();
+        ActivityCatalog newActivityCatalog = activityModule.getActivityCatalog();
 
         LobbyVisibilityService newVisibilityService = new LobbyVisibilityService(
                 plugin,
@@ -67,6 +77,11 @@ public final class LobbyExperienceModule implements CoreModule {
                 newPlayerSettingsService
         );
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin);
+        ActivitiesMenu newActivitiesMenu = new ActivitiesMenu(
+                plugin,
+                newActivityCatalog,
+                newNavigatorMenu
+        );
         LobbyItemService newLobbyItemService = new LobbyItemService(
                 plugin,
                 newLobbyService,
@@ -91,12 +106,21 @@ public final class LobbyExperienceModule implements CoreModule {
                 newSettingsMenu,
                 messageService
         );
-        NavigatorListener newNavigatorListener = new NavigatorListener(newLobbyService, messageService);
+        NavigatorListener newNavigatorListener = new NavigatorListener(
+                newLobbyService,
+                messageService,
+                newActivitiesMenu
+        );
+        ActivitiesListener newActivitiesListener = new ActivitiesListener(
+                newActivityCatalog,
+                newActivitiesMenu
+        );
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newExperienceListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newItemListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newNavigatorListener, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newActivitiesListener, plugin);
 
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 if (!newLobbyService.isLobbyWorld(player.getWorld())) {
@@ -107,19 +131,22 @@ public final class LobbyExperienceModule implements CoreModule {
             }
         } catch (RuntimeException exception) {
             newExperienceListener.deactivate();
+            HandlerList.unregisterAll(newActivitiesListener);
             HandlerList.unregisterAll(newNavigatorListener);
             HandlerList.unregisterAll(newItemListener);
             HandlerList.unregisterAll(newExperienceListener);
-            cleanupRuntime(newNavigatorMenu, newLobbyItemService, newVisibilityService);
+            cleanupRuntime(newNavigatorMenu, newActivitiesMenu, newLobbyItemService, newVisibilityService);
             throw exception;
         }
 
         visibilityService = newVisibilityService;
         navigatorMenu = newNavigatorMenu;
+        activitiesMenu = newActivitiesMenu;
         lobbyItemService = newLobbyItemService;
         experienceListener = newExperienceListener;
         itemListener = newItemListener;
         navigatorListener = newNavigatorListener;
+        activitiesListener = newActivitiesListener;
         plugin.getLogger().info("Lobby experience module enabled.");
     }
 
@@ -135,19 +162,25 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorListener != null) {
             HandlerList.unregisterAll(navigatorListener);
         }
+        if (activitiesListener != null) {
+            HandlerList.unregisterAll(activitiesListener);
+        }
 
-        cleanupRuntime(navigatorMenu, lobbyItemService, visibilityService);
+        cleanupRuntime(navigatorMenu, activitiesMenu, lobbyItemService, visibilityService);
 
+        activitiesListener = null;
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;
         lobbyItemService = null;
+        activitiesMenu = null;
         navigatorMenu = null;
         visibilityService = null;
     }
 
     private void cleanupRuntime(
             NavigatorMenu activeNavigatorMenu,
+            ActivitiesMenu activeActivitiesMenu,
             LobbyItemService activeLobbyItemService,
             LobbyVisibilityService activeVisibilityService
     ) {
@@ -156,6 +189,13 @@ public final class LobbyExperienceModule implements CoreModule {
                 activeNavigatorMenu.closeOpenInventories();
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.WARNING, "Could not close all navigator inventories.", exception);
+            }
+        }
+        if (activeActivitiesMenu != null) {
+            try {
+                activeActivitiesMenu.closeOpenInventories();
+            } catch (RuntimeException exception) {
+                plugin.getLogger().log(Level.WARNING, "Could not close all activities inventories.", exception);
             }
         }
         if (activeLobbyItemService != null) {

@@ -1,6 +1,7 @@
 package dev.vapee.core;
 
 import dev.vapee.core.activity.ActivityModule;
+import dev.vapee.core.activity.blackjack.BlackjackModule;
 import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.config.ConfigService;
@@ -39,6 +40,7 @@ public final class VapeeCore extends JavaPlugin {
     private PresentationModule presentationModule;
     private SettingsModule settingsModule;
     private ActivityModule activityModule;
+    private BlackjackModule blackjackModule;
     private LobbyExperienceModule lobbyExperienceModule;
 
     @Override
@@ -72,11 +74,18 @@ public final class VapeeCore extends JavaPlugin {
                 messageService
         );
         activityModule = new ActivityModule(this, playerModule);
+        blackjackModule = new BlackjackModule(
+                this,
+                activityModule,
+                lobbyModule,
+                messageService
+        );
         lobbyExperienceModule = new LobbyExperienceModule(
                 this,
                 lobbyModule,
                 playerModule,
                 settingsModule,
+                activityModule,
                 messageService
         );
         moduleManager.register(permissionModule);
@@ -89,6 +98,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(presentationModule);
         moduleManager.register(settingsModule);
         moduleManager.register(activityModule);
+        moduleManager.register(blackjackModule);
         moduleManager.register(lobbyExperienceModule);
         moduleManager.enableAll();
 

@@ -1,6 +1,7 @@
 package dev.vapee.core.lobby.experience.navigator;
 
 import dev.vapee.core.lobby.LobbyService;
+import dev.vapee.core.lobby.experience.navigator.activity.ActivitiesMenu;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
@@ -17,10 +18,16 @@ public final class NavigatorListener implements Listener {
 
     private final LobbyService lobbyService;
     private final MessageService messageService;
+    private final ActivitiesMenu activitiesMenu;
 
-    public NavigatorListener(LobbyService lobbyService, MessageService messageService) {
+    public NavigatorListener(
+            LobbyService lobbyService,
+            MessageService messageService,
+            ActivitiesMenu activitiesMenu
+    ) {
         this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.activitiesMenu = Objects.requireNonNull(activitiesMenu, "activitiesMenu");
     }
 
     @EventHandler
@@ -51,8 +58,7 @@ public final class NavigatorListener implements Listener {
                 }
                 player.closeInventory();
             }
-            case NavigatorMenu.ACTIVITIES_SLOT ->
-                    messageService.send(player, "<yellow>Activities are not available yet.</yellow>");
+            case NavigatorMenu.ACTIVITIES_SLOT -> activitiesMenu.open(player);
             case NavigatorMenu.MINIGAMES_SLOT ->
                     messageService.send(player, "<yellow>Minigames are not available yet.</yellow>");
             case NavigatorMenu.CLOSE_SLOT -> player.closeInventory();

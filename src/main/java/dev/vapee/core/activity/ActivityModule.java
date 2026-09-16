@@ -1,5 +1,6 @@
 package dev.vapee.core.activity;
 
+import dev.vapee.core.activity.navigation.ActivityCatalog;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
@@ -15,6 +16,7 @@ public final class ActivityModule implements CoreModule {
     private final PlayerModule playerModule;
 
     private ActivityService activityService;
+    private ActivityCatalog activityCatalog;
     private ActivityListener activityListener;
 
     public ActivityModule(JavaPlugin plugin, PlayerModule playerModule) {
@@ -35,6 +37,7 @@ public final class ActivityModule implements CoreModule {
                 newPlayerService,
                 plugin.getLogger()
         );
+        ActivityCatalog newActivityCatalog = new ActivityCatalog(newActivityService);
         ActivityListener newActivityListener = new ActivityListener(newActivityService);
 
         try {
@@ -50,6 +53,7 @@ public final class ActivityModule implements CoreModule {
         }
 
         activityService = newActivityService;
+        activityCatalog = newActivityCatalog;
         activityListener = newActivityListener;
         plugin.getLogger().info("Activity module enabled with "
                 + newActivityService.getActivityTypeCount() + " activity type(s), "
@@ -63,6 +67,9 @@ public final class ActivityModule implements CoreModule {
         if (activityListener != null) {
             HandlerList.unregisterAll(activityListener);
         }
+        if (activityCatalog != null) {
+            activityCatalog.clear();
+        }
         if (activityService != null) {
             try {
                 activityService.shutdown();
@@ -72,10 +79,15 @@ public final class ActivityModule implements CoreModule {
         }
 
         activityListener = null;
+        activityCatalog = null;
         activityService = null;
     }
 
     public ActivityService getActivityService() {
         return Objects.requireNonNull(activityService, "ActivityModule is not enabled");
+    }
+
+    public ActivityCatalog getActivityCatalog() {
+        return Objects.requireNonNull(activityCatalog, "ActivityModule is not enabled");
     }
 }

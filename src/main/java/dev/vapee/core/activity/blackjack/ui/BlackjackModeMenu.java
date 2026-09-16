@@ -1,4 +1,4 @@
-package dev.vapee.core.lobby.experience.navigator;
+package dev.vapee.core.activity.blackjack.ui;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -13,45 +13,37 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.List;
 import java.util.Objects;
 
-public final class NavigatorMenu {
+public final class BlackjackModeMenu {
 
     public static final int INVENTORY_SIZE = 27;
-    public static final int LOBBY_SLOT = 11;
-    public static final int ACTIVITIES_SLOT = 13;
-    public static final int MINIGAMES_SLOT = 15;
+    public static final int SOLO_SLOT = 11;
+    public static final int PUBLIC_SLOT = 15;
     public static final int CLOSE_SLOT = 22;
 
-    private static final Component TITLE = Component.text("Navigator", NamedTextColor.DARK_GRAY);
+    private static final Component TITLE = Component.text("Blackjack", NamedTextColor.DARK_GRAY);
 
     private final JavaPlugin plugin;
 
-    public NavigatorMenu(JavaPlugin plugin) {
+    public BlackjackModeMenu(JavaPlugin plugin) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
     }
 
     public void open(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
-        NavigatorInventoryHolder holder = new NavigatorInventoryHolder(validatedPlayer.getUniqueId());
+        BlackjackModeInventoryHolder holder = new BlackjackModeInventoryHolder(validatedPlayer.getUniqueId());
         Inventory inventory = plugin.getServer().createInventory(holder, INVENTORY_SIZE, TITLE);
         holder.bindInventory(inventory);
-
-        inventory.setItem(LOBBY_SLOT, createItem(
-                Material.GRASS_BLOCK,
-                "Lobby",
+        inventory.setItem(SOLO_SLOT, createItem(
+                Material.PLAYER_HEAD,
+                "Solo Play",
                 NamedTextColor.GREEN,
-                List.of("Teleport to the lobby spawn.")
+                List.of("Your own private table.", "No waiting. Deal whenever you are ready.")
         ));
-        inventory.setItem(ACTIVITIES_SLOT, createItem(
-                Material.EMERALD,
-                "Activities",
+        inventory.setItem(PUBLIC_SLOT, createItem(
+                Material.OAK_SIGN,
+                "Public Table",
                 NamedTextColor.AQUA,
-                List.of("Browse lobby activities.")
-        ));
-        inventory.setItem(MINIGAMES_SLOT, createItem(
-                Material.DIAMOND_SWORD,
-                "Minigames",
-                NamedTextColor.LIGHT_PURPLE,
-                List.of("Minigames are coming soon.")
+                List.of("Join an available public table.", "One player is enough to start.")
         ));
         inventory.setItem(CLOSE_SLOT, createItem(
                 Material.BARRIER,
@@ -64,7 +56,7 @@ public final class NavigatorMenu {
 
     public void closeOpenInventories() {
         for (Player player : plugin.getServer().getOnlinePlayers()) {
-            if (player.getOpenInventory().getTopInventory().getHolder() instanceof NavigatorInventoryHolder) {
+            if (player.getOpenInventory().getTopInventory().getHolder() instanceof BlackjackModeInventoryHolder) {
                 player.closeInventory();
             }
         }
@@ -73,23 +65,20 @@ public final class NavigatorMenu {
     private ItemStack createItem(
             Material material,
             String name,
-            NamedTextColor nameColor,
-            List<String> loreLines
+            NamedTextColor color,
+            List<String> lore
     ) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(uiText(name, nameColor));
-        if (!loreLines.isEmpty()) {
-            meta.lore(loreLines.stream()
-                    .map(line -> uiText(line, NamedTextColor.GRAY))
-                    .toList()
-            );
+        meta.displayName(text(name, color));
+        if (!lore.isEmpty()) {
+            meta.lore(lore.stream().map(line -> text(line, NamedTextColor.GRAY)).toList());
         }
         item.setItemMeta(meta);
         return item;
     }
 
-    private Component uiText(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
+    private Component text(String value, NamedTextColor color) {
+        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
     }
 }
