@@ -1,7 +1,6 @@
 package dev.vapee.core.activity.blackjack.ui;
 
 import dev.vapee.core.activity.ActivityState;
-import dev.vapee.core.activity.blackjack.BlackjackMode;
 import dev.vapee.core.activity.blackjack.BlackjackOutcome;
 import dev.vapee.core.activity.blackjack.BlackjackPlayerRound;
 import dev.vapee.core.activity.blackjack.BlackjackRoundPhase;
@@ -92,7 +91,7 @@ public final class BlackjackTableMenu {
 
     private void render(Player player, BlackjackSession session, Inventory inventory) {
         inventory.clear();
-        inventory.setItem(INFO_SLOT, createInfoItem(session));
+        inventory.setItem(INFO_SLOT, createInfoItem(player.getUniqueId(), session));
         renderDealer(session, inventory);
         renderPlayerHand(player.getUniqueId(), session, inventory);
         renderParticipantSummaries(player.getUniqueId(), session, inventory);
@@ -184,16 +183,19 @@ public final class BlackjackTableMenu {
         }
     }
 
-    private ItemStack createInfoItem(BlackjackSession session) {
-        String mode = session.getMode() == BlackjackMode.SOLO ? "Solo" : "Public";
+    private ItemStack createInfoItem(UUID playerId, BlackjackSession session) {
+        String seat = blackjackService.getSeatNumber(playerId)
+                .map(String::valueOf)
+                .orElse("-");
         return createItem(
                 Material.PAPER,
                 "Table Information",
                 NamedTextColor.GOLD,
                 List.of(
-                        text("Mode: " + mode, NamedTextColor.GRAY),
+                        text("Table: " + session.getVenue().id(), NamedTextColor.GRAY),
+                        text("Seat: " + seat, NamedTextColor.GRAY),
                         text("Players: " + session.getParticipantCount() + "/"
-                                + dev.vapee.core.activity.blackjack.BlackjackActivityType.MAX_PARTICIPANTS,
+                                + blackjackService.getTableCapacity(session),
                                 NamedTextColor.GRAY)
                 )
         );

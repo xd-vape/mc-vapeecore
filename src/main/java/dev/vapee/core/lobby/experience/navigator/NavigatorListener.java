@@ -1,7 +1,7 @@
 package dev.vapee.core.lobby.experience.navigator;
 
-import dev.vapee.core.lobby.LobbyService;
-import dev.vapee.core.lobby.experience.navigator.activity.ActivitiesMenu;
+import dev.vapee.core.lobby.warp.WarpResult;
+import dev.vapee.core.lobby.warp.WarpService;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
@@ -16,18 +16,18 @@ import java.util.Objects;
 
 public final class NavigatorListener implements Listener {
 
-    private final LobbyService lobbyService;
+    private final WarpService warpService;
     private final MessageService messageService;
-    private final ActivitiesMenu activitiesMenu;
+    private final NavigatorMenu navigatorMenu;
 
     public NavigatorListener(
-            LobbyService lobbyService,
+            WarpService warpService,
             MessageService messageService,
-            ActivitiesMenu activitiesMenu
+            NavigatorMenu navigatorMenu
     ) {
-        this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
+        this.warpService = Objects.requireNonNull(warpService, "warpService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
-        this.activitiesMenu = Objects.requireNonNull(activitiesMenu, "activitiesMenu");
+        this.navigatorMenu = Objects.requireNonNull(navigatorMenu, "navigatorMenu");
     }
 
     @EventHandler
@@ -51,19 +51,34 @@ public final class NavigatorListener implements Listener {
             return;
         }
 
-        switch (event.getRawSlot()) {
-            case NavigatorMenu.LOBBY_SLOT -> {
-                if (!lobbyService.teleportToSpawn(player)) {
-                    messageService.send(player, "<red>The lobby spawn is not available.</red>");
-                }
-                player.closeInventory();
+        int slot = event.getRawSlot();
+        if (slot == NavigatorMenu.PREVIOUS_SLOT && holder.getPage() > 0) {
+            navigatorMenu.open(player, holder.getPage() - 1);
+            return;
+        }
+        if (slot == NavigatorMenu.NEXT_SLOT) {
+            navigatorMenu.open(player, holder.getPage() + 1);
+            return;
+        }
+        if (slot == NavigatorMenu.CLOSE_SLOT) {
+            player.closeInventory();
+            return;
+        }
+        holder.getWarpId(slot).ifPresent(warpId -> teleport(player, warpId));
+    }
+
+    private void teleport(Player player, String warpId) {
+        WarpResult result = warpService.teleport(player, warpId);
+        switch (result) {
+            case SUCCESS -> player.closeInventory();
+            case NOT_FOUND -> {
+                messageService.send(player, "<red>That warp no longer exists.</red>");
+                navigatorMenu.open(player, 0);
             }
-            case NavigatorMenu.ACTIVITIES_SLOT -> activitiesMenu.open(player);
-            case NavigatorMenu.MINIGAMES_SLOT ->
-                    messageService.send(player, "<yellow>Minigames are not available yet.</yellow>");
-            case NavigatorMenu.CLOSE_SLOT -> player.closeInventory();
-            default -> {
-            }
+            case WORLD_NOT_LOADED -> messageService.send(player, "<red>The warp world is not loaded.</red>");
+            case TELEPORT_FAILED -> messageService.send(player, "<red>The teleport was cancelled or failed.</red>");
+            case PLAYER_OFFLINE, INVALID_ID, INVALID_NAME, INVALID_ICON ->
+                    messageService.send(player, "<red>The warp is currently unavailable.</red>");
         }
     }
 

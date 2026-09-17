@@ -5,6 +5,7 @@ import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;
+import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
@@ -22,13 +23,17 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class LobbyItemListener implements Listener {
+
+    private static final long VISIBILITY_TOGGLE_COOLDOWN_TICKS = 10L;
 
     private final JavaPlugin plugin;
     private final LobbyService lobbyService;
@@ -39,6 +44,7 @@ public final class LobbyItemListener implements Listener {
     private final SettingsMenu settingsMenu;
     private final MessageService messageService;
     private final Logger logger;
+    private final Set<UUID> visibilityToggleCooldowns = new HashSet<>();
 
     public LobbyItemListener(
             JavaPlugin plugin,
@@ -97,7 +103,7 @@ public final class LobbyItemListener implements Listener {
                 settingsMenu.open(player);
                 playFeedbackSound(player);
             }
-            case VISIBILITY -> toggleVisibility(player);
+            case VISIBILITY -> handleVisibilityInteraction(player, event.getAction());
         }
     }
 
@@ -151,6 +157,10 @@ public final class LobbyItemListener implements Listener {
 
     private void toggleVisibility(Player player) {
         UUID uniqueId = player.getUniqueId();
+        if (!beginVisibilityToggleCooldown(player, uniqueId)) {
+            return;
+        }
+
         Optional<Boolean> currentValue = playerSettingsService.areLobbyPlayersVisible(uniqueId);
         if (currentValue.isEmpty()) {
             messageService.send(player, "<red>Your player profile is not available.</red>");
@@ -173,6 +183,40 @@ public final class LobbyItemListener implements Listener {
         visibilityService.applyViewerPreference(player);
         lobbyItemService.refreshVisibilityItem(player);
         playFeedbackSound(player);
+    }
+
+    private void handleVisibilityInteraction(Player player, Action action) {
+        if (action != Action.RIGHT_CLICK_BLOCK) {
+            toggleVisibility(player);
+            return;
+        }
+
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline() || !lobbyService.isLobbyWorld(player.getWorld())) {
+                return;
+            }
+            toggleVisibility(player);
+        });
+    }
+
+    private boolean beginVisibilityToggleCooldown(Player player, UUID uniqueId) {
+        if (!visibilityToggleCooldowns.add(uniqueId)) {
+            return false;
+        }
+
+        try {
+            player.setCooldown(Material.LIME_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
+            player.setCooldown(Material.GRAY_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
+            plugin.getServer().getScheduler().runTaskLater(
+                    plugin,
+                    () -> visibilityToggleCooldowns.remove(uniqueId),
+                    VISIBILITY_TOGGLE_COOLDOWN_TICKS
+            );
+            return true;
+        } catch (RuntimeException exception) {
+            visibilityToggleCooldowns.remove(uniqueId);
+            throw exception;
+        }
     }
 
     private void playFeedbackSound(Player player) {

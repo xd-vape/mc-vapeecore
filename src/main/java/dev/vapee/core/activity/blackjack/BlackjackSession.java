@@ -20,8 +20,6 @@ public final class BlackjackSession extends ActivitySession {
     private final BlackjackService blackjackService;
     private final Map<UUID, BlackjackPlayerRound> playerRounds = new LinkedHashMap<>();
 
-    private BlackjackMode mode = BlackjackMode.UNCLAIMED;
-    private UUID soloOwner;
     private BlackjackRoundPhase roundPhase = BlackjackRoundPhase.IDLE;
     private BlackjackShoe currentShoe;
     private BlackjackHand dealerHand = new BlackjackHand();
@@ -38,14 +36,6 @@ public final class BlackjackSession extends ActivitySession {
     ) {
         super(sessionId, BlackjackActivityType.KEY, venue);
         this.blackjackService = Objects.requireNonNull(blackjackService, "blackjackService");
-    }
-
-    public BlackjackMode getMode() {
-        return mode;
-    }
-
-    public Optional<UUID> getSoloOwner() {
-        return Optional.ofNullable(soloOwner);
     }
 
     public BlackjackRoundPhase getRoundPhase() {
@@ -78,29 +68,6 @@ public final class BlackjackSession extends ActivitySession {
 
     long getTurnGeneration() {
         return turnGeneration;
-    }
-
-    void claim(BlackjackMode mode, UUID soloOwner) {
-        BlackjackMode validatedMode = Objects.requireNonNull(mode, "mode");
-        if (validatedMode == BlackjackMode.UNCLAIMED) {
-            throw new IllegalArgumentException("Use release() to unclaim a table");
-        }
-        if (getParticipantCount() != 0 || this.mode != BlackjackMode.UNCLAIMED) {
-            throw new IllegalStateException("Only an empty unclaimed table can be claimed");
-        }
-        if ((validatedMode == BlackjackMode.SOLO) != (soloOwner != null)) {
-            throw new IllegalArgumentException("Solo tables require exactly one owner");
-        }
-        this.mode = validatedMode;
-        this.soloOwner = soloOwner;
-    }
-
-    void release() {
-        if (getParticipantCount() != 0) {
-            throw new IllegalStateException("A table with participants cannot be released");
-        }
-        mode = BlackjackMode.UNCLAIMED;
-        soloOwner = null;
     }
 
     void beginRound(BlackjackShoe shoe) {

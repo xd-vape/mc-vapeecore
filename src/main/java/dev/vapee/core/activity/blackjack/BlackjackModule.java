@@ -3,15 +3,15 @@ package dev.vapee.core.activity.blackjack;
 import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.activity.ActivityResult;
 import dev.vapee.core.activity.ActivityService;
-import dev.vapee.core.activity.blackjack.ui.BlackjackModeListener;
-import dev.vapee.core.activity.blackjack.ui.BlackjackModeMenu;
+import dev.vapee.core.activity.blackjack.command.BlackjackCommand;
+import dev.vapee.core.activity.blackjack.table.BlackjackSeatService;
+import dev.vapee.core.activity.blackjack.table.BlackjackTableConfig;
+import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
 import dev.vapee.core.activity.blackjack.ui.BlackjackTableListener;
 import dev.vapee.core.activity.blackjack.ui.BlackjackTableMenu;
-import dev.vapee.core.activity.navigation.ActivityCatalog;
-import dev.vapee.core.lobby.LobbyModule;
-import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -22,26 +22,24 @@ public final class BlackjackModule implements CoreModule {
 
     private final JavaPlugin plugin;
     private final ActivityModule activityModule;
-    private final LobbyModule lobbyModule;
     private final MessageService messageService;
 
     private ActivityService activityService;
-    private ActivityCatalog activityCatalog;
+    private BlackjackTableConfig tableConfig;
+    private BlackjackTableService tableService;
+    private BlackjackSeatService seatService;
     private BlackjackService blackjackService;
-    private BlackjackModeMenu modeMenu;
     private BlackjackTableMenu tableMenu;
-    private BlackjackModeListener modeListener;
     private BlackjackTableListener tableListener;
+    private PluginCommand blackjackCommand;
 
     public BlackjackModule(
             JavaPlugin plugin,
             ActivityModule activityModule,
-            LobbyModule lobbyModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
-        this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -53,12 +51,21 @@ public final class BlackjackModule implements CoreModule {
     @Override
     public void enable() {
         ActivityService newActivityService = activityModule.getActivityService();
-        ActivityCatalog newActivityCatalog = activityModule.getActivityCatalog();
-        LobbyService newLobbyService = lobbyModule.getLobbyService();
+        BlackjackTableConfig newTableConfig = new BlackjackTableConfig(plugin);
+        newTableConfig.initialize();
+        BlackjackSeatService newSeatService = new BlackjackSeatService(plugin, newActivityService);
+        BlackjackTableService newTableService = new BlackjackTableService(
+                newActivityService,
+                newTableConfig,
+                newSeatService,
+                worldName -> plugin.getServer().getWorld(worldName) != null,
+                plugin.getLogger()
+        );
         BlackjackService newBlackjackService = new BlackjackService(
                 plugin,
                 newActivityService,
-                newLobbyService,
+                newTableService,
+                newSeatService,
                 messageService
         );
         BlackjackActivityType activityType = new BlackjackActivityType(newBlackjackService);
@@ -67,35 +74,55 @@ public final class BlackjackModule implements CoreModule {
             throw new IllegalStateException("Could not register blackjack activity type: " + typeResult);
         }
 
-        BlackjackModeMenu newModeMenu = new BlackjackModeMenu(plugin);
-        BlackjackTableMenu newTableMenu = new BlackjackTableMenu(plugin, newBlackjackService);
-        newBlackjackService.setTableRefresher(newTableMenu::refreshSession);
-        BlackjackEntryPoint entryPoint = new BlackjackEntryPoint(
-                newBlackjackService,
-                newModeMenu,
-                newTableMenu
-        );
-        BlackjackModeListener newModeListener = new BlackjackModeListener(newBlackjackService, newTableMenu);
-        BlackjackTableListener newTableListener = new BlackjackTableListener(newBlackjackService);
+        BlackjackTableMenu newTableMenu = null;
+        BlackjackTableListener newTableListener = null;
+        PluginCommand newBlackjackCommand = null;
 
-        boolean catalogRegistered = false;
         try {
-            newActivityCatalog.register(entryPoint);
-            catalogRegistered = true;
-            plugin.getServer().getPluginManager().registerEvents(newModeListener, plugin);
+            newTableService.activateConfiguredTables();
+            int staleSeats = newSeatService.cleanupStaleSeats();
+            if (staleSeats > 0) {
+                plugin.getLogger().info("Removed " + staleSeats + " stale blackjack seat entity/entities.");
+            }
+            newTableMenu = new BlackjackTableMenu(plugin, newBlackjackService);
+            newBlackjackService.setTableRefresher(newTableMenu::refreshSession);
+            newTableListener = new BlackjackTableListener(
+                    plugin,
+                    newBlackjackService,
+                    newTableService,
+                    newSeatService,
+                    newTableMenu
+            );
+            newBlackjackCommand = Objects.requireNonNull(
+                    plugin.getCommand("blackjack"),
+                    "Command 'blackjack' is missing from plugin.yml"
+            );
+            BlackjackCommand commandExecutor = new BlackjackCommand(
+                    plugin,
+                    newTableConfig,
+                    newTableService,
+                    messageService
+            );
             plugin.getServer().getPluginManager().registerEvents(newTableListener, plugin);
+            newBlackjackCommand.setExecutor(commandExecutor);
+            newBlackjackCommand.setTabCompleter(commandExecutor);
         } catch (RuntimeException exception) {
-            HandlerList.unregisterAll(newTableListener);
-            HandlerList.unregisterAll(newModeListener);
+            if (newTableListener != null) {
+                HandlerList.unregisterAll(newTableListener);
+            }
+            if (newBlackjackCommand != null) {
+                newBlackjackCommand.setExecutor(null);
+                newBlackjackCommand.setTabCompleter(null);
+            }
             try {
-                newTableMenu.closeOpenInventories();
-                newModeMenu.closeOpenInventories();
+                if (newTableMenu != null) {
+                    newTableMenu.closeOpenInventories();
+                }
                 newBlackjackService.shutdown();
+                newTableService.shutdown();
+                newSeatService.shutdown();
             } catch (RuntimeException cleanupException) {
                 exception.addSuppressed(cleanupException);
-            }
-            if (catalogRegistered) {
-                newActivityCatalog.unregister(BlackjackActivityType.KEY);
             }
             ActivityResult unregisterResult = newActivityService.unregisterActivityType(BlackjackActivityType.KEY);
             if (unregisterResult != ActivityResult.SUCCESS
@@ -108,13 +135,15 @@ public final class BlackjackModule implements CoreModule {
         }
 
         activityService = newActivityService;
-        activityCatalog = newActivityCatalog;
+        tableConfig = newTableConfig;
+        tableService = newTableService;
+        seatService = newSeatService;
         blackjackService = newBlackjackService;
-        modeMenu = newModeMenu;
         tableMenu = newTableMenu;
-        modeListener = newModeListener;
         tableListener = newTableListener;
-        plugin.getLogger().info("Blackjack module enabled (Free Play, solo/public, no waiting).");
+        blackjackCommand = newBlackjackCommand;
+        plugin.getLogger().info("Blackjack module enabled with "
+                + newTableService.getDefinitions().size() + " physical table(s) (Free Play).");
     }
 
     @Override
@@ -122,27 +151,28 @@ public final class BlackjackModule implements CoreModule {
         if (tableListener != null) {
             HandlerList.unregisterAll(tableListener);
         }
-        if (modeListener != null) {
-            HandlerList.unregisterAll(modeListener);
+        if (blackjackCommand != null) {
+            blackjackCommand.setExecutor(null);
+            blackjackCommand.setTabCompleter(null);
         }
         cleanup("close blackjack table inventories", () -> {
             if (tableMenu != null) {
                 tableMenu.closeOpenInventories();
             }
         });
-        cleanup("close blackjack mode inventories", () -> {
-            if (modeMenu != null) {
-                modeMenu.closeOpenInventories();
-            }
-        });
-        cleanup("shut down blackjack sessions and venues", () -> {
+        cleanup("stop blackjack UI updates", () -> {
             if (blackjackService != null) {
                 blackjackService.shutdown();
             }
         });
-        cleanup("unregister blackjack entry point", () -> {
-            if (activityCatalog != null) {
-                activityCatalog.unregister(BlackjackActivityType.KEY);
+        cleanup("shut down blackjack sessions and venues", () -> {
+            if (tableService != null) {
+                tableService.shutdown();
+            }
+        });
+        cleanup("remove blackjack seat entities", () -> {
+            if (seatService != null) {
+                seatService.shutdown();
             }
         });
         cleanup("unregister blackjack activity type", () -> {
@@ -154,12 +184,13 @@ public final class BlackjackModule implements CoreModule {
             }
         });
 
+        blackjackCommand = null;
         tableListener = null;
-        modeListener = null;
         tableMenu = null;
-        modeMenu = null;
         blackjackService = null;
-        activityCatalog = null;
+        seatService = null;
+        tableService = null;
+        tableConfig = null;
         activityService = null;
     }
 

@@ -1,23 +1,92 @@
 package dev.vapee.core.activity.blackjack.ui;
 
 import dev.vapee.core.activity.blackjack.BlackjackService;
+import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
+import dev.vapee.core.activity.blackjack.table.BlackjackSeatService;
+import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
 
 public final class BlackjackTableListener implements Listener {
 
+    private final JavaPlugin plugin;
     private final BlackjackService blackjackService;
+    private final BlackjackTableService tableService;
+    private final BlackjackSeatService seatService;
+    private final BlackjackTableMenu tableMenu;
 
-    public BlackjackTableListener(BlackjackService blackjackService) {
+    public BlackjackTableListener(
+            JavaPlugin plugin,
+            BlackjackService blackjackService,
+            BlackjackTableService tableService,
+            BlackjackSeatService seatService,
+            BlackjackTableMenu tableMenu
+    ) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.blackjackService = Objects.requireNonNull(blackjackService, "blackjackService");
+        this.tableService = Objects.requireNonNull(tableService, "tableService");
+        this.seatService = Objects.requireNonNull(seatService, "seatService");
+        this.tableMenu = Objects.requireNonNull(tableMenu, "tableMenu");
+    }
+
+    @EventHandler
+    public void onTableInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK
+                || event.getHand() != EquipmentSlot.HAND
+                || event.getClickedBlock() == null) {
+            return;
+        }
+        var tableId = tableService.getTableAt(BlackjackBlockPosition.fromBlock(event.getClickedBlock()));
+        if (tableId.isEmpty()) {
+            return;
+        }
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) {
+                return;
+            }
+            blackjackService.joinTable(player, tableId.get())
+                    .ifPresent(session -> tableMenu.open(player, session));
+        });
+    }
+
+    @EventHandler
+    public void onSeatDamage(EntityDamageEvent event) {
+        if (seatService.isManagedSeat(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onSeatManipulate(PlayerArmorStandManipulateEvent event) {
+        if (seatService.isManagedSeat(event.getRightClicked())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onDismount(EntityDismountEvent event) {
+        Entity entity = event.getEntity();
+        if (entity instanceof Player player && seatService.isManagedSeat(event.getDismounted())) {
+            seatService.handleDismount(player, event.getDismounted());
+        }
     }
 
     @EventHandler

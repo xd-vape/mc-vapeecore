@@ -8,6 +8,7 @@ import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyModule;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.experience.LobbyExperienceModule;
+import dev.vapee.core.lobby.warp.WarpModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.permission.LuckPermsService;
@@ -41,6 +42,7 @@ public final class VapeeCore extends JavaPlugin {
     private SettingsModule settingsModule;
     private ActivityModule activityModule;
     private BlackjackModule blackjackModule;
+    private WarpModule warpModule;
     private LobbyExperienceModule lobbyExperienceModule;
 
     @Override
@@ -77,15 +79,15 @@ public final class VapeeCore extends JavaPlugin {
         blackjackModule = new BlackjackModule(
                 this,
                 activityModule,
-                lobbyModule,
                 messageService
         );
+        warpModule = new WarpModule(this, messageService);
         lobbyExperienceModule = new LobbyExperienceModule(
                 this,
                 lobbyModule,
                 playerModule,
                 settingsModule,
-                activityModule,
+                warpModule,
                 messageService
         );
         moduleManager.register(permissionModule);
@@ -99,6 +101,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(settingsModule);
         moduleManager.register(activityModule);
         moduleManager.register(blackjackModule);
+        moduleManager.register(warpModule);
         moduleManager.register(lobbyExperienceModule);
         moduleManager.enableAll();
 

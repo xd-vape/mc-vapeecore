@@ -131,9 +131,9 @@ public final class LobbyItemService {
     private ItemStack createNavigatorItem() {
         return createItem(
                 Material.COMPASS,
-                "Navigator",
+                "Warp Navigator",
                 NamedTextColor.AQUA,
-                List.of("Right-click to open the navigator."),
+                List.of("Right-click to open the warp navigator."),
                 LobbyItemType.NAVIGATOR
         );
     }

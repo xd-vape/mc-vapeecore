@@ -51,6 +51,14 @@ commands:
     description: Shows your ignored players
     usage: /ignorelist
     permission: vapeecore.social.ignore
+  blackjack:
+    description: Blackjack table administration
+    usage: /blackjack setup ...
+    permission: vapeecore.blackjack.admin
+  warp:
+    description: Warp administration
+    usage: /warp <set|remove|list|info|name|icon>
+    permission: vapeecore.warp.admin
 
 permissions:
   vapeecore.admin:
@@ -80,3 +88,9 @@ permissions:
   vapeecore.social.ignore:
     description: Allows managing your ignored players
     default: true
+  vapeecore.blackjack.admin:
+    description: Allows configuring blackjack tables
+    default: op
+  vapeecore.warp.admin:
+    description: Allows configuring warp destinations
+    default: op

@@ -4,26 +4,22 @@ import dev.vapee.core.activity.ActivityLeaveReason;
 import dev.vapee.core.activity.ActivityResult;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.activity.ActivitySession;
-import dev.vapee.core.activity.ActivitySessionCreationResult;
 import dev.vapee.core.activity.ActivityState;
 import dev.vapee.core.activity.blackjack.card.BlackjackHand;
 import dev.vapee.core.activity.blackjack.card.BlackjackShoe;
-import dev.vapee.core.activity.location.ActivityArea;
-import dev.vapee.core.activity.location.ActivityPosition;
-import dev.vapee.core.activity.location.ActivityVenue;
+import dev.vapee.core.activity.blackjack.table.BlackjackSeatService;
+import dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition;
+import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
 import dev.vapee.core.activity.player.ActivityParticipant;
-import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.message.MessageService;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -31,7 +27,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.random.RandomGenerator;
 
 public final class BlackjackService {
 
@@ -39,7 +34,8 @@ public final class BlackjackService {
     public static final long RESULT_VIEW_TICKS = 3L * 20L;
 
     private final ActivityService activityService;
-    private final Supplier<Optional<Location>> lobbySpawnSupplier;
+    private final TableAccess tableAccess;
+    private final SeatAccess seatAccess;
     private final Function<UUID, Player> onlinePlayerLookup;
     private final BiConsumer<Player, String> messageSender;
     private final TaskScheduler taskScheduler;
@@ -48,17 +44,18 @@ public final class BlackjackService {
 
     private Consumer<BlackjackSession> tableRefresher = ignored -> {
     };
-    private int nextTableNumber = 1;
 
     public BlackjackService(
             JavaPlugin plugin,
             ActivityService activityService,
-            LobbyService lobbyService,
+            BlackjackTableService tableService,
+            BlackjackSeatService seatService,
             MessageService messageService
     ) {
         this(
                 activityService,
-                Objects.requireNonNull(lobbyService, "lobbyService")::getSpawnLocation,
+                tableAccess(tableService),
+                seatAccess(seatService),
                 Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 Objects.requireNonNull(messageService, "messageService")::send,
                 (action, delayTicks) -> plugin.getServer().getScheduler().runTaskLater(
@@ -66,14 +63,15 @@ public final class BlackjackService {
                         action,
                         delayTicks
                 ),
-                () -> BlackjackShoe.sixDecks(RandomGenerator.getDefault()),
+                () -> BlackjackShoe.sixDecks(new Random()),
                 plugin.getLogger()
         );
     }
 
     BlackjackService(
             ActivityService activityService,
-            Supplier<Optional<Location>> lobbySpawnSupplier,
+            TableAccess tableAccess,
+            SeatAccess seatAccess,
             Function<UUID, Player> onlinePlayerLookup,
             BiConsumer<Player, String> messageSender,
             TaskScheduler taskScheduler,
@@ -81,7 +79,8 @@ public final class BlackjackService {
             Logger logger
     ) {
         this.activityService = Objects.requireNonNull(activityService, "activityService");
-        this.lobbySpawnSupplier = Objects.requireNonNull(lobbySpawnSupplier, "lobbySpawnSupplier");
+        this.tableAccess = Objects.requireNonNull(tableAccess, "tableAccess");
+        this.seatAccess = Objects.requireNonNull(seatAccess, "seatAccess");
         this.onlinePlayerLookup = Objects.requireNonNull(onlinePlayerLookup, "onlinePlayerLookup");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
         this.taskScheduler = Objects.requireNonNull(taskScheduler, "taskScheduler");
@@ -93,81 +92,58 @@ public final class BlackjackService {
         this.tableRefresher = Objects.requireNonNull(tableRefresher, "tableRefresher");
     }
 
-    public Optional<BlackjackSession> launchSolo(Player player) {
+    public Optional<BlackjackSession> joinTable(Player player, String tableId) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
-        Optional<BlackjackSession> existing = getSessionForPlayer(validatedPlayer);
-        if (existing.isPresent()) {
-            return existing;
-        }
-        if (activityService.isParticipating(validatedPlayer.getUniqueId())) {
+        String validatedTableId = Objects.requireNonNull(tableId, "tableId");
+        Optional<ActivitySession> currentActivity = activityService.getSessionForPlayer(validatedPlayer.getUniqueId());
+        if (currentActivity.isPresent()) {
+            ActivitySession currentSession = currentActivity.get();
+            if (currentSession instanceof BlackjackSession blackjackSession) {
+                if (blackjackSession.getVenue().id().equals(validatedTableId)) {
+                    return Optional.of(blackjackSession);
+                }
+                send(validatedPlayer, "<red>You are already seated at another blackjack table.</red>");
+                return Optional.empty();
+            }
             send(validatedPlayer, "<red>You are already participating in another activity.</red>");
             return Optional.empty();
         }
 
-        Optional<Location> optionalSpawn = lobbySpawnSupplier.get();
-        if (optionalSpawn.isEmpty()) {
-            sendUnavailable(validatedPlayer);
+        Optional<BlackjackTableDefinition> optionalDefinition = tableAccess.getDefinition(validatedTableId);
+        Optional<BlackjackSession> optionalSession = tableAccess.getSession(validatedTableId);
+        if (optionalDefinition.isEmpty() || optionalSession.isEmpty()) {
+            send(validatedPlayer, "<red>This blackjack table is not available.</red>");
             return Optional.empty();
         }
-        Location spawn = optionalSpawn.get();
-        cleanupForeignIdleTables(requireWorld(spawn).getName());
-        Optional<BlackjackSession> optionalSession = findUnclaimedTable(spawn)
-                .or(() -> createVirtualTable(spawn));
-        if (optionalSession.isEmpty()) {
-            sendUnavailable(validatedPlayer);
-            return Optional.empty();
-        }
-
+        BlackjackTableDefinition definition = optionalDefinition.get();
         BlackjackSession session = optionalSession.get();
-        session.claim(BlackjackMode.SOLO, validatedPlayer.getUniqueId());
+        if (session.getState() != ActivityState.AVAILABLE) {
+            send(validatedPlayer, "<red>This blackjack round is already in progress.</red>");
+            return Optional.empty();
+        }
+        if (session.getParticipantCount() >= definition.capacity()) {
+            send(validatedPlayer, "<red>This blackjack table is full.</red>");
+            return Optional.empty();
+        }
+        if (!seatAccess.reserveLowestFreeSeat(definition, validatedPlayer.getUniqueId())) {
+            send(validatedPlayer, "<red>This blackjack table is full.</red>");
+            return Optional.empty();
+        }
         ActivityResult joinResult = activityService.joinSession(validatedPlayer, session.getSessionId());
         if (joinResult != ActivityResult.SUCCESS) {
-            if (session.getParticipantCount() == 0) {
-                session.release();
-            }
+            seatAccess.releaseSeat(validatedPlayer.getUniqueId());
             sendJoinFailure(validatedPlayer, joinResult);
             return Optional.empty();
         }
-        refresh(session);
-        return Optional.of(session);
-    }
 
-    public Optional<BlackjackSession> launchPublic(Player player) {
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        Optional<BlackjackSession> existing = getSessionForPlayer(validatedPlayer);
-        if (existing.isPresent()) {
-            return existing;
-        }
-        if (activityService.isParticipating(validatedPlayer.getUniqueId())) {
-            send(validatedPlayer, "<red>You are already participating in another activity.</red>");
-            return Optional.empty();
-        }
-
-        Optional<Location> optionalSpawn = lobbySpawnSupplier.get();
-        if (optionalSpawn.isEmpty()) {
-            sendUnavailable(validatedPlayer);
-            return Optional.empty();
-        }
-        Location spawn = optionalSpawn.get();
-        String lobbyWorldName = requireWorld(spawn).getName();
-        cleanupForeignIdleTables(lobbyWorldName);
-        Optional<BlackjackSession> optionalSession = findAvailablePublicTable(lobbyWorldName);
-        if (optionalSession.isEmpty()) {
-            optionalSession = findUnclaimedTable(spawn).or(() -> createVirtualTable(spawn));
-            optionalSession.ifPresent(session -> session.claim(BlackjackMode.PUBLIC, null));
-        }
-        if (optionalSession.isEmpty()) {
-            sendUnavailable(validatedPlayer);
-            return Optional.empty();
-        }
-
-        BlackjackSession session = optionalSession.get();
-        ActivityResult joinResult = activityService.joinSession(validatedPlayer, session.getSessionId());
-        if (joinResult != ActivityResult.SUCCESS) {
-            if (session.getParticipantCount() == 0) {
-                session.release();
-            }
-            sendJoinFailure(validatedPlayer, joinResult);
+        try {
+            seatAccess.mountReservedPlayer(validatedPlayer);
+        } catch (RuntimeException exception) {
+            logger.log(Level.SEVERE, "Could not seat player " + validatedPlayer.getUniqueId()
+                    + " at blackjack table '" + validatedTableId + "'.", exception);
+            activityService.leaveCurrentSession(validatedPlayer, ActivityLeaveReason.ERROR);
+            seatAccess.releaseSeat(validatedPlayer.getUniqueId());
+            send(validatedPlayer, "<red>You could not be seated at this blackjack table.</red>");
             return Optional.empty();
         }
         refresh(session);
@@ -191,18 +167,6 @@ public final class BlackjackService {
         throw new IllegalStateException("The blackjack activity type produced an incompatible session");
     }
 
-    public boolean canOpenModeMenu(Player player) {
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        if (!activityService.isParticipating(validatedPlayer.getUniqueId())) {
-            return true;
-        }
-        if (getSessionForPlayer(validatedPlayer).isPresent()) {
-            return false;
-        }
-        send(validatedPlayer, "<red>You are already participating in another activity.</red>");
-        return false;
-    }
-
     public ActivityResult startRound(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         Optional<BlackjackSession> optionalSession = getSessionForPlayer(validatedPlayer);
@@ -210,8 +174,7 @@ public final class BlackjackService {
             return ActivityResult.NOT_PARTICIPANT;
         }
         BlackjackSession session = optionalSession.get();
-        if (session.getMode() == BlackjackMode.UNCLAIMED
-                || session.getState() != ActivityState.AVAILABLE) {
+        if (session.getState() != ActivityState.AVAILABLE) {
             return ActivityResult.INVALID_STATE;
         }
         ActivityResult result = activityService.activateSession(session.getSessionId());
@@ -261,6 +224,16 @@ public final class BlackjackService {
         );
     }
 
+    public int getTableCapacity(BlackjackSession session) {
+        return tableAccess.getDefinition(Objects.requireNonNull(session, "session").getVenue().id())
+                .map(BlackjackTableDefinition::capacity)
+                .orElse(BlackjackActivityType.MAX_PARTICIPANTS);
+    }
+
+    public Optional<Integer> getSeatNumber(UUID playerId) {
+        return seatAccess.getSeatNumber(playerId);
+    }
+
     public static boolean shouldDealerHit(BlackjackHand dealerHand) {
         return Objects.requireNonNull(dealerHand, "dealerHand").getValue() < 17;
     }
@@ -277,15 +250,6 @@ public final class BlackjackService {
     public void shutdown() {
         tableRefresher = ignored -> {
         };
-        for (ActivitySession session : new ArrayList<>(activityService.getSessions(BlackjackActivityType.KEY))) {
-            activityService.closeSession(session.getSessionId(), ActivityLeaveReason.PLUGIN_DISABLE);
-        }
-        for (ActivityVenue venue : new ArrayList<>(activityService.getVenues(BlackjackActivityType.KEY))) {
-            ActivityResult result = activityService.unregisterVenue(BlackjackActivityType.KEY, venue.id());
-            if (result != ActivityResult.SUCCESS && result != ActivityResult.VENUE_NOT_FOUND) {
-                logger.warning("Could not unregister blackjack venue '" + venue.id() + "': " + result);
-            }
-        }
     }
 
     void onParticipantJoined(BlackjackSession session, ActivityParticipant participant) {
@@ -298,6 +262,7 @@ public final class BlackjackService {
             ActivityLeaveReason reason
     ) {
         UUID playerId = participant.uniqueId();
+        seatAccess.releaseSeat(playerId);
         boolean wasCurrentTurn = session.getCurrentTurnPlayer().filter(playerId::equals).isPresent();
         session.removePlayerRound(playerId);
 
@@ -313,9 +278,6 @@ public final class BlackjackService {
         }
 
         if (session.getState() == ActivityState.AVAILABLE) {
-            if (session.getParticipantCount() == 0 && session.getMode() != BlackjackMode.UNCLAIMED) {
-                session.release();
-            }
             refresh(session);
             return;
         }
@@ -365,9 +327,6 @@ public final class BlackjackService {
     }
 
     void onReset(BlackjackSession session) {
-        if (session.getParticipantCount() == 0 && session.getMode() != BlackjackMode.UNCLAIMED) {
-            session.release();
-        }
         refresh(session);
     }
 
@@ -496,106 +455,6 @@ public final class BlackjackService {
         session.setResultResetTask(task);
     }
 
-    private Optional<BlackjackSession> findAvailablePublicTable(String worldName) {
-        return blackjackSessions().stream()
-                .filter(session -> session.getMode() == BlackjackMode.PUBLIC)
-                .filter(session -> session.getState() == ActivityState.AVAILABLE)
-                .filter(session -> session.getParticipantCount() < BlackjackActivityType.MAX_PARTICIPANTS)
-                .filter(session -> session.getVenue().area().worldName().equals(worldName))
-                .findFirst();
-    }
-
-    private Optional<BlackjackSession> findUnclaimedTable(Location spawn) {
-        String worldName = requireWorld(spawn).getName();
-        return blackjackSessions().stream()
-                .filter(session -> session.getMode() == BlackjackMode.UNCLAIMED)
-                .filter(session -> session.getState() == ActivityState.AVAILABLE)
-                .filter(session -> session.getParticipantCount() == 0)
-                .filter(session -> session.getVenue().area().worldName().equals(worldName))
-                .findFirst();
-    }
-
-    private Optional<BlackjackSession> createVirtualTable(Location spawn) {
-        World world = requireWorld(spawn);
-        String venueId;
-        do {
-            venueId = "table-" + nextTableNumber++;
-        } while (activityService.getVenue(BlackjackActivityType.KEY, venueId).isPresent());
-
-        ActivityPosition anchor = new ActivityPosition(
-                world.getName(),
-                spawn.getX(),
-                spawn.getY(),
-                spawn.getZ(),
-                spawn.getYaw(),
-                spawn.getPitch()
-        );
-        ActivityVenue venue = new ActivityVenue(
-                venueId,
-                BlackjackActivityType.KEY,
-                new ActivityArea(
-                        world.getName(),
-                        spawn.getX() - 8.0D,
-                        spawn.getY() - 4.0D,
-                        spawn.getZ() - 8.0D,
-                        spawn.getX() + 8.0D,
-                        spawn.getY() + 4.0D,
-                        spawn.getZ() + 8.0D
-                ),
-                anchor
-        );
-        ActivityResult venueResult = activityService.registerVenue(venue);
-        if (venueResult != ActivityResult.SUCCESS) {
-            logger.warning("Could not register virtual blackjack venue '" + venueId + "': " + venueResult);
-            return Optional.empty();
-        }
-
-        ActivitySessionCreationResult creationResult = activityService.createSession(
-                BlackjackActivityType.KEY,
-                venueId
-        );
-        if (!creationResult.isSuccess()) {
-            activityService.unregisterVenue(BlackjackActivityType.KEY, venueId);
-            logger.warning("Could not create virtual blackjack session for '" + venueId
-                    + "': " + creationResult.result());
-            return Optional.empty();
-        }
-        ActivitySession createdSession = creationResult.session().orElseThrow();
-        if (!(createdSession instanceof BlackjackSession blackjackSession)) {
-            activityService.closeSession(createdSession.getSessionId(), ActivityLeaveReason.ERROR);
-            activityService.unregisterVenue(BlackjackActivityType.KEY, venueId);
-            throw new IllegalStateException("The blackjack activity type produced an incompatible session");
-        }
-        return Optional.of(blackjackSession);
-    }
-
-    private void cleanupForeignIdleTables(String currentWorldName) {
-        for (BlackjackSession session : new ArrayList<>(blackjackSessions())) {
-            if (session.getState() != ActivityState.AVAILABLE
-                    || session.getParticipantCount() != 0
-                    || session.getVenue().area().worldName().equals(currentWorldName)) {
-                continue;
-            }
-            String venueId = session.getVenue().id();
-            activityService.closeSession(session.getSessionId(), ActivityLeaveReason.SESSION_CLOSED);
-            ActivityResult result = activityService.unregisterVenue(BlackjackActivityType.KEY, venueId);
-            if (result != ActivityResult.SUCCESS && result != ActivityResult.VENUE_NOT_FOUND) {
-                logger.warning("Could not remove stale blackjack venue '" + venueId + "': " + result);
-            }
-        }
-    }
-
-    private List<BlackjackSession> blackjackSessions() {
-        List<BlackjackSession> result = new ArrayList<>();
-        for (ActivitySession session : activityService.getSessions(BlackjackActivityType.KEY)) {
-            if (!(session instanceof BlackjackSession blackjackSession)) {
-                throw new IllegalStateException("The blackjack activity type produced an incompatible session");
-            }
-            result.add(blackjackSession);
-        }
-        return List.copyOf(result);
-    }
-
     private void refresh(BlackjackSession session) {
         try {
             tableRefresher.accept(session);
@@ -605,15 +464,13 @@ public final class BlackjackService {
     }
 
     private void sendJoinFailure(Player player, ActivityResult result) {
-        if (result == ActivityResult.PLAYER_ALREADY_IN_ACTIVITY) {
-            send(player, "<red>You are already participating in another activity.</red>");
-        } else {
-            sendUnavailable(player);
-        }
-    }
-
-    private void sendUnavailable(Player player) {
-        send(player, "<red>Blackjack is currently unavailable.</red>");
+        String message = switch (result) {
+            case PLAYER_ALREADY_IN_ACTIVITY -> "<red>You are already participating in another activity.</red>";
+            case SESSION_NOT_AVAILABLE, INVALID_STATE -> "<red>This blackjack round is already in progress.</red>";
+            case SESSION_FULL -> "<red>This blackjack table is full.</red>";
+            default -> "<red>This blackjack table is currently unavailable.</red>";
+        };
+        send(player, message);
     }
 
     private void send(Player player, String message) {
@@ -630,8 +487,60 @@ public final class BlackjackService {
         };
     }
 
-    private static World requireWorld(Location location) {
-        return Objects.requireNonNull(Objects.requireNonNull(location, "location").getWorld(), "location world");
+    private static TableAccess tableAccess(BlackjackTableService tableService) {
+        BlackjackTableService service = Objects.requireNonNull(tableService, "tableService");
+        return new TableAccess() {
+            @Override
+            public Optional<BlackjackTableDefinition> getDefinition(String tableId) {
+                return service.getDefinition(tableId);
+            }
+
+            @Override
+            public Optional<BlackjackSession> getSession(String tableId) {
+                return service.getSession(tableId);
+            }
+        };
+    }
+
+    private static SeatAccess seatAccess(BlackjackSeatService seatService) {
+        BlackjackSeatService service = Objects.requireNonNull(seatService, "seatService");
+        return new SeatAccess() {
+            @Override
+            public boolean reserveLowestFreeSeat(BlackjackTableDefinition definition, UUID playerId) {
+                return service.reserveLowestFreeSeat(definition, playerId).isPresent();
+            }
+
+            @Override
+            public void mountReservedPlayer(Player player) {
+                service.mountReservedPlayer(player);
+            }
+
+            @Override
+            public void releaseSeat(UUID playerId) {
+                service.releaseSeat(playerId);
+            }
+
+            @Override
+            public Optional<Integer> getSeatNumber(UUID playerId) {
+                return service.getSeatNumber(playerId);
+            }
+        };
+    }
+
+    interface TableAccess {
+        Optional<BlackjackTableDefinition> getDefinition(String tableId);
+
+        Optional<BlackjackSession> getSession(String tableId);
+    }
+
+    interface SeatAccess {
+        boolean reserveLowestFreeSeat(BlackjackTableDefinition definition, UUID playerId);
+
+        void mountReservedPlayer(Player player);
+
+        void releaseSeat(UUID playerId);
+
+        Optional<Integer> getSeatNumber(UUID playerId);
     }
 
     @FunctionalInterface
