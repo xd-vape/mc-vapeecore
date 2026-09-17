@@ -2,6 +2,8 @@ package dev.vapee.core.lobby.experience;
 
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
+import dev.vapee.core.lobby.item.LobbyItemService;
+import dev.vapee.core.lobby.item.LobbyItemType;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;

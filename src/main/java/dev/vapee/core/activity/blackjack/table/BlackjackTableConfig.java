@@ -10,7 +10,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -26,6 +25,8 @@ import java.util.logging.Logger;
 public final class BlackjackTableConfig {
 
     private static final String RESOURCE_NAME = "blackjack.yml";
+    private static final int REPLACE_ATTEMPTS = 5;
+    private static final long REPLACE_RETRY_DELAY_MILLIS = 25L;
     private static final byte[] DEFAULT_CONTENT = "tables: {}\n".getBytes(StandardCharsets.UTF_8);
 
     private final Path configFile;
@@ -327,16 +328,7 @@ public final class BlackjackTableConfig {
             Files.createDirectories(configFile.getParent());
             temporaryFile = Files.createTempFile(configFile.getParent(), "blackjack-", ".tmp");
             configuration.save(temporaryFile.toFile());
-            try {
-                Files.move(
-                        temporaryFile,
-                        configFile,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
-            }
+            replaceConfiguration(temporaryFile);
             temporaryFile = null;
         } catch (IOException exception) {
             throw failure("save configuration", exception);
@@ -348,6 +340,62 @@ public final class BlackjackTableConfig {
                     logger.warning("Could not delete temporary blackjack configuration " + temporaryFile + ".");
                 }
             }
+        }
+    }
+
+    private void replaceConfiguration(Path temporaryFile) throws IOException {
+        IOException atomicFailure;
+        try {
+            Files.move(
+                    temporaryFile,
+                    configFile,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+            return;
+        } catch (IOException exception) {
+            atomicFailure = exception;
+        }
+
+        IOException replaceFailure = null;
+        for (int attempt = 1; attempt <= REPLACE_ATTEMPTS; attempt++) {
+            try {
+                Files.move(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (IOException exception) {
+                replaceFailure = exception;
+                if (attempt < REPLACE_ATTEMPTS) {
+                    waitBeforeReplaceRetry(attempt, atomicFailure, replaceFailure);
+                }
+            }
+        }
+
+        try {
+            Files.copy(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            exception.addSuppressed(atomicFailure);
+            if (replaceFailure != null) {
+                exception.addSuppressed(replaceFailure);
+            }
+            throw exception;
+        }
+        try {
+            Files.deleteIfExists(temporaryFile);
+        } catch (IOException exception) {
+            logger.warning("Could not delete copied temporary blackjack configuration " + temporaryFile + ".");
+        }
+    }
+
+    private void waitBeforeReplaceRetry(int attempt, IOException atomicFailure, IOException replaceFailure)
+            throws IOException {
+        try {
+            Thread.sleep(REPLACE_RETRY_DELAY_MILLIS * attempt);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            IOException interrupted = new IOException("Interrupted while retrying configuration replacement", exception);
+            interrupted.addSuppressed(atomicFailure);
+            interrupted.addSuppressed(replaceFailure);
+            throw interrupted;
         }
     }
 

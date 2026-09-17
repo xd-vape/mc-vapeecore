@@ -162,8 +162,8 @@ public record BlackjackTableDefinition(
     }
 
     private static boolean contains(ActivityArea area, BlackjackBlockPosition position) {
-        return position.x() >= area.minX() && position.x() <= area.maxX()
-                && position.y() >= area.minY() && position.y() <= area.maxY()
-                && position.z() >= area.minZ() && position.z() <= area.maxZ();
+        return position.x() <= area.maxX() && position.x() + 1.0D >= area.minX()
+                && position.y() <= area.maxY() && position.y() + 1.0D >= area.minY()
+                && position.z() <= area.maxZ() && position.z() + 1.0D >= area.minZ();
     }
 }

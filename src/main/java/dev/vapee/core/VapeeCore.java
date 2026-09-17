@@ -20,6 +20,7 @@ import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.reload.ReloadService;
 import dev.vapee.core.settings.SettingsModule;
 import dev.vapee.core.social.SocialModule;
+import dev.vapee.core.utility.UtilityModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -41,6 +42,7 @@ public final class VapeeCore extends JavaPlugin {
     private PresentationModule presentationModule;
     private SettingsModule settingsModule;
     private ActivityModule activityModule;
+    private UtilityModule utilityModule;
     private BlackjackModule blackjackModule;
     private WarpModule warpModule;
     private LobbyExperienceModule lobbyExperienceModule;
@@ -57,7 +59,7 @@ public final class VapeeCore extends JavaPlugin {
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService);
-        lobbyModule = new LobbyModule(this, messageService);
+        lobbyModule = new LobbyModule(this, playerModule, messageService);
         chatModule = new ChatModule(this, permissionModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
         presentationModule = new PresentationModule(
@@ -76,10 +78,17 @@ public final class VapeeCore extends JavaPlugin {
                 messageService
         );
         activityModule = new ActivityModule(this, playerModule);
+        utilityModule = new UtilityModule(
+                this,
+                lobbyModule,
+                activityModule,
+                messageService
+        );
         blackjackModule = new BlackjackModule(
                 this,
                 activityModule,
-                messageService
+                messageService,
+                playerId -> lobbyModule.getLobbyPlayerStateService().isBuildMode(playerId)
         );
         warpModule = new WarpModule(this, messageService);
         lobbyExperienceModule = new LobbyExperienceModule(
@@ -100,6 +109,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(presentationModule);
         moduleManager.register(settingsModule);
         moduleManager.register(activityModule);
+        moduleManager.register(utilityModule);
         moduleManager.register(blackjackModule);
         moduleManager.register(warpModule);
         moduleManager.register(lobbyExperienceModule);

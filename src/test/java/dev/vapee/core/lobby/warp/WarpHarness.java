@@ -42,7 +42,7 @@ public final class WarpHarness {
     }
 
     private static void testZeroWarpAndPersistence() throws Exception {
-        Path file = Files.createTempDirectory("vapeecore-warps-zero-").resolve("warps.yml");
+        Path file = workspaceTempDirectory("vapeecore-warps-zero-").resolve("warps.yml");
         WarpConfig config = new WarpConfig(file, logger());
         NavigableMap<String, WarpPoint> loaded = config.initialize();
         check(loaded.isEmpty(), "default warp registry is empty");
@@ -207,6 +207,12 @@ public final class WarpHarness {
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);
         return logger;
+    }
+
+    private static Path workspaceTempDirectory(String prefix) throws Exception {
+        Path root = Path.of("target", "harness-temp").toAbsolutePath().normalize();
+        Files.createDirectories(root);
+        return Files.createTempDirectory(root, prefix);
     }
 
     private static void check(boolean condition, String message) {

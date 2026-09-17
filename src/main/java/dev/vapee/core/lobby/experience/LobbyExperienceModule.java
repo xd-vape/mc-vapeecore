@@ -2,9 +2,10 @@ package dev.vapee.core.lobby.experience;
 
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.LobbyService;
-import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.experience.navigator.NavigatorListener;
 import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
+import dev.vapee.core.lobby.item.LobbyItemService;
+import dev.vapee.core.lobby.message.LobbyMessageService;
 import dev.vapee.core.lobby.warp.WarpModule;
 import dev.vapee.core.lobby.warp.WarpService;
 import dev.vapee.core.message.MessageService;
@@ -32,7 +33,6 @@ public final class LobbyExperienceModule implements CoreModule {
 
     private LobbyVisibilityService visibilityService;
     private NavigatorMenu navigatorMenu;
-    private LobbyItemService lobbyItemService;
     private LobbyExperienceListener experienceListener;
     private LobbyItemListener itemListener;
     private NavigatorListener navigatorListener;
@@ -61,7 +61,8 @@ public final class LobbyExperienceModule implements CoreModule {
     @Override
     public void enable() {
         LobbyService newLobbyService = lobbyModule.getLobbyService();
-        LobbyConfig newLobbyConfig = lobbyModule.getLobbyConfig();
+        LobbyItemService newLobbyItemService = lobbyModule.getLobbyItemService();
+        LobbyMessageService newLobbyMessageService = lobbyModule.getLobbyMessageService();
         PlayerService newPlayerService = playerModule.getPlayerService();
         PlayerSettingsService newPlayerSettingsService = playerModule.getPlayerSettingsService();
         SettingsMenu newSettingsMenu = settingsModule.getSettingsMenu();
@@ -73,19 +74,12 @@ public final class LobbyExperienceModule implements CoreModule {
                 newPlayerSettingsService
         );
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService);
-        LobbyItemService newLobbyItemService = new LobbyItemService(
-                plugin,
-                newLobbyService,
-                newPlayerSettingsService
-        );
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
                 plugin,
-                newLobbyConfig,
                 newLobbyService,
                 newPlayerService,
-                newLobbyItemService,
                 newVisibilityService,
-                messageService
+                newLobbyMessageService
         );
         LobbyItemListener newItemListener = new LobbyItemListener(
                 plugin,
@@ -112,7 +106,6 @@ public final class LobbyExperienceModule implements CoreModule {
                 if (!newLobbyService.isLobbyWorld(player.getWorld())) {
                     continue;
                 }
-                newLobbyItemService.applyLobbyItems(player);
                 newVisibilityService.synchronizePlayer(player);
             }
         } catch (RuntimeException exception) {
@@ -120,13 +113,12 @@ public final class LobbyExperienceModule implements CoreModule {
             HandlerList.unregisterAll(newNavigatorListener);
             HandlerList.unregisterAll(newItemListener);
             HandlerList.unregisterAll(newExperienceListener);
-            cleanupRuntime(newNavigatorMenu, newLobbyItemService, newVisibilityService);
+            cleanupRuntime(newNavigatorMenu, newVisibilityService);
             throw exception;
         }
 
         visibilityService = newVisibilityService;
         navigatorMenu = newNavigatorMenu;
-        lobbyItemService = newLobbyItemService;
         experienceListener = newExperienceListener;
         itemListener = newItemListener;
         navigatorListener = newNavigatorListener;
@@ -145,19 +137,17 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorListener != null) {
             HandlerList.unregisterAll(navigatorListener);
         }
-        cleanupRuntime(navigatorMenu, lobbyItemService, visibilityService);
+        cleanupRuntime(navigatorMenu, visibilityService);
 
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;
-        lobbyItemService = null;
         navigatorMenu = null;
         visibilityService = null;
     }
 
     private void cleanupRuntime(
             NavigatorMenu activeNavigatorMenu,
-            LobbyItemService activeLobbyItemService,
             LobbyVisibilityService activeVisibilityService
     ) {
         if (activeNavigatorMenu != null) {
@@ -165,19 +155,6 @@ public final class LobbyExperienceModule implements CoreModule {
                 activeNavigatorMenu.closeOpenInventories();
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.WARNING, "Could not close all navigator inventories.", exception);
-            }
-        }
-        if (activeLobbyItemService != null) {
-            for (Player player : plugin.getServer().getOnlinePlayers()) {
-                try {
-                    activeLobbyItemService.removeManagedItems(player);
-                } catch (RuntimeException exception) {
-                    plugin.getLogger().log(
-                            Level.WARNING,
-                            "Could not remove lobby items for " + player.getUniqueId() + ".",
-                            exception
-                    );
-                }
             }
         }
         if (activeVisibilityService != null) {

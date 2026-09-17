@@ -1,4 +1,4 @@
-package dev.vapee.core.lobby.experience;
+package dev.vapee.core.lobby.item;
 
 import java.util.Arrays;
 import java.util.Optional;

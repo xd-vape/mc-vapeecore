@@ -744,6 +744,7 @@ public final class BlackjackHarness {
         testHandValuesAndNaturals();
         testOutcomesAndDealerRule();
         testSixDeckShoe();
+        testBuildModeJoinGuard();
         testPhysicalTableJoinCapacityAndReopen();
         testJoinRollback();
         testSinglePlayerRoundResetAndRematch();
@@ -754,6 +755,20 @@ public final class BlackjackHarness {
         check(InventoryHolder.class.isAssignableFrom(BlackjackTableInventoryHolder.class),
                 "blackjack table GUI has a dedicated holder");
         System.out.println("BlackjackHarness passed " + checks + " checks.");
+    }
+
+    private static void testBuildModeJoinGuard() {
+        Fixture fixture = new Fixture(3);
+        Player player = fixture.player("Builder");
+        fixture.buildPlayers.add(player.getUniqueId());
+        check(fixture.service.joinTable(player, Fixture.TABLE_ID).isEmpty(),
+                "BUILD player cannot join a blackjack table");
+        check(fixture.activityService.getSessionForPlayer(player.getUniqueId()).isEmpty(),
+                "rejected BUILD player does not enter the activity registry");
+        check(!fixture.seats.assignments.containsKey(player.getUniqueId()),
+                "rejected BUILD player does not reserve a physical seat");
+        check(fixture.messages.stream().anyMatch(message -> message.contains("build mode")),
+                "BUILD conflict returns a controlled blackjack message");
     }
 
     private static void testHandValuesAndNaturals() {
@@ -1056,6 +1071,7 @@ public final class BlackjackHarness {
         private final Deque<BlackjackShoe> shoes = new ArrayDeque<>();
         private final FakeScheduler scheduler = new FakeScheduler();
         private final List<String> messages = new ArrayList<>();
+        private final Set<UUID> buildPlayers = new HashSet<>();
         private final Map<String, BlackjackTableDefinition> definitions = new HashMap<>();
         private final Map<String, BlackjackSession> sessions = new HashMap<>();
         private final FakeSeats seats = new FakeSeats();
@@ -1078,6 +1094,7 @@ public final class BlackjackHarness {
                     (player, message) -> messages.add(player.getUniqueId() + ":" + message),
                     scheduler::schedule,
                     () -> shoes.isEmpty() ? new BlackjackShoe(6, new java.util.Random(123L)) : shoes.removeFirst(),
+                    buildPlayers::contains,
                     logger);
             checkResult(activityService.registerActivityType(new BlackjackActivityType(service)), ActivityResult.SUCCESS);
             ActivityVenue venue = new ActivityVenue(TABLE_ID, BlackjackActivityType.KEY,

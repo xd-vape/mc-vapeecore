@@ -16,6 +16,8 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 
 public final class BlackjackModule implements CoreModule {
@@ -23,6 +25,7 @@ public final class BlackjackModule implements CoreModule {
     private final JavaPlugin plugin;
     private final ActivityModule activityModule;
     private final MessageService messageService;
+    private final Predicate<UUID> buildModeCheck;
 
     private ActivityService activityService;
     private BlackjackTableConfig tableConfig;
@@ -36,11 +39,13 @@ public final class BlackjackModule implements CoreModule {
     public BlackjackModule(
             JavaPlugin plugin,
             ActivityModule activityModule,
-            MessageService messageService
+            MessageService messageService,
+            Predicate<UUID> buildModeCheck
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.buildModeCheck = Objects.requireNonNull(buildModeCheck, "buildModeCheck");
     }
 
     @Override
@@ -66,7 +71,8 @@ public final class BlackjackModule implements CoreModule {
                 newActivityService,
                 newTableService,
                 newSeatService,
-                messageService
+                messageService,
+                buildModeCheck
         );
         BlackjackActivityType activityType = new BlackjackActivityType(newBlackjackService);
         ActivityResult typeResult = newActivityService.registerActivityType(activityType);

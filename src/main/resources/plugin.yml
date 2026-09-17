@@ -59,6 +59,10 @@ commands:
     description: Warp administration
     usage: /warp <set|remove|list|info|name|icon>
     permission: vapeecore.warp.admin
+  build:
+    description: Toggle lobby build mode
+    usage: /build
+    permission: vapeecore.utility.build
 
 permissions:
   vapeecore.admin:
@@ -71,7 +75,12 @@ permissions:
     description: Allows setting the lobby spawn
     default: op
   vapeecore.lobby.build:
-    description: Bypasses lobby build, drop and pickup protection
+    description: Deprecated compatibility permission for lobby build mode
+    default: op
+    children:
+      vapeecore.utility.build: true
+  vapeecore.utility.build:
+    description: Allows toggling lobby build mode
     default: op
   vapeecore.economy.coins:
     description: Allows viewing your own coin balance

@@ -4,16 +4,21 @@ import dev.vapee.core.lobby.LobbySpawn;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import org.bukkit.GameMode;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,21 +29,31 @@ public final class LobbyConfig {
             "<dark_gray>[<green>+<dark_gray>] <white><name>";
     public static final String DEFAULT_QUIT_MESSAGE_FORMAT =
             "<dark_gray>[<red>-<dark_gray>] <white><name>";
+    private static final GameMode DEFAULT_PLAYER_GAME_MODE = GameMode.ADVENTURE;
+    private static final byte[] DEFAULT_CONTENT = "player:\n  gamemode: ADVENTURE\n"
+            .getBytes(StandardCharsets.UTF_8);
 
-    private final JavaPlugin plugin;
     private final Logger logger;
     private final Path configFile;
+    private final Supplier<InputStream> defaultResourceSupplier;
     private final MiniMessage strictMiniMessage = MiniMessage.builder().strict(true).build();
 
     private volatile State state = State.defaults();
 
     public LobbyConfig(JavaPlugin plugin) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.logger = plugin.getLogger();
-        this.configFile = plugin.getDataFolder().toPath()
+        JavaPlugin validatedPlugin = Objects.requireNonNull(plugin, "plugin");
+        this.logger = validatedPlugin.getLogger();
+        this.configFile = validatedPlugin.getDataFolder().toPath()
                 .resolve(RESOURCE_NAME)
                 .toAbsolutePath()
                 .normalize();
+        this.defaultResourceSupplier = () -> validatedPlugin.getResource(RESOURCE_NAME);
+    }
+
+    public LobbyConfig(Path configFile, Logger logger) {
+        this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
+        this.logger = Objects.requireNonNull(logger, "logger");
+        this.defaultResourceSupplier = () -> new ByteArrayInputStream(DEFAULT_CONTENT);
     }
 
     public void initialize() {
@@ -60,6 +75,10 @@ public final class LobbyConfig {
 
     public Optional<LobbySpawn> getSpawn() {
         return state.spawn();
+    }
+
+    public GameMode getPlayerGameMode() {
+        return state.playerGameMode();
     }
 
     public void saveSpawn(LobbySpawn spawn) {
@@ -126,7 +145,7 @@ public final class LobbyConfig {
                 return;
             }
 
-            try (InputStream resource = plugin.getResource(RESOURCE_NAME)) {
+            try (InputStream resource = defaultResourceSupplier.get()) {
                 if (resource == null) {
                     String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
                     logger.severe(message);
@@ -144,6 +163,7 @@ public final class LobbyConfig {
         YamlConfiguration configuration = loadConfiguration();
         return new State(
                 readSpawn(configuration, strictSpawnValidation),
+                readPlayerGameMode(configuration),
                 readBoolean(configuration, "teleport.on-join"),
                 readBoolean(configuration, "teleport.on-respawn"),
                 readBoolean(configuration, "void-rescue"),
@@ -164,6 +184,28 @@ public final class LobbyConfig {
                         DEFAULT_QUIT_MESSAGE_FORMAT
                 )
         );
+    }
+
+    private GameMode readPlayerGameMode(YamlConfiguration configuration) {
+        String path = "player.gamemode";
+        if (!configuration.contains(path)) {
+            return DEFAULT_PLAYER_GAME_MODE;
+        }
+
+        Object value = configuration.get(path);
+        if (value instanceof String gameModeName) {
+            try {
+                return GameMode.valueOf(gameModeName.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                // A warning with the safe fallback is emitted below.
+            }
+        }
+
+        logger.warning("Invalid lobby setting '" + path + "' in " + configFile
+                + ": expected a valid game mode; using '" + DEFAULT_PLAYER_GAME_MODE
+                + "'. The file was left unchanged."
+        );
+        return DEFAULT_PLAYER_GAME_MODE;
     }
 
     private MessageSettings readMessageSettings(
@@ -319,6 +361,7 @@ public final class LobbyConfig {
 
     public record State(
             Optional<LobbySpawn> spawn,
+            GameMode playerGameMode,
             boolean teleportOnJoin,
             boolean teleportOnRespawn,
             boolean voidRescue,
@@ -334,6 +377,7 @@ public final class LobbyConfig {
 
         public State {
             spawn = Objects.requireNonNull(spawn, "spawn");
+            playerGameMode = Objects.requireNonNull(playerGameMode, "playerGameMode");
             joinMessage = Objects.requireNonNull(joinMessage, "joinMessage");
             quitMessage = Objects.requireNonNull(quitMessage, "quitMessage");
         }
@@ -341,6 +385,7 @@ public final class LobbyConfig {
         private static State defaults() {
             return new State(
                     Optional.empty(),
+                    DEFAULT_PLAYER_GAME_MODE,
                     true,
                     true,
                     true,
@@ -358,6 +403,7 @@ public final class LobbyConfig {
         private State withSpawn(LobbySpawn newSpawn) {
             return new State(
                     Optional.of(Objects.requireNonNull(newSpawn, "newSpawn")),
+                    playerGameMode,
                     teleportOnJoin,
                     teleportOnRespawn,
                     voidRescue,

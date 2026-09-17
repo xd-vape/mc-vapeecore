@@ -1,6 +1,10 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, ein leichtgewichtiges Activity-Fundament, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Integration bereit. Der aktuelle Stand ist Phase 15A „Physical Blackjack & Generic Warp Navigator“.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-Nachrichten, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, ein leichtgewichtiges Activity-Fundament, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Integration bereit. Der aktuelle Stand ist Phase 15A.1 „Lobby Player State Foundation & Developer Documentation“.
+
+## Developer Documentation
+
+Die praktische Architektur-, Ownership-, Config-, Command- und Erweiterungsdokumentation liegt in [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md). Dort beantwortet die zentrale „Where do I change this?“-Tabelle, welche Klasse oder Live-Konfiguration für eine Änderung zuständig ist.
 
 ## Voraussetzungen
 
@@ -19,6 +23,12 @@ mvn clean package
 
 Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 
+### IntelliJ Dev-Server
+
+Das Projekt enthält die geteilten IntelliJ-Run-Konfigurationen `Start VapeeCore Dev Server` und `Build & Deploy VapeeCore`. Der Server sollte über die erste Konfiguration oder über `dev-server/start.bat` gestartet werden. Beide Wege verwenden denselben verwalteten Startprozess und stellen einen sauberen Stop-Kanal bereit.
+
+`Build & Deploy VapeeCore` sendet einem laufenden verwalteten Paper-Server zunächst den regulären Konsolenbefehl `stop` und wartet, bis Plugins, Spieler und Welten vollständig gespeichert wurden. Anschließend führt die Konfiguration `mvn clean package` aus und ersetzt `dev-server/plugins/vapeecore-1.0-SNAPSHOT.jar` über eine temporäre Deployment-Datei. Der Server bleibt danach absichtlich gestoppt und kann über `Start VapeeCore Dev Server` erneut gestartet werden. Ein fremder oder manuell gestarteter Paper-Prozess wird nicht hart beendet; in diesem Fall bricht das Deployment mit einer verständlichen Meldung ab.
+
 ## Architektur
 
 - `command`: Commands und deren Subcommands
@@ -30,8 +40,11 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `config`: zentraler Zugriff auf die Bukkit-Konfiguration
 - `economy`: internes Coin-Wallet, EconomyService und Coin-Commands
 - `lobby`: Lobby-Spawn, Teleports und auf die Lobby-Welt begrenzter Schutz
+- `lobby.item`: Definition und Erzeugung der drei Lobby-Hotbar-Items
+- `lobby.message`: Rendering der konfigurierbaren Join-/Quit-Nachrichten
+- `lobby.player`: zentraler Runtime-Zustand `NORMAL`/`BUILD`, Gamemode und Inventory-Ownership
 - `lobby.warp`: generische persistente Warps ohne vordefinierte oder reservierte Ziele
-- `lobby.experience`: Lobby-Hotbar, dynamischer Warp Navigator, Settings-Shortcut, Join-/Quit-UX und weltgebundene Player-Visibility
+- `lobby.experience`: Interaktionen der Lobby-Hotbar, dynamischer Warp Navigator, Settings-Shortcut und weltgebundene Player-Visibility
 - `message`: Adventure- und MiniMessage-Ausgabe
 - `module`: kleiner Lifecycle-Extension-Point für zukünftige Systeme
 - `permission`: lesender Zugriff auf LuckPerms-Gruppen und Meta-Daten
@@ -44,8 +57,9 @@ Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 - `reload`: koordinierter zweiphasiger Config-Reload mit Runtime-Rollback
 - `settings`: sichere Ingame-Oberfläche für die bereits persistenten Player-Settings
 - `social`: Ignore-Service, threadsichere Runtime-Projektion, Lifecycle und Commands
+- `utility`: administrative Utility-Einstiegspunkte; aktuell ausschließlich `/build`
 
-Die zwölf Module starten in der gerichteten Reihenfolge `Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → Activity → Blackjack → LobbyExperience` und werden beim Shutdown vollständig rückwärts deaktiviert. Dadurch ist Blackjack bereits im Activity-Katalog registriert, bevor LobbyExperience seine Navigation initialisiert. LobbyExperience hängt ausschließlich vom generischen ActivityModule ab und kennt das BlackjackModule nicht. Chat und PrivateMessage nutzen weiterhin den Social-Snapshot und Player-Persistence wird beim Shutdown erst nach allen konsumierenden Modulen gespeichert.
+Die 14 Module starten in der gerichteten Reihenfolge `Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → Activity → Utility → Blackjack → Warp → LobbyExperience` und werden beim Shutdown vollständig rückwärts deaktiviert. Dadurch sind Lobby und Activity vor `/build`, Blackjack nach Activity sowie Warp vor LobbyExperience verfügbar. Chat und PrivateMessage nutzen weiterhin den Social-Snapshot und Player-Persistence wird beim Shutdown erst nach allen konsumierenden Modulen gespeichert.
 
 Aktive Spieler werden als `CorePlayer` im Speicher gehalten. Zum Profil gehören die Einstellungen `scoreboard`, `sounds`, `private-messages` und `lobby-players-visible`, die standardmäßig aktiviert sind, das Coin-Wallet und `PlayerSocial`. Andere Module greifen über klar abgegrenzte Services darauf zu. Die lokale Persistence legt pro UUID eine Datei unter `plugins/VapeeCore/players/<uuid>.yml` an. Alte Player-Dateien ohne einzelne Settings oder ohne `settings`, `economy` beziehungsweise `social` werden mit den jeweiligen Default-Werten geladen und beim nächsten regulären Save automatisch erweitert. Bukkit-`Player`-Instanzen werden nicht im Domainmodell gespeichert.
 
@@ -77,11 +91,11 @@ Phase 12 enthält bewusst kein Friends- oder Party-System, kein Social GUI und k
 
 Permissions, Gruppen, Primary Groups, Prefixe, Suffixe, Meta-Daten, Contexts und Vererbung werden ausschließlich von LuckPerms verwaltet. VapeeCore liest die bereits von LuckPerms aufgelösten Daten und speichert sie weder im `CorePlayer` noch in den Player-YAML-Dateien. Normale Permission-Checks erfolgen weiterhin über Bukkit/Paper.
 
-Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. Join-Teleport, Lobby-Respawn, Void Rescue sowie Damage-, Hunger-, Block- und Item-Schutz gelten ausschließlich in der Welt aus `spawn.world`. Spieler mit `vapeecore.lobby.build` dürfen dort bauen sowie Items droppen und aufnehmen.
+Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. `player.gamemode` bestimmt den normalen Lobby-Gamemode und verwendet bei ungültigen Werten sicher `ADVENTURE`. `LobbyPlayerStateService` besitzt den nicht persistenten Zustand `NORMAL`/`BUILD`, normalisiert Gamemode und Inventory und erzeugt in `NORMAL` die Lobby-Hotbar. `/build` liegt im `UtilityModule`, ist auf die Lobby beschränkt, mit Activities gegenseitig exklusiv und verwendet immer `CREATIVE`. Nur der aktive BUILD-Zustand umgeht Block- und Item-Schutz; die Permission `vapeecore.utility.build` erlaubt ausschließlich das Command. `vapeecore.lobby.build` bleibt nur als deprecated Permission-Parent zur Migration erhalten.
 
 ### Activity Foundation
 
-Das nach `SettingsModule` gestartete `ActivityModule` stellt mit dem `ActivityService` vier ausschließlich zur Laufzeit geführte Registries bereit: Activity-Typen, Venues, Sessions und die globale Zuordnung `Player-UUID → Session-UUID`. Direkt beim Enable des ActivityModule bleiben alle Registries leer; das danach gestartete BlackjackModule registriert seinen Typ und die aus `blackjack.yml` aktivierten Venues und Sessions. Der frühere, ausschließlich für die Compass-Navigation verwendete `ActivityCatalog` samt `ActivityEntryPoint` wurde in Phase 15A entfernt. Mutierende Service-Operationen sind auf den primären Server-Thread begrenzt. Es gibt weder Reflection-Scans noch statische Registries oder Activity-, Venue- beziehungsweise Session-Persistence und keine neuen Keys in den Player-YAML-Dateien.
+Das nach `SettingsModule` gestartete `ActivityModule` stellt mit dem `ActivityService` vier ausschließlich zur Laufzeit geführte Registries bereit: Activity-Typen, Venues, Sessions und die globale Zuordnung `Player-UUID → Session-UUID`. Direkt beim Enable des ActivityModule bleiben alle Registries leer; das später gestartete BlackjackModule registriert seinen Typ und die aus `blackjack.yml` aktivierten Venues und Sessions. Der frühere, ausschließlich für die Compass-Navigation verwendete `ActivityCatalog` samt `ActivityEntryPoint` wurde in Phase 15A entfernt. Mutierende Service-Operationen sind auf den primären Server-Thread begrenzt. Es gibt weder Reflection-Scans noch statische Registries oder Activity-, Venue- beziehungsweise Session-Persistence und keine neuen Keys in den Player-YAML-Dateien.
 
 Ein `ActivityType` besitzt einen stabilen Key nach `[a-z0-9_-]+`, eine minimale und maximale Teilnehmerzahl und erzeugt eine konkrete `ActivitySession` für eine UUID und ein bereits registriertes `ActivityVenue`. Typen müssen explizit vor ihren Venues registriert werden. Ein Typ kann erst entfernt werden, wenn keine zugehörigen Venues oder Sessions mehr existieren. Ein Venue ist über `activityKey + id` eindeutig, gehört genau einem Typ und kann gleichzeitig höchstens eine Session reservieren. Es kann erst entfernt werden, nachdem diese Session geschlossen wurde.
 
@@ -99,7 +113,7 @@ Activity und Game bleiben getrennte Konzepte. Das Activity-Framework besitzt kei
 
 ### Blackjack Activity
 
-Das `BlackjackModule` ist die erste konkrete Activity und wird direkt nach Activity sowie vor Warp und LobbyExperience aktiviert. Es hängt nur von `JavaPlugin`, `ActivityModule` und `MessageService` ab. Sein `BlackjackActivityType` verwendet den Key `blackjack`, `minParticipants = 1` und `maxParticipants = 5`. Spieler starten Blackjack ausschließlich durch einen Main-Hand-Rechtsklick auf den konfigurierten Interaktionsblock eines physischen Tisches; der Compass und das Warp-System kennen Blackjack nicht.
+Das `BlackjackModule` ist die erste konkrete Activity und wird nach Utility sowie vor Warp und LobbyExperience aktiviert. Es nutzt `JavaPlugin`, `ActivityModule`, `MessageService` und eine schmale, injizierte BUILD-Abfrage aus dem Lobby-State. Sein `BlackjackActivityType` verwendet den Key `blackjack`, `minParticipants = 1` und `maxParticipants = 5`. Spieler im BUILD-Modus werden vor jeder Sitzreservierung abgewiesen. Spieler starten Blackjack ausschließlich durch einen Main-Hand-Rechtsklick auf den konfigurierten Interaktionsblock eines physischen Tisches; der Compass und das Warp-System kennen Blackjack nicht.
 
 Eine Solo-/Public-Auswahl gibt es nicht mehr: Ein Teilnehmer spielt automatisch allein, mehrere Teilnehmer spielen gemeinsam gegen denselben Dealer. Ein Spieler kann sofort `Deal` drücken; Queue, Countdown oder zweite erforderliche Person existieren nicht. Solange eine Session `AVAILABLE` ist, werden bis zur tatsächlichen Anzahl konfigurierter Sitze weitere Spieler aufgenommen. Sobald jemand `Deal` drückt und der Tisch `ACTIVE` ist, sind Mid-Round-Joins kontrolliert gesperrt. Die globale Obergrenze bleibt fünf, ein Tisch mit drei Sitzen besitzt praktisch aber Kapazität drei.
 
@@ -115,7 +129,7 @@ Nach dem letzten Spielerzug wird die Dealer-Karte aufgedeckt, das Ergebnis etwa 
 
 Phase 15A ist ausdrücklich `Free Play`: Blackjack importiert weder `EconomyModule` noch `EconomyService`, verändert keine Coins und besitzt keine Einsätze, Payouts oder Escrow-Logik. `blackjack.yml` persistiert ausschließlich den physischen Tischaufbau; Player, Sitz, Session, Runde, Hände und Shoe bleiben reine Runtime-Daten. Das bestehende Player-YAML-Schema bleibt unverändert. Echte Coin-Wetten benötigen später eine transaktionale Escrow- und Crash-Recovery-Strategie, damit ein Serverausfall keinen Einsatz verlieren oder verdoppeln kann.
 
-Das als letztes gestartete `LobbyExperienceModule` ergänzt diese technische Lobby um drei PDC-markierte Hotbar-Items: Warp Navigator in Slot 0 (`COMPASS`), Player-Visibility in Slot 4 (`LIME_DYE` oder `GRAY_DYE`) und Settings in Slot 8 (`COMPARATOR`). Die Items werden nur in der konfigurierten Lobby-Welt gesetzt. Vorhandene VapeeCore-Lobby-Items werden vorher dedupliziert; normale Items in reservierten Slots werden ausschließlich in einen freien, nicht reservierten Storage-Slot verschoben. Ist kein solcher Slot verfügbar, bleibt das normale Item unangetastet und das betreffende Lobby-Item wird nicht erzwungen. Es gibt ausdrücklich keinen Inventory-Wipe. Drop, Offhand-Swap, Click-, Shift-, Number-Key-, Double-Click- und Drag-Manipulationen der PDC-markierten Items werden verhindert, ohne normale Items pauschal zu sperren. Der Visibility-Schalter besitzt einen kurzen Server-Cooldown; Block-Rechtsklicks werden für die Item-Aktualisierung um einen Tick verschoben, damit Boden-Interaktionen nicht doppelt oder verloren verarbeitet werden.
+Das als letztes gestartete `LobbyExperienceModule` bezieht den vom `LobbyModule` besessenen `LobbyItemService` und verarbeitet die Interaktionen der drei PDC-markierten Hotbar-Items: Warp Navigator in Slot 0 (`COMPASS`), Player-Visibility in Slot 4 (`LIME_DYE` oder `GRAY_DYE`) und Settings in Slot 8 (`COMPARATOR`). Das Setzen und Entfernen der normalen Hotbar gehört dagegen dem `LobbyPlayerStateService`: `NORMAL` bereinigt das vollständige Player-Inventory und erzeugt die drei Items deterministisch, `BUILD` entfernt sie und stellt ein temporäres Creative-Inventory bereit. Drop, Offhand-Swap, Click-, Shift-, Number-Key-, Double-Click- und Drag-Manipulationen der PDC-markierten Items werden verhindert. Der Visibility-Schalter besitzt einen kurzen Server-Cooldown; Block-Rechtsklicks werden für die Item-Aktualisierung um einen Tick verschoben, damit Boden-Interaktionen nicht doppelt oder verloren verarbeitet werden.
 
 Das eigenständige `WarpModule` hängt nur von `JavaPlugin` und `MessageService` ab. `plugins/VapeeCore/warps.yml` beginnt mit `warps: {}`; es gibt keine vordefinierten, reservierten oder besonders behandelten Lobby-, Spawn-, Casino- oder Blackjack-Ziele. Administratoren pflegen beliebige IDs nach `[a-z0-9_-]+` mit `/warp set|remove|list|info|name|icon` und `vapeecore.warp.admin`. Neue Warps erhalten generisch einen Namen aus der ID und `ENDER_PEARL`; erneutes Setzen ändert nur die Position. Persistente Änderungen werden vor dem Runtime-Austausch atomar geschrieben, und Teleports verwenden `TeleportCause.PLUGIN`, ohne Welten zu laden.
 
@@ -135,7 +149,7 @@ messages:
     format: "<dark_gray>[<red>-<dark_gray>] <white><name>"
 ```
 
-Bei `enabled: false` wird die jeweilige Nachricht vollständig unterdrückt; es gibt keinen Vanilla-Fallback. `<name>` wird als Adventure Component eingesetzt und nicht in einen MiniMessage-String eingebaut. Fehlende Keys verwenden interne Defaults. Ungültige Templates erzeugen eine Warnung und verwenden einen sicheren internen Default, ohne `lobby.yml` zu verändern. Da `LobbyModule` weiterhin alleiniger Reload-Teilnehmer für `lobby.yml` ist und LobbyExperience dessen aktuellen State liest, gelten Änderungen nach `/core reload` ohne einen sechsten Reload-Teilnehmer.
+Bei `enabled: false` wird die jeweilige Nachricht vollständig unterdrückt; es gibt keinen Vanilla-Fallback. `LobbyMessageService` rendert `<name>` als Adventure Component, protokolliert Laufzeitfehler und liefert einen sicheren Component-Fallback. Fehlende Keys verwenden interne Defaults. Ungültige Templates erzeugen eine Warnung und verwenden einen sicheren internen Default, ohne `lobby.yml` zu verändern. Da `LobbyModule` weiterhin alleiniger Reload-Teilnehmer für `lobby.yml` ist und LobbyExperience dessen Message-Service bezieht, gelten Änderungen nach `/core reload` ohne einen sechsten Reload-Teilnehmer.
 
 Das `ChatModule` formatiert den globalen Chat über Papers `AsyncChatEvent` und einen viewer-unabhängigen `ChatRenderer`. Das Format liegt in `plugins/VapeeCore/chat.yml`; LuckPerms-Prefix und -Suffix können dort als `legacy-ampersand`, `mini-message` oder `plain` interpretiert werden. Das Serverformat ist MiniMessage, die originale Playernachricht wird jedoch als Adventure Component eingesetzt und niemals als MiniMessage ausgewertet. Chat-Channels sind nicht Bestandteil dieser Phase.
 
@@ -147,6 +161,6 @@ Das `SettingsModule` stellt `/settings` für Spieler mit `vapeecore.settings.use
 
 `/core reload` liest `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml` in einer gemeinsamen zweiphasigen Transaktion neu. Zuerst werden alle fünf Dateien in dieser Reihenfolge vollständig vorbereitet und validiert; erst danach werden ihre Runtime-Zustände in derselben Reihenfolge angewendet. Ein Prepare-Fehler verändert daher keinen aktiven Zustand. Bei einem unerwarteten Apply-Fehler werden bereits übernommene Zustände rückwärts zurückgerollt. Message-Prefix, Servername, Debug-Modus, Lobby-Regeln, Chat- und PM-Format sowie Scoreboard- und Tablist-Templates werden ohne Serverneustart aktiv; auch der Presentation-Task passt sich sicher an `enabled` und `update-interval-ticks` an. Ein PM-Reload behält bestehende Conversation-Beziehungen. Der Reload schreibt keine Configdateien, lädt keine Playerdaten und verändert weder Social-State, Economy noch LuckPerms.
 
-Die 13 Module starten exakt in der Reihenfolge Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → Activity → Blackjack → Warp → LobbyExperience und stoppen in umgekehrter Reihenfolge. `/core reload` besitzt weiterhin genau fünf Teilnehmer (`config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml`); Blackjack und Warp werden bewusst direkt über ihre Admin-Commands gepflegt und sind keine Reload-Teilnehmer.
+Die 14 Module starten exakt in der Reihenfolge Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → Activity → Utility → Blackjack → Warp → LobbyExperience und stoppen in umgekehrter Reihenfolge. `/core reload` besitzt weiterhin genau fünf Teilnehmer (`config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml`); Utility ist kein Reload-Teilnehmer, Blackjack und Warp werden bewusst direkt über ihre Admin-Commands gepflegt.
 
 Weitere Activities, Voice-System, Community-Funktionen und Minigames werden in späteren Phasen als klar abgegrenzte interne `CoreModule` innerhalb derselben VapeeCore-JAR ergänzt. Phase 15A liefert physisches Blackjack und generische Warps, baut aber weiterhin weder ein Game- noch ein Minigame-Framework auf.

@@ -1,3 +1,6 @@
+player:
+  gamemode: ADVENTURE
+
 teleport:
   on-join: true
   on-respawn: true

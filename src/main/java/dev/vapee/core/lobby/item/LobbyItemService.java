@@ -1,4 +1,4 @@
-package dev.vapee.core.lobby.experience;
+package dev.vapee.core.lobby.item;
 
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.player.settings.PlayerSettingsService;

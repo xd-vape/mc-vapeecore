@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,6 +41,7 @@ public final class BlackjackService {
     private final BiConsumer<Player, String> messageSender;
     private final TaskScheduler taskScheduler;
     private final Supplier<BlackjackShoe> shoeSupplier;
+    private final Predicate<UUID> buildModeCheck;
     private final Logger logger;
 
     private Consumer<BlackjackSession> tableRefresher = ignored -> {
@@ -50,7 +52,8 @@ public final class BlackjackService {
             ActivityService activityService,
             BlackjackTableService tableService,
             BlackjackSeatService seatService,
-            MessageService messageService
+            MessageService messageService,
+            Predicate<UUID> buildModeCheck
     ) {
         this(
                 activityService,
@@ -64,6 +67,7 @@ public final class BlackjackService {
                         delayTicks
                 ),
                 () -> BlackjackShoe.sixDecks(new Random()),
+                buildModeCheck,
                 plugin.getLogger()
         );
     }
@@ -78,6 +82,30 @@ public final class BlackjackService {
             Supplier<BlackjackShoe> shoeSupplier,
             Logger logger
     ) {
+        this(
+                activityService,
+                tableAccess,
+                seatAccess,
+                onlinePlayerLookup,
+                messageSender,
+                taskScheduler,
+                shoeSupplier,
+                ignored -> false,
+                logger
+        );
+    }
+
+    BlackjackService(
+            ActivityService activityService,
+            TableAccess tableAccess,
+            SeatAccess seatAccess,
+            Function<UUID, Player> onlinePlayerLookup,
+            BiConsumer<Player, String> messageSender,
+            TaskScheduler taskScheduler,
+            Supplier<BlackjackShoe> shoeSupplier,
+            Predicate<UUID> buildModeCheck,
+            Logger logger
+    ) {
         this.activityService = Objects.requireNonNull(activityService, "activityService");
         this.tableAccess = Objects.requireNonNull(tableAccess, "tableAccess");
         this.seatAccess = Objects.requireNonNull(seatAccess, "seatAccess");
@@ -85,6 +113,7 @@ public final class BlackjackService {
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
         this.taskScheduler = Objects.requireNonNull(taskScheduler, "taskScheduler");
         this.shoeSupplier = Objects.requireNonNull(shoeSupplier, "shoeSupplier");
+        this.buildModeCheck = Objects.requireNonNull(buildModeCheck, "buildModeCheck");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -95,6 +124,10 @@ public final class BlackjackService {
     public Optional<BlackjackSession> joinTable(Player player, String tableId) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         String validatedTableId = Objects.requireNonNull(tableId, "tableId");
+        if (buildModeCheck.test(validatedPlayer.getUniqueId())) {
+            send(validatedPlayer, "<red>You cannot join blackjack while build mode is enabled.</red>");
+            return Optional.empty();
+        }
         Optional<ActivitySession> currentActivity = activityService.getSessionForPlayer(validatedPlayer.getUniqueId());
         if (currentActivity.isPresent()) {
             ActivitySession currentSession = currentActivity.get();

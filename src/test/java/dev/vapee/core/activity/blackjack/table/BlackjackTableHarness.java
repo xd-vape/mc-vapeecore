@@ -54,7 +54,7 @@ public final class BlackjackTableHarness {
     }
 
     private static void testDraftPersistenceRoundTrip() throws Exception {
-        Path file = Files.createTempDirectory("vapeecore-blackjack-table-").resolve("blackjack.yml");
+        Path file = workspaceTempDirectory("vapeecore-blackjack-table-").resolve("blackjack.yml");
         BlackjackTableConfig config = new BlackjackTableConfig(file, logger());
         config.initialize();
         check(config.getDrafts().isEmpty(), "default blackjack config contains no tables");
@@ -119,6 +119,19 @@ public final class BlackjackTableHarness {
         BlackjackTableDraft interactionOutside = validDraft("interaction-outside", 1);
         interactionOutside.setInteraction(new BlackjackBlockPosition("world", 50, 5, 5));
         assertError(interactionOutside, "interaction is outside the area");
+        BlackjackTableDraft floorInteraction = new BlackjackTableDraft(
+                "floor-interaction",
+                false,
+                position("world", 0.25, 88, 0.25, 0, 0),
+                position("world", 10.75, 88, 10.75, 0, 0),
+                position("world", 5, 88, 5, 0, 0),
+                new BlackjackBlockPosition("world", 5, 87, 5),
+                Map.of(1, position("world", 4, 88, 4, 0, 0))
+        );
+        check(BlackjackTableDefinition.validate(floorInteraction).isEmpty(),
+                "interaction floor block touching the area plane is accepted");
+        floorInteraction.setInteraction(new BlackjackBlockPosition("world", 5, 86, 5));
+        assertError(floorInteraction, "interaction is outside the area");
         BlackjackTableDraft seatOutside = validDraft("seat-outside", 1);
         seatOutside.setSeat(1, position("world", 50, 5, 5, 0, 0));
         assertError(seatOutside, "seat 1 is outside the area");
@@ -259,6 +272,12 @@ public final class BlackjackTableHarness {
         Logger logger = Logger.getAnonymousLogger();
         logger.setLevel(Level.OFF);
         return logger;
+    }
+
+    private static Path workspaceTempDirectory(String prefix) throws Exception {
+        Path root = Path.of("target", "harness-temp").toAbsolutePath().normalize();
+        Files.createDirectories(root);
+        return Files.createTempDirectory(root, prefix);
     }
 
     @SuppressWarnings("unchecked")
