@@ -20,8 +20,10 @@ import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.reload.ReloadService;
 import dev.vapee.core.settings.SettingsModule;
+import dev.vapee.core.seat.SeatModule;
 import dev.vapee.core.social.SocialModule;
 import dev.vapee.core.utility.UtilityModule;
+import dev.vapee.core.worlddisplay.WorldDisplayModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -45,6 +47,8 @@ public final class VapeeCore extends JavaPlugin {
     private SettingsModule settingsModule;
     private ActivityModule activityModule;
     private UtilityModule utilityModule;
+    private SeatModule seatModule;
+    private WorldDisplayModule worldDisplayModule;
     private BlackjackModule blackjackModule;
     private WarpModule warpModule;
     private LobbyExperienceModule lobbyExperienceModule;
@@ -87,9 +91,12 @@ public final class VapeeCore extends JavaPlugin {
                 activityModule,
                 messageService
         );
+        seatModule = new SeatModule(this, lobbyModule, activityModule);
+        worldDisplayModule = new WorldDisplayModule(this);
         blackjackModule = new BlackjackModule(
                 this,
                 activityModule,
+                seatModule,
                 messageService,
                 commandHelpRenderer,
                 playerId -> lobbyModule.getLobbyPlayerStateService().isBuildMode(playerId)
@@ -114,6 +121,8 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(settingsModule);
         moduleManager.register(activityModule);
         moduleManager.register(utilityModule);
+        moduleManager.register(seatModule);
+        moduleManager.register(worldDisplayModule);
         moduleManager.register(blackjackModule);
         moduleManager.register(warpModule);
         moduleManager.register(lobbyExperienceModule);

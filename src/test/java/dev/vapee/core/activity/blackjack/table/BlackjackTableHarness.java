@@ -12,6 +12,7 @@ import dev.vapee.core.activity.location.ActivityPosition;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.PlayerRepository;
+import dev.vapee.core.seat.SeatKey;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -31,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -210,6 +212,8 @@ public final class BlackjackTableHarness {
         UUID third = UUID.randomUUID();
         UUID fourth = UUID.randomUUID();
         check(fixture.seats.reserveLowestFreeSeat(definition, first).orElseThrow().seatNumber() == 1, "A gets seat 1");
+        check(fixture.seats.reserveLowestFreeSeat(definition, first).orElseThrow().seatNumber() == 1,
+                "same player keeps the same seat on the same table");
         check(fixture.seats.reserveLowestFreeSeat(definition, second).orElseThrow().seatNumber() == 2, "B gets seat 2");
         fixture.seats.releaseSeat(first);
         check(fixture.seats.reserveLowestFreeSeat(definition, third).orElseThrow().seatNumber() == 1,
@@ -226,10 +230,27 @@ public final class BlackjackTableHarness {
         BlackjackSession session = fixture.tables.getSession("seats").orElseThrow();
         check(fixture.activity.joinSession(player, session.getSessionId()) == ActivityResult.SUCCESS,
                 "dismount player joins session");
-        fixture.seats.handleManagedDismount(player);
+        fixture.seats.mountReservedPlayer(player);
+        check(fixture.seatRuntime.mountCalls == 1, "blackjack mount delegates to generic seat runtime");
+        fixture.seatRuntime.dismount(player.getUniqueId());
         check(fixture.activity.getSessionForPlayer(player.getUniqueId()).isEmpty(), "manual dismount leaves activity");
         check(fixture.seats.getSeatNumber(player.getUniqueId()).isEmpty(), "manual dismount frees seat");
-        check(fixture.seats.cleanupStaleSeats() == 0, "headless stale-seat scan does not touch foreign entities");
+
+        Player mountFailure = fixture.player("MountFailure");
+        fixture.seats.releaseSeat(second);
+        check(fixture.seats.reserveLowestFreeSeat(definition, mountFailure.getUniqueId()).isPresent(),
+                "mount-failure player reserves through generic runtime");
+        fixture.seatRuntime.mountResult = false;
+        expectThrows(() -> fixture.seats.mountReservedPlayer(mountFailure), "failed generic mount is surfaced");
+        fixture.seats.releaseSeat(mountFailure.getUniqueId());
+        check(fixture.seats.getSeatNumber(mountFailure.getUniqueId()).isEmpty(),
+                "mount failure can be rolled back without occupancy leak");
+        fixture.seatRuntime.mountResult = true;
+
+        fixture.seats.cleanupTable("seats");
+        check(fixture.seats.getSeatNumber(fourth).isEmpty(), "table cleanup clears blackjack assignments");
+        check(fixture.seatRuntime.releasedOwners.contains("blackjack:seats"),
+                "table cleanup delegates owner cleanup");
     }
 
     private static BlackjackTableDraft validDraft(String id, int seats) {
@@ -380,6 +401,7 @@ public final class BlackjackTableHarness {
                 ? "world" : defaultValue(method.getReturnType()));
         private final ActivityService activity;
         private final BlackjackTableConfig config;
+        private final FakeSeatRuntime seatRuntime = new FakeSeatRuntime();
         private final BlackjackSeatService seats;
         private final BlackjackTableService tables;
         private final List<String> cleanedTables = new java.util.ArrayList<>();
@@ -390,7 +412,14 @@ public final class BlackjackTableHarness {
 
         private RuntimeFixture(Set<String> loadedWorlds) throws Exception {
             activity = activityService(players, logger, loadedWorlds);
-            seats = new BlackjackSeatService(activity, logger, Runnable::run);
+            seats = new BlackjackSeatService(activity, seatRuntime, position -> Optional.of(new Location(
+                    world,
+                    position.x(),
+                    position.y(),
+                    position.z(),
+                    position.yaw(),
+                    position.pitch()
+            )));
             BlackjackService blackjack = blackjackService(activity, seats, logger);
             check(activity.registerActivityType(new BlackjackActivityType(blackjack)) == ActivityResult.SUCCESS,
                     "blackjack activity type registers");
@@ -414,6 +443,46 @@ public final class BlackjackTableHarness {
                 case "getLocation" -> new Location(world, 5, 5, 5);
                 default -> defaultValue(method.getReturnType());
             });
+        }
+    }
+
+    private static final class FakeSeatRuntime implements BlackjackSeatService.SeatRuntime {
+        private final Map<UUID, Consumer<UUID>> callbacks = new HashMap<>();
+        private final Set<String> releasedOwners = new java.util.HashSet<>();
+        private boolean mountResult = true;
+        private int mountCalls;
+
+        @Override
+        public boolean reserve(SeatKey key, UUID playerId, Location location, Consumer<UUID> dismountHandler) {
+            if (callbacks.containsKey(playerId)) {
+                return false;
+            }
+            callbacks.put(playerId, dismountHandler);
+            return true;
+        }
+
+        @Override
+        public boolean mount(Player player) {
+            mountCalls++;
+            return mountResult;
+        }
+
+        @Override
+        public boolean releasePlayer(UUID playerId) {
+            return callbacks.remove(playerId) != null;
+        }
+
+        @Override
+        public int releaseOwner(String owner) {
+            releasedOwners.add(owner);
+            return 0;
+        }
+
+        private void dismount(UUID playerId) {
+            Consumer<UUID> callback = callbacks.get(playerId);
+            if (callback != null) {
+                callback.accept(playerId);
+            }
         }
     }
 

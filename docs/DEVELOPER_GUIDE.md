@@ -38,6 +38,13 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Physical Blackjack table setup | `dev.vapee.core.activity.blackjack.table` |
 | Blackjack setup command | `BlackjackCommand` |
 | Blackjack table persistence | Live: `plugins/VapeeCore/blackjack.yml`, Code: `BlackjackTableConfig` |
+| Casual seating behavior | `dev.vapee.core.seat.SeatListener` |
+| Seat entity lifecycle | `dev.vapee.core.seat.SeatService` |
+| Stair/slab seat position | `dev.vapee.core.seat.SeatPositionResolver` |
+| Managed seat integration | `SeatService` und das konsumierende Feature |
+| Blackjack seat allocation | `dev.vapee.core.activity.blackjack.table.BlackjackSeatService` |
+| World text/item display lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayService` |
+| World display module lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayModule` |
 | Coins | `dev.vapee.core.economy` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
@@ -82,11 +89,13 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 9. **Settings** – Settings-Inventar und `/settings`.
 10. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
 11. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-12. **Blackjack** – physische Tische, Sitze, Kartenrunde und UI.
-13. **Warp** – dynamische Warp-Persistence und Admin-Command.
-14. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+12. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+13. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+14. **Blackjack** – physische Tische, Seat-Allocation, Kartenrunde und UI.
+15. **Warp** – dynamische Warp-Persistence und Admin-Command.
+16. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Economy → Social → Player → Permission. Das ist relevant, weil Lobby beim eigenen Cleanup aktive BUILD-Inventare entfernt, nachdem Experience-UI und Interaktionen bereits deaktiviert wurden; die Lobby-Hotbar wird beim Shutdown nicht neu erzeugt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Economy → Social → Player → Permission. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt. WorldDisplay liegt bereits vor Blackjack, damit Phase 15C keine erneute Order-Migration braucht.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -99,16 +108,24 @@ Lobby + Activity
   ↑
 Utility
 
-Activity + schmale Lobby-BUILD-Abfrage
+Lobby + Activity
+  ↑
+Seat
+
+Seat + Activity + schmale Lobby-BUILD-Abfrage
   ↑
 Blackjack
+
+WorldDisplay
+  ↑
+zukünftige dynamische Feature-Visuals
 
 Lobby + Player + Settings + Warp
   ↑
 LobbyExperience
 ```
 
-`Presentation` bezieht außerdem Permission, Player, Economy und Lobby. Chat bezieht Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. Das generische Activity-Framework kennt weder Lobby noch Blackjack.
+`Presentation` bezieht außerdem Permission, Player, Economy und Lobby. Chat bezieht Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab. Das generische Activity-Framework kennt weder Seat noch Blackjack.
 
 ## Lobby player state
 
@@ -189,6 +206,26 @@ Vor NORMAL → BUILD gibt `BuildCommand` eventuell durch `/fly` verwaltetes Flig
 
 Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby, `BUILD` ist das temporäre Creative-Inventory. Eine spätere Activity-Hotbar muss Besitz explizit übernehmen und anschließend kontrolliert an den Lobby-State zurückgeben; sie darf nicht parallel dieselben Slots verwalten.
 
+## Community seating
+
+`SeatService` ist der alleinige Owner von Reservation, Occupancy, UUID-basierter Player-Zuordnung, technischer ArmorStand-Entity, Mount, programmatic Dismount, Owner-Cleanup und stale Cleanup. `SeatKey(owner, id)` gruppiert Sitze ohne Feature-Sonderlogik; `SeatType` trennt `CASUAL` von `MANAGED`. Ein Spieler und ein Key können gleichzeitig jeweils höchstens eine Zuordnung besitzen. Die immutable `SeatAssignment` speichert Welt, Position, Rotation und optional die Entity-UUID. Runtime-Mutationen sind Main-Thread-only; direkte dauerhafte Player- oder Entity-Referenzen werden nicht gespeichert.
+
+Die generischen PDC-Keys sind `seat`, `seat_owner`, `seat_id` und `seat_type`. Neue Entities sind unsichtbar, ohne Gravitation, invulnerable, silent, nicht kollidierbar, nicht persistent, ohne Baseplate/Arme/AI und soweit von Paper unterstützt unbeweglich. Der technische Passenger-Offset `-1.70D` liegt ausschließlich in `SeatService`. Beim Start werden markierte generische Entities und als Migrationsschutz auch alte `blackjack_seat`-ArmorStands entfernt. Fremde ArmorStands bleiben unangetastet.
+
+`SeatListener` erlaubt Casual Seating ausschließlich in der konfigurierten Lobby-Welt: Main-Hand-Rechtsklick, leere Hand, nicht sneaken, kein BUILD, keine Activity-Membership, außerhalb jeder registrierten ActivityVenue-Area, kein bestehendes Vehicle/Seat und passierbarer Raum über dem Block. Unterstützt werden Bottom-Stairs sowie Bottom- und Top-Slabs; Double-Slabs und Top-Stairs werden bewusst abgelehnt. `SeatPositionResolver` setzt den Blockmittelpunkt, Bottom-Oberflächen auf `y + 0.5`, Top-Slabs auf `y + 1.0`, Slab-Yaw auf den Player-Yaw und Stair-Yaw auf die Gegenrichtung des Stair-Facings. Es gibt keinen Tick-/Move-Listener, keine Permission, kein `/sit`, keine Config und keine Persistence.
+
+Normales Shift-Dismount entfernt Assignment und Entity. Ein `MANAGED`-Callback wird einen Tick verzögert nur bei einem echten Player-Dismount ausgeführt und prüft vorher Plugin-, Online- und Relevanzzustand. Programmatic Release, Quit, World Change, Tod und der Abbau eines belegten Casual-Blocks bereinigen ohne freiwilligen Feature-Callback. `CASUAL` erzeugt keine Activity und keinen neuen LobbyPlayerMode und verändert weder Gamemode noch Inventory.
+
+`BlackjackSeatService` ist nur noch der fachliche Allocation-Adapter: niedrigste freie konfigurierte Sitznummer, Table-/Seat-Mapping, `blackjack:<table-id>`-Owner, Reservation/Mount/Release-Delegation und der Callback zu `ActivityService.leaveCurrentSession(..., VOLUNTARY)`. Die physische Entity und ihre generischen Events gehören SeatService/SeatListener. `BlackjackTableListener` verarbeitet weiterhin nur Interaktionsblock und GUI. Der transaktionale Ablauf Reservation → Activity-Join → Mount samt Rollback bleibt bestehen.
+
+## Native world displays
+
+`WorldDisplayService` verwaltet runtime-eindeutige `WorldDisplayKey(owner, id)` und immutable `WorldDisplayHandle`-Werte mit Entity-UUID und Typ. Es erzeugt native `TextDisplay`- und `ItemDisplay`-Entities, aktualisiert Inhalt typsicher, teleportiert, entfernt idempotent und kann alle Displays eines Owners freigeben. ItemStacks werden bei Create und Update defensiv geklont. Ein Duplicate-Key ist ein kontrollierter Programmierfehler; eine verschwundene Entity liefert bei Update/Teleport `false` und entfernt den stale Registry-Eintrag. Ein falscher Update-Typ wirft konsistent `IllegalArgumentException`.
+
+Die PDC-Keys sind `world_display`, `world_display_owner`, `world_display_id` und `world_display_type`. Displays sind nicht persistent, ohne Gravitation, invulnerable und silent. Feature-spezifische Transformation, Billboard, Scale, Brightness, Textausrichtung und Interpolation bleiben beim Consumer. Beim Modulstart werden ausschließlich markierte Text-/ItemDisplays entfernt; beim Shutdown alle registrierten Displays. Es gibt keinen Polling-Task, keine Display-Config/-Persistence, keine Commands, keine Packet-/NMS-Abhängigkeit und keine Demo-Entities.
+
+WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf parallel für frei konfigurierbare statische Hologramme verwendet werden, VapeeCore besitzt jedoch keine harte Dependency darauf. Phase 15C soll SeatService für physische Blackjack-Sitze und WorldDisplayService für Karten sowie Table-/Turn-Status verwenden; die dortige Activity-Hotbar muss weiterhin explizit mit der Lobby-Inventory-Ownership koordiniert werden.
+
 ## Should I change Java or configuration?
 
 | Änderung | Richtiger Ort |
@@ -200,6 +237,11 @@ Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` geh
 | BUILD-Regeln, Cleanup oder Inventory-Semantik | `LobbyPlayerStateService` |
 | Warp-Position | `/warp set …` beziehungsweise `warps.yml` |
 | Blackjack-Tischposition | `/blackjack setup …` beziehungsweise `blackjack.yml` |
+| Casual-Sitzbedingungen und Cleanup-Events | `SeatListener` |
+| Seat-Reservation, Entity und PDC | `SeatService` |
+| Stair-/Slab-Geometrie | `SeatPositionResolver` |
+| Blackjack-Sitzverteilung | `BlackjackSeatService` |
+| Native Text-/ItemDisplays | `WorldDisplayService` |
 | Command-Help-Design und Rendering | `dev.vapee.core.command.help` |
 | Hauptübersicht und `/core help` | `CoreCommand` |
 | Coin-Command-UX | `CoinsCommand` |
@@ -318,6 +360,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.utility.command.UtilityCommandHarness`
 - `dev.vapee.core.message.CommandHelpHarness`
 - `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
+- `dev.vapee.core.seat.SeatHarness`
+- `dev.vapee.core.worlddisplay.WorldDisplayHarness`
 
 Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 

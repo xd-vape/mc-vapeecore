@@ -12,6 +12,7 @@ import dev.vapee.core.activity.blackjack.ui.BlackjackTableMenu;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.seat.SeatModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,6 +26,7 @@ public final class BlackjackModule implements CoreModule {
 
     private final JavaPlugin plugin;
     private final ActivityModule activityModule;
+    private final SeatModule seatModule;
     private final MessageService messageService;
     private final CommandHelpRenderer commandHelpRenderer;
     private final Predicate<UUID> buildModeCheck;
@@ -41,12 +43,14 @@ public final class BlackjackModule implements CoreModule {
     public BlackjackModule(
             JavaPlugin plugin,
             ActivityModule activityModule,
+            SeatModule seatModule,
             MessageService messageService,
             CommandHelpRenderer commandHelpRenderer,
             Predicate<UUID> buildModeCheck
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
+        this.seatModule = Objects.requireNonNull(seatModule, "seatModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
         this.buildModeCheck = Objects.requireNonNull(buildModeCheck, "buildModeCheck");
@@ -62,7 +66,11 @@ public final class BlackjackModule implements CoreModule {
         ActivityService newActivityService = activityModule.getActivityService();
         BlackjackTableConfig newTableConfig = new BlackjackTableConfig(plugin);
         newTableConfig.initialize();
-        BlackjackSeatService newSeatService = new BlackjackSeatService(plugin, newActivityService);
+        BlackjackSeatService newSeatService = new BlackjackSeatService(
+                plugin,
+                newActivityService,
+                seatModule.getSeatService()
+        );
         BlackjackTableService newTableService = new BlackjackTableService(
                 newActivityService,
                 newTableConfig,
@@ -90,17 +98,12 @@ public final class BlackjackModule implements CoreModule {
 
         try {
             newTableService.activateConfiguredTables();
-            int staleSeats = newSeatService.cleanupStaleSeats();
-            if (staleSeats > 0) {
-                plugin.getLogger().info("Removed " + staleSeats + " stale blackjack seat entity/entities.");
-            }
             newTableMenu = new BlackjackTableMenu(plugin, newBlackjackService);
             newBlackjackService.setTableRefresher(newTableMenu::refreshSession);
             newTableListener = new BlackjackTableListener(
                     plugin,
                     newBlackjackService,
                     newTableService,
-                    newSeatService,
                     newTableMenu
             );
             newBlackjackCommand = Objects.requireNonNull(
