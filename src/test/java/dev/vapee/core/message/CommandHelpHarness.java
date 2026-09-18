@@ -123,16 +123,37 @@ public final class CommandHelpHarness {
         check(playerText.contains("/spawn") && playerText.contains("/coins"),
                 "core help shows permitted player commands");
         check(!playerText.contains("/setspawn") && !playerText.contains("/build")
+                        && !playerText.contains("/fly") && !playerText.contains("/speed")
+                        && !playerText.contains("/gamemode") && !playerText.contains("/tphere")
+                        && !playerText.contains("/heal") && !playerText.contains("/feed")
                         && !playerText.contains("/warp help") && !playerText.contains("/blackjack help"),
-                "core help hides unavailable administration commands");
+                "core help hides unavailable administration and utility commands");
+
+        Capture builder = capture(Set.of(
+                "vapeecore.utility.build", "vapeecore.utility.fly", "vapeecore.utility.speed"
+        ));
+        new CommandHelpRenderer(builder.messageService()).send(builder.sender(), core);
+        String builderText = builder.singleText();
+        check(builderText.contains("/build") && builderText.contains("/fly") && builderText.contains("/speed"),
+                "core help shows a builder's three permitted utilities");
+        check(!builderText.contains("/gamemode") && !builderText.contains("/tp <player>")
+                        && !builderText.contains("/tphere") && !builderText.contains("/heal")
+                        && !builderText.contains("/feed"),
+                "core help hides utilities the builder cannot use");
 
         Capture admin = capture(Set.of(
                 "vapeecore.admin", "vapeecore.lobby.setspawn", "vapeecore.utility.build",
+                "vapeecore.utility.fly", "vapeecore.utility.speed", "vapeecore.utility.gamemode",
+                "vapeecore.utility.teleport", "vapeecore.utility.teleport.here",
+                "vapeecore.utility.heal", "vapeecore.utility.feed",
                 "vapeecore.warp.admin", "vapeecore.blackjack.admin"
         ));
         new CommandHelpRenderer(admin.messageService()).send(admin.sender(), core);
-        check(admin.singleText().contains("/core reload") && admin.singleText().contains("/blackjack help"),
-                "core help shows permitted administration commands");
+        String adminText = admin.singleText();
+        check(adminText.contains("/core reload") && adminText.contains("/blackjack help")
+                        && adminText.contains("/gamemode <mode> [player]")
+                        && adminText.contains("Alias: /gm") && adminText.contains("/tphere <player>"),
+                "core help shows all permitted administration and utility commands");
 
         CommandHelpPage coins = page(CoinsCommand.class, "HELP_PAGE");
         Capture normalCoins = capture(Set.of());

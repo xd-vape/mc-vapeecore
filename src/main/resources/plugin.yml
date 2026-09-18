@@ -63,6 +63,36 @@ commands:
     description: Toggle lobby build mode
     usage: /build
     permission: vapeecore.utility.build
+  fly:
+    description: Toggle flight
+    usage: /fly [player]
+    permission: vapeecore.utility.fly
+  speed:
+    description: Change player movement speed
+    usage: /speed <1-10> [player]
+    permission: vapeecore.utility.speed
+  gamemode:
+    aliases:
+      - gm
+    description: Change player game mode
+    usage: /gamemode <mode> [player]
+    permission: vapeecore.utility.gamemode
+  tp:
+    description: Teleport to an online player
+    usage: /tp <player>
+    permission: vapeecore.utility.teleport
+  tphere:
+    description: Teleport an online player to you
+    usage: /tphere <player>
+    permission: vapeecore.utility.teleport.here
+  heal:
+    description: Restore player health
+    usage: /heal [player]
+    permission: vapeecore.utility.heal
+  feed:
+    description: Restore player hunger
+    usage: /feed [player]
+    permission: vapeecore.utility.feed
 
 permissions:
   vapeecore.admin:
@@ -82,6 +112,52 @@ permissions:
   vapeecore.utility.build:
     description: Allows toggling lobby build mode
     default: op
+  vapeecore.utility.fly:
+    description: Allows toggling personal flight
+    default: op
+  vapeecore.utility.fly.others:
+    description: Allows toggling another online player's flight
+    default: op
+    children:
+      vapeecore.utility.fly: true
+  vapeecore.utility.speed:
+    description: Allows changing personal movement speed
+    default: op
+  vapeecore.utility.speed.others:
+    description: Allows changing another online player's movement speed
+    default: op
+    children:
+      vapeecore.utility.speed: true
+  vapeecore.utility.gamemode:
+    description: Allows changing personal game mode
+    default: op
+  vapeecore.utility.gamemode.others:
+    description: Allows changing another online player's game mode
+    default: op
+    children:
+      vapeecore.utility.gamemode: true
+  vapeecore.utility.teleport:
+    description: Allows teleporting to an online player
+    default: op
+  vapeecore.utility.teleport.here:
+    description: Allows teleporting an online player to yourself
+    default: op
+  vapeecore.utility.heal:
+    description: Allows restoring personal health
+    default: op
+  vapeecore.utility.heal.others:
+    description: Allows restoring another online player's health
+    default: op
+    children:
+      vapeecore.utility.heal: true
+  vapeecore.utility.feed:
+    description: Allows restoring personal hunger
+    default: op
+  vapeecore.utility.feed.others:
+    description: Allows restoring another online player's hunger
+    default: op
+    children:
+      vapeecore.utility.feed: true
   vapeecore.economy.coins:
     description: Allows viewing your own coin balance
     default: true

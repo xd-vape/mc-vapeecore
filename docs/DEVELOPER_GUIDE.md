@@ -17,6 +17,16 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Lobby protection | `LobbyListener` |
 | Build mode behavior | `dev.vapee.core.lobby.player.LobbyPlayerStateService` |
 | `/build` command | `UtilityModule` und `BuildCommand` |
+| Flight-/Speed-/Gamemode-Mutationen und transienter Cleanup | `dev.vapee.core.utility.UtilityService` |
+| Utility Join-/Quit-Normalisierung | `dev.vapee.core.utility.UtilityListener` |
+| `/fly` | `dev.vapee.core.utility.command.FlyCommand` |
+| `/speed` | `dev.vapee.core.utility.command.SpeedCommand` |
+| `/gamemode` und `/gm` | `dev.vapee.core.utility.command.GameModeCommand` |
+| `/tp` | `dev.vapee.core.utility.command.TeleportCommand` |
+| `/tphere` | `dev.vapee.core.utility.command.TeleportHereCommand` |
+| `/heal` | `dev.vapee.core.utility.command.HealCommand` |
+| `/feed` | `dev.vapee.core.utility.command.FeedCommand` |
+| Utility-Modul-Lifecycle und Command-Registrierung | `dev.vapee.core.utility.UtilityModule` |
 | Lobby hotbar items | `dev.vapee.core.lobby.item.LobbyItemService` |
 | Warp Navigator item material/name/lore | `LobbyItemService` |
 | Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
@@ -71,7 +81,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 8. **Presentation** – Sidebar und Tablist.
 9. **Settings** – Settings-Inventar und `/settings`.
 10. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-11. **Utility** – Utility-Commands; derzeit ausschließlich `/build`.
+11. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
 12. **Blackjack** – physische Tische, Sitze, Kartenrunde und UI.
 13. **Warp** – dynamische Warp-Persistence und Admin-Command.
 14. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
@@ -136,6 +146,10 @@ PlayerJoinEvent
       → NORMAL-Gamemode
       → vollständiger Inventory-Reset
       → LobbyItemService.applyLobbyItems
+  → UtilityListener läuft danach ebenfalls geplant
+      → Walk/Fly Speed auf Vanilla-Defaults
+      → SURVIVAL/ADVENTURE Flight-Leaks entfernen
+      → CREATIVE/SPECTATOR Flight nicht beschädigen
   → LobbyExperienceListener synchronisiert danach Visibility/UI
 ```
 
@@ -171,6 +185,8 @@ Deaktivierung wird immer zuerst erkannt und bleibt damit auch als sicherer Exit 
 
 `ActivityService.isParticipating` blockiert NORMAL → BUILD. In Gegenrichtung erhält `BlackjackService` eine schmale `Predicate<UUID>`-Abfrage und lehnt BUILD-Spieler vor Definition-, Sitz- oder Membership-Änderungen ab. Es gibt keine `UtilityModule → BlackjackModule`-Dependency und keine Lobby-Abhängigkeit im generischen Activity-Framework.
 
+Vor NORMAL → BUILD gibt `BuildCommand` eventuell durch `/fly` verwaltetes Flight an `UtilityService` zurück. Erst danach übernimmt `LobbyPlayerStateService` über `CREATIVE`; damit besitzen Utility und BUILD Flight nie gleichzeitig.
+
 Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby, `BUILD` ist das temporäre Creative-Inventory. Eine spätere Activity-Hotbar muss Besitz explizit übernehmen und anschließend kontrolliert an den Lobby-State zurückgeben; sie darf nicht parallel dieselben Slots verwalten.
 
 ## Should I change Java or configuration?
@@ -189,7 +205,30 @@ Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` geh
 | Coin-Command-UX | `CoinsCommand` |
 | Blackjack-Command-UX | `BlackjackCommand` |
 | Warp-Command-UX | `WarpCommand` |
-| Zukünftige Utility Commands | `utility/command` |
+| Utility-Bukkit-Mutationen und Flight-/Speed-Cleanup | `UtilityService` |
+| Utility-Argumente, Rechte, Guards, Texte oder Completion | jeweilige Klasse unter `utility/command` |
+
+## Utility ownership und Lifecycle
+
+`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt einen `UtilityService` und den ausschließlich für Cleanup zuständigen `UtilityListener`, registriert acht Commands und anschließend den Listener. Es ist kein `ReloadParticipant` und besitzt keine Configdatei. Beim Disable werden verwaltetes Flight und beide Speed-Kanäle online normalisiert, UUID-Mengen geleert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
+
+`UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal und Feed. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
+
+`UtilityListener` entfernt beim Quit den UUID-State und normalisiert verwaltete Bewegung soweit noch sicher möglich. Beim Join vergisst er zunächst möglichen stale Runtime-State und plant die eigentliche Normalisierung einen Tick später. Dadurch läuft zuerst der bereits geplante Lobby-Join-State; anschließend setzt Utility Walk Speed auf `0.2F`, Fly Speed auf `0.1F` und entfernt in `SURVIVAL`/`ADVENTURE` unerwartetes Flight. Native Flight-Semantik in `CREATIVE`/`SPECTATOR` bleibt erhalten. Diese Join-Normalisierung deckt auch Prozessabbrüche ab, bei denen reguläres Disable-Cleanup nicht lief.
+
+Die Commands lösen Targets ausschließlich über `Server#getPlayerExact` auf. Es gibt weder fuzzy Namen noch `OfflinePlayer`. Bei optionalem Target reicht für Self die Basispermission; ein anderes Target und Console-mit-Target benötigen `.others`. Player-Completion wird ohne `.others` nicht offengelegt und sonst case-insensitive stabil sortiert. Gruppen oder Ränge sind keine Business-Logik. Eine mögliche, ausschließlich externe LuckPerms-Konfiguration wäre beispielsweise:
+
+- Builder: `vapeecore.utility.build`, `vapeecore.utility.fly`, `vapeecore.utility.speed`
+- Moderator: `vapeecore.utility.teleport`, `vapeecore.utility.teleport.here`, `vapeecore.utility.heal`, `vapeecore.utility.feed`
+- Admin: alle gewünschten `vapeecore.utility.*`-Permissions
+
+VapeeCore kennt die Gruppennamen Builder, Moderator und Admin ausdrücklich nicht; sie sind nur Beispiele für eine Serverkonfiguration.
+
+`/fly` verwaltet ausschließlich Flight in `SURVIVAL` und `ADVENTURE`. BUILD sowie `CREATIVE`/`SPECTATOR` behalten ihren jeweiligen nativen Owner. `/speed` akzeptiert Level 1–10; Level 1 entspricht Walk `0.2F` beziehungsweise Fly `0.1F`, Level 10 jeweils `1.0F`. Der Fly-Kanal gilt bei aktivem Fliegen sowie in `CREATIVE`/`SPECTATOR`, sonst der Walk-Kanal. `/gamemode` akzeptiert vollständige Namen, `s/c/a/sp` und `0/1/2/3`; Completion zeigt nur vollständige Namen. Ein BUILD-Target wird abgewiesen. Ein späterer Lobby-Resync darf einen temporär gesetzten Gamemode wieder auf `lobby.yml` normalisieren; Creative allein schaltet nie BUILD oder Protection-Bypass ein.
+
+`/tp` teleportiert nur den ausführenden Spieler zu einem exakten Online-Target, `/tphere` nur ein Online-Target zum ausführenden Spieler. Es gibt keine Zwei-Target- oder Console-Form. BUILD-Teleports werden nicht doppelt behandelt: Ein tatsächlicher Weltwechsel löst den bestehenden `LobbyListener`-Cleanup aus, ein Teleport innerhalb derselben Lobby-Welt behält BUILD. Die Plugin-Commands `/gamemode` und `/tp` sind bewusst vereinfachte VapeeCore-Varianten; die Vanilla-Kommandos bleiben über `/minecraft:gamemode` und `/minecraft:tp` erreichbar.
+
+Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen direkt und schmal `ActivityService.isParticipating(UUID)` ab. Das generische Activity-Framework erhält keine Utility-Regeln. `/tphere` prüft Sender und Target. `/heal` setzt aktuelle Max-Health sowie Fire-/Freeze-Ticks zurück, verändert aber weder Hunger, Inventory, Gamemode noch Potion Effects. `/feed` setzt Food 20, Saturation 20 und Exhaustion 0, verändert aber Health nicht.
 
 ## Commands und permissions
 
@@ -199,6 +238,13 @@ Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` geh
 | `/spawn` | Zum Lobby-Spawn teleportieren | `SpawnCommand` | `vapeecore.lobby.spawn` |
 | `/setspawn` | Lobby-Spawn speichern | `SetSpawnCommand` | `vapeecore.lobby.setspawn` |
 | `/build` | Temporären Lobby-BUILD-Modus umschalten | `BuildCommand` | `vapeecore.utility.build` |
+| `/fly [player]` | Command-managed Flight umschalten | `FlyCommand` | `vapeecore.utility.fly`, fremde Targets: `.fly.others` |
+| `/speed <1-10> [player]` | Kontextabhängigen Walk-/Fly-Speed setzen | `SpeedCommand` | `vapeecore.utility.speed`, fremde Targets: `.speed.others` |
+| `/gamemode`, `/gm` | Gamemode setzen | `GameModeCommand` | `vapeecore.utility.gamemode`, fremde Targets: `.gamemode.others` |
+| `/tp <player>` | Zum Online-Spieler teleportieren | `TeleportCommand` | `vapeecore.utility.teleport` |
+| `/tphere <player>` | Online-Spieler zum Sender teleportieren | `TeleportHereCommand` | `vapeecore.utility.teleport.here` |
+| `/heal [player]` | Aktuelle Max-Health wiederherstellen | `HealCommand` | `vapeecore.utility.heal`, fremde Targets: `.heal.others` |
+| `/feed [player]` | Hunger, Saturation und Exhaustion normalisieren | `FeedCommand` | `vapeecore.utility.feed`, fremde Targets: `.feed.others` |
 | `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
@@ -206,7 +252,7 @@ Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` geh
 | `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 
-Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine Gruppe namens „Builder“; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
+Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. Die `.others`-Nodes für Flight, Speed, Gamemode, Heal und Feed besitzen die jeweilige Basispermission als Child. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
 
 ## Command UX Standard
 
@@ -268,7 +314,10 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.lobby.warp.WarpHarness`
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`
+- `dev.vapee.core.utility.UtilityServiceHarness`
+- `dev.vapee.core.utility.command.UtilityCommandHarness`
 - `dev.vapee.core.message.CommandHelpHarness`
+- `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
 
 Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 

@@ -22,12 +22,14 @@ public final class BuildCommandHarness {
         List<String> messages = new ArrayList<>();
         AtomicBoolean inLobby = new AtomicBoolean(true);
         AtomicBoolean participating = new AtomicBoolean(false);
+        int[] flightCleanupCount = {0};
         MutableBuildState state = new MutableBuildState();
         BuildCommand command = new BuildCommand(
                 silentLogger(),
                 ignored -> inLobby.get(),
                 state,
                 ignored -> participating.get(),
+                ignored -> flightCleanupCount[0]++,
                 (sender, message) -> messages.add(message)
         );
 
@@ -59,11 +61,13 @@ public final class BuildCommandHarness {
         participating.set(false);
         command.onCommand(allowed, null, "build", new String[0]);
         check(state.build && state.enterCount == 1, "eligible player enters BUILD exactly once");
+        check(flightCleanupCount[0] == 1, "entering BUILD surrenders command-managed flight first");
         check(last(messages).contains("enabled"), "BUILD activation reports success");
 
         inLobby.set(false);
         command.onCommand(allowed, null, "build", new String[0]);
         check(!state.build && state.exitCount == 1, "active BUILD can always be exited safely");
+        check(flightCleanupCount[0] == 1, "leaving BUILD does not touch utility flight ownership");
         check(last(messages).contains("disabled"), "BUILD exit reports success");
         check(command.onTabComplete(allowed, null, "build", new String[]{""}).isEmpty(),
                 "/build exposes no tab completions");

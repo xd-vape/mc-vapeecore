@@ -4,6 +4,7 @@ import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.utility.UtilityService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -28,6 +30,7 @@ public final class BuildCommand implements TabExecutor {
     private final Predicate<Player> lobbyWorldCheck;
     private final BuildStateAccess buildStateAccess;
     private final Predicate<UUID> activityCheck;
+    private final Consumer<Player> managedFlightCleanup;
     private final BiConsumer<CommandSender, String> messageSender;
 
     public BuildCommand(
@@ -35,6 +38,7 @@ public final class BuildCommand implements TabExecutor {
             LobbyService lobbyService,
             LobbyPlayerStateService lobbyPlayerStateService,
             ActivityService activityService,
+            UtilityService utilityService,
             MessageService messageService
     ) {
         this(
@@ -42,6 +46,7 @@ public final class BuildCommand implements TabExecutor {
                 lobbyWorldCheck(lobbyService),
                 buildStateAccess(lobbyPlayerStateService),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
+                Objects.requireNonNull(utilityService, "utilityService")::clearManagedFlight,
                 Objects.requireNonNull(messageService, "messageService")::send
         );
     }
@@ -51,12 +56,14 @@ public final class BuildCommand implements TabExecutor {
             Predicate<Player> lobbyWorldCheck,
             BuildStateAccess buildStateAccess,
             Predicate<UUID> activityCheck,
+            Consumer<Player> managedFlightCleanup,
             BiConsumer<CommandSender, String> messageSender
     ) {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.lobbyWorldCheck = Objects.requireNonNull(lobbyWorldCheck, "lobbyWorldCheck");
         this.buildStateAccess = Objects.requireNonNull(buildStateAccess, "buildStateAccess");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
+        this.managedFlightCleanup = Objects.requireNonNull(managedFlightCleanup, "managedFlightCleanup");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
     }
 
@@ -98,6 +105,7 @@ public final class BuildCommand implements TabExecutor {
                 return true;
             }
 
+            managedFlightCleanup.accept(player);
             buildStateAccess.enterBuildMode(player);
             send(player, "<green>Build mode enabled.</green>");
         } catch (RuntimeException exception) {

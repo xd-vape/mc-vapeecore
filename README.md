@@ -1,6 +1,6 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, ein leichtgewichtiges Activity-Fundament, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Integration bereit. Der aktuelle Stand ist Phase 15A.2 „Command UX Foundation“.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, grundlegende Utility-Commands, ein leichtgewichtiges Activity-Fundament, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Integration bereit. Der aktuelle Stand ist Phase 15A.3 „Utility Commands“.
 
 ## Developer Documentation
 
@@ -58,7 +58,7 @@ Das Projekt enthält die geteilten IntelliJ-Run-Konfigurationen `Start VapeeCore
 - `reload`: koordinierter zweiphasiger Config-Reload mit Runtime-Rollback
 - `settings`: sichere Ingame-Oberfläche für die bereits persistenten Player-Settings
 - `social`: Ignore-Service, threadsichere Runtime-Projektion, Lifecycle und Commands
-- `utility`: administrative Utility-Einstiegspunkte; aktuell ausschließlich `/build`
+- `utility`: zustandsbewusste Builder-/Admin-Utilities, Laufzeit-Cleanup und Commands
 
 Die 14 Module starten in der gerichteten Reihenfolge `Permission → Player → Social → Economy → Lobby → Chat → PrivateMessage → Presentation → Settings → Activity → Utility → Blackjack → Warp → LobbyExperience` und werden beim Shutdown vollständig rückwärts deaktiviert. Dadurch sind Lobby und Activity vor `/build`, Blackjack nach Activity sowie Warp vor LobbyExperience verfügbar. Chat und PrivateMessage nutzen weiterhin den Social-Snapshot und Player-Persistence wird beim Shutdown erst nach allen konsumierenden Modulen gespeichert.
 
@@ -93,6 +93,10 @@ Phase 12 enthält bewusst kein Friends- oder Party-System, kein Social GUI und k
 Permissions, Gruppen, Primary Groups, Prefixe, Suffixe, Meta-Daten, Contexts und Vererbung werden ausschließlich von LuckPerms verwaltet. VapeeCore liest die bereits von LuckPerms aufgelösten Daten und speichert sie weder im `CorePlayer` noch in den Player-YAML-Dateien. Normale Permission-Checks erfolgen weiterhin über Bukkit/Paper.
 
 Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/setspawn` speichert dort den Lobby-Spawn mit Weltname, Position und Blickrichtung; `/spawn` teleportiert Spieler dorthin. `player.gamemode` bestimmt den normalen Lobby-Gamemode und verwendet bei ungültigen Werten sicher `ADVENTURE`. `LobbyPlayerStateService` besitzt den nicht persistenten Zustand `NORMAL`/`BUILD`, normalisiert Gamemode und Inventory und erzeugt in `NORMAL` die Lobby-Hotbar. `/build` liegt im `UtilityModule`, ist auf die Lobby beschränkt, mit Activities gegenseitig exklusiv und verwendet immer `CREATIVE`. Nur der aktive BUILD-Zustand umgeht Block- und Item-Schutz; die Permission `vapeecore.utility.build` erlaubt ausschließlich das Command. `vapeecore.lobby.build` bleibt nur als deprecated Permission-Parent zur Migration erhalten.
+
+### Utility Commands
+
+Phase 15A.3 erweitert dasselbe `UtilityModule` um `/fly`, `/speed`, `/gamemode` (Alias `/gm`), `/tp`, `/tphere`, `/heal` und `/feed`. Alle Player-Ziele werden exakt und ausschließlich online aufgelöst; Self- und Others-Rechte bleiben getrennt. Flight und Speed sind reine Laufzeit-Zustände: Join, Quit und Modul-Shutdown bereinigen sie, ohne Player-YAMLs oder neue Konfigurationen zu verändern. Gamemode, Movement, Teleport, Heal und Feed sind während einer Activity gesperrt, soweit sie deren Gameplay-State verändern würden. BUILD bleibt vollständig im `LobbyPlayerStateService`; `/fly` greift dort nicht ein, `/gamemode` wahrt dessen CREATIVE-Invariante und Teleports verlassen BUILD über den bestehenden World-Change-Flow. Die konkreten Permissions, Zustandsregeln und Erweiterungspunkte stehen im Developer Guide.
 
 ### Activity Foundation
 
