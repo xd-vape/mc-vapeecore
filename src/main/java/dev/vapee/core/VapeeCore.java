@@ -4,6 +4,7 @@ import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.activity.blackjack.BlackjackModule;
 import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.command.CoreCommand;
+import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyModule;
 import dev.vapee.core.lobby.LobbyModule;
@@ -31,6 +32,7 @@ public final class VapeeCore extends JavaPlugin {
 
     private ConfigService configService;
     private MessageService messageService;
+    private CommandHelpRenderer commandHelpRenderer;
     private ModuleManager moduleManager;
     private PermissionModule permissionModule;
     private PlayerModule playerModule;
@@ -53,12 +55,13 @@ public final class VapeeCore extends JavaPlugin {
         configService.load();
 
         messageService = new MessageService(configService);
+        commandHelpRenderer = new CommandHelpRenderer(messageService);
         moduleManager = new ModuleManager(getLogger());
 
         permissionModule = new PermissionModule(this);
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
-        economyModule = new EconomyModule(this, playerModule, messageService);
+        economyModule = new EconomyModule(this, playerModule, messageService, commandHelpRenderer);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
         chatModule = new ChatModule(this, permissionModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
@@ -88,9 +91,10 @@ public final class VapeeCore extends JavaPlugin {
                 this,
                 activityModule,
                 messageService,
+                commandHelpRenderer,
                 playerId -> lobbyModule.getLobbyPlayerStateService().isBuildMode(playerId)
         );
-        warpModule = new WarpModule(this, messageService);
+        warpModule = new WarpModule(this, messageService, commandHelpRenderer);
         lobbyExperienceModule = new LobbyExperienceModule(
                 this,
                 lobbyModule,
@@ -148,14 +152,17 @@ public final class VapeeCore extends JavaPlugin {
                 getCommand("vapeecore"),
                 "Command 'vapeecore' is missing from plugin.yml"
         );
-        coreCommand.setExecutor(new CoreCommand(
+        CoreCommand executor = new CoreCommand(
                 this,
                 configService,
                 messageService,
                 moduleManager,
                 playerService,
                 luckPermsService,
-                reloadService
-        ));
+                reloadService,
+                commandHelpRenderer
+        );
+        coreCommand.setExecutor(executor);
+        coreCommand.setTabCompleter(executor);
     }
 }

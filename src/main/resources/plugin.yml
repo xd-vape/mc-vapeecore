@@ -12,7 +12,7 @@ commands:
     aliases:
       - core
     description: Main command for VapeeCore
-    usage: /vapeecore [version|reload]
+    usage: /core help
   spawn:
     description: Teleports a player to the lobby spawn
     usage: /spawn
@@ -23,7 +23,7 @@ commands:
     permission: vapeecore.lobby.setspawn
   coins:
     description: View and manage coin balances
-    usage: /coins [get|add|remove|set]
+    usage: /coins help
     permission: vapeecore.economy.coins
   msg:
     description: Send a private message to an online player
@@ -53,11 +53,11 @@ commands:
     permission: vapeecore.social.ignore
   blackjack:
     description: Blackjack table administration
-    usage: /blackjack setup ...
+    usage: /blackjack help
     permission: vapeecore.blackjack.admin
   warp:
     description: Warp administration
-    usage: /warp <set|remove|list|info|name|icon>
+    usage: /warp help
     permission: vapeecore.warp.admin
   build:
     description: Toggle lobby build mode

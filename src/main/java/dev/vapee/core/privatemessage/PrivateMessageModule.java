@@ -67,20 +67,26 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newListener, plugin);
-            newMessageCommand.setExecutor(new MessageCommand(
+            MessageCommand newMessageExecutor = new MessageCommand(
                     plugin.getServer(),
                     newService,
                     messageService,
                     plugin.getLogger()
-            ));
-            newReplyCommand.setExecutor(new ReplyCommand(
+            );
+            newMessageCommand.setExecutor(newMessageExecutor);
+            newMessageCommand.setTabCompleter(newMessageExecutor);
+            ReplyCommand newReplyExecutor = new ReplyCommand(
                     newService,
                     messageService,
                     plugin.getLogger()
-            ));
+            );
+            newReplyCommand.setExecutor(newReplyExecutor);
+            newReplyCommand.setTabCompleter(newReplyExecutor);
         } catch (RuntimeException exception) {
             newMessageCommand.setExecutor(null);
+            newMessageCommand.setTabCompleter(null);
             newReplyCommand.setExecutor(null);
+            newReplyCommand.setTabCompleter(null);
             HandlerList.unregisterAll(newListener);
             newService.clearConversations();
             throw exception;
@@ -101,9 +107,11 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
         }
         if (messageCommand != null) {
             messageCommand.setExecutor(null);
+            messageCommand.setTabCompleter(null);
         }
         if (replyCommand != null) {
             replyCommand.setExecutor(null);
+            replyCommand.setTabCompleter(null);
         }
         if (privateMessageService != null) {
             privateMessageService.clearConversations();

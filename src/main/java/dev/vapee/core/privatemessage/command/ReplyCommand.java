@@ -3,17 +3,21 @@ package dev.vapee.core.privatemessage.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.privatemessage.PrivateMessageResult;
 import dev.vapee.core.privatemessage.PrivateMessageService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public final class ReplyCommand implements CommandExecutor {
+public final class ReplyCommand implements TabExecutor {
 
     private final PrivateMessageService privateMessageService;
     private final MessageService messageService;
@@ -64,8 +68,21 @@ public final class ReplyCommand implements CommandExecutor {
         return true;
     }
 
+    @Override
+    public @Nullable List<String> onTabComplete(
+            @NotNull CommandSender sender,
+            @NotNull Command command,
+            @NotNull String alias,
+            @NotNull String[] args
+    ) {
+        return List.of();
+    }
+
     private void sendUsage(Player player) {
-        messageService.send(player, "<yellow>Usage:</yellow> <white>/reply <message></white>");
+        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text("/reply <message>", NamedTextColor.AQUA)));
     }
 
     private void sendResult(Player player, PrivateMessageResult result) {

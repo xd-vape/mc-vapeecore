@@ -3,6 +3,8 @@ package dev.vapee.core.social.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.IgnoreResult;
 import dev.vapee.core.social.SocialService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -49,7 +51,7 @@ public final class IgnoreCommand implements TabExecutor {
             return true;
         }
         if (args.length != 1) {
-            messageService.send(player, "<yellow>Usage:</yellow> <white>/ignore \\<player></white>");
+            sendUsage(player);
             return true;
         }
 
@@ -96,14 +98,21 @@ public final class IgnoreCommand implements TabExecutor {
 
     private void sendResult(Player player, Player target, IgnoreResult result) {
         switch (result) {
-            case SUCCESS -> messageService.send(
-                    player,
-                    "<green>You are now ignoring <white>" + target.getName() + "</white>.</green>"
-            );
+            case SUCCESS -> messageService.send(player,
+                    Component.text("You are now ignoring ", NamedTextColor.GREEN)
+                            .append(Component.text(target.getName(), NamedTextColor.WHITE))
+                            .append(Component.text(".", NamedTextColor.GREEN)));
             case OWNER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
             case CANNOT_IGNORE_SELF -> messageService.send(player, "<red>You cannot ignore yourself.</red>");
             case ALREADY_IGNORED -> messageService.send(player, "<red>That player is already ignored.</red>");
             case NOT_IGNORED -> throw new IllegalStateException("Ignore returned an unignore-only result");
         }
+    }
+
+    private void sendUsage(Player player) {
+        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text("/ignore <player>", NamedTextColor.AQUA)));
     }
 }

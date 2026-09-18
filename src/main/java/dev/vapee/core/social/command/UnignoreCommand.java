@@ -3,6 +3,8 @@ package dev.vapee.core.social.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.IgnoreResult;
 import dev.vapee.core.social.SocialService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -45,7 +47,7 @@ public final class UnignoreCommand implements TabExecutor {
             return true;
         }
         if (args.length != 1) {
-            messageService.send(player, "<yellow>Usage:</yellow> <white>/unignore \\<player|uuid></white>");
+            sendUsage(player);
             return true;
         }
 
@@ -111,15 +113,22 @@ public final class UnignoreCommand implements TabExecutor {
 
     private void sendResult(Player player, ResolvedTarget target, IgnoreResult result) {
         switch (result) {
-            case SUCCESS -> messageService.send(
-                    player,
-                    "<green>You are no longer ignoring <white>" + target.displayName() + "</white>.</green>"
-            );
+            case SUCCESS -> messageService.send(player,
+                    Component.text("You are no longer ignoring ", NamedTextColor.GREEN)
+                            .append(Component.text(target.displayName(), NamedTextColor.WHITE))
+                            .append(Component.text(".", NamedTextColor.GREEN)));
             case OWNER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
             case NOT_IGNORED -> messageService.send(player, "<red>That player is not ignored.</red>");
             case CANNOT_IGNORE_SELF -> messageService.send(player, "<red>You cannot unignore yourself.</red>");
             case ALREADY_IGNORED -> throw new IllegalStateException("Unignore returned an ignore-only result");
         }
+    }
+
+    private void sendUsage(Player player) {
+        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text("/unignore <player|uuid>", NamedTextColor.AQUA)));
     }
 
     private record ResolvedTarget(UUID uniqueId, String displayName) {

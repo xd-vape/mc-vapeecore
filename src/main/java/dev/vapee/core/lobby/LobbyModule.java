@@ -79,11 +79,15 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         );
         PluginCommand newSpawnCommand = requireCommand("spawn");
         PluginCommand newSetSpawnCommand = requireCommand("setspawn");
+        SpawnCommand newSpawnExecutor = new SpawnCommand(newLobbyService, messageService);
+        SetSpawnCommand newSetSpawnExecutor = new SetSpawnCommand(newLobbyService, messageService);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newLobbyListener, plugin);
-            newSpawnCommand.setExecutor(new SpawnCommand(newLobbyService, messageService));
-            newSetSpawnCommand.setExecutor(new SetSpawnCommand(newLobbyService, messageService));
+            newSpawnCommand.setExecutor(newSpawnExecutor);
+            newSpawnCommand.setTabCompleter(newSpawnExecutor);
+            newSetSpawnCommand.setExecutor(newSetSpawnExecutor);
+            newSetSpawnCommand.setTabCompleter(newSetSpawnExecutor);
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 if (newPlayerService.isLoaded(player.getUniqueId())
                         && newLobbyService.isLobbyWorld(player.getWorld())) {
@@ -93,7 +97,9 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         } catch (RuntimeException exception) {
             HandlerList.unregisterAll(newLobbyListener);
             newSpawnCommand.setExecutor(null);
+            newSpawnCommand.setTabCompleter(null);
             newSetSpawnCommand.setExecutor(null);
+            newSetSpawnCommand.setTabCompleter(null);
             try {
                 newLobbyPlayerStateService.cleanup();
             } catch (RuntimeException cleanupException) {
@@ -120,9 +126,11 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         }
         if (spawnCommand != null) {
             spawnCommand.setExecutor(null);
+            spawnCommand.setTabCompleter(null);
         }
         if (setSpawnCommand != null) {
             setSpawnCommand.setExecutor(null);
+            setSpawnCommand.setTabCompleter(null);
         }
         if (lobbyPlayerStateService != null) {
             lobbyPlayerStateService.cleanup();

@@ -7,7 +7,14 @@ import dev.vapee.core.activity.blackjack.table.BlackjackTableDraft;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableOperationResult;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
 import dev.vapee.core.activity.location.ActivityPosition;
+import dev.vapee.core.command.help.CommandHelpEntry;
+import dev.vapee.core.command.help.CommandHelpPage;
+import dev.vapee.core.command.help.CommandHelpRenderer;
+import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.message.MessageService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.command.Command;
@@ -31,22 +38,74 @@ public final class BlackjackCommand implements TabExecutor {
             "create", "delete", "pos1", "pos2", "dealer", "interaction",
             "seat", "removeseat", "enable", "disable", "info", "list"
     );
+    private static final List<String> SETUP_ACTIONS = java.util.stream.Stream.concat(
+            java.util.stream.Stream.of("help"),
+            ACTIONS.stream()
+    ).toList();
+    private static final CommandHelpPage MAIN_HELP_PAGE = new CommandHelpPage(
+            "Blackjack Administration",
+            null,
+            List.of(new CommandHelpSection("Table Setup", List.of(
+                    new CommandHelpEntry("/blackjack setup", "Shows physical table setup commands."),
+                    new CommandHelpEntry("/blackjack setup list", "Lists all configured tables.")
+            ))),
+            "Use /blackjack setup help for the complete setup workflow."
+    );
+    private static final CommandHelpPage SETUP_HELP_PAGE = new CommandHelpPage(
+            "Blackjack Setup",
+            null,
+            List.of(
+                    new CommandHelpSection("Create & Configure", List.of(
+                            new CommandHelpEntry("/blackjack setup create <id>",
+                                    "Creates a disabled blackjack table draft."),
+                            new CommandHelpEntry("/blackjack setup pos1 <id>",
+                                    "Sets the first corner of the table area."),
+                            new CommandHelpEntry("/blackjack setup pos2 <id>",
+                                    "Sets the second corner of the table area."),
+                            new CommandHelpEntry("/blackjack setup dealer <id>",
+                                    "Sets the dealer position."),
+                            new CommandHelpEntry("/blackjack setup interaction <id>",
+                                    "Sets the block players right-click to join."),
+                            new CommandHelpEntry("/blackjack setup seat <id> <1-5>",
+                                    "Sets or updates a table seat."),
+                            new CommandHelpEntry("/blackjack setup removeseat <id> <1-5>",
+                                    "Removes a configured seat.")
+                    )),
+                    new CommandHelpSection("Management", List.of(
+                            new CommandHelpEntry("/blackjack setup enable <id>",
+                                    "Validates and enables the table."),
+                            new CommandHelpEntry("/blackjack setup disable <id>",
+                                    "Disables an unused table."),
+                            new CommandHelpEntry("/blackjack setup delete <id>",
+                                    "Deletes a disabled table.")
+                    )),
+                    new CommandHelpSection("Information", List.of(
+                            new CommandHelpEntry("/blackjack setup info <id>",
+                                    "Shows configuration and runtime state."),
+                            new CommandHelpEntry("/blackjack setup list", "Lists configured tables.")
+                    ))
+            ),
+            "Use /blackjack setup info <id> to check setup progress."
+    );
 
     private final JavaPlugin plugin;
     private final BlackjackTableConfig tableConfig;
     private final BlackjackTableService tableService;
     private final MessageService messageService;
+    private final CommandHelpRenderer helpRenderer;
 
     public BlackjackCommand(
             JavaPlugin plugin,
             BlackjackTableConfig tableConfig,
             BlackjackTableService tableService,
-            MessageService messageService
+            MessageService messageService,
+            CommandHelpRenderer helpRenderer
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.tableConfig = Objects.requireNonNull(tableConfig, "tableConfig");
         this.tableService = Objects.requireNonNull(tableService, "tableService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
     }
 
     @Override
@@ -60,8 +119,32 @@ public final class BlackjackCommand implements TabExecutor {
             messageService.send(sender, "<red>You do not have permission to configure blackjack tables.</red>");
             return true;
         }
-        if (args.length < 2 || !args[0].equalsIgnoreCase("setup")) {
-            sendUsage(sender);
+        if (args.length == 0) {
+            helpRenderer.send(sender, MAIN_HELP_PAGE);
+            return true;
+        }
+        if (args[0].equalsIgnoreCase("help")) {
+            if (args.length == 1) {
+                helpRenderer.send(sender, MAIN_HELP_PAGE);
+            } else {
+                sendInvalidUsage(sender, "/blackjack help");
+            }
+            return true;
+        }
+        if (!args[0].equalsIgnoreCase("setup")) {
+            sendUnknown(sender, args[0], "/blackjack help");
+            return true;
+        }
+        if (args.length == 1) {
+            helpRenderer.send(sender, SETUP_HELP_PAGE);
+            return true;
+        }
+        if (args[1].equalsIgnoreCase("help")) {
+            if (args.length == 2) {
+                helpRenderer.send(sender, SETUP_HELP_PAGE);
+            } else {
+                sendInvalidUsage(sender, "/blackjack setup help");
+            }
             return true;
         }
 
@@ -79,7 +162,7 @@ public final class BlackjackCommand implements TabExecutor {
                 case "disable" -> disable(sender, args);
                 case "info" -> info(sender, args);
                 case "list" -> list(sender, args);
-                default -> sendUsage(sender);
+                default -> sendUnknown(sender, args[1], "/blackjack setup help");
             }
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.SEVERE, "Could not update blackjack table configuration.", exception);
@@ -101,12 +184,13 @@ public final class BlackjackCommand implements TabExecutor {
             return List.of();
         }
         if (args.length == 1) {
-            return matches(List.of("setup"), args[0]);
+            return rootSuggestions(args[0]);
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("setup")) {
-            return matches(ACTIONS, args[1]);
+            return setupSuggestions(args[1]);
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("setup")
+                && !args[1].equalsIgnoreCase("help")
                 && !args[1].equalsIgnoreCase("create")
                 && !args[1].equalsIgnoreCase("list")) {
             return matches(tableConfig.getDrafts().stream().map(BlackjackTableDraft::getId).toList(), args[2]);
@@ -118,9 +202,17 @@ public final class BlackjackCommand implements TabExecutor {
         return List.of();
     }
 
+    static List<String> rootSuggestions(String input) {
+        return matches(List.of("help", "setup"), input);
+    }
+
+    static List<String> setupSuggestions(String input) {
+        return matches(SETUP_ACTIONS, input);
+    }
+
     private void create(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/blackjack setup create <id>");
             return;
         }
         if (!BlackjackTableDraft.isValidId(args[2])) {
@@ -128,11 +220,12 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         if (!tableConfig.createDraft(args[2])) {
-            messageService.send(sender, "<red>A blackjack table with that ID already exists.</red>");
+            messageService.send(sender, Component.text("Blackjack table '", NamedTextColor.RED)
+                    .append(Component.text(args[2], NamedTextColor.WHITE))
+                    .append(Component.text("' already exists.", NamedTextColor.RED)));
             return;
         }
-        messageService.send(sender, "<green>Created disabled blackjack table draft <white>"
-                + args[2] + "</white>.</green>");
+        messageService.send(sender, createWorkflow(args[2]));
     }
 
     private void delete(CommandSender sender, String[] args) {
@@ -145,7 +238,7 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         tableConfig.deleteDraft(draft.getId());
-        messageService.send(sender, "<green>Blackjack table draft deleted.</green>");
+        messageService.send(sender, success("Blackjack table '", draft.getId(), "' deleted."));
     }
 
     private void setPosition(CommandSender sender, String[] args, PositionType type) {
@@ -161,7 +254,8 @@ public final class BlackjackCommand implements TabExecutor {
             case DEALER -> draft.setDealer(position);
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, "<green>Blackjack table " + type.label + " updated.</green>");
+        messageService.send(sender, success("Blackjack table '", draft.getId(),
+                "' " + type.label + " updated."));
     }
 
     private void interaction(CommandSender sender, String[] args) {
@@ -177,7 +271,8 @@ public final class BlackjackCommand implements TabExecutor {
         }
         draft.setInteraction(BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, "<green>Blackjack interaction block updated.</green>");
+        messageService.send(sender, success("Blackjack table '", draft.getId(),
+                "' interaction block updated."));
     }
 
     private void seat(CommandSender sender, String[] args) {
@@ -191,7 +286,8 @@ public final class BlackjackCommand implements TabExecutor {
         }
         draft.setSeat(number, position(((Player) sender).getLocation(), true));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, "<green>Blackjack seat " + number + " updated.</green>");
+        messageService.send(sender, success("Blackjack table '", draft.getId(),
+                "' seat " + number + " updated."));
     }
 
     private void removeSeat(CommandSender sender, String[] args) {
@@ -208,33 +304,34 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, "<green>Blackjack seat " + number + " removed.</green>");
+        messageService.send(sender, success("Blackjack table '", draft.getId(),
+                "' seat " + number + " removed."));
     }
 
     private void enable(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/blackjack setup enable <id>");
             return;
         }
         BlackjackTableOperationResult result = tableService.enableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, "<green>Blackjack table enabled.</green>");
+            messageService.send(sender, success("Blackjack table '", args[2], "' enabled."));
             return;
         }
-        sendOperationFailure(sender, result);
+        sendOperationFailure(sender, args[2], result);
     }
 
     private void disable(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/blackjack setup disable <id>");
             return;
         }
         BlackjackTableOperationResult result = tableService.disableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, "<green>Blackjack table disabled.</green>");
+            messageService.send(sender, success("Blackjack table '", args[2], "' disabled."));
             return;
         }
-        sendOperationFailure(sender, result);
+        sendOperationFailure(sender, args[2], result);
     }
 
     private void info(CommandSender sender, String[] args) {
@@ -243,25 +340,57 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         Optional<BlackjackSession> session = tableService.getSession(draft.getId());
-        messageService.send(sender, "<gold>Blackjack table " + draft.getId() + "</gold>");
-        messageService.send(sender, "<gray>Enabled:</gray> <white>" + draft.isEnabled() + "</white>");
-        messageService.send(sender, "<gray>Runtime active:</gray> <white>"
-                + tableService.isRuntimeActive(draft.getId()) + "</white>");
-        messageService.send(sender, "<gray>World:</gray> <white>" + configuredWorld(draft) + "</white>");
-        messageService.send(sender, "<gray>Area pos1/pos2:</gray> <white>"
-                + draft.getPos1().isPresent() + "/" + draft.getPos2().isPresent() + "</white>");
-        messageService.send(sender, "<gray>Dealer:</gray> <white>" + draft.getDealer().isPresent() + "</white>");
-        messageService.send(sender, "<gray>Interaction:</gray> <white>"
-                + draft.getInteraction().isPresent() + "</white>");
-        messageService.send(sender, "<gray>Seats:</gray> <white>" + draft.getSeats().size() + "</white>");
-        messageService.send(sender, "<gray>Session:</gray> <white>" + session
-                .map(value -> value.getState() + ", " + value.getParticipantCount() + " participant(s)")
-                .orElse("none") + "</white>");
+        String sessionStatus = session
+                .map(value -> display(value.getState().name()) + " • "
+                        + value.getParticipantCount() + " participant(s)")
+                .orElse("None");
+        Component output = Component.text("Blackjack Table • ", NamedTextColor.GOLD)
+                .append(Component.text(draft.getId(), NamedTextColor.AQUA))
+                .append(Component.newline())
+                .append(Component.newline())
+                .append(Component.text("Status", NamedTextColor.YELLOW))
+                .append(Component.newline())
+                .append(infoLine("Enabled: ", draft.isEnabled() ? "Enabled" : "Disabled",
+                        draft.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY))
+                .append(Component.newline())
+                .append(infoLine("Runtime: ", tableService.isRuntimeActive(draft.getId()) ? "Active" : "Inactive",
+                        tableService.isRuntimeActive(draft.getId()) ? NamedTextColor.GREEN : NamedTextColor.GRAY))
+                .append(Component.newline())
+                .append(infoLine("Session: ", sessionStatus, NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(Component.newline())
+                .append(Component.text("Setup", NamedTextColor.YELLOW))
+                .append(Component.newline())
+                .append(infoLine("World: ", configuredWorld(draft), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(configurationLine("Area Pos 1: ", draft.getPos1().isPresent()))
+                .append(Component.newline())
+                .append(configurationLine("Area Pos 2: ", draft.getPos2().isPresent()))
+                .append(Component.newline())
+                .append(configurationLine("Dealer: ", draft.getDealer().isPresent()))
+                .append(Component.newline())
+                .append(configurationLine("Interaction: ", draft.getInteraction().isPresent()))
+                .append(Component.newline())
+                .append(infoLine("Seats: ", draft.getSeats().size() + " / 5",
+                        draft.getSeats().isEmpty() ? NamedTextColor.RED : NamedTextColor.WHITE));
+
+        SetupStep nextStep = nextSetupStep(draft);
+        if (nextStep != null) {
+            output = output.append(Component.newline())
+                    .append(Component.newline())
+                    .append(Component.text("Next", NamedTextColor.YELLOW))
+                    .append(Component.newline())
+                    .append(Component.text(nextStep.description(), NamedTextColor.GRAY))
+                    .append(Component.newline())
+                    .append(Component.text(nextStep.syntax(), NamedTextColor.AQUA)
+                            .clickEvent(ClickEvent.suggestCommand(nextStep.syntax())));
+        }
+        messageService.send(sender, output);
     }
 
     private void list(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/blackjack setup list");
             return;
         }
         List<BlackjackTableDraft> drafts = tableConfig.getDrafts();
@@ -269,15 +398,21 @@ public final class BlackjackCommand implements TabExecutor {
             messageService.send(sender, "<yellow>No blackjack tables are configured.</yellow>");
             return;
         }
-        messageService.send(sender, "<gold>Blackjack tables:</gold>");
+        Component output = Component.text("Blackjack Tables", NamedTextColor.GOLD)
+                .append(Component.newline())
+                .append(Component.text(drafts.size() + " table(s) configured.", NamedTextColor.GRAY));
         for (BlackjackTableDraft draft : drafts) {
             BlackjackSession session = tableService.getSession(draft.getId()).orElse(null);
-            String status = draft.isEnabled() ? "ENABLED" : "DISABLED";
+            String status = draft.isEnabled() ? "Enabled" : "Disabled";
             String capacity = session == null ? "" : " " + session.getParticipantCount() + "/"
                     + tableService.getDefinition(draft.getId()).orElseThrow().capacity();
-            messageService.send(sender, "<gray>-</gray> <white>" + draft.getId() + "</white> <yellow>["
-                    + status + "]</yellow><white>" + capacity + "</white>");
+            output = output.append(Component.newline())
+                    .append(Component.text("- ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(draft.getId(), NamedTextColor.AQUA))
+                    .append(Component.text(" [" + status + "]" + capacity,
+                            draft.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY));
         }
+        messageService.send(sender, output);
     }
 
     private BlackjackTableDraft requireEditablePlayerDraft(CommandSender sender, String[] args, int length) {
@@ -294,12 +429,14 @@ public final class BlackjackCommand implements TabExecutor {
 
     private BlackjackTableDraft requireDraft(CommandSender sender, String[] args, int length) {
         if (args.length != length) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, syntaxFor(args.length > 1 ? args[1] : "help"));
             return null;
         }
         BlackjackTableDraft draft = tableConfig.getDraft(args[2]).orElse(null);
         if (draft == null) {
-            messageService.send(sender, "<red>That blackjack table does not exist.</red>");
+            messageService.send(sender, Component.text("Blackjack table '", NamedTextColor.RED)
+                    .append(Component.text(args[2], NamedTextColor.WHITE))
+                    .append(Component.text("' does not exist.", NamedTextColor.RED)));
         }
         return draft;
     }
@@ -339,12 +476,17 @@ public final class BlackjackCommand implements TabExecutor {
                 .or(() -> draft.getPos2().map(ActivityPosition::worldName))
                 .or(() -> draft.getDealer().map(ActivityPosition::worldName))
                 .or(() -> draft.getInteraction().map(BlackjackBlockPosition::worldName))
-                .orElse("-");
+                .orElse("Not configured");
     }
 
-    private void sendOperationFailure(CommandSender sender, BlackjackTableOperationResult result) {
+    private void sendOperationFailure(
+            CommandSender sender,
+            String tableId,
+            BlackjackTableOperationResult result
+    ) {
         switch (result.status()) {
-            case TABLE_NOT_FOUND -> messageService.send(sender, "<red>That blackjack table does not exist.</red>");
+            case TABLE_NOT_FOUND -> messageService.send(sender,
+                    error("Blackjack table '", tableId, "' does not exist."));
             case ALREADY_ENABLED -> messageService.send(sender, "<yellow>That blackjack table is already enabled.</yellow>");
             case NOT_ENABLED -> messageService.send(sender, "<yellow>That blackjack table is already disabled.</yellow>");
             case WORLD_NOT_LOADED -> messageService.send(sender, "<red>The table world is not loaded.</red>");
@@ -353,29 +495,170 @@ public final class BlackjackCommand implements TabExecutor {
             case TABLE_IN_USE -> messageService.send(sender,
                     "<red>The table cannot be disabled while occupied or running a round.</red>");
             case INVALID_DEFINITION -> {
-                messageService.send(sender, "<red>The table is incomplete or invalid. Missing/invalid:</red>");
-                for (String detail : result.details()) {
-                    messageService.send(sender, "<gray>-</gray> <white>" + detail + "</white>");
-                }
+                messageService.send(sender, invalidDefinitionMessage(tableId, result.details()));
             }
             case RUNTIME_FAILURE -> messageService.send(sender,
                     "<red>The table runtime could not be activated. Check the server log.</red>");
-            case SUCCESS -> messageService.send(sender, "<green>Done.</green>");
+            case SUCCESS -> throw new IllegalArgumentException("Success is not a failure result");
         }
     }
 
-    private void sendUsage(CommandSender sender) {
-        messageService.send(sender,
-                "<yellow>Usage:</yellow> <white>/blackjack setup "
-                        + "\\<create|delete|pos1|pos2|dealer|interaction|seat|removeseat|enable|disable|info|list> ...</white>"
+    private static Component createWorkflow(String tableId) {
+        List<String> commands = List.of(
+                "/blackjack setup pos1 " + tableId,
+                "/blackjack setup pos2 " + tableId,
+                "/blackjack setup dealer " + tableId,
+                "/blackjack setup interaction " + tableId,
+                "/blackjack setup seat " + tableId + " 1",
+                "/blackjack setup enable " + tableId
+        );
+        Component output = success("Blackjack table '", tableId, "' created.")
+                .append(Component.newline())
+                .append(Component.newline())
+                .append(Component.text("Setup order:", NamedTextColor.YELLOW));
+        for (int index = 0; index < commands.size(); index++) {
+            String command = commands.get(index);
+            output = output.append(Component.newline())
+                    .append(Component.text((index + 1) + ". ", NamedTextColor.GRAY))
+                    .append(Component.text(command, NamedTextColor.AQUA)
+                            .clickEvent(ClickEvent.suggestCommand(command)));
+        }
+        return output.append(Component.newline())
+                .append(Component.newline())
+                .append(Component.text("Tip: ", NamedTextColor.YELLOW))
+                .append(Component.text("Use /blackjack setup info " + tableId
+                        + " to check progress.", NamedTextColor.GRAY));
+    }
+
+    private void sendUnknown(CommandSender sender, String subcommand, String helpSyntax) {
+        messageService.send(sender, Component.text("Unknown subcommand '", NamedTextColor.RED)
+                .append(Component.text(subcommand, NamedTextColor.WHITE))
+                .append(Component.text("'.", NamedTextColor.RED))
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text(helpSyntax, NamedTextColor.AQUA)));
+    }
+
+    private void sendInvalidUsage(CommandSender sender, String syntax) {
+        messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text(syntax, NamedTextColor.AQUA)));
+    }
+
+    private String syntaxFor(String action) {
+        return switch (action.toLowerCase(Locale.ROOT)) {
+            case "create" -> "/blackjack setup create <id>";
+            case "delete" -> "/blackjack setup delete <id>";
+            case "pos1" -> "/blackjack setup pos1 <id>";
+            case "pos2" -> "/blackjack setup pos2 <id>";
+            case "dealer" -> "/blackjack setup dealer <id>";
+            case "interaction" -> "/blackjack setup interaction <id>";
+            case "seat" -> "/blackjack setup seat <id> <1-5>";
+            case "removeseat" -> "/blackjack setup removeseat <id> <1-5>";
+            case "enable" -> "/blackjack setup enable <id>";
+            case "disable" -> "/blackjack setup disable <id>";
+            case "info" -> "/blackjack setup info <id>";
+            case "list" -> "/blackjack setup list";
+            default -> "/blackjack setup help";
+        };
+    }
+
+    private static Component success(String before, String value, String after) {
+        return Component.text(before, NamedTextColor.GREEN)
+                .append(Component.text(value, NamedTextColor.WHITE))
+                .append(Component.text(after, NamedTextColor.GREEN));
+    }
+
+    private static Component error(String before, String value, String after) {
+        return Component.text(before, NamedTextColor.RED)
+                .append(Component.text(value, NamedTextColor.WHITE))
+                .append(Component.text(after, NamedTextColor.RED));
+    }
+
+    private Component infoLine(String label, String value, NamedTextColor valueColor) {
+        return Component.text(label, NamedTextColor.GRAY)
+                .append(Component.text(value, valueColor));
+    }
+
+    private Component configurationLine(String label, boolean configured) {
+        return infoLine(
+                label,
+                configured ? "Configured" : "Missing",
+                configured ? NamedTextColor.GREEN : NamedTextColor.RED
         );
     }
 
-    private List<String> matches(List<String> values, String prefix) {
+    private SetupStep nextSetupStep(BlackjackTableDraft draft) {
+        String id = draft.getId();
+        if (draft.getPos1().isEmpty()) {
+            return new SetupStep("Set the first area corner with:", "/blackjack setup pos1 " + id);
+        }
+        if (draft.getPos2().isEmpty()) {
+            return new SetupStep("Set the second area corner with:", "/blackjack setup pos2 " + id);
+        }
+        if (draft.getDealer().isEmpty()) {
+            return new SetupStep("Set the dealer position with:", "/blackjack setup dealer " + id);
+        }
+        if (draft.getInteraction().isEmpty()) {
+            return new SetupStep("Set the interaction block with:", "/blackjack setup interaction " + id);
+        }
+        if (draft.getSeats().isEmpty()) {
+            return new SetupStep("Configure at least one seat with:", "/blackjack setup seat " + id + " 1");
+        }
+        if (!draft.isEnabled()) {
+            return new SetupStep("Validate and enable the table with:", "/blackjack setup enable " + id);
+        }
+        return null;
+    }
+
+    private static Component invalidDefinitionMessage(String tableId, List<String> details) {
+        Component output = error("Table '", tableId, "' is not ready.")
+                .append(Component.newline())
+                .append(Component.text("Missing or invalid:", NamedTextColor.YELLOW));
+        for (String detail : details) {
+            output = output.append(Component.newline())
+                    .append(Component.text("- ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(friendlyDetail(detail), NamedTextColor.WHITE));
+        }
+        return output.append(Component.newline())
+                .append(Component.text("Then: ", NamedTextColor.YELLOW))
+                .append(Component.text("/blackjack setup info " + tableId, NamedTextColor.AQUA));
+    }
+
+    private static String friendlyDetail(String detail) {
+        String value = Objects.requireNonNull(detail, "detail").trim();
+        return switch (value) {
+            case "missing area pos1" -> "Area Pos 1";
+            case "missing area pos2" -> "Area Pos 2";
+            case "missing dealer" -> "Dealer position";
+            case "missing interaction" -> "Interaction block";
+            case "missing seat", "at least one seat is required" -> "At least one seat";
+            default -> value.isEmpty()
+                    ? "Unknown validation issue"
+                    : Character.toUpperCase(value.charAt(0)) + value.substring(1);
+        };
+    }
+
+    private String display(String enumName) {
+        String value = enumName.toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private static List<String> matches(List<String> values, String prefix) {
         String normalizedPrefix = prefix.toLowerCase(Locale.ROOT);
         return values.stream()
                 .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(normalizedPrefix))
+                .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
+    }
+
+    private record SetupStep(String description, String syntax) {
+
+        private SetupStep {
+            description = Objects.requireNonNull(description, "description");
+            syntax = Objects.requireNonNull(syntax, "syntax");
+        }
     }
 
     private enum PositionType {

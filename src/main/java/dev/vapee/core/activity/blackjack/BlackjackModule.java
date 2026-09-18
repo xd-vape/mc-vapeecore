@@ -9,6 +9,7 @@ import dev.vapee.core.activity.blackjack.table.BlackjackTableConfig;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
 import dev.vapee.core.activity.blackjack.ui.BlackjackTableListener;
 import dev.vapee.core.activity.blackjack.ui.BlackjackTableMenu;
+import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import org.bukkit.command.PluginCommand;
@@ -25,6 +26,7 @@ public final class BlackjackModule implements CoreModule {
     private final JavaPlugin plugin;
     private final ActivityModule activityModule;
     private final MessageService messageService;
+    private final CommandHelpRenderer commandHelpRenderer;
     private final Predicate<UUID> buildModeCheck;
 
     private ActivityService activityService;
@@ -40,11 +42,13 @@ public final class BlackjackModule implements CoreModule {
             JavaPlugin plugin,
             ActivityModule activityModule,
             MessageService messageService,
+            CommandHelpRenderer commandHelpRenderer,
             Predicate<UUID> buildModeCheck
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
         this.buildModeCheck = Objects.requireNonNull(buildModeCheck, "buildModeCheck");
     }
 
@@ -107,7 +111,8 @@ public final class BlackjackModule implements CoreModule {
                     plugin,
                     newTableConfig,
                     newTableService,
-                    messageService
+                    messageService,
+                    commandHelpRenderer
             );
             plugin.getServer().getPluginManager().registerEvents(newTableListener, plugin);
             newBlackjackCommand.setExecutor(commandExecutor);

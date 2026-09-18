@@ -7,14 +7,19 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public final class MessageService {
 
-    private final ConfigService configService;
+    private final Supplier<String> prefixSupplier;
     private final MiniMessage miniMessage;
 
     public MessageService(ConfigService configService) {
-        this.configService = Objects.requireNonNull(configService, "configService");
+        this(Objects.requireNonNull(configService, "configService")::getMessagePrefix);
+    }
+
+    MessageService(Supplier<String> prefixSupplier) {
+        this.prefixSupplier = Objects.requireNonNull(prefixSupplier, "prefixSupplier");
         this.miniMessage = MiniMessage.miniMessage();
     }
 
@@ -30,7 +35,23 @@ public final class MessageService {
     }
 
     public void send(Audience audience, String message) {
-        Objects.requireNonNull(audience, "audience")
-                .sendMessage(deserialize(configService.getMessagePrefix() + message));
+        send(audience, deserialize(Objects.requireNonNull(message, "message")));
+    }
+
+    public void send(Audience audience, String message, TagResolver resolver) {
+        send(
+                audience,
+                deserialize(
+                        Objects.requireNonNull(message, "message"),
+                        Objects.requireNonNull(resolver, "resolver")
+                )
+        );
+    }
+
+    public void send(Audience audience, Component message) {
+        Objects.requireNonNull(audience, "audience").sendMessage(
+                deserialize(Objects.requireNonNull(prefixSupplier.get(), "messagePrefix"))
+                        .append(Objects.requireNonNull(message, "message"))
+        );
     }
 }

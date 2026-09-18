@@ -1,32 +1,66 @@
 package dev.vapee.core.economy.command;
 
+import dev.vapee.core.command.help.CommandHelpEntry;
+import dev.vapee.core.command.help.CommandHelpPage;
+import dev.vapee.core.command.help.CommandHelpRenderer;
+import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.economy.EconomyResult;
 import dev.vapee.core.economy.EconomyService;
 import dev.vapee.core.message.MessageService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.logging.Level;
 
-public final class CoinsCommand implements CommandExecutor {
+public final class CoinsCommand implements TabExecutor {
 
     private static final String ADMIN_PERMISSION = "vapeecore.economy.admin";
+    private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
+            "Coins",
+            List.of(
+                    new CommandHelpSection("Player", List.of(
+                            new CommandHelpEntry("/coins", "Shows your current coin balance.")
+                    )),
+                    new CommandHelpSection("Administration", List.of(
+                            new CommandHelpEntry("/coins get <player>", "Shows an online player's balance.",
+                                    ADMIN_PERMISSION),
+                            new CommandHelpEntry("/coins add <player> <amount>", "Adds coins to an online player.",
+                                    ADMIN_PERMISSION),
+                            new CommandHelpEntry("/coins remove <player> <amount>",
+                                    "Removes coins from an online player.", ADMIN_PERMISSION),
+                            new CommandHelpEntry("/coins set <player> <amount>", "Sets an online player's balance.",
+                                    ADMIN_PERMISSION)
+                    ))
+            )
+    );
 
     private final JavaPlugin plugin;
     private final EconomyService economyService;
     private final MessageService messageService;
+    private final CommandHelpRenderer helpRenderer;
 
-    public CoinsCommand(JavaPlugin plugin, EconomyService economyService, MessageService messageService) {
+    public CoinsCommand(
+            JavaPlugin plugin,
+            EconomyService economyService,
+            MessageService messageService,
+            CommandHelpRenderer helpRenderer
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
     }
 
     @Override
@@ -40,8 +74,12 @@ public final class CoinsCommand implements CommandExecutor {
             sendOwnBalance(sender);
             return true;
         }
+        if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
+            helpRenderer.send(sender, HELP_PAGE);
+            return true;
+        }
         if (!sender.hasPermission(ADMIN_PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to manage coin balances.</red>");
+            messageService.send(sender, "<red>You do not have permission to use this command.</red>");
             return true;
         }
 
@@ -50,9 +88,38 @@ public final class CoinsCommand implements CommandExecutor {
             case "add" -> handleMutation(sender, args, Mutation.ADD);
             case "remove" -> handleMutation(sender, args, Mutation.REMOVE);
             case "set" -> handleMutation(sender, args, Mutation.SET);
-            default -> sendUsage(sender);
+            default -> sendUnknown(sender, args[0]);
         }
         return true;
+    }
+
+    @Override
+    public @Nullable List<String> onTabComplete(
+            @NotNull CommandSender sender,
+            @NotNull Command command,
+            @NotNull String alias,
+            @NotNull String[] args
+    ) {
+        if (args.length == 1) {
+            return rootSuggestions(args[0], sender.hasPermission(ADMIN_PERMISSION));
+        }
+        if (args.length == 2
+                && sender.hasPermission(ADMIN_PERMISSION)
+                && List.of("get", "add", "remove", "set").contains(args[0].toLowerCase(Locale.ROOT))) {
+            return matches(
+                    plugin.getServer().getOnlinePlayers().stream().map(Player::getName).toList(),
+                    args[1]
+            );
+        }
+        return List.of();
+    }
+
+    static List<String> rootSuggestions(String input, boolean admin) {
+        List<String> values = new ArrayList<>(List.of("help"));
+        if (admin) {
+            values.addAll(List.of("get", "add", "remove", "set"));
+        }
+        return matches(values, input);
     }
 
     private void sendOwnBalance(CommandSender sender) {
@@ -66,12 +133,12 @@ public final class CoinsCommand implements CommandExecutor {
             sendPlayerNotLoaded(sender, player);
             return;
         }
-        messageService.send(player, "<gray>Coins:</gray> <white>" + format(balance.getAsLong()) + "</white>");
+        messageService.send(player, labeledValue("Coins: ", format(balance.getAsLong())));
     }
 
     private void handleGet(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/coins get <player>");
             return;
         }
 
@@ -85,14 +152,14 @@ public final class CoinsCommand implements CommandExecutor {
             sendPlayerNotLoaded(sender, target);
             return;
         }
-        messageService.send(sender, "<gray>" + target.getName() + "'s coins:</gray> <white>"
-                + format(balance.getAsLong()) + "</white>"
-        );
+        messageService.send(sender, Component.text(target.getName() + "'s coins: ", NamedTextColor.GRAY)
+                .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
     }
 
     private void handleMutation(CommandSender sender, String[] args, Mutation mutation) {
         if (args.length != 3) {
-            sendUsage(sender);
+            sendInvalidUsage(sender, "/coins " + mutation.name().toLowerCase(Locale.ROOT)
+                    + " <player> <amount>");
             return;
         }
 
@@ -138,8 +205,8 @@ public final class CoinsCommand implements CommandExecutor {
             case SUCCESS -> sendMutationSuccess(sender, target, amount, mutation);
             case PLAYER_NOT_LOADED -> sendPlayerNotLoaded(sender, target);
             case INSUFFICIENT_FUNDS -> messageService.send(sender,
-                    "<red>" + target.getName() + " does not have enough coins.</red>"
-            );
+                    Component.text(target.getName(), NamedTextColor.WHITE)
+                            .append(Component.text(" does not have enough coins.", NamedTextColor.RED)));
             case BALANCE_OVERFLOW -> messageService.send(sender,
                     "<red>The resulting coin balance would be too large.</red>"
             );
@@ -148,13 +215,14 @@ public final class CoinsCommand implements CommandExecutor {
 
     private void sendMutationSuccess(CommandSender sender, Player target, long amount, Mutation mutation) {
         long newBalance = economyService.getCoins(target.getUniqueId()).orElseThrow();
-        String message = switch (mutation) {
-            case ADD -> "<green>Added <white>" + format(amount) + "</white> coins to <white>"
-                    + target.getName() + "</white>. New balance: <white>" + format(newBalance) + "</white>.</green>";
-            case REMOVE -> "<green>Removed <white>" + format(amount) + "</white> coins from <white>"
-                    + target.getName() + "</white>. New balance: <white>" + format(newBalance) + "</white>.</green>";
-            case SET -> "<green>Set <white>" + target.getName() + "</white>'s coin balance to <white>"
-                    + format(newBalance) + "</white>.</green>";
+        Component message = switch (mutation) {
+            case ADD -> mutationMessage("Added ", amount, " coins to ", target.getName(), newBalance);
+            case REMOVE -> mutationMessage("Removed ", amount, " coins from ", target.getName(), newBalance);
+            case SET -> Component.text("Set ", NamedTextColor.GREEN)
+                    .append(Component.text(target.getName(), NamedTextColor.WHITE))
+                    .append(Component.text("'s coin balance to ", NamedTextColor.GREEN))
+                    .append(Component.text(format(newBalance), NamedTextColor.WHITE))
+                    .append(Component.text(".", NamedTextColor.GREEN));
         };
         messageService.send(sender, message);
     }
@@ -185,24 +253,60 @@ public final class CoinsCommand implements CommandExecutor {
 
     private void sendInvalidAmount(CommandSender sender, boolean zeroAllowed) {
         String requirement = zeroAllowed ? "a non-negative" : "a positive";
-        messageService.send(sender, "<red>The amount must be " + requirement + " whole number.</red>");
+        messageService.send(sender, Component.text(
+                "The amount must be " + requirement + " whole number.", NamedTextColor.RED));
     }
 
     private void sendPlayerNotLoaded(CommandSender sender, Player player) {
-        messageService.send(sender, "<red>Player data for <white>" + player.getName()
-                + "</white> is not loaded.</red>"
+        messageService.send(sender, Component.text("Player data for ", NamedTextColor.RED)
+                .append(Component.text(player.getName(), NamedTextColor.WHITE))
+                .append(Component.text(" is not loaded.", NamedTextColor.RED)));
+    }
+
+    private void sendUnknown(CommandSender sender, String subcommand) {
+        messageService.send(sender,
+                "<red>Unknown subcommand '<white><value></white>'.</red>\n"
+                        + "<yellow>Use:</yellow> <aqua>/coins help</aqua>",
+                net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.unparsed("value", subcommand)
         );
     }
 
-    private void sendUsage(CommandSender sender) {
-        messageService.send(sender,
-                "<yellow>Usage:</yellow> <white>/coins [get \\<player>|add \\<player> \\<amount>"
-                        + "|remove \\<player> \\<amount>|set \\<player> \\<amount>]</white>"
+    private void sendInvalidUsage(CommandSender sender, String syntax) {
+        messageService.send(sender, net.kyori.adventure.text.Component.text(
+                        "Invalid usage.", net.kyori.adventure.text.format.NamedTextColor.RED)
+                .append(net.kyori.adventure.text.Component.newline())
+                .append(net.kyori.adventure.text.Component.text(
+                        "Use: ", net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                .append(net.kyori.adventure.text.Component.text(
+                        syntax, net.kyori.adventure.text.format.NamedTextColor.AQUA))
         );
+    }
+
+    private static List<String> matches(List<String> values, String prefix) {
+        String normalized = prefix.toLowerCase(Locale.ROOT);
+        return values.stream()
+                .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(normalized))
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
     }
 
     private String format(long coins) {
         return String.format(Locale.US, "%,d", coins);
+    }
+
+    private Component labeledValue(String label, String value) {
+        return Component.text(label, NamedTextColor.GRAY)
+                .append(Component.text(value, NamedTextColor.WHITE));
+    }
+
+    private Component mutationMessage(String action, long amount, String relation, String playerName, long balance) {
+        return Component.text(action, NamedTextColor.GREEN)
+                .append(Component.text(format(amount), NamedTextColor.WHITE))
+                .append(Component.text(relation, NamedTextColor.GREEN))
+                .append(Component.text(playerName, NamedTextColor.WHITE))
+                .append(Component.text(". New balance: ", NamedTextColor.GREEN))
+                .append(Component.text(format(balance), NamedTextColor.WHITE))
+                .append(Component.text(".", NamedTextColor.GREEN));
     }
 
     private enum Mutation {

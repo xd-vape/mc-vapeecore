@@ -3,19 +3,24 @@ package dev.vapee.core.privatemessage.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.privatemessage.PrivateMessageResult;
 import dev.vapee.core.privatemessage.PrivateMessageService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Server;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public final class MessageCommand implements CommandExecutor {
+public final class MessageCommand implements TabExecutor {
 
     private final Server server;
     private final PrivateMessageService privateMessageService;
@@ -79,8 +84,30 @@ public final class MessageCommand implements CommandExecutor {
         return true;
     }
 
+    @Override
+    public @Nullable List<String> onTabComplete(
+            @NotNull CommandSender sender,
+            @NotNull Command command,
+            @NotNull String alias,
+            @NotNull String[] args
+    ) {
+        if (!(sender instanceof Player player) || args.length != 1) {
+            return List.of();
+        }
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        return server.getOnlinePlayers().stream()
+                .filter(candidate -> !candidate.getUniqueId().equals(player.getUniqueId()))
+                .map(Player::getName)
+                .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+    }
+
     private void sendUsage(Player player) {
-        messageService.send(player, "<yellow>Usage:</yellow> <white>/msg <player> <message></white>");
+        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+                .append(Component.newline())
+                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(Component.text("/msg <player> <message>", NamedTextColor.AQUA)));
     }
 
     private void sendResult(Player player, PrivateMessageResult result) {

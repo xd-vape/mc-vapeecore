@@ -42,7 +42,7 @@ public final class BuildCommandHarness {
 
         Player allowed = player(true);
         command.onCommand(allowed, null, "build", new String[]{"extra"});
-        check(last(messages).contains("Usage"), "arguments receive controlled usage");
+        check(last(messages).contains("/build"), "arguments receive controlled usage");
 
         inLobby.set(false);
         command.onCommand(allowed, null, "build", new String[0]);

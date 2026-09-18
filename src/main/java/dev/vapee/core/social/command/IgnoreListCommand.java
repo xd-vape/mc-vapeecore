@@ -2,11 +2,14 @@ package dev.vapee.core.social.command;
 
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.SocialService;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,7 +17,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-public final class IgnoreListCommand implements CommandExecutor {
+public final class IgnoreListCommand implements TabExecutor {
 
     private final SocialService socialService;
     private final MessageService messageService;
@@ -36,7 +39,10 @@ public final class IgnoreListCommand implements CommandExecutor {
             return true;
         }
         if (args.length != 0) {
-            messageService.send(player, "<yellow>Usage:</yellow> <white>/ignorelist</white>");
+            messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+                    .append(Component.newline())
+                    .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                    .append(Component.text("/ignorelist", NamedTextColor.AQUA)));
             return true;
         }
 
@@ -55,14 +61,31 @@ public final class IgnoreListCommand implements CommandExecutor {
         unknownEntries.sort(Comparator.comparing(UUID::toString));
 
         int size = knownEntries.size() + unknownEntries.size();
-        messageService.send(player, "<gray>Ignored players (</gray><white>" + size + "</white><gray>):</gray>");
+        Component output = Component.text("Ignored players (", NamedTextColor.GRAY)
+                .append(Component.text(size, NamedTextColor.WHITE))
+                .append(Component.text("):", NamedTextColor.GRAY));
         for (KnownEntry entry : knownEntries) {
-            messageService.send(player, "<gray>-</gray> <white>" + entry.name() + "</white>");
+            output = output.append(Component.newline())
+                    .append(Component.text("- ", NamedTextColor.GRAY))
+                    .append(Component.text(entry.name(), NamedTextColor.WHITE));
         }
         for (UUID uniqueId : unknownEntries) {
-            messageService.send(player, "<gray>-</gray> <white>" + uniqueId + "</white>");
+            output = output.append(Component.newline())
+                    .append(Component.text("- ", NamedTextColor.GRAY))
+                    .append(Component.text(uniqueId.toString(), NamedTextColor.WHITE));
         }
+        messageService.send(player, output);
         return true;
+    }
+
+    @Override
+    public @Nullable List<String> onTabComplete(
+            @NotNull CommandSender sender,
+            @NotNull Command command,
+            @NotNull String alias,
+            @NotNull String[] args
+    ) {
+        return List.of();
     }
 
     private record KnownEntry(String name, UUID uniqueId) {

@@ -1,5 +1,6 @@
 package dev.vapee.core.economy;
 
+import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.economy.command.CoinsCommand;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
@@ -15,14 +16,21 @@ public final class EconomyModule implements CoreModule {
     private final JavaPlugin plugin;
     private final PlayerModule playerModule;
     private final MessageService messageService;
+    private final CommandHelpRenderer commandHelpRenderer;
 
     private EconomyService economyService;
     private PluginCommand coinsCommand;
 
-    public EconomyModule(JavaPlugin plugin, PlayerModule playerModule, MessageService messageService) {
+    public EconomyModule(
+            JavaPlugin plugin,
+            PlayerModule playerModule,
+            MessageService messageService,
+            CommandHelpRenderer commandHelpRenderer
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
     }
 
     @Override
@@ -40,9 +48,17 @@ public final class EconomyModule implements CoreModule {
         );
 
         try {
-            newCoinsCommand.setExecutor(new CoinsCommand(plugin, newEconomyService, messageService));
+            CoinsCommand executor = new CoinsCommand(
+                    plugin,
+                    newEconomyService,
+                    messageService,
+                    commandHelpRenderer
+            );
+            newCoinsCommand.setExecutor(executor);
+            newCoinsCommand.setTabCompleter(executor);
         } catch (RuntimeException exception) {
             newCoinsCommand.setExecutor(null);
+            newCoinsCommand.setTabCompleter(null);
             throw exception;
         }
 
@@ -55,6 +71,7 @@ public final class EconomyModule implements CoreModule {
     public void disable() {
         if (coinsCommand != null) {
             coinsCommand.setExecutor(null);
+            coinsCommand.setTabCompleter(null);
         }
 
         coinsCommand = null;

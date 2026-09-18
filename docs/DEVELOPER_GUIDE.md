@@ -184,23 +184,53 @@ Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` geh
 | BUILD-Regeln, Cleanup oder Inventory-Semantik | `LobbyPlayerStateService` |
 | Warp-Position | `/warp set …` beziehungsweise `warps.yml` |
 | Blackjack-Tischposition | `/blackjack setup …` beziehungsweise `blackjack.yml` |
+| Command-Help-Design und Rendering | `dev.vapee.core.command.help` |
+| Hauptübersicht und `/core help` | `CoreCommand` |
+| Coin-Command-UX | `CoinsCommand` |
+| Blackjack-Command-UX | `BlackjackCommand` |
+| Warp-Command-UX | `WarpCommand` |
+| Zukünftige Utility Commands | `utility/command` |
 
 ## Commands und permissions
 
 | Command | Zweck | Zuständige Klasse | Permission |
 |---|---|---|---|
-| `/vapeecore`, `/core version`, `/core reload` | Status, Version, koordinierter Reload | `CoreCommand` | Nur Reload: `vapeecore.admin` |
+| `/vapeecore`, `/core help`, `/core version`, `/core reload` | Status, permission-aware Hilfe, Version, koordinierter Reload | `CoreCommand` | Nur Reload: `vapeecore.admin` |
 | `/spawn` | Zum Lobby-Spawn teleportieren | `SpawnCommand` | `vapeecore.lobby.spawn` |
 | `/setspawn` | Lobby-Spawn speichern | `SetSpawnCommand` | `vapeecore.lobby.setspawn` |
 | `/build` | Temporären Lobby-BUILD-Modus umschalten | `BuildCommand` | `vapeecore.utility.build` |
-| `/coins …` | Eigene Coins anzeigen / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
+| `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
-| `/blackjack setup …` | Physische Blackjack-Tische verwalten | `BlackjackCommand` | `vapeecore.blackjack.admin` |
-| `/warp …` | Dynamische Warps verwalten | `WarpCommand` | `vapeecore.warp.admin` |
+| `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
+| `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 
 Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine Gruppe namens „Builder“; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
+
+## Command UX Standard
+
+Einfache Commands wie `/spawn`, `/settings`, `/build` oder `/ignorelist` zeigen bei falscher Eingabe nur einen kurzen, kontrollierten Hinweis mit `Invalid usage.` und der exakten Syntax. Komplexe Commands mit mehreren Aktionen besitzen dagegen eine strukturierte `CommandHelpPage` mit logisch benannten `CommandHelpSection`s und je einer `CommandHelpEntry` pro sichtbarer Syntaxzeile. Die gemeinsamen immutable Modelle und der reine Presentation-Renderer liegen unter `dev.vapee.core.command.help`; Parsing, Permission-Gates und Service-Aufrufe bleiben in der jeweiligen dünnen Command-Klasse.
+
+Der Renderer filtert Einträge ausschließlich über die am Entry hinterlegte Bukkit-Permission und unterdrückt danach leere Sections. Eine Help Page wird als ein mehrzeiliger Adventure-`Component` gesendet, damit der globale Prefix exakt einmal erscheint. Syntax wird immer über `Component.text` erzeugt: Platzhalter wie `<id>`, `<player>` oder `<amount>` bleiben sichtbarer Plain Text und werden nie als MiniMessage-Tags ausgewertet. Klickbare Syntax verwendet ausschließlich `ClickEvent.suggestCommand`; administrative Aktionen dürfen niemals durch einen Help-Klick ausgeführt werden.
+
+Erwartete Benutzerfehler werden vollständig durch den Command behandelt und liefern `true`; `plugin.yml`-Usage bleibt nur ein kurzer technischer Fallback. Ein konkretes Subcommand mit falschen Argumenten zeigt seine genaue Syntax statt der gesamten Help Page. Unbekannte Subcommands benennen den unbekannten Wert sicher und verweisen auf das passende `help`. Success-Ausgaben nennen Aktion, Objekt und – wo hilfreich – das neue Ergebnis; Errors sind konkret, Warnungen beschreiben einen sicheren nächsten Schritt.
+
+Tab Completion ist case-insensitive, stabil sortiert, permission-aware und möglichst klein. Spielerargumente stammen nur aus aktuell online befindlichen Spielern, dynamische IDs aus dem bereits geladenen Servicezustand und Warp-Materialien nur aus tatsächlich darstellbaren Items. Keine Completion lädt Offline-Player. Frei beeinflussbare IDs, Namen, Display Names und andere dynamische Werte werden mit `Component.text`, `Placeholder.unparsed` oder `Placeholder.component` eingesetzt, niemals per String-Konkatenation in ein MiniMessage-Template.
+
+### Checkliste für einen neuen Command
+
+1. Command mit kurzer Description und technischer Fallback-Usage in `plugin.yml` registrieren.
+2. Bestehende Permission verwenden oder den benötigten Node ausdrücklich deklarieren; keine Ränge hardcoden.
+3. Command-Klasse als dünnen Parser und Input-Adapter halten.
+4. Business Logic ausschließlich über den zuständigen Service ausführen.
+5. Für erwartete Benutzerfehler eine eigene Meldung senden und niemals `return false` verwenden.
+6. Komplexe Commands mit einer permission-aware Help Page ausstatten.
+7. Einfache Commands mit einem kurzen, exakten Usage Hint ausstatten.
+8. Tab Completion case-insensitive, stabil, klein und permission-aware implementieren.
+9. Dynamischen Text mit sicheren Adventure Components oder unparsed Placeholders rendern.
+10. Diese Developer-Dokumentation und die „Where do I change this?“-Tabelle aktualisieren.
+11. Passende Harness-Prüfungen ergänzen und den Paper-Smoke-Test durchführen.
 
 ## Ein Feature hinzufügen
 
@@ -238,6 +268,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.lobby.warp.WarpHarness`
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`
+- `dev.vapee.core.message.CommandHelpHarness`
 
 Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 

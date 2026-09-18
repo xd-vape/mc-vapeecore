@@ -76,7 +76,7 @@ public final class BuildCommand implements TabExecutor {
             return true;
         }
         if (args.length != 0) {
-            send(player, "<yellow>Usage:</yellow> <white>/build</white>");
+            send(player, "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <aqua>/build</aqua>");
             return true;
         }
 

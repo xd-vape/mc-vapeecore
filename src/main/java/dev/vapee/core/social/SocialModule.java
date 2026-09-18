@@ -66,6 +66,7 @@ public final class SocialModule implements CoreModule {
             newUnignoreCommand.setExecutor(newUnignoreExecutor);
             newUnignoreCommand.setTabCompleter(newUnignoreExecutor);
             newIgnoreListCommand.setExecutor(newIgnoreListExecutor);
+            newIgnoreListCommand.setTabCompleter(newIgnoreListExecutor);
             for (CorePlayer loadedPlayer : newPlayerService.getLoadedPlayers()) {
                 newSocialService.activatePlayer(loadedPlayer.getUniqueId());
             }

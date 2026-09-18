@@ -59,13 +59,16 @@ public final class SettingsModule implements CoreModule {
                 plugin.getCommand("settings"),
                 "Command 'settings' is missing from plugin.yml"
         );
+        SettingsCommand newSettingsExecutor = new SettingsCommand(newSettingsMenu, messageService);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newSettingsListener, plugin);
-            newSettingsCommand.setExecutor(new SettingsCommand(newSettingsMenu, messageService));
+            newSettingsCommand.setExecutor(newSettingsExecutor);
+            newSettingsCommand.setTabCompleter(newSettingsExecutor);
         } catch (RuntimeException exception) {
             HandlerList.unregisterAll(newSettingsListener);
             newSettingsCommand.setExecutor(null);
+            newSettingsCommand.setTabCompleter(null);
             throw exception;
         }
 
@@ -84,6 +87,7 @@ public final class SettingsModule implements CoreModule {
         }
         if (settingsCommand != null) {
             settingsCommand.setExecutor(null);
+            settingsCommand.setTabCompleter(null);
         }
 
         settingsCommand = null;

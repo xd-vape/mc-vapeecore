@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.warp;
 
+import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.lobby.warp.command.WarpCommand;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
@@ -13,14 +14,20 @@ public final class WarpModule implements CoreModule {
 
     private final JavaPlugin plugin;
     private final MessageService messageService;
+    private final CommandHelpRenderer commandHelpRenderer;
 
     private WarpConfig warpConfig;
     private WarpService warpService;
     private PluginCommand warpCommand;
 
-    public WarpModule(JavaPlugin plugin, MessageService messageService) {
+    public WarpModule(
+            JavaPlugin plugin,
+            MessageService messageService,
+            CommandHelpRenderer commandHelpRenderer
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
     }
 
     @Override
@@ -41,7 +48,7 @@ public final class WarpModule implements CoreModule {
                 plugin.getCommand("warp"),
                 "Command 'warp' is missing from plugin.yml"
         );
-        WarpCommand executor = new WarpCommand(plugin, newWarpService, messageService);
+        WarpCommand executor = new WarpCommand(plugin, newWarpService, messageService, commandHelpRenderer);
 
         try {
             newWarpCommand.setExecutor(executor);
