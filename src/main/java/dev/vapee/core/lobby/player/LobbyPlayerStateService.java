@@ -100,6 +100,20 @@ public final class LobbyPlayerStateService {
         applyNormalMode(validatedPlayer, true);
     }
 
+    /**
+     * Hands the normal lobby inventory to an activity without introducing another lobby mode.
+     */
+    public boolean relinquishNormalInventory(Player player) {
+        requirePrimaryThread();
+        Player validatedPlayer = Objects.requireNonNull(player, "player");
+        if (isBuildMode(validatedPlayer.getUniqueId())) {
+            return false;
+        }
+        lobbyItemRemover.accept(validatedPlayer);
+        clearInventory(validatedPlayer);
+        return true;
+    }
+
     public void enterNormalMode(Player player) {
         requirePrimaryThread();
         Player validatedPlayer = Objects.requireNonNull(player, "player");

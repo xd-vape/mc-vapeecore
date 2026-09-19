@@ -13,7 +13,7 @@ import dev.vapee.core.activity.blackjack.card.BlackjackSuit;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
 import dev.vapee.core.activity.blackjack.table.BlackjackSeat;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition;
-import dev.vapee.core.activity.blackjack.ui.BlackjackTableInventoryHolder;
+import dev.vapee.core.activity.blackjack.presentation.BlackjackAction;
 import dev.vapee.core.activity.location.ActivityArea;
 import dev.vapee.core.activity.location.ActivityPosition;
 import dev.vapee.core.activity.location.ActivityVenue;
@@ -23,7 +23,6 @@ import dev.vapee.core.player.repository.PlayerRepository;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -749,11 +748,14 @@ public final class BlackjackHarness {
         testJoinRollback();
         testSinglePlayerRoundResetAndRematch();
         testMultiplayerDealOrderAndActions();
+        testDoubleDown();
         testHitTimeoutAndStaleTaskSafety();
         testMidRoundJoinRejected();
         testLeaveDisconnectAndWorldChangeCleanup();
-        check(InventoryHolder.class.isAssignableFrom(BlackjackTableInventoryHolder.class),
-                "blackjack table GUI has a dedicated holder");
+        check(java.util.Arrays.equals(BlackjackAction.values(), new BlackjackAction[]{
+                BlackjackAction.DEAL, BlackjackAction.HIT, BlackjackAction.STAND,
+                BlackjackAction.DOUBLE, BlackjackAction.LEAVE
+        }), "blackjack hotbar exposes exactly the five world actions");
         System.out.println("BlackjackHarness passed " + checks + " checks.");
     }
 
@@ -943,6 +945,24 @@ public final class BlackjackHarness {
                 "current timeout automatically stands");
     }
 
+    private static void testDoubleDown() {
+        Fixture fixture = new Fixture(1);
+        Player player = fixture.player("Double");
+        fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        fixture.queueShoe(cards(BlackjackRank.FIVE, BlackjackRank.TEN,
+                BlackjackRank.SIX, BlackjackRank.SEVEN, BlackjackRank.TWO));
+        checkResult(fixture.service.startRound(player), ActivityResult.SUCCESS);
+        FakeTask originalTimeout = fixture.scheduler.tasks.getFirst();
+        checkResult(fixture.service.doubleDown(player), ActivityResult.SUCCESS);
+        BlackjackPlayerRound round = fixture.session.getPlayerRound(player.getUniqueId()).orElseThrow();
+        check(round.isDoubledDown(), "double down is recorded on the player round");
+        check(round.getHand().size() == 3, "double down draws exactly one card");
+        check(round.isFinished(), "double down finishes the player hand");
+        check(originalTimeout.cancelled, "double down cancels the active turn timeout");
+        check(fixture.session.getRoundPhase() == BlackjackRoundPhase.SETTLED,
+                "double down advances through dealer settlement");
+    }
+
     private static void testMidRoundJoinRejected() {
         Fixture fixture = new Fixture(3);
         Player first = fixture.player("First");
@@ -962,7 +982,7 @@ public final class BlackjackHarness {
 
     private static void testLeaveDisconnectAndWorldChangeCleanup() {
         for (ActivityLeaveReason reason : List.of(ActivityLeaveReason.VOLUNTARY,
-                ActivityLeaveReason.DISCONNECT, ActivityLeaveReason.WORLD_CHANGE)) {
+                ActivityLeaveReason.DISCONNECT, ActivityLeaveReason.WORLD_CHANGE, ActivityLeaveReason.DEATH)) {
             Fixture fixture = new Fixture(2);
             Player player = fixture.player(reason.name());
             fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();

@@ -5,6 +5,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -27,6 +28,11 @@ public final class ActivityListener implements Listener {
         handlePlayerChangedWorld(event.getPlayer().getUniqueId(), event.getPlayer().getWorld().getName());
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        handlePlayerDeath(event.getPlayer().getUniqueId());
+    }
+
     void handlePlayerQuit(UUID playerId) {
         if (activityService.isParticipating(playerId)) {
             activityService.leaveCurrentSession(playerId, ActivityLeaveReason.DISCONNECT);
@@ -40,5 +46,12 @@ public final class ActivityListener implements Listener {
                 activityService.leaveCurrentSession(playerId, ActivityLeaveReason.WORLD_CHANGE);
             }
         });
+    }
+
+
+    void handlePlayerDeath(UUID playerId) {
+        if (activityService.isParticipating(playerId)) {
+            activityService.leaveCurrentSession(playerId, ActivityLeaveReason.DEATH);
+        }
     }
 }

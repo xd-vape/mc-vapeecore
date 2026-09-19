@@ -38,6 +38,10 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Physical Blackjack table setup | `dev.vapee.core.activity.blackjack.table` |
 | Blackjack setup command | `BlackjackCommand` |
 | Blackjack table persistence | Live: `plugins/VapeeCore/blackjack.yml`, Code: `BlackjackTableConfig` |
+| Blackjack hotbar items and slots | `BlackjackInventoryService` |
+| Blackjack seat/block interaction | `activity.blackjack.interaction.BlackjackTableListener` |
+| Blackjack world cards and labels | `BlackjackWorldViewService` |
+| Blackjack card positions and tuning | `BlackjackDisplayGeometry` |
 | Casual seating behavior | `dev.vapee.core.seat.SeatListener` |
 | Seat entity lifecycle | `dev.vapee.core.seat.SeatService` |
 | Stair/slab seat position | `dev.vapee.core.seat.SeatPositionResolver` |
@@ -91,7 +95,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 11. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
 12. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
 13. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-14. **Blackjack** – physische Tische, Seat-Allocation, Kartenrunde und UI.
+14. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
 15. **Warp** – dynamische Warp-Persistence und Admin-Command.
 16. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
@@ -112,13 +116,9 @@ Lobby + Activity
   ↑
 Seat
 
-Seat + Activity + schmale Lobby-BUILD-Abfrage
+Seat + Activity + WorldDisplay + Lobby
   ↑
 Blackjack
-
-WorldDisplay
-  ↑
-zukünftige dynamische Feature-Visuals
 
 Lobby + Player + Settings + Warp
   ↑
@@ -200,11 +200,11 @@ Deaktivierung wird immer zuerst erkannt und bleibt damit auch als sicherer Exit 
   → in der Lobby die drei Lobby-Items neu erzeugen
 ```
 
-`ActivityService.isParticipating` blockiert NORMAL → BUILD. In Gegenrichtung erhält `BlackjackService` eine schmale `Predicate<UUID>`-Abfrage und lehnt BUILD-Spieler vor Definition-, Sitz- oder Membership-Änderungen ab. Es gibt keine `UtilityModule → BlackjackModule`-Dependency und keine Lobby-Abhängigkeit im generischen Activity-Framework.
+`ActivityService.isParticipating` blockiert NORMAL → BUILD. In Gegenrichtung fragt Blackjack den vom `LobbyModule` gelieferten `LobbyPlayerStateService` ab und lehnt BUILD-Spieler vor Definition-, Sitz- oder Membership-Änderungen ab. Es gibt keine `UtilityModule → BlackjackModule`-Dependency und keine Lobby-Abhängigkeit im generischen Activity-Framework.
 
 Vor NORMAL → BUILD gibt `BuildCommand` eventuell durch `/fly` verwaltetes Flight an `UtilityService` zurück. Erst danach übernimmt `LobbyPlayerStateService` über `CREATIVE`; damit besitzen Utility und BUILD Flight nie gleichzeitig.
 
-Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby, `BUILD` ist das temporäre Creative-Inventory. Eine spätere Activity-Hotbar muss Besitz explizit übernehmen und anschließend kontrolliert an den Lobby-State zurückgeben; sie darf nicht parallel dieselben Slots verwalten.
+Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby, `BUILD` ist das temporäre Creative-Inventory und aktive Blackjack-Teilnahme gehört `BlackjackInventoryService`. `relinquishNormalInventory` entfernt Lobby-Items und leert alle Inventory-Flächen vor der Übernahme. Reguläres Leave stellt NORMAL nur in der Lobby wieder her; Quit, World Change, Tod und Plugin-Shutdown bereinigen ohne Reapply.
 
 ## Community seating
 
@@ -216,7 +216,7 @@ Die generischen PDC-Keys sind `seat`, `seat_owner`, `seat_id` und `seat_type`. N
 
 Normales Shift-Dismount entfernt Assignment und Entity. Ein `MANAGED`-Callback wird einen Tick verzögert nur bei einem echten Player-Dismount ausgeführt und prüft vorher Plugin-, Online- und Relevanzzustand. Programmatic Release, Quit, World Change, Tod und der Abbau eines belegten Casual-Blocks bereinigen ohne freiwilligen Feature-Callback. `CASUAL` erzeugt keine Activity und keinen neuen LobbyPlayerMode und verändert weder Gamemode noch Inventory.
 
-`BlackjackSeatService` ist nur noch der fachliche Allocation-Adapter: niedrigste freie konfigurierte Sitznummer, Table-/Seat-Mapping, `blackjack:<table-id>`-Owner, Reservation/Mount/Release-Delegation und der Callback zu `ActivityService.leaveCurrentSession(..., VOLUNTARY)`. Die physische Entity und ihre generischen Events gehören SeatService/SeatListener. `BlackjackTableListener` verarbeitet weiterhin nur Interaktionsblock und GUI. Der transaktionale Ablauf Reservation → Activity-Join → Mount samt Rollback bleibt bestehen.
+`BlackjackSeatService` ist der fachliche Allocation-Adapter: moderne Sitzklicks reservieren exakt die angeklickte Nummer, Legacy-Interaktionen weiterhin die niedrigste freie Nummer. Table-/Seat-Mapping, `blackjack:<table-id>`-Owner und Reservation/Mount/Release delegieren an SeatService. `activity.blackjack.interaction.BlackjackTableListener` priorisiert Hotbar-Actions, dann moderne Sitzblöcke, dann Legacy-Interaktionsblöcke. Der transaktionale Ablauf Reservation → Activity-Join → Mount → Inventory-Übernahme besitzt vollständigen Rollback.
 
 ## Native world displays
 
@@ -224,7 +224,32 @@ Normales Shift-Dismount entfernt Assignment und Entity. Ein `MANAGED`-Callback w
 
 Die PDC-Keys sind `world_display`, `world_display_owner`, `world_display_id` und `world_display_type`. Displays sind nicht persistent, ohne Gravitation, invulnerable und silent. Feature-spezifische Transformation, Billboard, Scale, Brightness, Textausrichtung und Interpolation bleiben beim Consumer. Beim Modulstart werden ausschließlich markierte Text-/ItemDisplays entfernt; beim Shutdown alle registrierten Displays. Es gibt keinen Polling-Task, keine Display-Config/-Persistence, keine Commands, keine Packet-/NMS-Abhängigkeit und keine Demo-Entities.
 
-WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf parallel für frei konfigurierbare statische Hologramme verwendet werden, VapeeCore besitzt jedoch keine harte Dependency darauf. Phase 15C soll SeatService für physische Blackjack-Sitze und WorldDisplayService für Karten sowie Table-/Turn-Status verwenden; die dortige Activity-Hotbar muss weiterhin explizit mit der Lobby-Inventory-Ownership koordiniert werden.
+WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf parallel für frei konfigurierbare statische Hologramme verwendet werden, VapeeCore besitzt jedoch keine harte Dependency darauf.
+
+## Blackjack world UX
+
+`BlackjackTableInteractionMode` trennt `MODERN_SEAT_CLICK` und `LEGACY_INTERACTION`. Ein moderner Seat speichert unter `seats.<n>.block` die konkrete Welt-/Blockposition und unter `seats.<n>.position` die aufgelöste Sitzposition samt Yaw/Pitch. `/blackjack setup seat <id> <1-5>` verlangt einen Zielblock in höchstens sechs Blöcken Entfernung und verwendet `SeatPositionResolver`; Bottom-Stairs sowie einzelne Bottom-/Top-Slabs sind erlaubt, Top-Stairs, Double-Slabs und andere Blöcke nicht. Die resolved Position darf über der Area-Grenzebene liegen, solange der konkrete Sitzblock die Area berührt. Vollständig alte, flache Seat-Positionen bleiben lesbar und benötigen `interaction`. Moderne Tische ignorieren einen eventuell noch vorhandenen alten Interaction-Key. Gemischte Schemas, doppelte Blöcke innerhalb einer Definition und Blockkonflikte zwischen aktivierten Tischen sind ungültig.
+
+`BlackjackTableService` hält getrennte O(1)-Indizes für Legacy-Interaktionen und moderne `BlackjackBlockPosition → BlackjackTableSeatReference`-Zuordnungen. Vor Runtime-Aktivierung wird ein moderner Block erneut durch `SeatPositionResolver` validiert. Enable erzeugt sofort die Idle-Anzeige; Disable, Rollback und Shutdown entfernen alle Anzeigen und Seat-Indizes.
+
+`BlackjackInventoryService` besitzt während der Teilnahme die Player-Hotbar. Die Action-PDC heißt `blackjack_action`; Status ist markiert, aber nicht ausführbar. Slots: `0` Deal oder Hit, `1` Stand, `2` Double, `4` Status, `8` Leave. `AVAILABLE` zeigt Deal/Status/Leave. Nur der aktuelle Spielerzug zeigt Hit/Stand und – solange legal – Double. Fremder Zug, Dealer-Zug und Settlement zeigen ausschließlich Status/Leave. Drop, Inventory-Click inklusive Number-Key, Drag, Offhand-Swap und Pickup werden nur für aktuelle Blackjack-Owner blockiert. `PlayerDeathEvent` entfernt markierte Drops; der generische Activity-Listener verlässt mit `DEATH`.
+
+Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER_TURNS`, eigener Zug, unfertige Hand, genau zwei Karten und kein Natural sind zwingend. Der Timeout wird abgebrochen, genau eine Karte gezogen, `BlackjackPlayerRound.doubledDown` gesetzt, die Hand beendet und zum nächsten Spieler beziehungsweise Dealer weitergeschaltet. Es gibt weiterhin keine Wette und keine Economy-Auswirkung.
+
+`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys. Er wird nur durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Während `PLAYER_TURNS` zeigt die zweite Dealerkarte `?` und das Dealer-Label nur den Wert der ersten Karte; danach sind Karte und Gesamtwert sichtbar. Hearts/Diamonds sind rot, Clubs/Spades dunkelgrau. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
+
+### Blackjack tuning map
+
+| Frage | Stelle |
+|---|---|
+| Wo ändere ich die Position der Blackjack-Karten? | Anchor-/`card`-Methoden in `BlackjackDisplayGeometry` |
+| Wo ändere ich den Abstand zwischen Karten? | `BlackjackDisplayGeometry.CARD_SPACING` |
+| Wo ändere ich die Größe? | `BlackjackDisplayGeometry.CARD_SCALE` und Label-/Status-Scale in `BlackjackWorldViewService.configure` |
+| Wo ändere ich die Höhe über dem Tisch? | `CARD_HOVER`, `LABEL_HEIGHT`, `STATUS_HEIGHT` in `BlackjackDisplayGeometry` |
+| Wo ändere ich die Hotbar Items? | Factory-Aufrufe in `BlackjackInventoryService.refreshPlayer` |
+| Wo ändere ich die Hotbar Slots? | `PRIMARY_SLOT`, `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT`, `LEAVE_SLOT` in `BlackjackInventoryService` |
+| Wo ändere ich die Seat-Setup-Regeln? | `BlackjackCommand.seat` und `SeatPositionResolver` |
+| Wo ändere ich Double? | `BlackjackService.doubleDown` und `BlackjackPlayerRound` |
 
 ## Should I change Java or configuration?
 
@@ -241,6 +266,10 @@ WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf
 | Seat-Reservation, Entity und PDC | `SeatService` |
 | Stair-/Slab-Geometrie | `SeatPositionResolver` |
 | Blackjack-Sitzverteilung | `BlackjackSeatService` |
+| Blackjack-Hotbar-Materialien und Slots | `BlackjackInventoryService` |
+| Blackjack-Kartenposition, Abstand und Höhe | `BlackjackDisplayGeometry` |
+| Blackjack-Display-Texte und Ausrichtung | `BlackjackWorldViewService` |
+| Double-Down-Regeln | `BlackjackService.doubleDown` |
 | Native Text-/ItemDisplays | `WorldDisplayService` |
 | Command-Help-Design und Rendering | `dev.vapee.core.command.help` |
 | Hauptübersicht und `/core help` | `CoreCommand` |
@@ -353,6 +382,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.activity.ActivityHarness`
 - `dev.vapee.core.activity.blackjack.BlackjackHarness`
 - `dev.vapee.core.activity.blackjack.table.BlackjackTableHarness`
+- `dev.vapee.core.activity.blackjack.BlackjackPresentationHarness`
 - `dev.vapee.core.lobby.warp.WarpHarness`
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`

@@ -321,6 +321,10 @@ public final class ActivityHarness {
         check(fixture.service.isParticipating(worldId), "same-world change keeps membership");
         listener.handlePlayerChangedWorld(worldId, "other");
         check(!fixture.service.isParticipating(worldId), "different-world change removes membership");
+        checkResult(fixture.service.joinSession(fixture.onlinePlayer(worldId), second.getSessionId()),
+                ActivityResult.SUCCESS);
+        listener.handlePlayerDeath(worldId);
+        check(!fixture.service.isParticipating(worldId), "death removes membership");
         listener.handlePlayerQuit(quitId);
         check(!fixture.service.isParticipating(quitId), "quit removes membership");
 

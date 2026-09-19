@@ -67,36 +67,52 @@ public final class BlackjackSeatService {
                     : Optional.empty();
         }
 
-        Map<Integer, UUID> occupants = occupantsByTable.computeIfAbsent(
-                validatedDefinition.id(),
-                ignored -> new HashMap<>()
-        );
         for (BlackjackSeat seat : validatedDefinition.seats()) {
-            if (occupants.containsKey(seat.number())) {
-                continue;
-            }
-            Location location = locationResolver.apply(seat.position()).orElse(null);
-            if (location == null || !seatRuntime.reserve(
-                    seatKey(validatedDefinition.id(), seat.number()),
-                    validatedPlayerId,
-                    location,
-                    id -> activityService.leaveCurrentSession(id, ActivityLeaveReason.VOLUNTARY)
-            )) {
-                continue;
-            }
-            SeatAssignment assignment = new SeatAssignment(
-                    validatedDefinition.id(),
+            Optional<SeatAssignment> assignment = reserveSeat(
+                    validatedDefinition,
                     seat.number(),
-                    seat.position()
+                    validatedPlayerId
             );
-            occupants.put(seat.number(), validatedPlayerId);
-            assignmentsByPlayer.put(validatedPlayerId, assignment);
-            return Optional.of(assignment);
-        }
-        if (occupants.isEmpty()) {
-            occupantsByTable.remove(validatedDefinition.id());
+            if (assignment.isPresent()) return assignment;
         }
         return Optional.empty();
+    }
+
+    public Optional<SeatAssignment> reserveSeat(
+            BlackjackTableDefinition definition,
+            int seatNumber,
+            UUID playerId
+    ) {
+        BlackjackTableDefinition validatedDefinition = Objects.requireNonNull(definition, "definition");
+        UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
+        SeatAssignment existing = assignmentsByPlayer.get(validatedPlayerId);
+        if (existing != null) {
+            return existing.tableId().equals(validatedDefinition.id())
+                    && existing.seatNumber() == seatNumber ? Optional.of(existing) : Optional.empty();
+        }
+        BlackjackSeat seat = validatedDefinition.seats().stream()
+                .filter(candidate -> candidate.number() == seatNumber)
+                .findFirst()
+                .orElse(null);
+        if (seat == null) return Optional.empty();
+        Map<Integer, UUID> occupants = occupantsByTable.computeIfAbsent(
+                validatedDefinition.id(), ignored -> new HashMap<>()
+        );
+        if (occupants.containsKey(seatNumber)) return Optional.empty();
+        Location location = locationResolver.apply(seat.position()).orElse(null);
+        if (location == null || !seatRuntime.reserve(
+                seatKey(validatedDefinition.id(), seatNumber),
+                validatedPlayerId,
+                location,
+                id -> activityService.leaveCurrentSession(id, ActivityLeaveReason.VOLUNTARY)
+        )) {
+            if (occupants.isEmpty()) occupantsByTable.remove(validatedDefinition.id());
+            return Optional.empty();
+        }
+        SeatAssignment assignment = new SeatAssignment(validatedDefinition.id(), seatNumber, seat.position());
+        occupants.put(seatNumber, validatedPlayerId);
+        assignmentsByPlayer.put(validatedPlayerId, assignment);
+        return Optional.of(assignment);
     }
 
     public void mountReservedPlayer(Player player) {

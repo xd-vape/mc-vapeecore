@@ -3,6 +3,7 @@ package dev.vapee.core.activity.blackjack.table;
 import dev.vapee.core.activity.location.ActivityPosition;
 
 import java.util.Collections;
+import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
@@ -20,7 +21,7 @@ public final class BlackjackTableDraft {
     private ActivityPosition pos2;
     private ActivityPosition dealer;
     private BlackjackBlockPosition interaction;
-    private final NavigableMap<Integer, ActivityPosition> seats = new TreeMap<>();
+    private final NavigableMap<Integer, BlackjackSeat> seats = new TreeMap<>();
 
     public BlackjackTableDraft(String id) {
         this(id, false, null, null, null, null, Map.of());
@@ -44,9 +45,30 @@ public final class BlackjackTableDraft {
         Objects.requireNonNull(seats, "seats").forEach((number, position) ->
                 this.seats.put(
                         Objects.requireNonNull(number, "seat number"),
-                        Objects.requireNonNull(position, "seat position")
+                        new BlackjackSeat(number, Objects.requireNonNull(position, "seat position"))
                 )
         );
+    }
+
+    public BlackjackTableDraft(
+            String id,
+            boolean enabled,
+            ActivityPosition pos1,
+            ActivityPosition pos2,
+            ActivityPosition dealer,
+            BlackjackBlockPosition interaction,
+            Collection<BlackjackSeat> seats
+    ) {
+        this.id = requireId(id);
+        this.enabled = enabled;
+        this.pos1 = pos1;
+        this.pos2 = pos2;
+        this.dealer = dealer;
+        this.interaction = interaction;
+        for (BlackjackSeat seat : Objects.requireNonNull(seats, "seats")) {
+            BlackjackSeat validated = Objects.requireNonNull(seat, "seat");
+            this.seats.put(validated.number(), validated);
+        }
     }
 
     public String getId() {
@@ -94,6 +116,12 @@ public final class BlackjackTableDraft {
     }
 
     public NavigableMap<Integer, ActivityPosition> getSeats() {
+        NavigableMap<Integer, ActivityPosition> positions = new TreeMap<>();
+        seats.forEach((number, seat) -> positions.put(number, seat.position()));
+        return Collections.unmodifiableNavigableMap(positions);
+    }
+
+    public NavigableMap<Integer, BlackjackSeat> getSeatDefinitions() {
         return Collections.unmodifiableNavigableMap(new TreeMap<>(seats));
     }
 
@@ -101,7 +129,14 @@ public final class BlackjackTableDraft {
         if (number < 1 || number > 5) {
             throw new IllegalArgumentException("seat number must be between 1 and 5");
         }
-        seats.put(number, Objects.requireNonNull(position, "position"));
+        seats.put(number, new BlackjackSeat(number, Objects.requireNonNull(position, "position")));
+    }
+
+    public void setSeat(int number, ActivityPosition position, BlackjackBlockPosition block) {
+        if (number < 1 || number > 5) {
+            throw new IllegalArgumentException("seat number must be between 1 and 5");
+        }
+        seats.put(number, new BlackjackSeat(number, position, Objects.requireNonNull(block, "block")));
     }
 
     public boolean removeSeat(int number) {
@@ -109,7 +144,7 @@ public final class BlackjackTableDraft {
     }
 
     public BlackjackTableDraft copy() {
-        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, seats);
+        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, seats.values());
     }
 
     public static boolean isValidId(String id) {

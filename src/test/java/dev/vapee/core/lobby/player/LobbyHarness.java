@@ -140,6 +140,16 @@ public final class LobbyHarness {
         check(player.inventoryIsEmpty(), "exit removes build storage, armor, offhand and cursor items");
         check(player.lobbyItems, "exit recreates lobby items");
         check(!fixture.service.isBuildMode(player.id), "exit disables the protection bypass state");
+
+        check(fixture.service.relinquishNormalInventory(player.player),
+                "NORMAL inventory can hand ownership to an activity");
+        check(!player.lobbyItems && player.inventoryIsEmpty(),
+                "activity handoff removes lobby items and clears all inventory surfaces");
+        fixture.service.synchronize(player.player);
+        check(player.lobbyItems, "normal lobby inventory can be restored after activity handoff");
+        fixture.service.enterBuildMode(player.player);
+        check(!fixture.service.relinquishNormalInventory(player.player),
+                "BUILD inventory ownership cannot be taken by an activity");
     }
 
     private static void testQuitReconnectAndWorldLeave() {

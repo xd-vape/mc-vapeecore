@@ -14,8 +14,19 @@ public record BlackjackTableDefinition(
         ActivityArea area,
         ActivityPosition dealer,
         BlackjackBlockPosition interaction,
-        List<BlackjackSeat> seats
+        List<BlackjackSeat> seats,
+        BlackjackTableInteractionMode interactionMode
 ) {
+
+    public BlackjackTableDefinition(
+            String id,
+            ActivityArea area,
+            ActivityPosition dealer,
+            BlackjackBlockPosition interaction,
+            List<BlackjackSeat> seats
+    ) {
+        this(id, area, dealer, interaction, seats, inferMode(seats));
+    }
 
     public BlackjackTableDefinition {
         if (!BlackjackTableDraft.isValidId(id)) {
@@ -23,10 +34,10 @@ public record BlackjackTableDefinition(
         }
         area = Objects.requireNonNull(area, "area");
         dealer = Objects.requireNonNull(dealer, "dealer");
-        interaction = Objects.requireNonNull(interaction, "interaction");
         seats = Objects.requireNonNull(seats, "seats").stream().sorted().toList();
+        interactionMode = Objects.requireNonNull(interactionMode, "interactionMode");
 
-        List<String> errors = validateDefinition(area, dealer, interaction, seats);
+        List<String> errors = validateDefinition(area, dealer, interaction, seats, interactionMode);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
@@ -53,20 +64,31 @@ public record BlackjackTableDefinition(
         if (dealer == null) {
             errors.add("missing dealer");
         }
-        if (interaction == null) {
-            errors.add("missing interaction");
-        }
-        if (validatedDraft.getSeats().isEmpty()) {
+        List<BlackjackSeat> seats = List.copyOf(validatedDraft.getSeatDefinitions().values());
+        if (seats.isEmpty()) {
             errors.add("missing seat");
         }
-        if (validatedDraft.getSeats().size() > 5) {
+        if (seats.size() > 5) {
             errors.add("more than 5 seats configured");
         }
-        validatedDraft.getSeats().keySet().stream()
+        validatedDraft.getSeatDefinitions().keySet().stream()
                 .filter(number -> number < 1 || number > 5)
                 .forEach(number -> errors.add("seat number " + number + " is outside 1-5"));
 
-        if (pos1 == null || pos2 == null || dealer == null || interaction == null) {
+        boolean anyModern = seats.stream().anyMatch(BlackjackSeat::isModern);
+        boolean allModern = !seats.isEmpty() && seats.stream().allMatch(BlackjackSeat::isModern);
+        if (anyModern && !allModern) {
+            errors.add("legacy and modern seats cannot be mixed");
+        }
+        BlackjackTableInteractionMode mode = allModern
+                ? BlackjackTableInteractionMode.MODERN_SEAT_CLICK
+                : BlackjackTableInteractionMode.LEGACY_INTERACTION;
+        if (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION && interaction == null) {
+            errors.add("missing interaction");
+        }
+
+        if (pos1 == null || pos2 == null || dealer == null
+                || (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION && interaction == null)) {
             return List.copyOf(errors);
         }
 
@@ -77,12 +99,16 @@ public record BlackjackTableDefinition(
         if (!worldName.equals(dealer.worldName())) {
             errors.add("dealer uses a different world");
         }
-        if (!worldName.equals(interaction.worldName())) {
+        if (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION
+                && interaction != null && !worldName.equals(interaction.worldName())) {
             errors.add("interaction uses a different world");
         }
-        for (var entry : validatedDraft.getSeats().entrySet()) {
-            if (!worldName.equals(entry.getValue().worldName())) {
-                errors.add("seat " + entry.getKey() + " uses a different world");
+        for (BlackjackSeat seat : seats) {
+            if (!worldName.equals(seat.position().worldName())) {
+                errors.add("seat " + seat.number() + " uses a different world");
+            }
+            if (seat.block() != null && !worldName.equals(seat.block().worldName())) {
+                errors.add("seat block " + seat.number() + " uses a different world");
             }
         }
         if (!errors.isEmpty()) {
@@ -94,10 +120,7 @@ public record BlackjackTableDefinition(
                 pos1.x(), pos1.y(), pos1.z(),
                 pos2.x(), pos2.y(), pos2.z()
         );
-        List<BlackjackSeat> seats = validatedDraft.getSeats().entrySet().stream()
-                .map(entry -> new BlackjackSeat(entry.getKey(), entry.getValue()))
-                .toList();
-        errors.addAll(validateDefinition(area, dealer, interaction, seats));
+        errors.addAll(validateDefinition(area, dealer, interaction, seats, mode));
         return List.copyOf(errors);
     }
 
@@ -117,18 +140,24 @@ public record BlackjackTableDefinition(
                 draft.getId(),
                 area,
                 draft.getDealer().orElseThrow(),
-                draft.getInteraction().orElseThrow(),
-                draft.getSeats().entrySet().stream()
-                        .map(entry -> new BlackjackSeat(entry.getKey(), entry.getValue()))
-                        .toList()
+                draft.getInteraction().orElse(null),
+                List.copyOf(draft.getSeatDefinitions().values()),
+                inferMode(List.copyOf(draft.getSeatDefinitions().values()))
         );
+    }
+
+    private static BlackjackTableInteractionMode inferMode(List<BlackjackSeat> seats) {
+        return seats != null && !seats.isEmpty() && seats.stream().allMatch(BlackjackSeat::isModern)
+                ? BlackjackTableInteractionMode.MODERN_SEAT_CLICK
+                : BlackjackTableInteractionMode.LEGACY_INTERACTION;
     }
 
     private static List<String> validateDefinition(
             ActivityArea area,
             ActivityPosition dealer,
             BlackjackBlockPosition interaction,
-            List<BlackjackSeat> seats
+            List<BlackjackSeat> seats,
+            BlackjackTableInteractionMode mode
     ) {
         List<String> errors = new ArrayList<>();
         if (seats.isEmpty()) {
@@ -138,14 +167,33 @@ public record BlackjackTableDefinition(
             errors.add("at most five seats are allowed");
         }
         Set<Integer> numbers = new HashSet<>();
+        Set<BlackjackBlockPosition> blocks = new HashSet<>();
         for (BlackjackSeat seat : seats) {
             if (!numbers.add(seat.number())) {
                 errors.add("duplicate seat number " + seat.number());
             }
             if (!area.worldName().equals(seat.position().worldName())) {
                 errors.add("seat " + seat.number() + " uses a different world");
-            } else if (!area.contains(seat.position())) {
+            } else if (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION
+                    && !area.contains(seat.position())) {
                 errors.add("seat " + seat.number() + " is outside the area");
+            }
+            if (mode == BlackjackTableInteractionMode.MODERN_SEAT_CLICK) {
+                BlackjackBlockPosition block = seat.block();
+                if (block == null) {
+                    errors.add("seat " + seat.number() + " has no block");
+                } else {
+                    if (!blocks.add(block)) {
+                        errors.add("duplicate seat block at seat " + seat.number());
+                    }
+                    if (!area.worldName().equals(block.worldName())) {
+                        errors.add("seat block " + seat.number() + " uses a different world");
+                    } else if (!contains(area, block)) {
+                        errors.add("seat block " + seat.number() + " is outside the area");
+                    }
+                }
+            } else if (seat.isModern()) {
+                errors.add("legacy and modern seats cannot be mixed");
             }
         }
         if (!area.worldName().equals(dealer.worldName())) {
@@ -153,10 +201,14 @@ public record BlackjackTableDefinition(
         } else if (!area.contains(dealer)) {
             errors.add("dealer is outside the area");
         }
-        if (!area.worldName().equals(interaction.worldName())) {
-            errors.add("interaction uses a different world");
-        } else if (!contains(area, interaction)) {
-            errors.add("interaction is outside the area");
+        if (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION) {
+            if (interaction == null) {
+                errors.add("missing interaction");
+            } else if (!area.worldName().equals(interaction.worldName())) {
+                errors.add("interaction uses a different world");
+            } else if (!contains(area, interaction)) {
+                errors.add("interaction is outside the area");
+            }
         }
         return errors;
     }

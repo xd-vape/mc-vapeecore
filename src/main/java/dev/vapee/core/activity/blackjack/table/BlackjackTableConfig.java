@@ -14,6 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
@@ -137,12 +139,12 @@ public final class BlackjackTableConfig {
         ActivityPosition pos2 = readOptionalPosition(section, "area.pos2", false);
         ActivityPosition dealer = readOptionalPosition(section, "dealer", true);
         BlackjackBlockPosition interaction = readOptionalBlockPosition(section, "interaction");
-        Map<Integer, ActivityPosition> seats = readSeats(section);
+        Collection<BlackjackSeat> seats = readSeats(section);
         return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, seats);
     }
 
-    private Map<Integer, ActivityPosition> readSeats(ConfigurationSection tableSection) {
-        Map<Integer, ActivityPosition> seats = new TreeMap<>();
+    private Collection<BlackjackSeat> readSeats(ConfigurationSection tableSection) {
+        List<BlackjackSeat> seats = new ArrayList<>();
         if (!tableSection.contains("seats")) {
             return seats;
         }
@@ -157,11 +159,25 @@ public final class BlackjackTableConfig {
             } catch (NumberFormatException exception) {
                 throw new IllegalArgumentException("seat key '" + key + "' is not a number");
             }
-            ActivityPosition position = readOptionalPosition(tableSection, "seats." + key, true);
-            if (position == null) {
-                throw new IllegalArgumentException("seat " + key + " is incomplete");
+            String root = "seats." + key;
+            ConfigurationSection definition = tableSection.getConfigurationSection(root);
+            if (definition == null) {
+                throw new IllegalArgumentException("seat " + key + " must be a YAML section");
             }
-            seats.put(number, position);
+            boolean modern = definition.contains("position") || definition.contains("block");
+            ActivityPosition position = readOptionalPosition(
+                    tableSection,
+                    modern ? root + ".position" : root,
+                    true
+            );
+            if (position == null) throw new IllegalArgumentException("seat " + key + " is incomplete");
+            BlackjackBlockPosition block = modern
+                    ? readOptionalBlockPosition(tableSection, root + ".block")
+                    : null;
+            if (modern && block == null) {
+                throw new IllegalArgumentException("seat " + key + " block is incomplete");
+            }
+            seats.add(new BlackjackSeat(number, position, block));
         }
         return seats;
     }
@@ -268,12 +284,22 @@ public final class BlackjackTableConfig {
                 configuration.set(root + ".interaction.y", position.y());
                 configuration.set(root + ".interaction.z", position.z());
             });
-            if (draft.getSeats().isEmpty()) {
+            if (draft.getSeatDefinitions().isEmpty()) {
                 configuration.createSection(root + ".seats");
             } else {
-                draft.getSeats().forEach((number, position) ->
-                        writePosition(configuration, root + ".seats." + number, position, true)
-                );
+                draft.getSeatDefinitions().forEach((number, seat) -> {
+                    String seatRoot = root + ".seats." + number;
+                    if (seat.isModern()) {
+                        BlackjackBlockPosition block = seat.block();
+                        configuration.set(seatRoot + ".block.world", block.worldName());
+                        configuration.set(seatRoot + ".block.x", block.x());
+                        configuration.set(seatRoot + ".block.y", block.y());
+                        configuration.set(seatRoot + ".block.z", block.z());
+                        writePosition(configuration, seatRoot + ".position", seat.position(), true);
+                    } else {
+                        writePosition(configuration, seatRoot, seat.position(), true);
+                    }
+                });
             }
         }
         saveAtomically(configuration);

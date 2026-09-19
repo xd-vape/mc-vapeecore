@@ -12,6 +12,7 @@ import dev.vapee.core.command.help.CommandHelpPage;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.seat.SeatPositionResolver;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -93,19 +94,22 @@ public final class BlackjackCommand implements TabExecutor {
     private final BlackjackTableService tableService;
     private final MessageService messageService;
     private final CommandHelpRenderer helpRenderer;
+    private final SeatPositionResolver seatPositionResolver;
 
     public BlackjackCommand(
             JavaPlugin plugin,
             BlackjackTableConfig tableConfig,
             BlackjackTableService tableService,
             MessageService messageService,
-            CommandHelpRenderer helpRenderer
+            CommandHelpRenderer helpRenderer,
+            SeatPositionResolver seatPositionResolver
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.tableConfig = Objects.requireNonNull(tableConfig, "tableConfig");
         this.tableService = Objects.requireNonNull(tableService, "tableService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
+        this.seatPositionResolver = Objects.requireNonNull(seatPositionResolver, "seatPositionResolver");
     }
 
     @Override
@@ -284,10 +288,22 @@ public final class BlackjackCommand implements TabExecutor {
         if (number == null) {
             return;
         }
-        draft.setSeat(number, position(((Player) sender).getLocation(), true));
+        Player player = (Player) sender;
+        Block block = player.getTargetBlockExact(6);
+        if (block == null) {
+            messageService.send(sender, "<red>Look at a supported seat block within six blocks.</red>");
+            return;
+        }
+        Location resolved = seatPositionResolver.resolve(block, player.getYaw()).orElse(null);
+        if (resolved == null) {
+            messageService.send(sender,
+                    "<red>Use a bottom stair or a single bottom/top slab. Top stairs and double slabs are unsupported.</red>");
+            return;
+        }
+        draft.setSeat(number, position(resolved, true), BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
         messageService.send(sender, success("Blackjack table '", draft.getId(),
-                "' seat " + number + " updated."));
+                "' seat " + number + " block and sit position updated."));
     }
 
     private void removeSeat(CommandSender sender, String[] args) {
@@ -370,6 +386,8 @@ public final class BlackjackCommand implements TabExecutor {
                 .append(configurationLine("Dealer: ", draft.getDealer().isPresent()))
                 .append(Component.newline())
                 .append(configurationLine("Interaction: ", draft.getInteraction().isPresent()))
+                .append(Component.newline())
+                .append(infoLine("Join Mode: ", joinMode(draft), NamedTextColor.WHITE))
                 .append(Component.newline())
                 .append(infoLine("Seats: ", draft.getSeats().size() + " / 5",
                         draft.getSeats().isEmpty() ? NamedTextColor.RED : NamedTextColor.WHITE));
@@ -492,6 +510,10 @@ public final class BlackjackCommand implements TabExecutor {
             case WORLD_NOT_LOADED -> messageService.send(sender, "<red>The table world is not loaded.</red>");
             case INTERACTION_CONFLICT -> messageService.send(sender,
                     "<red>That interaction block is already used by another table.</red>");
+            case SEAT_CONFLICT -> messageService.send(sender,
+                    "<red>One of those seat blocks is already used by another enabled table.</red>");
+            case SEAT_BLOCK_INVALID -> messageService.send(sender,
+                    "<red>A configured seat block is no longer a supported stair or slab.</red>");
             case TABLE_IN_USE -> messageService.send(sender,
                     "<red>The table cannot be disabled while occupied or running a round.</red>");
             case INVALID_DEFINITION -> {
@@ -508,7 +530,6 @@ public final class BlackjackCommand implements TabExecutor {
                 "/blackjack setup pos1 " + tableId,
                 "/blackjack setup pos2 " + tableId,
                 "/blackjack setup dealer " + tableId,
-                "/blackjack setup interaction " + tableId,
                 "/blackjack setup seat " + tableId + " 1",
                 "/blackjack setup enable " + tableId
         );
@@ -600,11 +621,12 @@ public final class BlackjackCommand implements TabExecutor {
         if (draft.getDealer().isEmpty()) {
             return new SetupStep("Set the dealer position with:", "/blackjack setup dealer " + id);
         }
-        if (draft.getInteraction().isEmpty()) {
-            return new SetupStep("Set the interaction block with:", "/blackjack setup interaction " + id);
-        }
         if (draft.getSeats().isEmpty()) {
             return new SetupStep("Configure at least one seat with:", "/blackjack setup seat " + id + " 1");
+        }
+        boolean modern = draft.getSeatDefinitions().values().stream().allMatch(seat -> seat.isModern());
+        if (!modern && draft.getInteraction().isEmpty()) {
+            return new SetupStep("Set the legacy interaction block with:", "/blackjack setup interaction " + id);
         }
         if (!draft.isEnabled()) {
             return new SetupStep("Validate and enable the table with:", "/blackjack setup enable " + id);
@@ -643,6 +665,14 @@ public final class BlackjackCommand implements TabExecutor {
     private String display(String enumName) {
         String value = enumName.toLowerCase(Locale.ROOT).replace('_', ' ');
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private String joinMode(BlackjackTableDraft draft) {
+        if (draft.getSeatDefinitions().isEmpty()) return "Not configured";
+        long modern = draft.getSeatDefinitions().values().stream().filter(seat -> seat.isModern()).count();
+        if (modern == draft.getSeatDefinitions().size()) return "Modern seat click";
+        if (modern == 0) return "Legacy interaction";
+        return "Invalid mixed schema";
     }
 
     private static List<String> matches(List<String> values, String prefix) {

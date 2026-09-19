@@ -97,9 +97,10 @@ public final class VapeeCore extends JavaPlugin {
                 this,
                 activityModule,
                 seatModule,
+                worldDisplayModule,
+                lobbyModule,
                 messageService,
-                commandHelpRenderer,
-                playerId -> lobbyModule.getLobbyPlayerStateService().isBuildMode(playerId)
+                commandHelpRenderer
         );
         warpModule = new WarpModule(this, messageService, commandHelpRenderer);
         lobbyExperienceModule = new LobbyExperienceModule(

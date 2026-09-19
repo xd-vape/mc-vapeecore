@@ -190,7 +190,9 @@ public final class CommandHelpHarness {
         String workflowText = PLAIN.serialize(workflow);
         check(workflowText.contains("Blackjack table 'casino-1' created.")
                         && workflowText.contains("1. /blackjack setup pos1 casino-1")
-                        && workflowText.contains("6. /blackjack setup enable casino-1"),
+                        && workflowText.contains("4. /blackjack setup seat casino-1 1")
+                        && workflowText.contains("5. /blackjack setup enable casino-1")
+                        && !workflowText.contains("setup interaction casino-1"),
                 "blackjack create workflow shows a safe ordered setup path");
         check(hasClickAction(workflow, ClickEvent.Action.SUGGEST_COMMAND)
                         && !hasClickAction(workflow, ClickEvent.Action.RUN_COMMAND),

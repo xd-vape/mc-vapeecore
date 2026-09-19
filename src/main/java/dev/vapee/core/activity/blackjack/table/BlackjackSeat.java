@@ -3,14 +3,28 @@ package dev.vapee.core.activity.blackjack.table;
 import dev.vapee.core.activity.location.ActivityPosition;
 
 import java.util.Objects;
+import java.util.Optional;
 
-public record BlackjackSeat(int number, ActivityPosition position) implements Comparable<BlackjackSeat> {
+public record BlackjackSeat(
+        int number,
+        ActivityPosition position,
+        BlackjackBlockPosition block
+) implements Comparable<BlackjackSeat> {
+
+    public BlackjackSeat(int number, ActivityPosition position) {
+        this(number, position, null);
+    }
 
     public BlackjackSeat {
-        if (number < 1 || number > 5) {
-            throw new IllegalArgumentException("seat number must be between 1 and 5");
-        }
         position = Objects.requireNonNull(position, "position");
+    }
+
+    public boolean isModern() {
+        return block != null;
+    }
+
+    public Optional<BlackjackBlockPosition> blockPosition() {
+        return Optional.ofNullable(block);
     }
 
     @Override

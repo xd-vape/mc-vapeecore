@@ -10,6 +10,7 @@ import dev.vapee.core.activity.blackjack.card.BlackjackShoe;
 import dev.vapee.core.activity.blackjack.table.BlackjackSeatService;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableService;
+import dev.vapee.core.activity.blackjack.presentation.BlackjackInventoryService;
 import dev.vapee.core.activity.player.ActivityParticipant;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.entity.Player;
@@ -42,6 +43,7 @@ public final class BlackjackService {
     private final TaskScheduler taskScheduler;
     private final Supplier<BlackjackShoe> shoeSupplier;
     private final Predicate<UUID> buildModeCheck;
+    private final InventoryAccess inventoryAccess;
     private final Logger logger;
 
     private Consumer<BlackjackSession> tableRefresher = ignored -> {
@@ -53,7 +55,8 @@ public final class BlackjackService {
             BlackjackTableService tableService,
             BlackjackSeatService seatService,
             MessageService messageService,
-            Predicate<UUID> buildModeCheck
+            Predicate<UUID> buildModeCheck,
+            BlackjackInventoryService inventoryService
     ) {
         this(
                 activityService,
@@ -68,6 +71,7 @@ public final class BlackjackService {
                 ),
                 () -> BlackjackShoe.sixDecks(new Random()),
                 buildModeCheck,
+                inventoryAccess(inventoryService),
                 plugin.getLogger()
         );
     }
@@ -91,6 +95,7 @@ public final class BlackjackService {
                 taskScheduler,
                 shoeSupplier,
                 ignored -> false,
+                InventoryAccess.NONE,
                 logger
         );
     }
@@ -106,6 +111,22 @@ public final class BlackjackService {
             Predicate<UUID> buildModeCheck,
             Logger logger
     ) {
+        this(activityService, tableAccess, seatAccess, onlinePlayerLookup, messageSender,
+                taskScheduler, shoeSupplier, buildModeCheck, InventoryAccess.NONE, logger);
+    }
+
+    BlackjackService(
+            ActivityService activityService,
+            TableAccess tableAccess,
+            SeatAccess seatAccess,
+            Function<UUID, Player> onlinePlayerLookup,
+            BiConsumer<Player, String> messageSender,
+            TaskScheduler taskScheduler,
+            Supplier<BlackjackShoe> shoeSupplier,
+            Predicate<UUID> buildModeCheck,
+            InventoryAccess inventoryAccess,
+            Logger logger
+    ) {
         this.activityService = Objects.requireNonNull(activityService, "activityService");
         this.tableAccess = Objects.requireNonNull(tableAccess, "tableAccess");
         this.seatAccess = Objects.requireNonNull(seatAccess, "seatAccess");
@@ -114,6 +135,7 @@ public final class BlackjackService {
         this.taskScheduler = Objects.requireNonNull(taskScheduler, "taskScheduler");
         this.shoeSupplier = Objects.requireNonNull(shoeSupplier, "shoeSupplier");
         this.buildModeCheck = Objects.requireNonNull(buildModeCheck, "buildModeCheck");
+        this.inventoryAccess = Objects.requireNonNull(inventoryAccess, "inventoryAccess");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -122,6 +144,15 @@ public final class BlackjackService {
     }
 
     public Optional<BlackjackSession> joinTable(Player player, String tableId) {
+        return joinTable(player, tableId, null);
+    }
+
+    public Optional<BlackjackSession> joinTableAtSeat(Player player, String tableId, int seatNumber) {
+        if (seatNumber < 1 || seatNumber > 5) return Optional.empty();
+        return joinTable(player, tableId, seatNumber);
+    }
+
+    private Optional<BlackjackSession> joinTable(Player player, String tableId, Integer seatNumber) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         String validatedTableId = Objects.requireNonNull(tableId, "tableId");
         if (buildModeCheck.test(validatedPlayer.getUniqueId())) {
@@ -158,7 +189,10 @@ public final class BlackjackService {
             send(validatedPlayer, "<red>This blackjack table is full.</red>");
             return Optional.empty();
         }
-        if (!seatAccess.reserveLowestFreeSeat(definition, validatedPlayer.getUniqueId())) {
+        boolean reserved = seatNumber == null
+                ? seatAccess.reserveLowestFreeSeat(definition, validatedPlayer.getUniqueId())
+                : seatAccess.reserveSeat(definition, seatNumber, validatedPlayer.getUniqueId());
+        if (!reserved) {
             send(validatedPlayer, "<red>This blackjack table is full.</red>");
             return Optional.empty();
         }
@@ -171,6 +205,9 @@ public final class BlackjackService {
 
         try {
             seatAccess.mountReservedPlayer(validatedPlayer);
+            if (!inventoryAccess.takeOwnership(validatedPlayer)) {
+                throw new IllegalStateException("The lobby inventory could not hand ownership to blackjack");
+            }
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not seat player " + validatedPlayer.getUniqueId()
                     + " at blackjack table '" + validatedTableId + "'.", exception);
@@ -250,6 +287,25 @@ public final class BlackjackService {
         return ActivityResult.SUCCESS;
     }
 
+    public ActivityResult doubleDown(Player player) {
+        Player validatedPlayer = Objects.requireNonNull(player, "player");
+        Optional<BlackjackSession> optionalSession = actionableSession(validatedPlayer);
+        if (optionalSession.isEmpty()) return actionFailure(validatedPlayer);
+        BlackjackSession session = optionalSession.get();
+        BlackjackPlayerRound playerRound = session.requirePlayerRound(validatedPlayer.getUniqueId());
+        if (playerRound.isFinished() || playerRound.isDoubledDown()
+                || playerRound.getHand().size() != 2 || playerRound.getHand().isBlackjack()) {
+            send(validatedPlayer, "<yellow>You can only double on your first two cards.</yellow>");
+            return ActivityResult.INVALID_STATE;
+        }
+        session.cancelTurnTimeout();
+        playerRound.getHand().add(session.requireShoe().draw());
+        playerRound.markDoubledDown();
+        playerRound.finish();
+        advanceTurn(session);
+        return ActivityResult.SUCCESS;
+    }
+
     public ActivityResult leave(Player player) {
         return activityService.leaveCurrentSession(
                 Objects.requireNonNull(player, "player"),
@@ -296,6 +352,8 @@ public final class BlackjackService {
     ) {
         UUID playerId = participant.uniqueId();
         seatAccess.releaseSeat(playerId);
+        inventoryAccess.release(playerId,
+                reason == ActivityLeaveReason.VOLUNTARY || reason == ActivityLeaveReason.ERROR);
         boolean wasCurrentTurn = session.getCurrentTurnPlayer().filter(playerId::equals).isPresent();
         session.removePlayerRound(playerId);
 
@@ -400,13 +458,17 @@ public final class BlackjackService {
 
         UUID nextPlayerId = nextRound.get().getPlayerId();
         session.setRoundPhase(BlackjackRoundPhase.PLAYER_TURNS);
+        session.beginTurn(nextPlayerId);
         refresh(session);
         scheduleTurnTimeout(session, nextPlayerId, true);
     }
 
     private void scheduleTurnTimeout(BlackjackSession session, UUID expectedPlayerId, boolean announce) {
         long roundGeneration = session.getRoundGeneration();
-        long turnGeneration = session.beginTurn(expectedPlayerId);
+        if (session.getCurrentTurnPlayer().filter(expectedPlayerId::equals).isEmpty()) {
+            session.beginTurn(expectedPlayerId);
+        }
+        long turnGeneration = session.getTurnGeneration();
         BukkitTask[] taskReference = new BukkitTask[1];
         BukkitTask task = taskScheduler.schedule(() -> {
             BukkitTask executingTask = taskReference[0];
@@ -544,6 +606,11 @@ public final class BlackjackService {
             }
 
             @Override
+            public boolean reserveSeat(BlackjackTableDefinition definition, int seatNumber, UUID playerId) {
+                return service.reserveSeat(definition, seatNumber, playerId).isPresent();
+            }
+
+            @Override
             public void mountReservedPlayer(Player player) {
                 service.mountReservedPlayer(player);
             }
@@ -569,11 +636,34 @@ public final class BlackjackService {
     interface SeatAccess {
         boolean reserveLowestFreeSeat(BlackjackTableDefinition definition, UUID playerId);
 
+        default boolean reserveSeat(BlackjackTableDefinition definition, int seatNumber, UUID playerId) {
+            return reserveLowestFreeSeat(definition, playerId);
+        }
+
         void mountReservedPlayer(Player player);
 
         void releaseSeat(UUID playerId);
 
         Optional<Integer> getSeatNumber(UUID playerId);
+    }
+
+    private static InventoryAccess inventoryAccess(BlackjackInventoryService service) {
+        BlackjackInventoryService validated = Objects.requireNonNull(service, "inventoryService");
+        return new InventoryAccess() {
+            @Override public boolean takeOwnership(Player player) { return validated.takeOwnership(player); }
+            @Override public void release(UUID playerId, boolean restore) { validated.release(playerId, restore); }
+        };
+    }
+
+    interface InventoryAccess {
+        InventoryAccess NONE = new InventoryAccess() {
+            @Override public boolean takeOwnership(Player player) { return true; }
+            @Override public void release(UUID playerId, boolean restore) { }
+        };
+
+        boolean takeOwnership(Player player);
+
+        void release(UUID playerId, boolean restore);
     }
 
     @FunctionalInterface

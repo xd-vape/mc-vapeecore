@@ -49,6 +49,7 @@ public final class BlackjackTableHarness {
     public static void main(String[] args) throws Exception {
         testDraftPersistenceRoundTrip();
         testDefinitionValidation();
+        testModernSeatSchemaAndIndex();
         testRuntimeEnableDisableAndPersistence();
         testWorldAndInUseGuards();
         testSeatOrderAndLeaveCleanup();
@@ -172,6 +173,64 @@ public final class BlackjackTableHarness {
         check(fixture.config.deleteDraft("table-one"), "disabled table can be deleted");
     }
 
+    private static void testModernSeatSchemaAndIndex() throws Exception {
+        Path file = workspaceTempDirectory("vapeecore-blackjack-modern-").resolve("blackjack.yml");
+        BlackjackTableConfig config = new BlackjackTableConfig(file, logger());
+        config.initialize();
+        config.createDraft("modern");
+        BlackjackTableDraft modern = new BlackjackTableDraft("modern");
+        modern.setPos1(position("world", 0, 88, 0, 0, 0));
+        modern.setPos2(position("world", 10, 88, 10, 0, 0));
+        modern.setDealer(position("world", 5, 88, 5, 0, 0));
+        modern.setSeat(1, position("world", 2.5, 88.5, 2.5, 90, 0),
+                new BlackjackBlockPosition("world", 2, 88, 2));
+        config.saveDraft(modern);
+        BlackjackTableConfig reload = new BlackjackTableConfig(file, logger());
+        reload.initialize();
+        BlackjackTableDraft loaded = reload.getDraft("modern").orElseThrow();
+        check(loaded.getInteraction().isEmpty(), "modern config does not require an interaction block");
+        check(loaded.getSeatDefinitions().get(1).blockPosition().orElseThrow()
+                        .equals(new BlackjackBlockPosition("world", 2, 88, 2)),
+                "modern seat block identity survives config roundtrip");
+        BlackjackTableDefinition definition = BlackjackTableDefinition.fromDraft(loaded);
+        check(definition.interactionMode() == BlackjackTableInteractionMode.MODERN_SEAT_CLICK,
+                "all block-backed seats select modern seat-click mode");
+        BlackjackTableDraft retainedInteraction = modern.copy();
+        retainedInteraction.setInteraction(new BlackjackBlockPosition("other", 999, 999, 999));
+        check(BlackjackTableDefinition.validate(retainedInteraction).isEmpty(),
+                "retained legacy interaction data is ignored by modern seat-click tables");
+
+        loaded.setSeat(2, position("world", 3, 88, 3, 0, 0));
+        assertError(loaded, "legacy and modern seats cannot be mixed");
+
+        BlackjackTableDraft duplicate = modern.copy();
+        duplicate.setSeat(2, position("world", 4.5, 88.5, 4.5, 0, 0),
+                new BlackjackBlockPosition("world", 2, 88, 2));
+        assertError(duplicate, "duplicate seat block");
+
+        RuntimeFixture fixture = new RuntimeFixture();
+        fixture.config.createDraft("modern-one");
+        BlackjackTableDraft first = modern.copy();
+        first = new BlackjackTableDraft("modern-one", false,
+                first.getPos1().orElseThrow(), first.getPos2().orElseThrow(), first.getDealer().orElseThrow(),
+                null, first.getSeatDefinitions().values());
+        fixture.config.saveDraft(first);
+        check(fixture.tables.enableTable("modern-one").isSuccess(), "modern table enables without interaction");
+        BlackjackTableSeatReference reference = fixture.tables
+                .getSeatAt(new BlackjackBlockPosition("world", 2, 88, 2)).orElseThrow();
+        check(reference.equals(new BlackjackTableSeatReference("modern-one", 1)),
+                "modern seat block has an exact constant-time table/seat lookup");
+
+        fixture.config.createDraft("modern-two");
+        BlackjackTableDraft second = new BlackjackTableDraft("modern-two", false,
+                first.getPos1().orElseThrow(), first.getPos2().orElseThrow(), first.getDealer().orElseThrow(),
+                null, first.getSeatDefinitions().values());
+        fixture.config.saveDraft(second);
+        check(fixture.tables.enableTable("modern-two").status()
+                        == BlackjackTableOperationResult.Status.SEAT_CONFLICT,
+                "enabled tables cannot share a modern seat block");
+    }
+
     private static void testWorldAndInUseGuards() throws Exception {
         RuntimeFixture missingWorld = new RuntimeFixture(Set.of());
         missingWorld.config.createDraft("unloaded");
@@ -222,6 +281,13 @@ public final class BlackjackTableHarness {
                 "D gets final seat 3");
         check(fixture.seats.reserveLowestFreeSeat(definition, UUID.randomUUID()).isEmpty(),
                 "no reservation beyond configured capacity");
+        fixture.seats.releaseSeat(fourth);
+        UUID exact = UUID.randomUUID();
+        check(fixture.seats.reserveSeat(definition, 3, exact).orElseThrow().seatNumber() == 3,
+                "modern join can reserve the exact clicked seat");
+        check(fixture.seats.reserveSeat(definition, 2, UUID.randomUUID()).isEmpty(),
+                "exact reservation refuses an occupied seat without falling back");
+        fixture.seats.releaseSeat(exact);
 
         Player player = fixture.player("Dismount");
         fixture.seats.releaseSeat(third);

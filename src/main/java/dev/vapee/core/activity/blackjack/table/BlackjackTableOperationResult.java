@@ -34,6 +34,8 @@ public record BlackjackTableOperationResult(Status status, List<String> details)
         INVALID_DEFINITION,
         WORLD_NOT_LOADED,
         INTERACTION_CONFLICT,
+        SEAT_CONFLICT,
+        SEAT_BLOCK_INVALID,
         TABLE_IN_USE,
         RUNTIME_FAILURE
     }

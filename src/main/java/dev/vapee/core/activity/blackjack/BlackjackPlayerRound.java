@@ -11,6 +11,7 @@ public final class BlackjackPlayerRound {
     private final UUID playerId;
     private final BlackjackHand hand = new BlackjackHand();
     private boolean finished;
+    private boolean doubledDown;
     private BlackjackOutcome outcome;
 
     BlackjackPlayerRound(UUID playerId) {
@@ -31,6 +32,14 @@ public final class BlackjackPlayerRound {
 
     public Optional<BlackjackOutcome> getOutcome() {
         return Optional.ofNullable(outcome);
+    }
+
+    public boolean isDoubledDown() {
+        return doubledDown;
+    }
+
+    void markDoubledDown() {
+        doubledDown = true;
     }
 
     void finish() {
