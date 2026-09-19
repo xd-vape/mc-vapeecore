@@ -75,6 +75,8 @@ public final class BlackjackTableHarness {
                 "partial draft survives reload");
         check(partialReload.getDraft("casino-1").orElseThrow().getPos2().isEmpty(),
                 "missing draft fields remain optional");
+        check(partialReload.getDraft("casino-1").orElseThrow().getDisplayAnchor().isEmpty(),
+                "legacy config without display anchor remains loadable");
 
         BlackjackTableDraft complete = validDraft("casino-1", 3);
         complete.setEnabled(true);
@@ -87,6 +89,8 @@ public final class BlackjackTableHarness {
         check(loaded.getPos2().orElseThrow().equals(complete.getPos2().orElseThrow()), "pos2 survives roundtrip");
         check(loaded.getDealer().orElseThrow().equals(complete.getDealer().orElseThrow()),
                 "dealer coordinates and rotation survive roundtrip");
+        check(loaded.getDisplayAnchor().orElseThrow().equals(complete.getDisplayAnchor().orElseThrow()),
+                "display anchor coordinates and yaw survive roundtrip");
         check(loaded.getInteraction().orElseThrow().equals(complete.getInteraction().orElseThrow()),
                 "interaction block survives roundtrip");
         check(loaded.getSeats().equals(complete.getSeats()), "all seats and rotations survive roundtrip");
@@ -119,6 +123,12 @@ public final class BlackjackTableHarness {
         BlackjackTableDraft dealerOutside = validDraft("dealer-outside", 1);
         dealerOutside.setDealer(position("world", 50, 5, 5, 0, 0));
         assertError(dealerOutside, "dealer is outside the area");
+        BlackjackTableDraft displayWorldMismatch = validDraft("display-world-mismatch", 1);
+        displayWorldMismatch.setDisplayAnchor(new BlackjackDisplayAnchor("other", 5.5, 5.0, 5.5, 90.0F));
+        assertError(displayWorldMismatch, "display anchor uses a different world");
+        BlackjackTableDraft displayOutside = validDraft("display-outside", 1);
+        displayOutside.setDisplayAnchor(new BlackjackDisplayAnchor("world", 50.5, 5.0, 5.5, 90.0F));
+        assertError(displayOutside, "display anchor is outside the area");
         BlackjackTableDraft interactionOutside = validDraft("interaction-outside", 1);
         interactionOutside.setInteraction(new BlackjackBlockPosition("world", 50, 5, 5));
         assertError(interactionOutside, "interaction is outside the area");
@@ -324,6 +334,7 @@ public final class BlackjackTableHarness {
         draft.setPos1(position("world", 0, 0, 0, 0, 0));
         draft.setPos2(position("world", 10, 10, 10, 0, 0));
         draft.setDealer(position("world", 5.5, 5, 2.5, 180, 10));
+        draft.setDisplayAnchor(new BlackjackDisplayAnchor("world", 5.5, 5.25, 5.5, 180));
         draft.setInteraction(new BlackjackBlockPosition("world", 5, 5, 5));
         for (int number = 1; number <= seats; number++) {
             draft.setSeat(number, position("world", number, 5, 7, number * 10, number));

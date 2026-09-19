@@ -220,6 +220,11 @@ public final class BlackjackTableService {
     }
 
     private BlackjackTableOperationResult activateDefinition(BlackjackTableDefinition definition) {
+        if (definition.displayAnchor() == null) {
+            logger.warning("Blackjack table '" + definition.id()
+                    + "' has no display anchor; using legacy dealer/area display geometry. "
+                    + "Set one with /blackjack setup display " + definition.id() + ".");
+        }
         if (definition.interactionMode() == BlackjackTableInteractionMode.LEGACY_INTERACTION) {
             String existingInteraction = interactions.get(definition.interaction());
             if (existingInteraction != null && !existingInteraction.equals(definition.id())) {

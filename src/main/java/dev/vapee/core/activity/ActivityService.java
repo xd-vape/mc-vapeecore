@@ -475,6 +475,13 @@ public final class ActivityService {
         }
 
         session.transitionTo(ActivityState.AVAILABLE);
+        try {
+            session.onResetCompleted();
+        } catch (RuntimeException exception) {
+            logSessionFailure(session, "onResetCompleted", exception);
+            safeCloseSession(session, ActivityLeaveReason.ERROR);
+            return ActivityResult.HOOK_FAILED;
+        }
         return ActivityResult.SUCCESS;
     }
 

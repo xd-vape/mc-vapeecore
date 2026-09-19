@@ -230,26 +230,34 @@ WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf
 
 `BlackjackTableInteractionMode` trennt `MODERN_SEAT_CLICK` und `LEGACY_INTERACTION`. Ein moderner Seat speichert unter `seats.<n>.block` die konkrete Welt-/Blockposition und unter `seats.<n>.position` die aufgelöste Sitzposition samt Yaw/Pitch. `/blackjack setup seat <id> <1-5>` verlangt einen Zielblock in höchstens sechs Blöcken Entfernung und verwendet `SeatPositionResolver`; Bottom-Stairs sowie einzelne Bottom-/Top-Slabs sind erlaubt, Top-Stairs, Double-Slabs und andere Blöcke nicht. Die resolved Position darf über der Area-Grenzebene liegen, solange der konkrete Sitzblock die Area berührt. Vollständig alte, flache Seat-Positionen bleiben lesbar und benötigen `interaction`. Moderne Tische ignorieren einen eventuell noch vorhandenen alten Interaction-Key. Gemischte Schemas, doppelte Blöcke innerhalb einer Definition und Blockkonflikte zwischen aktivierten Tischen sind ungültig.
 
+Der optionale Abschnitt `tables.<id>.display` enthält `world`, `x`, `y`, `z` und `yaw`. `/blackjack setup display <id>` ist player-only, zielt höchstens sechs Blöcke weit und speichert Blockmittelpunkt sowie die reale obere Collision-Shape-Kante als Tischoberfläche; Full Blocks, Bottom-/Top-Slabs erhalten dadurch ihre tatsächliche Höhe. Der empfohlene neue Ablauf ist `pos1 → pos2 → dealer → display → seat(s) → enable`. `BlackjackDisplayAnchor` bleibt optional: Alte Dateien ohne den Abschnitt laden unverändert, `BlackjackTableService` protokolliert den Legacy-Fallback und `/blackjack setup info <id>` zeigt `Missing - using legacy geometry`.
+
 `BlackjackTableService` hält getrennte O(1)-Indizes für Legacy-Interaktionen und moderne `BlackjackBlockPosition → BlackjackTableSeatReference`-Zuordnungen. Vor Runtime-Aktivierung wird ein moderner Block erneut durch `SeatPositionResolver` validiert. Enable erzeugt sofort die Idle-Anzeige; Disable, Rollback und Shutdown entfernen alle Anzeigen und Seat-Indizes.
 
-`BlackjackInventoryService` besitzt während der Teilnahme die Player-Hotbar. Die Action-PDC heißt `blackjack_action`; Status ist markiert, aber nicht ausführbar. Slots: `0` Deal oder Hit, `1` Stand, `2` Double, `4` Status, `8` Leave. `AVAILABLE` zeigt Deal/Status/Leave. Nur der aktuelle Spielerzug zeigt Hit/Stand und – solange legal – Double. Fremder Zug, Dealer-Zug und Settlement zeigen ausschließlich Status/Leave. Drop, Inventory-Click inklusive Number-Key, Drag, Offhand-Swap und Pickup werden nur für aktuelle Blackjack-Owner blockiert. `PlayerDeathEvent` entfernt markierte Drops; der generische Activity-Listener verlässt mit `DEATH`.
+`BlackjackInventoryService` besitzt während der Teilnahme die Player-Hotbar. Die Action-PDC heißt `blackjack_action`; Status ist markiert, aber nicht ausführbar. Slots: `0` Deal oder Hit, `1` Stand, `2` Double, `4` Status, `8` Leave. `AVAILABLE` zeigt Deal/Status/Leave. Nur der aktuelle Spielerzug zeigt Hit/Stand und – solange legal – Double. Fremder Zug, Dealer-Zug und Settlement zeigen ausschließlich Status/Leave. Beim Activity-Reset löscht `BlackjackSession.onReset()` ausschließlich Rundendaten. `ActivityService` wechselt danach auf `AVAILABLE` und ruft erst dann `onResetCompleted()` auf; Blackjack aktualisiert dort Hotbar und Weltansicht. Fehler im Post-Reset-Hook werden protokolliert und schließen die Session kontrolliert. Dadurch bleiben Participant, Sitz und Inventory-Ownership erhalten, während Deal sofort wieder in Slot 0 erscheint. Drop, Inventory-Click inklusive Number-Key, Drag, Offhand-Swap und Pickup werden nur für aktuelle Blackjack-Owner blockiert. `PlayerDeathEvent` entfernt markierte Drops; der generische Activity-Listener verlässt mit `DEATH`.
 
 Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER_TURNS`, eigener Zug, unfertige Hand, genau zwei Karten und kein Natural sind zwingend. Der Timeout wird abgebrochen, genau eine Karte gezogen, `BlackjackPlayerRound.doubledDown` gesetzt, die Hand beendet und zum nächsten Spieler beziehungsweise Dealer weitergeschaltet. Es gibt weiterhin keine Wette und keine Economy-Auswirkung.
 
-`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys. Er wird nur durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Während `PLAYER_TURNS` zeigt die zweite Dealerkarte `?` und das Dealer-Label nur den Wert der ersten Karte; danach sind Karte und Gesamtwert sichtbar. Hearts/Diamonds sind rot, Clubs/Spades dunkelgrau. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
+`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys. Er wird nur durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Der Idle-Zustand erzeugt keine Seat-Labels; der zentrale Status verwendet ausschließlich freundliche Texte statt `IDLE`/`PLAYER_TURNS`/`DEALER_TURN`/`SETTLED`. Während `PLAYER_TURNS` zeigt die zweite Dealerkarte `?` und das Dealer-Label nur den Wert der ersten Karte; danach sind Karte und Gesamtwert sichtbar. Karten liegen bei `display.y + CARD_HOVER`, und je eine kombinierte Yaw-/X-Quaternion richtet Playerkarten vom Sitz sowie Dealerkarten von der Tisch-/Spielerseite lesbar aus. Hearts/Diamonds sind rot, Clubs/Spades dunkelgrau. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
+
+`BlackjackService.requiresDealerPlay` überspringt die Dealer-Ausspielung, wenn ausschließlich Bust-Hände oder bereits sichere Naturals übrig sind; normale Live-Hände spielen den Dealer weiterhin bis mindestens 17 aus, inklusive Stand auf Soft 17. `BlackjackShoe` erzeugt sechs vollständige Decks (312 Karten), mischt per Fisher-Yates mit `nextInt(index + 1)` und verwendet keinen konstanten Seed oder dynamische Spielerbevorzugung. `BlackjackFairnessHarness` prüft mit festen Seeds Verteilung, Reproduzierbarkeit, unterschiedliche Reihenfolgen, Ziehen ohne Replacement sowie Dealer-/Outcome-Invarianten; er besitzt absichtlich keine zufällige Winrate-Grenze.
 
 ### Blackjack tuning map
 
 | Frage | Stelle |
 |---|---|
-| Wo ändere ich die Position der Blackjack-Karten? | Anchor-/`card`-Methoden in `BlackjackDisplayGeometry` |
+| Wo ändere ich den Table-/Card-Anchor? | `/blackjack setup display <id>` und `BlackjackDisplayGeometry` |
 | Wo ändere ich den Abstand zwischen Karten? | `BlackjackDisplayGeometry.CARD_SPACING` |
-| Wo ändere ich die Größe? | `BlackjackDisplayGeometry.CARD_SCALE` und Label-/Status-Scale in `BlackjackWorldViewService.configure` |
-| Wo ändere ich die Höhe über dem Tisch? | `CARD_HOVER`, `LABEL_HEIGHT`, `STATUS_HEIGHT` in `BlackjackDisplayGeometry` |
+| Wo ändere ich die Kartengröße? | `BlackjackDisplayGeometry.CARD_SCALE` |
+| Wo ändere ich die Kartenhöhe? | `BlackjackDisplayGeometry.CARD_HOVER` |
+| Wo ändere ich Player-Label-Größe? | `BlackjackDisplayGeometry.LABEL_SCALE` |
+| Wo ändere ich Status-Größe/-Position? | `BlackjackDisplayGeometry.STATUS_SCALE` / `STATUS_HEIGHT` |
 | Wo ändere ich die Hotbar Items? | Factory-Aufrufe in `BlackjackInventoryService.refreshPlayer` |
 | Wo ändere ich die Hotbar Slots? | `PRIMARY_SLOT`, `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT`, `LEAVE_SLOT` in `BlackjackInventoryService` |
 | Wo ändere ich die Seat-Setup-Regeln? | `BlackjackCommand.seat` und `SeatPositionResolver` |
 | Wo ändere ich Double? | `BlackjackService.doubleDown` und `BlackjackPlayerRound` |
+| Wo ändere ich die Reset-Presentation? | Activity-Reset-Lifecycle und `BlackjackSession.onResetCompleted` |
+| Wo ändere ich die Dealer-Play-Entscheidung? | `BlackjackService.requiresDealerPlay` |
 
 ## Should I change Java or configuration?
 
@@ -262,6 +270,7 @@ Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER
 | BUILD-Regeln, Cleanup oder Inventory-Semantik | `LobbyPlayerStateService` |
 | Warp-Position | `/warp set …` beziehungsweise `warps.yml` |
 | Blackjack-Tischposition | `/blackjack setup …` beziehungsweise `blackjack.yml` |
+| Blackjack-Table-/Card-Anchor | `/blackjack setup display <id>` und `BlackjackDisplayGeometry` |
 | Casual-Sitzbedingungen und Cleanup-Events | `SeatListener` |
 | Seat-Reservation, Entity und PDC | `SeatService` |
 | Stair-/Slab-Geometrie | `SeatPositionResolver` |
@@ -269,6 +278,8 @@ Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER
 | Blackjack-Hotbar-Materialien und Slots | `BlackjackInventoryService` |
 | Blackjack-Kartenposition, Abstand und Höhe | `BlackjackDisplayGeometry` |
 | Blackjack-Display-Texte und Ausrichtung | `BlackjackWorldViewService` |
+| Blackjack-Round-Reset-Presentation | `ActivityService.resetSessionInternal`, `ActivitySession.onResetCompleted`, `BlackjackSession` |
+| Blackjack-Dealer-Ausspielentscheidung | `BlackjackService.requiresDealerPlay` |
 | Double-Down-Regeln | `BlackjackService.doubleDown` |
 | Native Text-/ItemDisplays | `WorldDisplayService` |
 | Command-Help-Design und Rendering | `dev.vapee.core.command.help` |
@@ -381,6 +392,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 
 - `dev.vapee.core.activity.ActivityHarness`
 - `dev.vapee.core.activity.blackjack.BlackjackHarness`
+- `dev.vapee.core.activity.blackjack.BlackjackFairnessHarness`
 - `dev.vapee.core.activity.blackjack.table.BlackjackTableHarness`
 - `dev.vapee.core.activity.blackjack.BlackjackPresentationHarness`
 - `dev.vapee.core.lobby.warp.WarpHarness`

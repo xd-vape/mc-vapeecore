@@ -21,10 +21,11 @@ public final class BlackjackTableDraft {
     private ActivityPosition pos2;
     private ActivityPosition dealer;
     private BlackjackBlockPosition interaction;
+    private BlackjackDisplayAnchor displayAnchor;
     private final NavigableMap<Integer, BlackjackSeat> seats = new TreeMap<>();
 
     public BlackjackTableDraft(String id) {
-        this(id, false, null, null, null, null, Map.of());
+        this(id, false, null, null, null, null, null, Map.of());
     }
 
     public BlackjackTableDraft(
@@ -36,12 +37,26 @@ public final class BlackjackTableDraft {
             BlackjackBlockPosition interaction,
             Map<Integer, ActivityPosition> seats
     ) {
+        this(id, enabled, pos1, pos2, dealer, interaction, null, seats);
+    }
+
+    public BlackjackTableDraft(
+            String id,
+            boolean enabled,
+            ActivityPosition pos1,
+            ActivityPosition pos2,
+            ActivityPosition dealer,
+            BlackjackBlockPosition interaction,
+            BlackjackDisplayAnchor displayAnchor,
+            Map<Integer, ActivityPosition> seats
+    ) {
         this.id = requireId(id);
         this.enabled = enabled;
         this.pos1 = pos1;
         this.pos2 = pos2;
         this.dealer = dealer;
         this.interaction = interaction;
+        this.displayAnchor = displayAnchor;
         Objects.requireNonNull(seats, "seats").forEach((number, position) ->
                 this.seats.put(
                         Objects.requireNonNull(number, "seat number"),
@@ -59,12 +74,26 @@ public final class BlackjackTableDraft {
             BlackjackBlockPosition interaction,
             Collection<BlackjackSeat> seats
     ) {
+        this(id, enabled, pos1, pos2, dealer, interaction, null, seats);
+    }
+
+    public BlackjackTableDraft(
+            String id,
+            boolean enabled,
+            ActivityPosition pos1,
+            ActivityPosition pos2,
+            ActivityPosition dealer,
+            BlackjackBlockPosition interaction,
+            BlackjackDisplayAnchor displayAnchor,
+            Collection<BlackjackSeat> seats
+    ) {
         this.id = requireId(id);
         this.enabled = enabled;
         this.pos1 = pos1;
         this.pos2 = pos2;
         this.dealer = dealer;
         this.interaction = interaction;
+        this.displayAnchor = displayAnchor;
         for (BlackjackSeat seat : Objects.requireNonNull(seats, "seats")) {
             BlackjackSeat validated = Objects.requireNonNull(seat, "seat");
             this.seats.put(validated.number(), validated);
@@ -115,6 +144,14 @@ public final class BlackjackTableDraft {
         this.interaction = Objects.requireNonNull(interaction, "interaction");
     }
 
+    public Optional<BlackjackDisplayAnchor> getDisplayAnchor() {
+        return Optional.ofNullable(displayAnchor);
+    }
+
+    public void setDisplayAnchor(BlackjackDisplayAnchor displayAnchor) {
+        this.displayAnchor = Objects.requireNonNull(displayAnchor, "displayAnchor");
+    }
+
     public NavigableMap<Integer, ActivityPosition> getSeats() {
         NavigableMap<Integer, ActivityPosition> positions = new TreeMap<>();
         seats.forEach((number, seat) -> positions.put(number, seat.position()));
@@ -144,7 +181,7 @@ public final class BlackjackTableDraft {
     }
 
     public BlackjackTableDraft copy() {
-        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, seats.values());
+        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, displayAnchor, seats.values());
     }
 
     public static boolean isValidId(String id) {

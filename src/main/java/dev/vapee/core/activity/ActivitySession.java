@@ -103,6 +103,9 @@ public abstract class ActivitySession {
     protected void onReset() {
     }
 
+    protected void onResetCompleted() {
+    }
+
     protected void onClosed() {
     }
 

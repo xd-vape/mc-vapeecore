@@ -15,8 +15,20 @@ public record BlackjackTableDefinition(
         ActivityPosition dealer,
         BlackjackBlockPosition interaction,
         List<BlackjackSeat> seats,
-        BlackjackTableInteractionMode interactionMode
+        BlackjackTableInteractionMode interactionMode,
+        BlackjackDisplayAnchor displayAnchor
 ) {
+
+    public BlackjackTableDefinition(
+            String id,
+            ActivityArea area,
+            ActivityPosition dealer,
+            BlackjackBlockPosition interaction,
+            List<BlackjackSeat> seats,
+            BlackjackTableInteractionMode interactionMode
+    ) {
+        this(id, area, dealer, interaction, seats, interactionMode, null);
+    }
 
     public BlackjackTableDefinition(
             String id,
@@ -25,7 +37,7 @@ public record BlackjackTableDefinition(
             BlackjackBlockPosition interaction,
             List<BlackjackSeat> seats
     ) {
-        this(id, area, dealer, interaction, seats, inferMode(seats));
+        this(id, area, dealer, interaction, seats, inferMode(seats), null);
     }
 
     public BlackjackTableDefinition {
@@ -37,7 +49,7 @@ public record BlackjackTableDefinition(
         seats = Objects.requireNonNull(seats, "seats").stream().sorted().toList();
         interactionMode = Objects.requireNonNull(interactionMode, "interactionMode");
 
-        List<String> errors = validateDefinition(area, dealer, interaction, seats, interactionMode);
+        List<String> errors = validateDefinition(area, dealer, interaction, seats, interactionMode, displayAnchor);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
@@ -54,6 +66,7 @@ public record BlackjackTableDefinition(
         ActivityPosition pos2 = validatedDraft.getPos2().orElse(null);
         ActivityPosition dealer = validatedDraft.getDealer().orElse(null);
         BlackjackBlockPosition interaction = validatedDraft.getInteraction().orElse(null);
+        BlackjackDisplayAnchor displayAnchor = validatedDraft.getDisplayAnchor().orElse(null);
 
         if (pos1 == null) {
             errors.add("missing area pos1");
@@ -120,7 +133,7 @@ public record BlackjackTableDefinition(
                 pos1.x(), pos1.y(), pos1.z(),
                 pos2.x(), pos2.y(), pos2.z()
         );
-        errors.addAll(validateDefinition(area, dealer, interaction, seats, mode));
+        errors.addAll(validateDefinition(area, dealer, interaction, seats, mode, displayAnchor));
         return List.copyOf(errors);
     }
 
@@ -142,7 +155,8 @@ public record BlackjackTableDefinition(
                 draft.getDealer().orElseThrow(),
                 draft.getInteraction().orElse(null),
                 List.copyOf(draft.getSeatDefinitions().values()),
-                inferMode(List.copyOf(draft.getSeatDefinitions().values()))
+                inferMode(List.copyOf(draft.getSeatDefinitions().values())),
+                draft.getDisplayAnchor().orElse(null)
         );
     }
 
@@ -157,7 +171,8 @@ public record BlackjackTableDefinition(
             ActivityPosition dealer,
             BlackjackBlockPosition interaction,
             List<BlackjackSeat> seats,
-            BlackjackTableInteractionMode mode
+            BlackjackTableInteractionMode mode,
+            BlackjackDisplayAnchor displayAnchor
     ) {
         List<String> errors = new ArrayList<>();
         if (seats.isEmpty()) {
@@ -200,6 +215,15 @@ public record BlackjackTableDefinition(
             errors.add("dealer uses a different world");
         } else if (!area.contains(dealer)) {
             errors.add("dealer is outside the area");
+        }
+        if (displayAnchor != null) {
+            if (!area.worldName().equals(displayAnchor.worldName())) {
+                errors.add("display anchor uses a different world");
+            } else if (displayAnchor.x() < area.minX() || displayAnchor.x() > area.maxX()
+                    || displayAnchor.y() < area.minY() - 1.0D || displayAnchor.y() > area.maxY() + 1.0D
+                    || displayAnchor.z() < area.minZ() || displayAnchor.z() > area.maxZ()) {
+                errors.add("display anchor is outside the area");
+            }
         }
         if (mode == BlackjackTableInteractionMode.LEGACY_INTERACTION) {
             if (interaction == null) {

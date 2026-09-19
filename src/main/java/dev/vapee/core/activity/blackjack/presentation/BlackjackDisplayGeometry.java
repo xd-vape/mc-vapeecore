@@ -5,26 +5,36 @@ import dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.util.Vector;
+import org.joml.Quaternionf;
 
 import java.util.Objects;
 
 public final class BlackjackDisplayGeometry {
 
-    public static final float CARD_SCALE = 0.32F;
-    public static final double CARD_SPACING = 0.30D;
-    public static final double CARD_HOVER = 0.07D;
-    public static final double PLAYER_DISTANCE = 0.72D;
-    public static final double DEALER_DISTANCE = 0.45D;
-    public static final double LABEL_HEIGHT = 0.42D;
-    public static final double STATUS_HEIGHT = 1.28D;
+    public static final float CARD_SCALE = 0.52F;
+    public static final double CARD_SPACING = 0.36D;
+    public static final double CARD_HOVER = 0.035D;
+    public static final double PLAYER_CARD_DISTANCE = 0.72D;
+    public static final double DEALER_CARD_DISTANCE = 0.45D;
+    public static final double PLAYER_LABEL_HEIGHT = 0.24D;
+    public static final double DEALER_LABEL_HEIGHT = 0.26D;
+    public static final double STATUS_HEIGHT = 0.68D;
+    public static final float STATUS_SCALE = 0.38F;
+    public static final float LABEL_SCALE = 0.25F;
 
     private BlackjackDisplayGeometry() { }
 
     public static Location tableCenter(World world, BlackjackTableDefinition definition) {
         Objects.requireNonNull(world, "world");
-        var area = Objects.requireNonNull(definition, "definition").area();
+        BlackjackTableDefinition validated = Objects.requireNonNull(definition, "definition");
+        if (validated.displayAnchor() != null) {
+            var anchor = validated.displayAnchor();
+            return new Location(world, anchor.x(), anchor.y(), anchor.z(), anchor.yaw(), 0.0F);
+        }
+        var area = validated.area();
         return new Location(world, (area.minX() + area.maxX()) / 2.0D,
-                definition.dealer().y(), (area.minZ() + area.maxZ()) / 2.0D);
+                validated.dealer().y(), (area.minZ() + area.maxZ()) / 2.0D,
+                validated.dealer().yaw(), 0.0F);
     }
 
     public static Location playerAnchor(World world, BlackjackTableDefinition definition, BlackjackSeat seat) {
@@ -32,10 +42,10 @@ public final class BlackjackDisplayGeometry {
         Location source = new Location(world, seat.position().x(), seat.position().y(), seat.position().z(),
                 seat.position().yaw(), seat.position().pitch());
         Vector inward = horizontalDirection(source, center);
-        return source.clone().add(inward.multiply(PLAYER_DISTANCE))
-                .set(source.getX() + inward.getX() * PLAYER_DISTANCE,
-                        definition.dealer().y() + CARD_HOVER,
-                        source.getZ() + inward.getZ() * PLAYER_DISTANCE);
+        return new Location(world,
+                source.getX() + inward.getX() * PLAYER_CARD_DISTANCE,
+                center.getY() + CARD_HOVER,
+                source.getZ() + inward.getZ() * PLAYER_CARD_DISTANCE);
     }
 
     public static Location dealerAnchor(World world, BlackjackTableDefinition definition) {
@@ -44,10 +54,10 @@ public final class BlackjackDisplayGeometry {
                 definition.dealer().z(), definition.dealer().yaw(), definition.dealer().pitch());
         Vector inward = horizontalDirection(source, center);
         return new Location(world,
-                source.getX() + inward.getX() * DEALER_DISTANCE,
-                source.getY() + CARD_HOVER,
-                source.getZ() + inward.getZ() * DEALER_DISTANCE,
-                source.getYaw(), 0.0F);
+                source.getX() + inward.getX() * DEALER_CARD_DISTANCE,
+                center.getY() + CARD_HOVER,
+                source.getZ() + inward.getZ() * DEALER_CARD_DISTANCE,
+                0.0F, 0.0F);
     }
 
     public static Location card(Location anchor, Location center, int index, int count) {
@@ -55,8 +65,22 @@ public final class BlackjackDisplayGeometry {
         Vector right = new Vector(-inward.getZ(), 0.0D, inward.getX());
         double offset = (index - (count - 1) / 2.0D) * CARD_SPACING;
         Location result = anchor.clone().add(right.multiply(offset));
-        result.setYaw((float) Math.toDegrees(Math.atan2(-inward.getX(), inward.getZ())));
+        result.setYaw(0.0F);
+        result.setPitch(0.0F);
         return result;
+    }
+
+    public static Quaternionf playerCardRotation(Location anchor, Location center) {
+        return horizontalCardRotation(horizontalDirection(anchor, center));
+    }
+
+    public static Quaternionf dealerCardRotation(Location anchor, Location center) {
+        return horizontalCardRotation(horizontalDirection(center, anchor));
+    }
+
+    private static Quaternionf horizontalCardRotation(Vector textTopDirection) {
+        float yaw = (float) Math.atan2(-textTopDirection.getX(), -textTopDirection.getZ());
+        return new Quaternionf().rotationYXZ(yaw, (float) Math.toRadians(-90.0D), 0.0F);
     }
 
     private static Vector horizontalDirection(Location from, Location to) {

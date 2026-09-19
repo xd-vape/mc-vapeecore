@@ -142,9 +142,19 @@ public final class BlackjackInventoryService {
 
     private ItemStack statusItem(BlackjackSession session, UUID playerId) {
         BlackjackPlayerRound round = session.getPlayerRound(playerId).orElse(null);
-        String state = session.getState() == ActivityState.AVAILABLE
-                ? "Waiting for deal"
-                : session.getRoundPhase().name().replace('_', ' ');
+        String state;
+        if (session.getState() == ActivityState.AVAILABLE) {
+            state = "Waiting for deal";
+        } else if (session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS) {
+            state = session.getCurrentTurnPlayer().filter(playerId::equals).isPresent()
+                    ? "Your turn" : "Another player's turn";
+        } else if (session.getRoundPhase() == BlackjackRoundPhase.DEALER_TURN) {
+            state = "Dealer is playing";
+        } else if (session.getRoundPhase() == BlackjackRoundPhase.SETTLED) {
+            state = "Round complete";
+        } else {
+            state = "Table available";
+        }
         List<String> lore = round == null
                 ? List.of(state, session.getParticipantCount() + " player(s) seated")
                 : List.of(state, "Hand value: " + round.getHand().getValue());

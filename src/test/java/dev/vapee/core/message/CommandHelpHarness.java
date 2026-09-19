@@ -16,6 +16,9 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.util.BoundingBox;
+import org.bukkit.util.VoxelShape;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -179,8 +182,8 @@ public final class CommandHelpHarness {
         check(setup.sections().stream().map(CommandHelpSection::title).toList()
                         .equals(List.of("Create & Configure", "Management", "Information")),
                 "blackjack setup sections have the required order");
-        check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 12,
-                "blackjack setup help contains all twelve actions");
+        check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 13,
+                "blackjack setup help contains all thirteen actions");
         Component workflow = invokeComponent(
                 BlackjackCommand.class,
                 "createWorkflow",
@@ -190,8 +193,9 @@ public final class CommandHelpHarness {
         String workflowText = PLAIN.serialize(workflow);
         check(workflowText.contains("Blackjack table 'casino-1' created.")
                         && workflowText.contains("1. /blackjack setup pos1 casino-1")
-                        && workflowText.contains("4. /blackjack setup seat casino-1 1")
-                        && workflowText.contains("5. /blackjack setup enable casino-1")
+                        && workflowText.contains("4. /blackjack setup display casino-1")
+                        && workflowText.contains("5. /blackjack setup seat casino-1 1")
+                        && workflowText.contains("6. /blackjack setup enable casino-1")
                         && !workflowText.contains("setup interaction casino-1"),
                 "blackjack create workflow shows a safe ordered setup path");
         check(hasClickAction(workflow, ClickEvent.Action.SUGGEST_COMMAND)
@@ -209,6 +213,12 @@ public final class CommandHelpHarness {
                         && invalid.contains("At least one seat")
                         && invalid.contains("/blackjack setup info casino-1"),
                 "blackjack validation output explains missing setup and the next check");
+        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0, 0, 1, 0.5, 1))) - 64.5D) < 0.0001D,
+                "blackjack display setup uses a bottom slab collision surface");
+        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0.5, 0, 1, 1, 1))) - 65.0D) < 0.0001D,
+                "blackjack display setup uses a top slab collision surface");
+        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 64, 0, 1, 65, 1))) - 65.0D) < 0.0001D,
+                "blackjack display setup accepts world-space collision bounds");
 
         CommandHelpPage warp = page(WarpCommand.class, "HELP_PAGE");
         check(warp.sections().stream().map(CommandHelpSection::title).toList()
@@ -311,6 +321,31 @@ public final class CommandHelpHarness {
         Method method = owner.getDeclaredMethod(name, parameterTypes);
         method.setAccessible(true);
         return (Component) method.invoke(null, arguments);
+    }
+
+    private static double invokeSurfaceY(Block block) throws Exception {
+        Method method = BlackjackCommand.class.getDeclaredMethod("surfaceY", Block.class);
+        method.setAccessible(true);
+        return (double) method.invoke(null, block);
+    }
+
+    private static Block block(int y, BoundingBox collisionBox) {
+        VoxelShape shape = (VoxelShape) Proxy.newProxyInstance(
+                VoxelShape.class.getClassLoader(),
+                new Class<?>[]{VoxelShape.class},
+                (proxy, method, arguments) -> method.getName().equals("getBoundingBoxes")
+                        ? List.of(collisionBox) : defaultValue(method.getReturnType())
+        );
+        return (Block) Proxy.newProxyInstance(
+                Block.class.getClassLoader(),
+                new Class<?>[]{Block.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getY" -> y;
+                    case "getCollisionShape" -> shape;
+                    case "getBoundingBox" -> new BoundingBox(0, y, 0, 1, y + 1, 1);
+                    default -> defaultValue(method.getReturnType());
+                }
+        );
     }
 
     @SuppressWarnings("unchecked")

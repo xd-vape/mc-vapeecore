@@ -2,6 +2,7 @@ package dev.vapee.core.activity.blackjack.command;
 
 import dev.vapee.core.activity.blackjack.BlackjackSession;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
+import dev.vapee.core.activity.blackjack.table.BlackjackDisplayAnchor;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableConfig;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableDraft;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableOperationResult;
@@ -37,7 +38,7 @@ public final class BlackjackCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.blackjack.admin";
     private static final List<String> ACTIONS = List.of(
             "create", "delete", "pos1", "pos2", "dealer", "interaction",
-            "seat", "removeseat", "enable", "disable", "info", "list"
+            "display", "seat", "removeseat", "enable", "disable", "info", "list"
     );
     private static final List<String> SETUP_ACTIONS = java.util.stream.Stream.concat(
             java.util.stream.Stream.of("help"),
@@ -65,6 +66,8 @@ public final class BlackjackCommand implements TabExecutor {
                                     "Sets the second corner of the table area."),
                             new CommandHelpEntry("/blackjack setup dealer <id>",
                                     "Sets the dealer position."),
+                            new CommandHelpEntry("/blackjack setup display <id>",
+                                    "Sets the visual center and surface height used for cards and table UI."),
                             new CommandHelpEntry("/blackjack setup interaction <id>",
                                     "Sets the block players right-click to join."),
                             new CommandHelpEntry("/blackjack setup seat <id> <1-5>",
@@ -159,6 +162,7 @@ public final class BlackjackCommand implements TabExecutor {
                 case "pos1" -> setPosition(sender, args, PositionType.POS1);
                 case "pos2" -> setPosition(sender, args, PositionType.POS2);
                 case "dealer" -> setPosition(sender, args, PositionType.DEALER);
+                case "display" -> displayAnchor(sender, args);
                 case "interaction" -> interaction(sender, args);
                 case "seat" -> seat(sender, args);
                 case "removeseat" -> removeSeat(sender, args);
@@ -279,6 +283,55 @@ public final class BlackjackCommand implements TabExecutor {
                 "' interaction block updated."));
     }
 
+    private void displayAnchor(CommandSender sender, String[] args) {
+        BlackjackTableDraft draft = requireEditablePlayerDraft(sender, args, 3);
+        if (draft == null) {
+            return;
+        }
+        Player player = (Player) sender;
+        Block block = player.getTargetBlockExact(6);
+        if (block == null) {
+            messageService.send(sender, "<red>Look at a table block within six blocks.</red>");
+            return;
+        }
+        double surfaceY = surfaceY(block);
+        BlackjackDisplayAnchor anchor = new BlackjackDisplayAnchor(
+                block.getWorld().getName(),
+                block.getX() + 0.5D,
+                surfaceY,
+                block.getZ() + 0.5D,
+                player.getYaw()
+        );
+        draft.setDisplayAnchor(anchor);
+        tableConfig.saveDraft(draft);
+        Component output = Component.text("Blackjack display anchor updated.", NamedTextColor.GREEN)
+                .append(Component.newline())
+                .append(infoLine("Block: ", anchor.worldName() + " @ "
+                        + block.getX() + ", " + block.getY() + ", " + block.getZ(), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(infoLine("Surface: ", Double.toString(surfaceY), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(Component.text("Use /blackjack setup info " + draft.getId(), NamedTextColor.AQUA));
+        messageService.send(sender, output);
+    }
+
+    static double surfaceY(Block block) {
+        Block validated = Objects.requireNonNull(block, "block");
+        double collisionTop = validated.getCollisionShape().getBoundingBoxes().stream()
+                .mapToDouble(box -> box.getMaxY())
+                .max()
+                .orElse(Double.NaN);
+        if (Double.isFinite(collisionTop)) {
+            return collisionTop >= -0.0001D && collisionTop <= 1.0001D
+                    ? validated.getY() + collisionTop
+                    : collisionTop;
+        }
+        double boundingTop = validated.getBoundingBox().getMaxY();
+        return Double.isFinite(boundingTop) && boundingTop > validated.getY()
+                ? boundingTop
+                : validated.getY() + 1.0D;
+    }
+
     private void seat(CommandSender sender, String[] args) {
         BlackjackTableDraft draft = requireEditablePlayerDraft(sender, args, 4);
         if (draft == null) {
@@ -384,6 +437,10 @@ public final class BlackjackCommand implements TabExecutor {
                 .append(configurationLine("Area Pos 2: ", draft.getPos2().isPresent()))
                 .append(Component.newline())
                 .append(configurationLine("Dealer: ", draft.getDealer().isPresent()))
+                .append(Component.newline())
+                .append(infoLine("Display Anchor: ", draft.getDisplayAnchor().isPresent()
+                                ? "Configured" : "Missing - using legacy geometry",
+                        draft.getDisplayAnchor().isPresent() ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
                 .append(Component.newline())
                 .append(configurationLine("Interaction: ", draft.getInteraction().isPresent()))
                 .append(Component.newline())
@@ -493,6 +550,7 @@ public final class BlackjackCommand implements TabExecutor {
         return draft.getPos1().map(ActivityPosition::worldName)
                 .or(() -> draft.getPos2().map(ActivityPosition::worldName))
                 .or(() -> draft.getDealer().map(ActivityPosition::worldName))
+                .or(() -> draft.getDisplayAnchor().map(BlackjackDisplayAnchor::worldName))
                 .or(() -> draft.getInteraction().map(BlackjackBlockPosition::worldName))
                 .orElse("Not configured");
     }
@@ -530,6 +588,7 @@ public final class BlackjackCommand implements TabExecutor {
                 "/blackjack setup pos1 " + tableId,
                 "/blackjack setup pos2 " + tableId,
                 "/blackjack setup dealer " + tableId,
+                "/blackjack setup display " + tableId,
                 "/blackjack setup seat " + tableId + " 1",
                 "/blackjack setup enable " + tableId
         );
@@ -574,6 +633,7 @@ public final class BlackjackCommand implements TabExecutor {
             case "pos1" -> "/blackjack setup pos1 <id>";
             case "pos2" -> "/blackjack setup pos2 <id>";
             case "dealer" -> "/blackjack setup dealer <id>";
+            case "display" -> "/blackjack setup display <id>";
             case "interaction" -> "/blackjack setup interaction <id>";
             case "seat" -> "/blackjack setup seat <id> <1-5>";
             case "removeseat" -> "/blackjack setup removeseat <id> <1-5>";
@@ -620,6 +680,9 @@ public final class BlackjackCommand implements TabExecutor {
         }
         if (draft.getDealer().isEmpty()) {
             return new SetupStep("Set the dealer position with:", "/blackjack setup dealer " + id);
+        }
+        if (draft.getDisplayAnchor().isEmpty()) {
+            return new SetupStep("Set the table display surface with:", "/blackjack setup display " + id);
         }
         if (draft.getSeats().isEmpty()) {
             return new SetupStep("Configure at least one seat with:", "/blackjack setup seat " + id + " 1");

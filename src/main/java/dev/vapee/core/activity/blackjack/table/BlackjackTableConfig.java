@@ -139,8 +139,9 @@ public final class BlackjackTableConfig {
         ActivityPosition pos2 = readOptionalPosition(section, "area.pos2", false);
         ActivityPosition dealer = readOptionalPosition(section, "dealer", true);
         BlackjackBlockPosition interaction = readOptionalBlockPosition(section, "interaction");
+        BlackjackDisplayAnchor displayAnchor = readOptionalDisplayAnchor(section, "display");
         Collection<BlackjackSeat> seats = readSeats(section);
-        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, seats);
+        return new BlackjackTableDraft(id, enabled, pos1, pos2, dealer, interaction, displayAnchor, seats);
     }
 
     private Collection<BlackjackSeat> readSeats(ConfigurationSection tableSection) {
@@ -219,6 +220,23 @@ public final class BlackjackTableConfig {
         );
     }
 
+    private BlackjackDisplayAnchor readOptionalDisplayAnchor(ConfigurationSection section, String path) {
+        if (!section.contains(path)) {
+            return null;
+        }
+        ConfigurationSection position = section.getConfigurationSection(path);
+        if (position == null) {
+            throw new IllegalArgumentException("'" + path + "' must be a YAML section");
+        }
+        return new BlackjackDisplayAnchor(
+                readWorld(position, path),
+                readNumber(position, "x", path).doubleValue(),
+                readNumber(position, "y", path).doubleValue(),
+                readNumber(position, "z", path).doubleValue(),
+                readNumber(position, "yaw", path).floatValue()
+        );
+    }
+
     private String readWorld(ConfigurationSection section, String path) {
         Object value = section.get("world");
         if (!(value instanceof String world) || world.isBlank()) {
@@ -283,6 +301,13 @@ public final class BlackjackTableConfig {
                 configuration.set(root + ".interaction.x", position.x());
                 configuration.set(root + ".interaction.y", position.y());
                 configuration.set(root + ".interaction.z", position.z());
+            });
+            draft.getDisplayAnchor().ifPresent(anchor -> {
+                configuration.set(root + ".display.world", anchor.worldName());
+                configuration.set(root + ".display.x", anchor.x());
+                configuration.set(root + ".display.y", anchor.y());
+                configuration.set(root + ".display.z", anchor.z());
+                configuration.set(root + ".display.yaw", anchor.yaw());
             });
             if (draft.getSeatDefinitions().isEmpty()) {
                 configuration.createSection(root + ".seats");

@@ -215,6 +215,10 @@ public final class ActivityHarness {
         check(session.taskDuringReset.cancelled.get(), "task created during reset also cancelled");
         check(session.getTrackedTaskCount() == 0, "tracked tasks empty after reset");
         check(session.getState() == ActivityState.AVAILABLE, "reset returns session to AVAILABLE");
+        check(session.resetLifecycle.toString().equals("onReset>onResetCompleted"),
+                "reset hooks run in lifecycle order");
+        check(session.stateSeenByResetCompleted == ActivityState.AVAILABLE,
+                "reset-completed hook observes AVAILABLE");
         check(session.hasParticipant(playerId), "reset keeps participant");
 
         checkResult(fixture.service.activateSession(session.getSessionId()), ActivityResult.SUCCESS);
@@ -280,6 +284,23 @@ public final class ActivityHarness {
         check(resetSession.getState() == ActivityState.CLOSED, "reset hook failure safely closes");
         check(resetFixture.service.getMembershipCount() == 0, "reset failure clears membership");
         checkResult(resetFixture.service.createSession("test", "one").result(), ActivityResult.SUCCESS);
+
+        Fixture resetCompletedFixture = configuredFixture("test", 1, 1, "one");
+        FakeSession resetCompletedSession = create(resetCompletedFixture, "one");
+        UUID resetCompletedId = UUID.randomUUID();
+        resetCompletedFixture.load(resetCompletedId, "ResetCompleted");
+        checkResult(resetCompletedFixture.service.joinSession(
+                resetCompletedFixture.onlinePlayer(resetCompletedId), resetCompletedSession.getSessionId()
+        ), ActivityResult.SUCCESS);
+        checkResult(resetCompletedFixture.service.activateSession(resetCompletedSession.getSessionId()),
+                ActivityResult.SUCCESS);
+        resetCompletedSession.failResetCompleted = true;
+        checkResult(resetCompletedFixture.service.resetSession(resetCompletedSession.getSessionId()),
+                ActivityResult.HOOK_FAILED);
+        check(resetCompletedSession.getState() == ActivityState.CLOSED,
+                "reset-completed hook failure safely closes");
+        check(resetCompletedFixture.service.getMembershipCount() == 0,
+                "reset-completed failure clears membership");
 
         Fixture leaveFixture = configuredFixture("test", 1, 2, "one");
         FakeSession leaveSession = create(leaveFixture, "one");
@@ -555,7 +576,10 @@ public final class ActivityHarness {
         private boolean failLeave;
         private boolean failActivate;
         private boolean failReset;
+        private boolean failResetCompleted;
         private TaskState taskDuringReset;
+        private final StringBuilder resetLifecycle = new StringBuilder();
+        private ActivityState stateSeenByResetCompleted;
 
         private FakeSession(UUID sessionId, String activityKey, ActivityVenue venue) {
             super(sessionId, activityKey, venue);
@@ -590,11 +614,21 @@ public final class ActivityHarness {
         @Override
         protected void onReset() {
             resetCalls++;
+            resetLifecycle.append("onReset");
             if (taskDuringReset != null) {
                 trackTask(taskDuringReset.task());
             }
             if (failReset) {
                 throw new IllegalStateException("reset failure");
+            }
+        }
+
+        @Override
+        protected void onResetCompleted() {
+            resetLifecycle.append(">onResetCompleted");
+            stateSeenByResetCompleted = getState();
+            if (failResetCompleted) {
+                throw new IllegalStateException("reset completed failure");
             }
         }
     }

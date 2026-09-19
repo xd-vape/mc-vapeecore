@@ -747,6 +747,8 @@ public final class BlackjackHarness {
         testPhysicalTableJoinCapacityAndReopen();
         testJoinRollback();
         testSinglePlayerRoundResetAndRematch();
+        testBustSkipsDealerPlay();
+        testNaturalSkipsDealerPlay();
         testMultiplayerDealOrderAndActions();
         testDoubleDown();
         testHitTimeoutAndStaleTaskSafety();
@@ -887,10 +889,53 @@ public final class BlackjackHarness {
         check(fixture.session.getParticipantCount() == 1, "reset keeps participant");
         check(fixture.service.getSeatNumber(solo.getUniqueId()).orElseThrow() == 1, "reset keeps seat");
         check(fixture.seats.mounted.contains(solo.getUniqueId()), "reset keeps seat entity state");
+        check(fixture.refreshes.getLast().equals(new RefreshState(
+                        ActivityState.AVAILABLE, BlackjackRoundPhase.IDLE, 1)),
+                "post-reset presentation refresh observes AVAILABLE and keeps the seated player");
         fixture.queueShoe(cards(BlackjackRank.TEN, BlackjackRank.NINE,
                 BlackjackRank.EIGHT, BlackjackRank.EIGHT));
         checkResult(fixture.service.startRound(solo), ActivityResult.SUCCESS);
         check(fixture.session.getState() == ActivityState.ACTIVE, "seated player starts rematch");
+        checkResult(fixture.service.stand(solo), ActivityResult.SUCCESS);
+        fixture.scheduler.runNextActive();
+        check(fixture.session.getState() == ActivityState.AVAILABLE,
+                "second round resets without leaving the seat");
+        fixture.queueShoe(cards(BlackjackRank.NINE, BlackjackRank.TEN,
+                BlackjackRank.SEVEN, BlackjackRank.SEVEN));
+        checkResult(fixture.service.startRound(solo), ActivityResult.SUCCESS);
+        check(fixture.session.getRoundGeneration() == 3L,
+                "same participant starts three consecutive rounds without rejoining");
+    }
+
+    private static void testBustSkipsDealerPlay() {
+        Fixture fixture = new Fixture(1);
+        Player player = fixture.player("Bust");
+        fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        fixture.queueShoe(cards(BlackjackRank.TEN, BlackjackRank.SIX,
+                BlackjackRank.EIGHT, BlackjackRank.TEN, BlackjackRank.KING, BlackjackRank.TWO));
+        checkResult(fixture.service.startRound(player), ActivityResult.SUCCESS);
+        checkResult(fixture.service.hit(player), ActivityResult.SUCCESS);
+        BlackjackPlayerRound round = fixture.session.getPlayerRound(player.getUniqueId()).orElseThrow();
+        check(round.getOutcome().orElseThrow() == BlackjackOutcome.BUST,
+                "busted player settles as BUST");
+        check(fixture.session.getDealerHand().size() == 2
+                        && fixture.session.getDealerHand().getValue() == 16,
+                "dealer keeps the initial two cards when every player busts");
+    }
+
+    private static void testNaturalSkipsDealerPlay() {
+        Fixture fixture = new Fixture(1);
+        Player player = fixture.player("Natural");
+        fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        fixture.queueShoe(cards(BlackjackRank.ACE, BlackjackRank.NINE,
+                BlackjackRank.KING, BlackjackRank.SEVEN, BlackjackRank.TWO));
+        checkResult(fixture.service.startRound(player), ActivityResult.SUCCESS);
+        BlackjackPlayerRound round = fixture.session.getPlayerRound(player.getUniqueId()).orElseThrow();
+        check(round.getOutcome().orElseThrow() == BlackjackOutcome.BLACKJACK,
+                "natural settles as BLACKJACK when dealer natural is excluded");
+        check(fixture.session.getDealerHand().size() == 2
+                        && fixture.session.getDealerHand().getValue() == 16,
+                "dealer does not draw against natural-only player hands");
     }
 
     private static void testMultiplayerDealOrderAndActions() {
@@ -1091,6 +1136,7 @@ public final class BlackjackHarness {
         private final Deque<BlackjackShoe> shoes = new ArrayDeque<>();
         private final FakeScheduler scheduler = new FakeScheduler();
         private final List<String> messages = new ArrayList<>();
+        private final List<RefreshState> refreshes = new ArrayList<>();
         private final Set<UUID> buildPlayers = new HashSet<>();
         private final Map<String, BlackjackTableDefinition> definitions = new HashMap<>();
         private final Map<String, BlackjackSession> sessions = new HashMap<>();
@@ -1124,6 +1170,9 @@ public final class BlackjackHarness {
             checkResult(creation.result(), ActivityResult.SUCCESS);
             session = (BlackjackSession) creation.session().orElseThrow();
             sessions.put(TABLE_ID, session);
+            service.setTableRefresher(value -> refreshes.add(new RefreshState(
+                    value.getState(), value.getRoundPhase(), value.getParticipantCount()
+            )));
         }
 
         private Player player(String name) {
@@ -1156,6 +1205,8 @@ public final class BlackjackHarness {
                     new BlackjackBlockPosition("world", 5, 4, 5), seats);
         }
     }
+
+    private record RefreshState(ActivityState state, BlackjackRoundPhase phase, int participants) { }
 
     private static final class FakeSeats implements BlackjackService.SeatAccess {
         private final Map<String, Map<Integer, UUID>> occupants = new HashMap<>();

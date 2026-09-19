@@ -193,7 +193,11 @@ public final class BlackjackSession extends ActivitySession {
     @Override
     protected void onReset() {
         clearRoundData();
-        blackjackService.onReset(this);
+    }
+
+    @Override
+    protected void onResetCompleted() {
+        blackjackService.onResetCompleted(this);
     }
 
     @Override

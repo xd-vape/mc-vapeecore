@@ -411,13 +411,13 @@ public final class BlackjackService {
 
         refresh(session);
         if (session.getDealerHand().isBlackjack()) {
-            runDealerTurn(session);
+            settleRound(session);
         } else {
             advanceTurn(session);
         }
     }
 
-    void onReset(BlackjackSession session) {
+    void onResetCompleted(BlackjackSession session) {
         refresh(session);
     }
 
@@ -452,7 +452,13 @@ public final class BlackjackService {
                 .filter(playerRound -> !playerRound.isFinished())
                 .findFirst();
         if (nextRound.isEmpty()) {
-            runDealerTurn(session);
+            if (requiresDealerPlay(session)) {
+                runDealerTurn(session);
+            } else {
+                session.cancelTurnTimeout();
+                session.clearCurrentTurn();
+                settleRound(session);
+            }
             return;
         }
 
@@ -498,6 +504,13 @@ public final class BlackjackService {
                 send(player, "<aqua>It is your turn. You have 20 seconds.</aqua>");
             }
         }
+    }
+
+    static boolean requiresDealerPlay(BlackjackSession session) {
+        Objects.requireNonNull(session, "session");
+        return session.getPlayerRoundsInOrder().stream()
+                .map(BlackjackPlayerRound::getHand)
+                .anyMatch(hand -> !hand.isBust() && !hand.isBlackjack());
     }
 
     private void runDealerTurn(BlackjackSession session) {
