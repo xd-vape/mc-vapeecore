@@ -15,6 +15,8 @@ import dev.vapee.core.activity.location.ActivityArea;
 import dev.vapee.core.activity.location.ActivityPosition;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.Color;
+import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -44,12 +46,14 @@ public final class BlackjackPresentationHarness {
                 && BlackjackDisplayGeometry.CARD_SPACING <= 0.40D, "card spacing matches larger cards");
         check(BlackjackDisplayGeometry.CARD_HOVER >= 0.02D
                 && BlackjackDisplayGeometry.CARD_HOVER <= 0.05D, "cards hover just above the table surface");
-        check(BlackjackDisplayGeometry.LABEL_SCALE >= 0.22F
-                && BlackjackDisplayGeometry.LABEL_SCALE <= 0.28F, "labels stay visually quiet");
+        check(BlackjackDisplayGeometry.HAND_VALUE_SCALE >= 0.18F
+                && BlackjackDisplayGeometry.HAND_VALUE_SCALE <= 0.28F, "hand values stay visually quiet");
+        check(BlackjackDisplayGeometry.RESULT_SCALE >= 0.22F
+                && BlackjackDisplayGeometry.RESULT_SCALE <= 0.28F, "results use their own compact scale");
         check(BlackjackDisplayGeometry.STATUS_SCALE >= 0.32F
                 && BlackjackDisplayGeometry.STATUS_SCALE <= 0.42F, "status stays compact");
         check(invokeText("idleStatusText", new Class<?>[]{int.class, int.class}, 1, 5)
-                        .equals("1 / 5 seated"),
+                        .equals("1 / 5"),
                 "idle table status is player-facing and contains no internal enum");
         check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, (Object) null) == null,
                 "idle seated player creates no Ready label");
@@ -57,17 +61,21 @@ public final class BlackjackPresentationHarness {
         activeRound.getHand().add(new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.SPADES));
         activeRound.getHand().add(new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.HEARTS));
         check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, activeRound)
-                        .equals("Hand: 17"),
+                        .equals("17"),
                 "active player label is a compact hand value");
         activeRound.settle(BlackjackOutcome.WIN);
         check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, activeRound).equals("WIN"),
                 "settled player label is the short outcome");
+        check(new BlackjackCard(BlackjackRank.ACE, BlackjackSuit.SPADES).getDisplayText().equals("A♠")
+                        && new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.HEARTS).getDisplayText().equals("10♥"),
+                "card text is compact without rank/suit whitespace");
+        assertDistinctCardStyles();
 
         World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
                 (proxy, method, arguments) -> method.getName().equals("getName") ? "world" : null);
         BlackjackSeat seat = new BlackjackSeat(1,
-                new ActivityPosition("world", 1.5, 64.5, 5.5, -90, 0),
-                new BlackjackBlockPosition("world", 1, 64, 5));
+                new ActivityPosition("world", 5.5, 64.5, 9.5, 180, 0),
+                new BlackjackBlockPosition("world", 5, 64, 9));
         BlackjackTableDefinition definition = new BlackjackTableDefinition(
                 "table", new ActivityArea("world", 0, 64, 0, 10, 65, 10),
                 new ActivityPosition("world", 8, 64.5, 5, 90, 0), null, List.of(seat),
@@ -76,20 +84,41 @@ public final class BlackjackPresentationHarness {
         Location center = BlackjackDisplayGeometry.tableCenter(world, definition);
         check(center.getX() == 5.5D && center.getY() == 64.75D && center.getZ() == 5.5D,
                 "configured display anchor is the table geometry source of truth");
-        Location anchor = BlackjackDisplayGeometry.playerAnchor(world, definition, seat);
-        check(distanceSquared(anchor, center) < distanceSquared(new Location(world, 1.5, 64.5, 5.5), center),
+        Vector forward = BlackjackDisplayGeometry.tableForward(definition.displayAnchor());
+        Vector right = BlackjackDisplayGeometry.tableRight(definition.displayAnchor());
+        check(Math.abs(forward.length() - 1.0D) < 0.0001D
+                        && Math.abs(right.length() - 1.0D) < 0.0001D
+                        && Math.abs(forward.dot(right)) < 0.0001D,
+                "table-local forward and right vectors are normalized and perpendicular");
+        check(forward.getZ() < -0.999D && right.getX() > 0.999D,
+                "display yaw determines stable table-local directions");
+        Location anchor = BlackjackDisplayGeometry.seatCardAnchor(world, definition, seat);
+        check(distanceSquared(anchor, center) < distanceSquared(new Location(world, 5.5, 64.5, 9.5), center),
                 "player card anchor moves from the seat toward table center");
-        Location first = BlackjackDisplayGeometry.card(anchor, center, 0, 2);
-        Location second = BlackjackDisplayGeometry.card(anchor, center, 1, 2);
+        Location first = BlackjackDisplayGeometry.seatCard(world, definition.displayAnchor(), seat.position(), 0, 2);
+        Location second = BlackjackDisplayGeometry.seatCard(world, definition.displayAnchor(), seat.position(), 1, 2);
         check(Math.abs(Math.sqrt(distanceSquared(first, second)) - BlackjackDisplayGeometry.CARD_SPACING) < 0.0001D,
                 "cards use deterministic geometry spacing");
         check(Math.abs(first.getY() - (64.75D + BlackjackDisplayGeometry.CARD_HOVER)) < 0.0001D,
                 "player cards use display surface plus card hover");
-        assertHorizontalOrientation(BlackjackDisplayGeometry.playerCardRotation(anchor, center), anchor, center,
+        assertHorizontalOrientation(BlackjackDisplayGeometry.seatCardRotation(
+                        world, definition.displayAnchor(), seat.position()), anchor, center,
                 "player cards read from the seat toward table center");
-        Location dealerAnchor = BlackjackDisplayGeometry.dealerAnchor(world, definition);
-        assertHorizontalOrientation(BlackjackDisplayGeometry.dealerCardRotation(dealerAnchor, center),
+        Location dealerAnchor = BlackjackDisplayGeometry.dealerCardAnchor(world, definition);
+        check(Math.abs(dealerAnchor.getY() - (64.75D + BlackjackDisplayGeometry.CARD_HOVER)) < 0.0001D,
+                "dealer cards use table surface height instead of dealer feet height");
+        check(dealerAnchor.getZ() < center.getZ(), "dealer anchor uses the table-local forward side");
+        assertHorizontalOrientation(BlackjackDisplayGeometry.dealerCardRotation(definition.displayAnchor()),
                 center, dealerAnchor, "dealer cards read from the player/table side");
+        Location resultAnchor = BlackjackDisplayGeometry.resultAnchor(
+                world, definition.displayAnchor(), seat.position());
+        check(Math.abs(resultAnchor.getY() - (64.75D + BlackjackDisplayGeometry.RESULT_HEIGHT)) < 0.0001D
+                        && distanceSquared(resultAnchor, center) < distanceSquared(anchor, center),
+                "result stays small and immediately behind the player's cards");
+        Location statusAnchor = BlackjackDisplayGeometry.statusAnchor(world, definition.displayAnchor());
+        check(Math.abs(statusAnchor.getY() - (64.75D + BlackjackDisplayGeometry.STATUS_HEIGHT)) < 0.0001D
+                        && statusAnchor.getZ() < center.getZ(),
+                "status stays close to the dealer side of the physical table");
 
         BlackjackTableDefinition legacy = new BlackjackTableDefinition(
                 "legacy", definition.area(), definition.dealer(),
@@ -99,6 +128,21 @@ public final class BlackjackPresentationHarness {
         check(BlackjackDisplayGeometry.tableCenter(world, legacy).getY() == definition.dealer().y(),
                 "missing display anchor retains legacy dealer-height fallback");
         System.out.println("BlackjackPresentationHarness passed " + checks + " checks.");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void assertDistinctCardStyles() throws Exception {
+        Class<?> styleType = Arrays.stream(BlackjackWorldViewService.class.getDeclaredClasses())
+                .filter(type -> type.getSimpleName().equals("DisplayStyle"))
+                .findFirst().orElseThrow();
+        Object open = Enum.valueOf((Class) styleType, "OPEN_CARD");
+        Object hidden = Enum.valueOf((Class) styleType, "HIDDEN_CARD");
+        var background = BlackjackWorldViewService.class.getDeclaredMethod("background", styleType);
+        background.setAccessible(true);
+        Color openColor = (Color) background.invoke(null, open);
+        Color hiddenColor = (Color) background.invoke(null, hidden);
+        check(!openColor.equals(hiddenColor) && openColor.getRed() > hiddenColor.getRed(),
+                "open and hidden cards use visibly different styles");
     }
 
     private static void check(boolean condition, String message) {

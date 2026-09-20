@@ -182,8 +182,14 @@ public final class CommandHelpHarness {
         check(setup.sections().stream().map(CommandHelpSection::title).toList()
                         .equals(List.of("Create & Configure", "Management", "Information")),
                 "blackjack setup sections have the required order");
-        check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 13,
-                "blackjack setup help contains all thirteen actions");
+        check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 14,
+                "blackjack setup help contains all fourteen actions including preview");
+        check(render(setup).contains("/blackjack setup preview <id>")
+                        && render(setup).contains("physical blackjack table"),
+                "blackjack help explains physical table surface setup and preview");
+        check(invokeSuggestions(BlackjackCommand.class, "setupSuggestions", "pre")
+                        .equals(List.of("preview")),
+                "blackjack preview is offered by setup completion");
         Component workflow = invokeComponent(
                 BlackjackCommand.class,
                 "createWorkflow",
@@ -192,10 +198,16 @@ public final class CommandHelpHarness {
         );
         String workflowText = PLAIN.serialize(workflow);
         check(workflowText.contains("Blackjack table 'casino-1' created.")
-                        && workflowText.contains("1. /blackjack setup pos1 casino-1")
-                        && workflowText.contains("4. /blackjack setup display casino-1")
-                        && workflowText.contains("5. /blackjack setup seat casino-1 1")
-                        && workflowText.contains("6. /blackjack setup enable casino-1")
+                        && workflowText.contains("1. Build the physical table in the world.")
+                        && workflowText.contains("2. Create its disabled configuration draft:")
+                        && workflowText.contains("/blackjack setup create casino-1")
+                        && workflowText.contains("6. Look at the playing surface:")
+                        && workflowText.contains("/blackjack setup display casino-1")
+                        && workflowText.contains("7. Look at every seat")
+                        && workflowText.contains("/blackjack setup seat casino-1 <number>")
+                        && workflowText.contains("8. Check the visual calibration:")
+                        && workflowText.contains("/blackjack setup preview casino-1")
+                        && workflowText.contains("9. Validate and enable the table:")
                         && !workflowText.contains("setup interaction casino-1"),
                 "blackjack create workflow shows a safe ordered setup path");
         check(hasClickAction(workflow, ClickEvent.Action.SUGGEST_COMMAND)
@@ -213,6 +225,14 @@ public final class CommandHelpHarness {
                         && invalid.contains("At least one seat")
                         && invalid.contains("/blackjack setup info casino-1"),
                 "blackjack validation output explains missing setup and the next check");
+        String missingTable = PLAIN.serialize(invokeComponent(
+                BlackjackCommand.class,
+                "missingTableMessage",
+                new Class<?>[]{String.class},
+                "unknown-table"
+        ));
+        check(missingTable.equals("Blackjack table 'unknown-table' does not exist."),
+                "blackjack preview shares the controlled unknown-table response");
         check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0, 0, 1, 0.5, 1))) - 64.5D) < 0.0001D,
                 "blackjack display setup uses a bottom slab collision surface");
         check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0.5, 0, 1, 1, 1))) - 65.0D) < 0.0001D,

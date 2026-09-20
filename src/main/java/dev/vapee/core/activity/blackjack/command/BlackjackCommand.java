@@ -1,6 +1,7 @@
 package dev.vapee.core.activity.blackjack.command;
 
 import dev.vapee.core.activity.blackjack.BlackjackSession;
+import dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewService;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
 import dev.vapee.core.activity.blackjack.table.BlackjackDisplayAnchor;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableConfig;
@@ -38,7 +39,7 @@ public final class BlackjackCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.blackjack.admin";
     private static final List<String> ACTIONS = List.of(
             "create", "delete", "pos1", "pos2", "dealer", "interaction",
-            "display", "seat", "removeseat", "enable", "disable", "info", "list"
+            "display", "seat", "removeseat", "preview", "enable", "disable", "info", "list"
     );
     private static final List<String> SETUP_ACTIONS = java.util.stream.Stream.concat(
             java.util.stream.Stream.of("help"),
@@ -67,13 +68,15 @@ public final class BlackjackCommand implements TabExecutor {
                             new CommandHelpEntry("/blackjack setup dealer <id>",
                                     "Sets the dealer position."),
                             new CommandHelpEntry("/blackjack setup display <id>",
-                                    "Sets the visual center and surface height used for cards and table UI."),
+                                    "Sets the center and surface of the physical blackjack table."),
                             new CommandHelpEntry("/blackjack setup interaction <id>",
                                     "Sets the block players right-click to join."),
                             new CommandHelpEntry("/blackjack setup seat <id> <1-5>",
                                     "Sets or updates a table seat."),
                             new CommandHelpEntry("/blackjack setup removeseat <id> <1-5>",
-                                    "Removes a configured seat.")
+                                    "Removes a configured seat."),
+                            new CommandHelpEntry("/blackjack setup preview <id>",
+                                    "Temporarily shows the configured card and status positions.")
                     )),
                     new CommandHelpSection("Management", List.of(
                             new CommandHelpEntry("/blackjack setup enable <id>",
@@ -98,6 +101,7 @@ public final class BlackjackCommand implements TabExecutor {
     private final MessageService messageService;
     private final CommandHelpRenderer helpRenderer;
     private final SeatPositionResolver seatPositionResolver;
+    private final BlackjackPreviewService previewService;
 
     public BlackjackCommand(
             JavaPlugin plugin,
@@ -105,7 +109,8 @@ public final class BlackjackCommand implements TabExecutor {
             BlackjackTableService tableService,
             MessageService messageService,
             CommandHelpRenderer helpRenderer,
-            SeatPositionResolver seatPositionResolver
+            SeatPositionResolver seatPositionResolver,
+            BlackjackPreviewService previewService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.tableConfig = Objects.requireNonNull(tableConfig, "tableConfig");
@@ -113,6 +118,7 @@ public final class BlackjackCommand implements TabExecutor {
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
         this.seatPositionResolver = Objects.requireNonNull(seatPositionResolver, "seatPositionResolver");
+        this.previewService = Objects.requireNonNull(previewService, "previewService");
     }
 
     @Override
@@ -166,6 +172,7 @@ public final class BlackjackCommand implements TabExecutor {
                 case "interaction" -> interaction(sender, args);
                 case "seat" -> seat(sender, args);
                 case "removeseat" -> removeSeat(sender, args);
+                case "preview" -> preview(sender, args);
                 case "enable" -> enable(sender, args);
                 case "disable" -> disable(sender, args);
                 case "info" -> info(sender, args);
@@ -304,7 +311,7 @@ public final class BlackjackCommand implements TabExecutor {
         );
         draft.setDisplayAnchor(anchor);
         tableConfig.saveDraft(draft);
-        Component output = Component.text("Blackjack display anchor updated.", NamedTextColor.GREEN)
+        Component output = Component.text("Blackjack table surface updated.", NamedTextColor.GREEN)
                 .append(Component.newline())
                 .append(infoLine("Block: ", anchor.worldName() + " @ "
                         + block.getX() + ", " + block.getY() + ", " + block.getZ(), NamedTextColor.WHITE))
@@ -377,6 +384,43 @@ public final class BlackjackCommand implements TabExecutor {
                 "' seat " + number + " removed."));
     }
 
+    private void preview(CommandSender sender, String[] args) {
+        BlackjackTableDraft draft = requireDraft(sender, args, 3);
+        if (draft == null) {
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            messageService.send(sender, "<red>Only players can view a world preview.</red>");
+            return;
+        }
+        BlackjackPreviewService.PreviewResult result = previewService.show(player.getUniqueId(), draft);
+        Component output;
+        if (result.status() == BlackjackPreviewService.PreviewStatus.MISSING_SURFACE) {
+            output = Component.text("Set the table surface before starting a preview.", NamedTextColor.RED)
+                    .append(Component.newline())
+                    .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                    .append(Component.text("/blackjack setup display " + draft.getId(), NamedTextColor.AQUA)
+                            .clickEvent(ClickEvent.suggestCommand(
+                                    "/blackjack setup display " + draft.getId())));
+        } else if (result.status() == BlackjackPreviewService.PreviewStatus.WORLD_UNAVAILABLE) {
+            output = Component.text("The table surface world is not loaded.", NamedTextColor.RED);
+        } else {
+            output = Component.text("Blackjack table preview shown for "
+                            + BlackjackPreviewService.PREVIEW_SECONDS + " seconds.", NamedTextColor.GREEN)
+                    .append(Component.newline())
+                    .append(infoLine("Markers: ", String.join(", ", result.markers()), NamedTextColor.WHITE));
+        }
+        if (!result.missingComponents().isEmpty()) {
+            output = output.append(Component.newline())
+                    .append(Component.text("Missing components:", NamedTextColor.YELLOW));
+            for (String missing : result.missingComponents()) {
+                output = output.append(Component.newline())
+                        .append(Component.text("- " + missing + ": missing", NamedTextColor.GRAY));
+            }
+        }
+        messageService.send(sender, output);
+    }
+
     private void enable(CommandSender sender, String[] args) {
         if (args.length != 3) {
             sendInvalidUsage(sender, "/blackjack setup enable <id>");
@@ -428,9 +472,14 @@ public final class BlackjackCommand implements TabExecutor {
                 .append(infoLine("Session: ", sessionStatus, NamedTextColor.WHITE))
                 .append(Component.newline())
                 .append(Component.newline())
-                .append(Component.text("Setup", NamedTextColor.YELLOW))
+                .append(Component.text("Physical Table Setup", NamedTextColor.YELLOW))
                 .append(Component.newline())
                 .append(infoLine("World: ", configuredWorld(draft), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(infoLine("Area: ", draft.getPos1().isPresent() && draft.getPos2().isPresent()
+                                ? "Configured" : "Missing",
+                        draft.getPos1().isPresent() && draft.getPos2().isPresent()
+                                ? NamedTextColor.GREEN : NamedTextColor.RED))
                 .append(Component.newline())
                 .append(configurationLine("Area Pos 1: ", draft.getPos1().isPresent()))
                 .append(Component.newline())
@@ -438,7 +487,7 @@ public final class BlackjackCommand implements TabExecutor {
                 .append(Component.newline())
                 .append(configurationLine("Dealer: ", draft.getDealer().isPresent()))
                 .append(Component.newline())
-                .append(infoLine("Display Anchor: ", draft.getDisplayAnchor().isPresent()
+                .append(infoLine("Table Surface: ", draft.getDisplayAnchor().isPresent()
                                 ? "Configured" : "Missing - using legacy geometry",
                         draft.getDisplayAnchor().isPresent() ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
                 .append(Component.newline())
@@ -509,11 +558,15 @@ public final class BlackjackCommand implements TabExecutor {
         }
         BlackjackTableDraft draft = tableConfig.getDraft(args[2]).orElse(null);
         if (draft == null) {
-            messageService.send(sender, Component.text("Blackjack table '", NamedTextColor.RED)
-                    .append(Component.text(args[2], NamedTextColor.WHITE))
-                    .append(Component.text("' does not exist.", NamedTextColor.RED)));
+            messageService.send(sender, missingTableMessage(args[2]));
         }
         return draft;
+    }
+
+    private static Component missingTableMessage(String tableId) {
+        return Component.text("Blackjack table '", NamedTextColor.RED)
+                .append(Component.text(tableId, NamedTextColor.WHITE))
+                .append(Component.text("' does not exist.", NamedTextColor.RED));
     }
 
     private boolean ensureEditable(CommandSender sender, BlackjackTableDraft draft) {
@@ -584,24 +637,39 @@ public final class BlackjackCommand implements TabExecutor {
     }
 
     private static Component createWorkflow(String tableId) {
-        List<String> commands = List.of(
-                "/blackjack setup pos1 " + tableId,
-                "/blackjack setup pos2 " + tableId,
-                "/blackjack setup dealer " + tableId,
-                "/blackjack setup display " + tableId,
-                "/blackjack setup seat " + tableId + " 1",
-                "/blackjack setup enable " + tableId
+        List<WorkflowStep> steps = List.of(
+                new WorkflowStep("Build the physical table in the world.", null),
+                new WorkflowStep("Create its disabled configuration draft:",
+                        "/blackjack setup create " + tableId),
+                new WorkflowStep("Set the first gameplay-area corner:",
+                        "/blackjack setup pos1 " + tableId),
+                new WorkflowStep("Set the second gameplay-area corner:",
+                        "/blackjack setup pos2 " + tableId),
+                new WorkflowStep("Stand at and set the dealer position:",
+                        "/blackjack setup dealer " + tableId),
+                new WorkflowStep("Look at the playing surface:",
+                        "/blackjack setup display " + tableId),
+                new WorkflowStep("Look at every seat and repeat with its number:",
+                        "/blackjack setup seat " + tableId + " <number>"),
+                new WorkflowStep("Check the visual calibration:",
+                        "/blackjack setup preview " + tableId),
+                new WorkflowStep("Validate and enable the table:",
+                        "/blackjack setup enable " + tableId)
         );
         Component output = success("Blackjack table '", tableId, "' created.")
                 .append(Component.newline())
                 .append(Component.newline())
                 .append(Component.text("Setup order:", NamedTextColor.YELLOW));
-        for (int index = 0; index < commands.size(); index++) {
-            String command = commands.get(index);
+        for (int index = 0; index < steps.size(); index++) {
+            WorkflowStep step = steps.get(index);
             output = output.append(Component.newline())
                     .append(Component.text((index + 1) + ". ", NamedTextColor.GRAY))
-                    .append(Component.text(command, NamedTextColor.AQUA)
-                            .clickEvent(ClickEvent.suggestCommand(command)));
+                    .append(Component.text(step.description(), NamedTextColor.WHITE));
+            if (step.command() != null) {
+                output = output.append(Component.newline())
+                        .append(Component.text("   " + step.command(), NamedTextColor.AQUA)
+                                .clickEvent(ClickEvent.suggestCommand(step.command())));
+            }
         }
         return output.append(Component.newline())
                 .append(Component.newline())
@@ -637,6 +705,7 @@ public final class BlackjackCommand implements TabExecutor {
             case "interaction" -> "/blackjack setup interaction <id>";
             case "seat" -> "/blackjack setup seat <id> <1-5>";
             case "removeseat" -> "/blackjack setup removeseat <id> <1-5>";
+            case "preview" -> "/blackjack setup preview <id>";
             case "enable" -> "/blackjack setup enable <id>";
             case "disable" -> "/blackjack setup disable <id>";
             case "info" -> "/blackjack setup info <id>";
@@ -692,7 +761,8 @@ public final class BlackjackCommand implements TabExecutor {
             return new SetupStep("Set the legacy interaction block with:", "/blackjack setup interaction " + id);
         }
         if (!draft.isEnabled()) {
-            return new SetupStep("Validate and enable the table with:", "/blackjack setup enable " + id);
+            return new SetupStep("Preview the visual positions before enabling with:",
+                    "/blackjack setup preview " + id);
         }
         return null;
     }
@@ -751,6 +821,13 @@ public final class BlackjackCommand implements TabExecutor {
         private SetupStep {
             description = Objects.requireNonNull(description, "description");
             syntax = Objects.requireNonNull(syntax, "syntax");
+        }
+    }
+
+    private record WorkflowStep(String description, String command) {
+
+        private WorkflowStep {
+            description = Objects.requireNonNull(description, "description");
         }
     }
 

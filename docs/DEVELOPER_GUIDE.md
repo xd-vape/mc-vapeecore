@@ -226,11 +226,33 @@ Die PDC-Keys sind `world_display`, `world_display_owner`, `world_display_id` und
 
 WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf parallel für frei konfigurierbare statische Hologramme verwendet werden, VapeeCore besitzt jedoch keine harte Dependency darauf.
 
-## Blackjack world UX
+## Physical Blackjack Table
+
+Der eigentliche Blackjack-Tisch wird vom Map-Builder aus normalen Minecraft-Blöcken gebaut und bleibt vollständig Map-owned. VapeeCore kennt keine Blockliste des Tisches, speichert keine Schematic und führt weder automatische Reparatur noch Regeneration aus. Nur die konfigurierten Seat-Blöcke sind konkrete technische Sitzpunkte; die `ActivityArea` beschreibt den gesamten Gameplay-/Ownership-Bereich mit Tisch, Sitzen und Dealerbereich. Der Builder kann die Struktur jederzeit ändern, solange Area, Seat-Blöcke und Spielflächen-Anchor danach weiterhin stimmen oder neu gesetzt werden. Es gibt bewusst kein Furniture-Modul, keine ItemDisplay-Möbel, keine CustomModelData- und keine Resource-Pack-Abhängigkeit.
+
+Als unverbindliches Baubeispiel eignet sich ein sieben bis neun Blöcke breiter und vier bis fünf Blöcke tiefer Tisch: grüne Spielfläche, dunkler Rand, bis zu fünf Stairs oder einzelne Slabs als Sitze und der Dealer gegenüber der Spielerseite. Diese Maße sind nur eine Empfehlung; die visuelle Wahrheit ist der Table-Surface-Anchor, nicht eine fest codierte Tischform.
+
+Der Abschnitt `tables.<id>.display` ist semantisch die Mitte der nutzbaren physischen Spielfläche: `x/z` sind ihr Center, `y` ist exakt ihre Oberfläche und `yaw` ihre Hauptausrichtung. `/blackjack setup display <id>` speichert Blockmittelpunkt, reale Collision-Shape-Oberkante und Player-Yaw. Aus dem Yaw leitet `BlackjackDisplayGeometry` normalisierte Forward-/Right-Vektoren ab. Dealer und Status liegen damit stabil auf der Dealer-Seite und parallel zum Tisch; Playerkarten liegen zwischen Seat und Center, beziehen ihre Y-Höhe aber immer von `display.y + CARD_HOVER`. Ergebnisse liegen knapp hinter der jeweiligen Kartenfläche.
+
+Der vollständige Setup-Ablauf ist:
+
+1. Physischen Tisch in der Welt bauen.
+2. `/blackjack setup create <id>`
+3. `/blackjack setup pos1 <id>`
+4. `/blackjack setup pos2 <id>`
+5. `/blackjack setup dealer <id>`
+6. Spielfläche ansehen und `/blackjack setup display <id>` ausführen.
+7. Jeden Sitz ansehen und `/blackjack setup seat <id> <number>` ausführen.
+8. Mit `/blackjack setup preview <id>` visuell kalibrieren.
+9. `/blackjack setup enable <id>`
+
+Die Preview benötigt keine ActivitySession und funktioniert bei disabled, enabled und teilweise konfigurierten Tabellen. Für zwölf Sekunden zeigt sie `CENTER`, optional `DEALER`, `STATUS` und nur die vorhandenen `SEAT n`-Marker; fehlende Komponenten werden zusätzlich im Chat genannt. Ihr Owner `blackjack-preview:<adminUuid>:<tableId>` ist vom Produktions-Owner getrennt. Timeout, eine neue Preview desselben Admins, Player-Quit und Modul-Shutdown räumen sie auf, ohne Produktionsanzeigen zu berühren. Setup-Markierungen werden nie persistiert.
+
+### Blackjack world UX
 
 `BlackjackTableInteractionMode` trennt `MODERN_SEAT_CLICK` und `LEGACY_INTERACTION`. Ein moderner Seat speichert unter `seats.<n>.block` die konkrete Welt-/Blockposition und unter `seats.<n>.position` die aufgelöste Sitzposition samt Yaw/Pitch. `/blackjack setup seat <id> <1-5>` verlangt einen Zielblock in höchstens sechs Blöcken Entfernung und verwendet `SeatPositionResolver`; Bottom-Stairs sowie einzelne Bottom-/Top-Slabs sind erlaubt, Top-Stairs, Double-Slabs und andere Blöcke nicht. Die resolved Position darf über der Area-Grenzebene liegen, solange der konkrete Sitzblock die Area berührt. Vollständig alte, flache Seat-Positionen bleiben lesbar und benötigen `interaction`. Moderne Tische ignorieren einen eventuell noch vorhandenen alten Interaction-Key. Gemischte Schemas, doppelte Blöcke innerhalb einer Definition und Blockkonflikte zwischen aktivierten Tischen sind ungültig.
 
-Der optionale Abschnitt `tables.<id>.display` enthält `world`, `x`, `y`, `z` und `yaw`. `/blackjack setup display <id>` ist player-only, zielt höchstens sechs Blöcke weit und speichert Blockmittelpunkt sowie die reale obere Collision-Shape-Kante als Tischoberfläche; Full Blocks, Bottom-/Top-Slabs erhalten dadurch ihre tatsächliche Höhe. Der empfohlene neue Ablauf ist `pos1 → pos2 → dealer → display → seat(s) → enable`. `BlackjackDisplayAnchor` bleibt optional: Alte Dateien ohne den Abschnitt laden unverändert, `BlackjackTableService` protokolliert den Legacy-Fallback und `/blackjack setup info <id>` zeigt `Missing - using legacy geometry`.
+`BlackjackDisplayAnchor` bleibt optional: Alte Dateien ohne den Abschnitt laden unverändert, `BlackjackTableService` protokolliert den Legacy-Fallback und `/blackjack setup info <id>` zeigt bei `Table Surface` den Hinweis `Missing - using legacy geometry`. Neue Tabellen sollten vor dem Enable immer den oben beschriebenen Preview-Schritt verwenden.
 
 `BlackjackTableService` hält getrennte O(1)-Indizes für Legacy-Interaktionen und moderne `BlackjackBlockPosition → BlackjackTableSeatReference`-Zuordnungen. Vor Runtime-Aktivierung wird ein moderner Block erneut durch `SeatPositionResolver` validiert. Enable erzeugt sofort die Idle-Anzeige; Disable, Rollback und Shutdown entfernen alle Anzeigen und Seat-Indizes.
 
@@ -238,7 +260,7 @@ Der optionale Abschnitt `tables.<id>.display` enthält `world`, `x`, `y`, `z` un
 
 Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER_TURNS`, eigener Zug, unfertige Hand, genau zwei Karten und kein Natural sind zwingend. Der Timeout wird abgebrochen, genau eine Karte gezogen, `BlackjackPlayerRound.doubledDown` gesetzt, die Hand beendet und zum nächsten Spieler beziehungsweise Dealer weitergeschaltet. Es gibt weiterhin keine Wette und keine Economy-Auswirkung.
 
-`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys. Er wird nur durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Der Idle-Zustand erzeugt keine Seat-Labels; der zentrale Status verwendet ausschließlich freundliche Texte statt `IDLE`/`PLAYER_TURNS`/`DEALER_TURN`/`SETTLED`. Während `PLAYER_TURNS` zeigt die zweite Dealerkarte `?` und das Dealer-Label nur den Wert der ersten Karte; danach sind Karte und Gesamtwert sichtbar. Karten liegen bei `display.y + CARD_HOVER`, und je eine kombinierte Yaw-/X-Quaternion richtet Playerkarten vom Sitz sowie Dealerkarten von der Tisch-/Spielerseite lesbar aus. Hearts/Diamonds sind rot, Clubs/Spades dunkelgrau. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
+`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys; nur ein tatsächlicher Stilwechsel ersetzt den betroffenen Display-Key. Er wird durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Idle zeigt ausschließlich `Blackjack` plus `n / capacity`. Aktive Hände zeigen Karten, kleinen Zahlenwert und Zugstatus; Settlement ersetzt den Wert durch ein kleines farbiges Resultat nahe den Karten. Offene Karten verwenden hellen Grund und kompakten Text (`A♠`, `10♥`), schwarze Suits sind dunkelgrau und rote Suits rot. Die Hole Card ist ein dunkler `◆`-Kartenrücken. `OPEN_CARD`, `HIDDEN_CARD`, `STATUS`, `RESULT` und `VALUE` besitzen getrennte Styles. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
 
 `BlackjackService.requiresDealerPlay` überspringt die Dealer-Ausspielung, wenn ausschließlich Bust-Hände oder bereits sichere Naturals übrig sind; normale Live-Hände spielen den Dealer weiterhin bis mindestens 17 aus, inklusive Stand auf Soft 17. `BlackjackShoe` erzeugt sechs vollständige Decks (312 Karten), mischt per Fisher-Yates mit `nextInt(index + 1)` und verwendet keinen konstanten Seed oder dynamische Spielerbevorzugung. `BlackjackFairnessHarness` prüft mit festen Seeds Verteilung, Reproduzierbarkeit, unterschiedliche Reihenfolgen, Ziehen ohne Replacement sowie Dealer-/Outcome-Invarianten; er besitzt absichtlich keine zufällige Winrate-Grenze.
 
@@ -250,8 +272,10 @@ Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER
 | Wo ändere ich den Abstand zwischen Karten? | `BlackjackDisplayGeometry.CARD_SPACING` |
 | Wo ändere ich die Kartengröße? | `BlackjackDisplayGeometry.CARD_SCALE` |
 | Wo ändere ich die Kartenhöhe? | `BlackjackDisplayGeometry.CARD_HOVER` |
-| Wo ändere ich Player-Label-Größe? | `BlackjackDisplayGeometry.LABEL_SCALE` |
+| Wo ändere ich Handwert-Größe? | `BlackjackDisplayGeometry.HAND_VALUE_SCALE` |
+| Wo ändere ich Resultat-Größe/-Höhe? | `BlackjackDisplayGeometry.RESULT_SCALE` / `RESULT_HEIGHT` |
 | Wo ändere ich Status-Größe/-Position? | `BlackjackDisplayGeometry.STATUS_SCALE` / `STATUS_HEIGHT` |
+| Wo ändere ich Player-/Dealer-Abstand? | `BlackjackDisplayGeometry.PLAYER_CARD_DISTANCE` / `DEALER_CARD_DISTANCE` |
 | Wo ändere ich die Hotbar Items? | Factory-Aufrufe in `BlackjackInventoryService.refreshPlayer` |
 | Wo ändere ich die Hotbar Slots? | `PRIMARY_SLOT`, `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT`, `LEAVE_SLOT` in `BlackjackInventoryService` |
 | Wo ändere ich die Seat-Setup-Regeln? | `BlackjackCommand.seat` und `SeatPositionResolver` |
@@ -395,6 +419,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.activity.blackjack.BlackjackFairnessHarness`
 - `dev.vapee.core.activity.blackjack.table.BlackjackTableHarness`
 - `dev.vapee.core.activity.blackjack.BlackjackPresentationHarness`
+- `dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewHarness`
 - `dev.vapee.core.lobby.warp.WarpHarness`
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`

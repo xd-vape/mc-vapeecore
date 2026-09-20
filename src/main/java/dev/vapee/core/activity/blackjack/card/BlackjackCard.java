@@ -10,6 +10,6 @@ public record BlackjackCard(BlackjackRank rank, BlackjackSuit suit) {
     }
 
     public String getDisplayText() {
-        return rank.getLabel() + " " + suit.getSymbol();
+        return rank.getLabel() + suit.getSymbol();
     }
 }

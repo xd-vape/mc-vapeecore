@@ -6,6 +6,7 @@ import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.activity.blackjack.command.BlackjackCommand;
 import dev.vapee.core.activity.blackjack.interaction.BlackjackTableListener;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackInventoryService;
+import dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewService;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackWorldViewService;
 import dev.vapee.core.activity.blackjack.table.BlackjackSeatService;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableConfig;
@@ -41,6 +42,7 @@ public final class BlackjackModule implements CoreModule {
     private BlackjackSeatService seatService;
     private BlackjackService blackjackService;
     private BlackjackInventoryService inventoryService;
+    private BlackjackPreviewService previewService;
     private BlackjackWorldViewService worldViewService;
     private BlackjackTableListener tableListener;
     private PluginCommand blackjackCommand;
@@ -113,6 +115,7 @@ public final class BlackjackModule implements CoreModule {
         }
 
         BlackjackWorldViewService newWorldViewService = null;
+        BlackjackPreviewService newPreviewService = null;
         BlackjackTableListener newTableListener = null;
         PluginCommand newBlackjackCommand = null;
 
@@ -122,6 +125,10 @@ public final class BlackjackModule implements CoreModule {
                     worldDisplayModule.getWorldDisplayService(),
                     newTableService,
                     newBlackjackService
+            );
+            newPreviewService = new BlackjackPreviewService(
+                    plugin,
+                    worldDisplayModule.getWorldDisplayService()
             );
             BlackjackWorldViewService activeWorldView = newWorldViewService;
             newTableService.setLifecycleCallbacks(activeWorldView);
@@ -146,14 +153,19 @@ public final class BlackjackModule implements CoreModule {
                     newTableService,
                     messageService,
                     commandHelpRenderer,
-                    seatPositionResolver
+                    seatPositionResolver,
+                    newPreviewService
             );
             plugin.getServer().getPluginManager().registerEvents(newTableListener, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newPreviewService, plugin);
             newBlackjackCommand.setExecutor(commandExecutor);
             newBlackjackCommand.setTabCompleter(commandExecutor);
         } catch (RuntimeException exception) {
             if (newTableListener != null) {
                 HandlerList.unregisterAll(newTableListener);
+            }
+            if (newPreviewService != null) {
+                HandlerList.unregisterAll(newPreviewService);
             }
             if (newBlackjackCommand != null) {
                 newBlackjackCommand.setExecutor(null);
@@ -162,6 +174,7 @@ public final class BlackjackModule implements CoreModule {
             try {
                 newBlackjackService.shutdown();
                 newTableService.shutdown();
+                if (newPreviewService != null) newPreviewService.shutdown();
                 if (newWorldViewService != null) newWorldViewService.shutdown();
                 newInventoryService.shutdown();
                 newSeatService.shutdown();
@@ -184,6 +197,7 @@ public final class BlackjackModule implements CoreModule {
         seatService = newSeatService;
         blackjackService = newBlackjackService;
         inventoryService = newInventoryService;
+        previewService = newPreviewService;
         worldViewService = newWorldViewService;
         tableListener = newTableListener;
         blackjackCommand = newBlackjackCommand;
@@ -195,6 +209,9 @@ public final class BlackjackModule implements CoreModule {
     public void disable() {
         if (tableListener != null) {
             HandlerList.unregisterAll(tableListener);
+        }
+        if (previewService != null) {
+            HandlerList.unregisterAll(previewService);
         }
         if (blackjackCommand != null) {
             blackjackCommand.setExecutor(null);
@@ -209,6 +226,9 @@ public final class BlackjackModule implements CoreModule {
             if (tableService != null) {
                 tableService.shutdown();
             }
+        });
+        cleanup("remove blackjack setup previews", () -> {
+            if (previewService != null) previewService.shutdown();
         });
         cleanup("remove blackjack world displays", () -> {
             if (worldViewService != null) worldViewService.shutdown();
@@ -233,6 +253,7 @@ public final class BlackjackModule implements CoreModule {
         blackjackCommand = null;
         tableListener = null;
         worldViewService = null;
+        previewService = null;
         inventoryService = null;
         blackjackService = null;
         seatService = null;
