@@ -5,6 +5,8 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
+import dev.vapee.core.rank.RankModule;
+import dev.vapee.core.rank.RankService;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import dev.vapee.core.social.SocialModule;
@@ -18,6 +20,7 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
 
     private final JavaPlugin plugin;
     private final PermissionModule permissionModule;
+    private final RankModule rankModule;
     private final SocialModule socialModule;
     private final MessageService messageService;
 
@@ -28,11 +31,13 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
     public ChatModule(
             JavaPlugin plugin,
             PermissionModule permissionModule,
+            RankModule rankModule,
             SocialModule socialModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.permissionModule = Objects.requireNonNull(permissionModule, "permissionModule");
+        this.rankModule = Objects.requireNonNull(rankModule, "rankModule");
         this.socialModule = Objects.requireNonNull(socialModule, "socialModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
@@ -45,11 +50,13 @@ public final class ChatModule implements CoreModule, ReloadParticipant {
     @Override
     public void enable() {
         LuckPermsService luckPermsService = permissionModule.getLuckPermsService();
+        RankService rankService = rankModule.getRankService();
         SocialService socialService = socialModule.getSocialService();
         ChatConfig newChatConfig = new ChatConfig(plugin);
         newChatConfig.initialize();
         ChatService newChatService = new ChatService(
                 luckPermsService,
+                rankService,
                 newChatConfig,
                 messageService,
                 plugin.getLogger()

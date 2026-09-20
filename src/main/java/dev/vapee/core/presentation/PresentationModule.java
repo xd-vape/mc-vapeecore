@@ -11,6 +11,8 @@ import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.settings.PlayerSettingsService;
+import dev.vapee.core.rank.RankModule;
+import dev.vapee.core.rank.RankService;
 import dev.vapee.core.presentation.config.PresentationConfig;
 import dev.vapee.core.presentation.scoreboard.ScoreboardService;
 import dev.vapee.core.presentation.tablist.TablistService;
@@ -28,6 +30,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
     private final ConfigService configService;
     private final MessageService messageService;
     private final PermissionModule permissionModule;
+    private final RankModule rankModule;
     private final PlayerModule playerModule;
     private final EconomyModule economyModule;
     private final LobbyModule lobbyModule;
@@ -45,6 +48,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
             ConfigService configService,
             MessageService messageService,
             PermissionModule permissionModule,
+            RankModule rankModule,
             PlayerModule playerModule,
             EconomyModule economyModule,
             LobbyModule lobbyModule
@@ -53,6 +57,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.permissionModule = Objects.requireNonNull(permissionModule, "permissionModule");
+        this.rankModule = Objects.requireNonNull(rankModule, "rankModule");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.economyModule = Objects.requireNonNull(economyModule, "economyModule");
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
@@ -66,6 +71,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
     @Override
     public void enable() {
         LuckPermsService luckPermsService = permissionModule.getLuckPermsService();
+        RankService rankService = rankModule.getRankService();
         PlayerSettingsService playerSettingsService = playerModule.getPlayerSettingsService();
         EconomyService economyService = economyModule.getEconomyService();
         LobbyService lobbyService = lobbyModule.getLobbyService();
@@ -77,6 +83,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
                 configService,
                 messageService,
                 luckPermsService,
+                rankService,
                 economyService,
                 newPresentationConfig
         );

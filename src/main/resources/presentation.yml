@@ -11,7 +11,7 @@ scoreboard:
   title: "<aqua><bold><server></bold></aqua>"
   lines:
     - ""
-    - "<gray>Rank:</gray> <white><group></white>"
+    - "<gray>Rank:</gray> <white><rank></white>"
     - "<gray>Coins:</gray> <gold><coins></gold>"
     - ""
     - "<gray>Online:</gray> <white><online>/<max_players></white>"

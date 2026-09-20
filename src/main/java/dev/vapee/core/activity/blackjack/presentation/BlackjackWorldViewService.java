@@ -37,6 +37,9 @@ import java.util.logging.Level;
 
 public final class BlackjackWorldViewService implements BlackjackTableService.LifecycleCallbacks {
 
+    private static final String DEALER_HAND_KEY = "dealer-hand";
+    private static final int DEALER_CARDS_PER_LINE = 4;
+
     private final JavaPlugin plugin;
     private final WorldDisplayService displayService;
     private final BlackjackTableService tableService;
@@ -84,7 +87,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                     statusText(session), DisplayStyle.STATUS, null
             ));
             if (session.getState() == ActivityState.ACTIVE) {
-                addDealer(desired, world, surface, session);
+                addDealer(desired, world, definition, session);
             }
             for (var participant : session.getParticipants()) {
                 Integer seatNumber = blackjackService.getSeatNumber(participant.uniqueId()).orElse(null);
@@ -101,24 +104,12 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
         }
     }
 
-    private void addDealer(Map<String, DisplaySpec> desired, World world, BlackjackDisplayAnchor surface,
+    private void addDealer(Map<String, DisplaySpec> desired, World world, BlackjackTableDefinition definition,
                            BlackjackSession session) {
         boolean hidden = session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS;
-        int value = hidden && session.getDealerHand().size() > 0
-                ? new BlackjackHand(java.util.List.of(session.getDealerHand().getCards().getFirst())).getValue()
-                : session.getDealerHand().getValue();
-        desired.put("dealer-label", new DisplaySpec(
-                BlackjackDisplayGeometry.dealerValueAnchor(world, surface),
-                Component.text("Dealer " + value, NamedTextColor.GOLD), DisplayStyle.VALUE, null));
-        var cards = session.getDealerHand().getCards();
-        for (int index = 0; index < cards.size(); index++) {
-            boolean hiddenCard = hidden && index == 1;
-            desired.put("dealer-card-" + index, new DisplaySpec(
-                    BlackjackDisplayGeometry.dealerCard(world, surface, index, cards.size()),
-                    hiddenCard ? hiddenCardText() : cardText(cards.get(index)),
-                    hiddenCard ? DisplayStyle.HIDDEN_CARD : DisplayStyle.OPEN_CARD,
-                    BlackjackDisplayGeometry.dealerCardRotation(surface)));
-        }
+        Location location = BlackjackDisplayGeometry.dealerHandLocation(world, definition);
+        dealerDisplays(session.getDealerHand(), hidden).forEach((key, text) ->
+                desired.put(key, new DisplaySpec(location, text, DisplayStyle.DEALER_HAND, null)));
     }
 
     private void addPlayer(Map<String, DisplaySpec> desired, World world, BlackjackDisplayAnchor surface,
@@ -138,7 +129,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                 BlackjackDisplayGeometry.seatFacingRotation(world, surface, seat.position())));
         var cards = round.getHand().getCards();
         for (int index = 0; index < cards.size(); index++) {
-            desired.put("seat-" + seat.number() + "-card-" + index, new DisplaySpec(
+            desired.put(seatCardKey(seat.number(), index), new DisplaySpec(
                     BlackjackDisplayGeometry.seatCard(world, surface, seat.position(), index, cards.size()),
                     cardText(cards.get(index)), DisplayStyle.OPEN_CARD,
                     BlackjackDisplayGeometry.seatCardRotation(world, surface, seat.position())));
@@ -176,10 +167,9 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
         display.setSeeThrough(false);
         display.setShadowed(style != DisplayStyle.OPEN_CARD);
         display.setBackgroundColor(background(style));
-        display.setLineWidth(style == DisplayStyle.STATUS ? 120 : 80);
-        boolean fixed = style == DisplayStyle.OPEN_CARD || style == DisplayStyle.HIDDEN_CARD
-                || spec.rotation() != null;
-        display.setBillboard(fixed ? Display.Billboard.FIXED : Display.Billboard.CENTER);
+        display.setLineWidth(style == DisplayStyle.DEALER_HAND ? 200
+                : style == DisplayStyle.STATUS ? 120 : 80);
+        display.setBillboard(billboard(style, spec.rotation()));
         Quaternionf rotation = spec.rotation() == null ? new Quaternionf() : new Quaternionf(spec.rotation());
         display.setTransformation(new Transformation(
                 new Vector3f(), rotation, new Vector3f(scale(style)), new Quaternionf()));
@@ -219,8 +209,41 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                 .decoration(TextDecoration.BOLD, true);
     }
 
-    private Component hiddenCardText() {
+    private static Component hiddenCardText() {
         return Component.text("◆", NamedTextColor.GRAY).decoration(TextDecoration.BOLD, true);
+    }
+
+    private static Map<String, Component> dealerDisplays(BlackjackHand hand, boolean hiddenHoleCard) {
+        return Map.of(DEALER_HAND_KEY, dealerHandText(hand, hiddenHoleCard));
+    }
+
+    private static Component dealerHandText(BlackjackHand hand, boolean hiddenHoleCard) {
+        BlackjackHand validated = Objects.requireNonNull(hand, "hand");
+        var cards = validated.getCards();
+        Component output = Component.empty().decoration(TextDecoration.ITALIC, false);
+        int visibleCards = hiddenHoleCard ? Math.min(1, cards.size()) : cards.size();
+        for (int index = 0; index < visibleCards; index++) {
+            if (index > 0) {
+                output = output.append(index % DEALER_CARDS_PER_LINE == 0
+                        ? Component.newline()
+                        : Component.text("   "));
+            }
+            BlackjackCard card = cards.get(index);
+            output = output.append(Component.text(
+                    card.getDisplayText(),
+                    card.suit().isRed() ? NamedTextColor.RED : NamedTextColor.WHITE
+            ).decoration(TextDecoration.BOLD, true));
+        }
+        if (hiddenHoleCard && cards.size() > 1) {
+            if (visibleCards > 0) output = output.append(Component.text("   "));
+            output = output.append(hiddenCardText());
+        }
+        int value = hiddenHoleCard && !cards.isEmpty()
+                ? new BlackjackHand(java.util.List.of(cards.getFirst())).getValue()
+                : validated.getValue();
+        return output.append(Component.newline())
+                .append(Component.text("Dealer • ", NamedTextColor.GOLD))
+                .append(Component.text(value, NamedTextColor.WHITE));
     }
 
     private Component resultText(BlackjackOutcome outcome) {
@@ -236,7 +259,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
     private static Color background(DisplayStyle style) {
         return switch (style) {
             case OPEN_CARD -> Color.fromARGB(232, 245, 245, 238);
-            case HIDDEN_CARD -> Color.fromARGB(235, 38, 45, 60);
+            case DEALER_HAND -> Color.fromARGB(170, 24, 28, 36);
             case STATUS -> Color.fromARGB(92, 20, 20, 20);
             case RESULT -> Color.fromARGB(75, 20, 20, 20);
             case VALUE -> Color.fromARGB(55, 20, 20, 20);
@@ -245,7 +268,8 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
 
     private static float scale(DisplayStyle style) {
         return switch (style) {
-            case OPEN_CARD, HIDDEN_CARD -> BlackjackDisplayGeometry.CARD_SCALE;
+            case OPEN_CARD -> BlackjackDisplayGeometry.CARD_SCALE;
+            case DEALER_HAND -> BlackjackDisplayGeometry.DEALER_HAND_SCALE;
             case STATUS -> BlackjackDisplayGeometry.STATUS_SCALE;
             case RESULT -> BlackjackDisplayGeometry.RESULT_SCALE;
             case VALUE -> BlackjackDisplayGeometry.HAND_VALUE_SCALE;
@@ -256,7 +280,18 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
         return "blackjack:" + tableId;
     }
 
-    private enum DisplayStyle { OPEN_CARD, HIDDEN_CARD, STATUS, RESULT, VALUE }
+    private static Display.Billboard billboard(DisplayStyle style, Quaternionf rotation) {
+        if (style == DisplayStyle.DEALER_HAND) return Display.Billboard.VERTICAL;
+        return style == DisplayStyle.OPEN_CARD || rotation != null
+                ? Display.Billboard.FIXED
+                : Display.Billboard.CENTER;
+    }
+
+    private static String seatCardKey(int seatNumber, int cardIndex) {
+        return "seat-" + seatNumber + "-card-" + cardIndex;
+    }
+
+    private enum DisplayStyle { OPEN_CARD, DEALER_HAND, STATUS, RESULT, VALUE }
 
     private record DisplaySpec(Location location, Component text, DisplayStyle style, Quaternionf rotation) { }
 }

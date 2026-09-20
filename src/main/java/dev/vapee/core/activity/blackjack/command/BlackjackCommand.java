@@ -66,7 +66,7 @@ public final class BlackjackCommand implements TabExecutor {
                             new CommandHelpEntry("/blackjack setup pos2 <id>",
                                     "Sets the second corner of the table area."),
                             new CommandHelpEntry("/blackjack setup dealer <id>",
-                                    "Sets the dealer position."),
+                                    "Stand at the dealer position facing the table."),
                             new CommandHelpEntry("/blackjack setup display <id>",
                                     "Sets the center and surface of the physical blackjack table."),
                             new CommandHelpEntry("/blackjack setup interaction <id>",
@@ -645,7 +645,7 @@ public final class BlackjackCommand implements TabExecutor {
                         "/blackjack setup pos1 " + tableId),
                 new WorkflowStep("Set the second gameplay-area corner:",
                         "/blackjack setup pos2 " + tableId),
-                new WorkflowStep("Stand at and set the dealer position:",
+                new WorkflowStep("Stand at the dealer position facing the table, then:",
                         "/blackjack setup dealer " + tableId),
                 new WorkflowStep("Look at the playing surface:",
                         "/blackjack setup display " + tableId),
@@ -748,7 +748,8 @@ public final class BlackjackCommand implements TabExecutor {
             return new SetupStep("Set the second area corner with:", "/blackjack setup pos2 " + id);
         }
         if (draft.getDealer().isEmpty()) {
-            return new SetupStep("Set the dealer position with:", "/blackjack setup dealer " + id);
+            return new SetupStep("Stand at the dealer position facing the table, then use:",
+                    "/blackjack setup dealer " + id);
         }
         if (draft.getDisplayAnchor().isEmpty()) {
             return new SetupStep("Set the table display surface with:", "/blackjack setup display " + id);

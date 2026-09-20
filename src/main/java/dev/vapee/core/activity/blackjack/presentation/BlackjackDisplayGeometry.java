@@ -17,7 +17,8 @@ public final class BlackjackDisplayGeometry {
     public static final double CARD_SPACING = 0.36D;
     public static final double CARD_HOVER = 0.035D;
     public static final double PLAYER_CARD_DISTANCE = 0.72D;
-    public static final double DEALER_CARD_DISTANCE = 0.45D;
+    public static final double DEALER_HAND_FORWARD_OFFSET = 0.75D;
+    public static final double DEALER_HAND_VERTICAL_OFFSET = 1.25D;
     public static final double STATUS_DISTANCE = 0.74D;
     public static final double RESULT_INSET = 0.10D;
     public static final double HAND_VALUE_HEIGHT = 0.18D;
@@ -26,6 +27,7 @@ public final class BlackjackDisplayGeometry {
     public static final float HAND_VALUE_SCALE = 0.22F;
     public static final float RESULT_SCALE = 0.25F;
     public static final float STATUS_SCALE = 0.34F;
+    public static final float DEALER_HAND_SCALE = 0.30F;
 
     private BlackjackDisplayGeometry() { }
 
@@ -86,19 +88,26 @@ public final class BlackjackDisplayGeometry {
         return seatCardAnchor(world, surfaceAnchor(definition), Objects.requireNonNull(seat, "seat").position());
     }
 
-    public static Location dealerCardAnchor(World world, BlackjackDisplayAnchor anchor) {
-        Location center = tableCenter(world, anchor);
-        Vector forward = tableForward(anchor);
-        return new Location(world,
-                center.getX() + forward.getX() * DEALER_CARD_DISTANCE,
-                anchor.y() + CARD_HOVER,
-                center.getZ() + forward.getZ() * DEALER_CARD_DISTANCE,
+    public static Vector dealerForward(ActivityPosition dealerPosition) {
+        ActivityPosition dealer = Objects.requireNonNull(dealerPosition, "dealerPosition");
+        double radians = Math.toRadians(dealer.yaw());
+        return new Vector(-Math.sin(radians), 0.0D, Math.cos(radians)).normalize();
+    }
+
+    public static Location dealerHandLocation(World world, ActivityPosition dealerPosition) {
+        World validatedWorld = Objects.requireNonNull(world, "world");
+        ActivityPosition dealer = Objects.requireNonNull(dealerPosition, "dealerPosition");
+        Vector forward = dealerForward(dealer);
+        return new Location(validatedWorld,
+                dealer.x() + forward.getX() * DEALER_HAND_FORWARD_OFFSET,
+                dealer.y() + DEALER_HAND_VERTICAL_OFFSET,
+                dealer.z() + forward.getZ() * DEALER_HAND_FORWARD_OFFSET,
                 0.0F,
                 0.0F);
     }
 
-    public static Location dealerCardAnchor(World world, BlackjackTableDefinition definition) {
-        return dealerCardAnchor(world, surfaceAnchor(definition));
+    public static Location dealerHandLocation(World world, BlackjackTableDefinition definition) {
+        return dealerHandLocation(world, Objects.requireNonNull(definition, "definition").dealer());
     }
 
     public static Location statusAnchor(World world, BlackjackDisplayAnchor anchor) {
@@ -138,17 +147,6 @@ public final class BlackjackDisplayGeometry {
         return result;
     }
 
-    public static Location dealerValueAnchor(World world, BlackjackDisplayAnchor anchor) {
-        Location cards = dealerCardAnchor(world, anchor);
-        Vector forward = tableForward(anchor);
-        return new Location(world,
-                cards.getX() + forward.getX() * RESULT_INSET,
-                anchor.y() + HAND_VALUE_HEIGHT,
-                cards.getZ() + forward.getZ() * RESULT_INSET,
-                0.0F,
-                0.0F);
-    }
-
     public static Location seatCard(
             World world,
             BlackjackDisplayAnchor anchor,
@@ -166,15 +164,6 @@ public final class BlackjackDisplayGeometry {
         return spaced(cards, handRight, index, count);
     }
 
-    public static Location dealerCard(
-            World world,
-            BlackjackDisplayAnchor anchor,
-            int index,
-            int count
-    ) {
-        return spaced(dealerCardAnchor(world, anchor), tableRight(anchor), index, count);
-    }
-
     public static Quaternionf seatCardRotation(
             World world,
             BlackjackDisplayAnchor anchor,
@@ -182,10 +171,6 @@ public final class BlackjackDisplayGeometry {
     ) {
         Location cards = seatCardAnchor(world, anchor, seatPosition);
         return horizontalCardRotation(horizontalDirection(cards, tableCenter(world, anchor)));
-    }
-
-    public static Quaternionf dealerCardRotation(BlackjackDisplayAnchor anchor) {
-        return horizontalCardRotation(tableForward(anchor));
     }
 
     public static Quaternionf seatFacingRotation(

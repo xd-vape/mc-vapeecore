@@ -141,8 +141,8 @@ public final class BlackjackPreviewService implements Listener {
         markers.add(marker("center", "CENTER", BlackjackDisplayGeometry.tableCenter(world, anchor),
                 NamedTextColor.AQUA));
         if (draft.getDealer().isPresent()) {
-            markers.add(marker("dealer", "DEALER", BlackjackDisplayGeometry.dealerCardAnchor(world, anchor),
-                    NamedTextColor.GOLD));
+            markers.add(markerAt("dealer-hand", "DEALER HAND", BlackjackDisplayGeometry.dealerHandLocation(
+                    world, draft.getDealer().orElseThrow()), NamedTextColor.GOLD));
         }
         markers.add(marker("status", "STATUS", BlackjackDisplayGeometry.statusAnchor(world, anchor),
                 NamedTextColor.YELLOW));
@@ -173,6 +173,15 @@ public final class BlackjackPreviewService implements Listener {
             NamedTextColor color
     ) {
         return new PreviewMarker(id, text, location.clone().add(0.0D, PREVIEW_LIFT, 0.0D), color);
+    }
+
+    private static PreviewMarker markerAt(
+            String id,
+            String text,
+            Location location,
+            NamedTextColor color
+    ) {
+        return new PreviewMarker(id, text, location, color);
     }
 
     private static void configure(org.bukkit.entity.TextDisplay display) {

@@ -3,6 +3,8 @@ package dev.vapee.core.chat;
 import dev.vapee.core.chat.config.ChatConfig;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.permission.LuckPermsService;
+import dev.vapee.core.rank.RankInfo;
+import dev.vapee.core.rank.RankService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -13,6 +15,7 @@ import org.bukkit.entity.Player;
 
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -20,6 +23,7 @@ import java.util.logging.Logger;
 public final class ChatService {
 
     private final LuckPermsService luckPermsService;
+    private final RankService rankService;
     private final MessageService messageService;
     private final Logger logger;
     private final LegacyComponentSerializer legacySerializer;
@@ -29,11 +33,13 @@ public final class ChatService {
 
     public ChatService(
             LuckPermsService luckPermsService,
+            RankService rankService,
             ChatConfig chatConfig,
             MessageService messageService,
             Logger logger
     ) {
         this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
+        this.rankService = Objects.requireNonNull(rankService, "rankService");
         ChatConfig validatedChatConfig = Objects.requireNonNull(chatConfig, "chatConfig");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -77,12 +83,17 @@ public final class ChatService {
             Component suffix = luckPermsService.getSuffix(uniqueId)
                     .map(value -> deserializeMeta(value, currentState.metaFormat()))
                     .orElse(Component.empty());
+            RankValues rankValues = resolveRankValues(
+                    rankService.getPrimaryRank(uniqueId),
+                    luckPermsService.getPrimaryGroup(uniqueId)
+            );
 
-            TagResolver placeholders = TagResolver.resolver(
-                    Placeholder.component("prefix", prefix),
-                    Placeholder.component("name", validatedDisplayName),
-                    Placeholder.component("suffix", suffix),
-                    Placeholder.component("message", validatedMessage)
+            TagResolver placeholders = createPlaceholders(
+                    prefix,
+                    validatedDisplayName,
+                    suffix,
+                    rankValues,
+                    validatedMessage
             );
             return messageService.deserialize(currentState.chatFormat(), placeholders);
         } catch (RuntimeException exception) {
@@ -94,6 +105,38 @@ public final class ChatService {
             );
             return fallback(validatedDisplayName, validatedMessage);
         }
+    }
+
+    static TagResolver createPlaceholders(
+            Component prefix,
+            Component displayName,
+            Component suffix,
+            RankValues rankValues,
+            Component message
+    ) {
+        RankValues validatedRankValues = Objects.requireNonNull(rankValues, "rankValues");
+        Component rankId = Component.text(validatedRankValues.id());
+        return TagResolver.resolver(
+                    Placeholder.component("prefix", prefix),
+                    Placeholder.component("name", displayName),
+                    Placeholder.component("suffix", suffix),
+                    Placeholder.component("rank", Component.text(validatedRankValues.displayName())),
+                    Placeholder.component("rank_id", rankId),
+                    Placeholder.component("group", rankId),
+                    Placeholder.component("message", message)
+        );
+    }
+
+    static RankValues resolveRankValues(
+            Optional<RankInfo> rankInfo,
+            Optional<String> primaryGroupFallback
+    ) {
+        Optional<RankInfo> validatedRankInfo = Objects.requireNonNull(rankInfo, "rankInfo");
+        String rankId = validatedRankInfo.map(RankInfo::id)
+                .or(() -> Objects.requireNonNull(primaryGroupFallback, "primaryGroupFallback"))
+                .orElse("");
+        String displayName = validatedRankInfo.map(RankInfo::displayName).orElse(rankId);
+        return new RankValues(displayName, rankId);
     }
 
     private Component deserializeMeta(String value, ChatConfig.MetaFormat metaFormat) {
@@ -109,6 +152,9 @@ public final class ChatService {
                 Placeholder.component("prefix", Component.empty()),
                 Placeholder.component("name", Component.empty()),
                 Placeholder.component("suffix", Component.empty()),
+                Placeholder.component("rank", Component.empty()),
+                Placeholder.component("rank_id", Component.empty()),
+                Placeholder.component("group", Component.empty()),
                 Placeholder.component("message", Component.empty())
         );
 
@@ -144,6 +190,14 @@ public final class ChatService {
         public RuntimeState {
             Objects.requireNonNull(chatFormat, "chatFormat");
             Objects.requireNonNull(metaFormat, "metaFormat");
+        }
+    }
+
+    record RankValues(String displayName, String id) {
+
+        RankValues {
+            Objects.requireNonNull(displayName, "displayName");
+            Objects.requireNonNull(id, "id");
         }
     }
 }

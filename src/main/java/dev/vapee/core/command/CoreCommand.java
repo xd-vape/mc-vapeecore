@@ -36,7 +36,11 @@ public final class CoreCommand implements TabExecutor {
                     new CommandHelpSection("General", List.of(
                             new CommandHelpEntry("/core", "Shows the current VapeeCore status.", null,
                                     "Alias of /vapeecore."),
-                            new CommandHelpEntry("/core version", "Shows plugin, Paper and Java versions.")
+                            new CommandHelpEntry("/core version", "Shows plugin, Paper and Java versions."),
+                            new CommandHelpEntry("/rank [player]", "Shows an online player's server rank.",
+                                    "vapeecore.rank.view"),
+                            new CommandHelpEntry("/ranks", "Shows the public server rank progression.",
+                                    "vapeecore.ranks.view")
                     )),
                     new CommandHelpSection("Social", List.of(
                             new CommandHelpEntry("/msg <player> <message>", "Sends a private message.",

@@ -52,6 +52,14 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Coins | `dev.vapee.core.economy` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
+| Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
+| Öffentlicher Rank-Track | Live: `plugins/VapeeCore/config.yml` → `ranks.track`, Default: `ranks` |
+| Rank integration | `dev.vapee.core.rank` |
+| `/rank` | `dev.vapee.core.rank.command.RankCommand` |
+| `/ranks` | `dev.vapee.core.rank.command.RanksCommand` |
+| Rank display name / description / weight | `RankService` und `LuckPermsService` |
+| Rank placeholder | `RankService` und `PresentationRenderer` |
+| Rank prefix / Farbe / Badge | LuckPerms-Prefix |
 | Chat | `dev.vapee.core.chat` |
 | Private messages | `dev.vapee.core.privatemessage` |
 | Scoreboard / Tablist | `dev.vapee.core.presentation` |
@@ -68,7 +76,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 
 | File | Owner | Purpose | `/core reload`? | Runtime mutable? | Defaults |
 |---|---|---|---:|---|---|
-| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug | Ja | Durch Reload | `src/main/resources/config.yml` |
+| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track` | Ja | Durch Reload | `src/main/resources/config.yml` |
 | `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
@@ -76,34 +84,41 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 
-Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. Der Reload wird zweiphasig vorbereitet und angewendet. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
+Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` gehört zum bereits vorhandenen `ConfigService`; `RankModule` fügt keinen sechsten Teilnehmer hinzu. Der Reload wird zweiphasig vorbereitet und angewendet. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
 ## Module map und Reihenfolge
 
 Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen Modulen bewusst gepflegt werden:
 
 1. **Permission** – lesender LuckPerms-Zugriff.
-2. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
-3. **Social** – Ignore-State und Commands.
-4. **Economy** – Coin-Wallet und `/coins`.
-5. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-6. **Chat** – globaler Chat.
-7. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-8. **Presentation** – Sidebar und Tablist.
-9. **Settings** – Settings-Inventar und `/settings`.
-10. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-11. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-12. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-13. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-14. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-15. **Warp** – dynamische Warp-Persistence und Admin-Command.
-16. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+2. **Rank** – cachefreie Rank-Domain, öffentlicher Track und `/rank`-/`/ranks`-Commands.
+3. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
+4. **Social** – Ignore-State und Commands.
+5. **Economy** – Coin-Wallet und `/coins`.
+6. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+7. **Chat** – globaler Chat und lesende Rank-Placeholder.
+8. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+9. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+10. **Settings** – Settings-Inventar und `/settings`.
+11. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+12. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+13. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+14. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+15. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+16. **Warp** – dynamische Warp-Persistence und Admin-Command.
+17. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Economy → Social → Player → Permission. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt. WorldDisplay liegt bereits vor Blackjack, damit Phase 15C keine erneute Order-Migration braucht.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Economy → Social → Player → Rank → Permission. Rank besitzt dabei keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
 ```text
+Permission
+  ↑
+Rank
+  ↑       ↑
+Chat  Presentation
+
 Player
   ↑
 Lobby
@@ -125,7 +140,23 @@ Lobby + Player + Settings + Warp
 LobbyExperience
 ```
 
-`Presentation` bezieht außerdem Permission, Player, Economy und Lobby. Chat bezieht Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab. Das generische Activity-Framework kennt weder Seat noch Blackjack.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+
+## Ranks & Server Identity
+
+LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms. `/rank` und `/ranks` sind reine Lese-Commands im VapeeCore-Namespace und besitzen bewusst keine Alias-Flut.
+
+`PermissionModule` stellt die einzige LuckPerms-Provider-Verbindung her. `LuckPermsService` kapselt geladene User, Group Information und Track Groups, ohne LuckPerms-API-Typen in andere Features zu leaken. `RankService` bildet diese Werte auf das immutable `RankInfo(id, displayName, description, weight)` ab. Normale Online-Abfragen verwenden ausschließlich `UserManager#getUser`; es gibt kein `loadUser`, kein `join()` und keinen dauerhaften Rank-Cache. Ist der User nicht geladen, liefert `getPrimaryRank` `Optional.empty()`. Fehlt die Group unerwartet, bleibt die bekannte ID erhalten und Display Name, Description und Weight fallen kontrolliert zurück.
+
+Der öffentliche Track steht unter `config.yml` → `ranks.track`; Default und Fallback sind `ranks`. Der Wert muss ein non-blank String sein, sonst warnt `ConfigService`, verwendet `ranks` und verändert die Datei nicht. Nur die in diesem LuckPerms-Track enthaltenen Gruppen erscheinen in `/ranks`; interne Gruppen bleiben unsichtbar. `Track#getGroups()` bestimmt die Reihenfolge, nicht Alphabet oder Weight. Da `RankService` den aktuellen Configwert bei jeder Listenabfrage liest, wirkt ein geänderter Track nach `/core reload` sofort, ohne sechsten Reload-Teilnehmer.
+
+Jeder öffentliche Rank sollte in LuckPerms einen Display Name besitzen. Fehlt er, erzeugt VapeeCore ohne hartcodiertes Mapping einen neutralen Namen aus der Group-ID. Die optionale Beschreibung kommt aus dem zentralen Group-Meta-Key `vapeecore.rank.description`; Weight bleibt reine Metadateninformation. Farben und Badges gehören weiterhin in den LuckPerms-Prefix, nicht in eine Java-Farbtabelle.
+
+Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren können über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16A implementiert weder Mine noch `coin-multiplier` und verändert den `EconomyService` nicht.
+
+Presentation und Chat unterstützen `<rank>` als freundlichen Primary-Rank-Namen sowie `<rank_id>` als rohe Primary Group. `<group>` bleibt als Compatibility-Alias identisch zu `<rank_id>`. `<prefix>` und `<suffix>` bleiben die effektiven LuckPerms-Metawerte. Dieselben Presentation-Placeholder gelten für Scoreboard, `tablist.name-format`, Header und Footer. Das Default-Scoreboard verwendet nun `<rank>`; das Default-Tablistformat bleibt `<prefix><name><suffix>`. Das Chat-Defaultformat bleibt ebenfalls unverändert und fügt nicht automatisch einen zweiten Rank neben dem Prefix ein. Der Async-Chatpfad liest nur bereits geladene LuckPerms-Cached-Data, verwendet keine Main-Thread-only Bukkit-Operationen und setzt Playertext weiterhin als sichere Adventure Component ein.
+
+Der neue Resource-Default überschreibt keine bestehende `plugins/VapeeCore/presentation.yml`. Ein vorhandenes `<group>` funktioniert weiterhin; Administratoren können die Live-Datei manuell auf `<rank>` umstellen und mit `/core reload` aktivieren.
 
 ## Lobby player state
 
@@ -232,7 +263,9 @@ Der eigentliche Blackjack-Tisch wird vom Map-Builder aus normalen Minecraft-Blö
 
 Als unverbindliches Baubeispiel eignet sich ein sieben bis neun Blöcke breiter und vier bis fünf Blöcke tiefer Tisch: grüne Spielfläche, dunkler Rand, bis zu fünf Stairs oder einzelne Slabs als Sitze und der Dealer gegenüber der Spielerseite. Diese Maße sind nur eine Empfehlung; die visuelle Wahrheit ist der Table-Surface-Anchor, nicht eine fest codierte Tischform.
 
-Der Abschnitt `tables.<id>.display` ist semantisch die Mitte der nutzbaren physischen Spielfläche: `x/z` sind ihr Center, `y` ist exakt ihre Oberfläche und `yaw` ihre Hauptausrichtung. `/blackjack setup display <id>` speichert Blockmittelpunkt, reale Collision-Shape-Oberkante und Player-Yaw. Aus dem Yaw leitet `BlackjackDisplayGeometry` normalisierte Forward-/Right-Vektoren ab. Dealer und Status liegen damit stabil auf der Dealer-Seite und parallel zum Tisch; Playerkarten liegen zwischen Seat und Center, beziehen ihre Y-Höhe aber immer von `display.y + CARD_HOVER`. Ergebnisse liegen knapp hinter der jeweiligen Kartenfläche.
+Der Abschnitt `tables.<id>.display` ist semantisch die Mitte der nutzbaren physischen Spielfläche: `x/z` sind ihr Center, `y` ist exakt ihre Oberfläche und `yaw` ihre Hauptausrichtung. `/blackjack setup display <id>` speichert Blockmittelpunkt, reale Collision-Shape-Oberkante und Player-Yaw. Aus dem Yaw leitet `BlackjackDisplayGeometry` normalisierte Forward-/Right-Vektoren für Playerkarten und Status ab. Playerkarten liegen zwischen Seat und Center, beziehen ihre Y-Höhe aber immer von `display.y + CARD_HOVER`; Ergebnisse liegen knapp hinter der jeweiligen Kartenfläche.
+
+Der Dealer besitzt davon unabhängig ein einzelnes aufrechtes Floating-Hand-`TextDisplay`. `/blackjack setup dealer <id>` wird ausgeführt, während der Admin an der Dealerposition steht und zum Tisch schaut. Die gespeicherte Dealer-Blickrichtung bestimmt den horizontalen Forward-Vektor; `dealerHandLocation` verschiebt das Display von der Dealerposition um `DEALER_HAND_FORWARD_OFFSET` nach vorne und `DEALER_HAND_VERTICAL_OFFSET` nach oben. Es besteht keine Abhängigkeit von Table-Surface-Y oder Tischform.
 
 Der vollständige Setup-Ablauf ist:
 
@@ -240,13 +273,13 @@ Der vollständige Setup-Ablauf ist:
 2. `/blackjack setup create <id>`
 3. `/blackjack setup pos1 <id>`
 4. `/blackjack setup pos2 <id>`
-5. `/blackjack setup dealer <id>`
+5. An der Dealerposition stehen, zum Tisch schauen und `/blackjack setup dealer <id>` ausführen.
 6. Spielfläche ansehen und `/blackjack setup display <id>` ausführen.
 7. Jeden Sitz ansehen und `/blackjack setup seat <id> <number>` ausführen.
 8. Mit `/blackjack setup preview <id>` visuell kalibrieren.
 9. `/blackjack setup enable <id>`
 
-Die Preview benötigt keine ActivitySession und funktioniert bei disabled, enabled und teilweise konfigurierten Tabellen. Für zwölf Sekunden zeigt sie `CENTER`, optional `DEALER`, `STATUS` und nur die vorhandenen `SEAT n`-Marker; fehlende Komponenten werden zusätzlich im Chat genannt. Ihr Owner `blackjack-preview:<adminUuid>:<tableId>` ist vom Produktions-Owner getrennt. Timeout, eine neue Preview desselben Admins, Player-Quit und Modul-Shutdown räumen sie auf, ohne Produktionsanzeigen zu berühren. Setup-Markierungen werden nie persistiert.
+Die Preview benötigt keine ActivitySession und funktioniert bei disabled, enabled und teilweise konfigurierten Tabellen. Für zwölf Sekunden zeigt sie `CENTER`, optional `DEALER HAND`, `STATUS` und nur die vorhandenen `SEAT n`-Marker; fehlende Komponenten werden zusätzlich im Chat genannt. Der Dealer-Marker verwendet exakt dieselbe `dealerHandLocation` wie die Production-Anzeige. Ihr Owner `blackjack-preview:<adminUuid>:<tableId>` ist vom Produktions-Owner getrennt. Timeout, eine neue Preview desselben Admins, Player-Quit und Modul-Shutdown räumen sie auf, ohne Produktionsanzeigen zu berühren. Setup-Markierungen werden nie persistiert.
 
 ### Blackjack world UX
 
@@ -260,7 +293,9 @@ Die Preview benötigt keine ActivitySession und funktioniert bei disabled, enabl
 
 Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER_TURNS`, eigener Zug, unfertige Hand, genau zwei Karten und kein Natural sind zwingend. Der Timeout wird abgebrochen, genau eine Karte gezogen, `BlackjackPlayerRound.doubledDown` gesetzt, die Hand beendet und zum nächsten Spieler beziehungsweise Dealer weitergeschaltet. Es gibt weiterhin keine Wette und keine Economy-Auswirkung.
 
-`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, `dealer-label`, `dealer-card-<i>`, `seat-<n>-label` und `seat-<n>-card-<i>`. Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys; nur ein tatsächlicher Stilwechsel ersetzt den betroffenen Display-Key. Er wird durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Idle zeigt ausschließlich `Blackjack` plus `n / capacity`. Aktive Hände zeigen Karten, kleinen Zahlenwert und Zugstatus; Settlement ersetzt den Wert durch ein kleines farbiges Resultat nahe den Karten. Offene Karten verwenden hellen Grund und kompakten Text (`A♠`, `10♥`), schwarze Suits sind dunkelgrau und rote Suits rot. Die Hole Card ist ein dunkler `◆`-Kartenrücken. `OPEN_CARD`, `HIDDEN_CARD`, `STATUS`, `RESULT` und `VALUE` besitzen getrennte Styles. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
+`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, genau ein `dealer-hand`, `seat-<n>-label` und `seat-<n>-card-<i>`. Playerkarten bleiben einzelne horizontale Displays auf der Table Surface. Die Dealerhand ist dagegen ein vertikales Billboard an der Dealerposition: Während `PLAYER_TURNS` zeigt sie beispielsweise `K♦   ◆` und darunter `Dealer • 10`; in `DEALER_TURN` und `SETTLED` werden sämtliche Karten und der Gesamtwert im selben Display sichtbar. Dealer-Hits führen deshalb nur zu `updateText` und Teleport des bestehenden Keys, unabhängig von der Kartenanzahl. Ab der fünften Karte wird die Hand nach vier Karten umgebrochen. Beim Reset verschwindet `dealer-hand`, Disable und Shutdown bereinigen weiterhin den kompletten Owner.
+
+Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys; nur ein tatsächlicher Stilwechsel ersetzt den betroffenen Display-Key. Er wird durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Idle zeigt ausschließlich `Blackjack` plus `n / capacity`. Aktive Spielerhände zeigen Karten, kleinen Zahlenwert und Zugstatus; Settlement ersetzt den Wert durch ein kleines farbiges Resultat nahe den Karten. `OPEN_CARD`, `DEALER_HAND`, `STATUS`, `RESULT` und `VALUE` besitzen getrennte Styles. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
 
 `BlackjackService.requiresDealerPlay` überspringt die Dealer-Ausspielung, wenn ausschließlich Bust-Hände oder bereits sichere Naturals übrig sind; normale Live-Hände spielen den Dealer weiterhin bis mindestens 17 aus, inklusive Stand auf Soft 17. `BlackjackShoe` erzeugt sechs vollständige Decks (312 Karten), mischt per Fisher-Yates mit `nextInt(index + 1)` und verwendet keinen konstanten Seed oder dynamische Spielerbevorzugung. `BlackjackFairnessHarness` prüft mit festen Seeds Verteilung, Reproduzierbarkeit, unterschiedliche Reihenfolgen, Ziehen ohne Replacement sowie Dealer-/Outcome-Invarianten; er besitzt absichtlich keine zufällige Winrate-Grenze.
 
@@ -275,7 +310,10 @@ Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER
 | Wo ändere ich Handwert-Größe? | `BlackjackDisplayGeometry.HAND_VALUE_SCALE` |
 | Wo ändere ich Resultat-Größe/-Höhe? | `BlackjackDisplayGeometry.RESULT_SCALE` / `RESULT_HEIGHT` |
 | Wo ändere ich Status-Größe/-Position? | `BlackjackDisplayGeometry.STATUS_SCALE` / `STATUS_HEIGHT` |
-| Wo ändere ich Player-/Dealer-Abstand? | `BlackjackDisplayGeometry.PLAYER_CARD_DISTANCE` / `DEALER_CARD_DISTANCE` |
+| Wo ändere ich den Abstand der Playerkarten? | `BlackjackDisplayGeometry.PLAYER_CARD_DISTANCE` |
+| Wo ändere ich den Dealer-Display-Abstand? | `BlackjackDisplayGeometry.DEALER_HAND_FORWARD_OFFSET` |
+| Wo ändere ich die Dealer-Display-Höhe? | `BlackjackDisplayGeometry.DEALER_HAND_VERTICAL_OFFSET` |
+| Wo ändere ich die Dealer-Display-Größe? | `BlackjackDisplayGeometry.DEALER_HAND_SCALE` |
 | Wo ändere ich die Hotbar Items? | Factory-Aufrufe in `BlackjackInventoryService.refreshPlayer` |
 | Wo ändere ich die Hotbar Slots? | `PRIMARY_SLOT`, `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT`, `LEAVE_SLOT` in `BlackjackInventoryService` |
 | Wo ändere ich die Seat-Setup-Regeln? | `BlackjackCommand.seat` und `SeatPositionResolver` |
@@ -301,6 +339,7 @@ Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER
 | Blackjack-Sitzverteilung | `BlackjackSeatService` |
 | Blackjack-Hotbar-Materialien und Slots | `BlackjackInventoryService` |
 | Blackjack-Kartenposition, Abstand und Höhe | `BlackjackDisplayGeometry` |
+| Floating Dealer Hand: Abstand, Höhe und Größe | `BlackjackDisplayGeometry.DEALER_HAND_FORWARD_OFFSET`, `DEALER_HAND_VERTICAL_OFFSET`, `DEALER_HAND_SCALE` |
 | Blackjack-Display-Texte und Ausrichtung | `BlackjackWorldViewService` |
 | Blackjack-Round-Reset-Presentation | `ActivityService.resetSessionInternal`, `ActivitySession.onResetCompleted`, `BlackjackSession` |
 | Blackjack-Dealer-Ausspielentscheidung | `BlackjackService.requiresDealerPlay` |
@@ -355,10 +394,12 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
+| `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
+| `/ranks` | Öffentliche LuckPerms-Track-Reihenfolge anzeigen | `RanksCommand` | `vapeecore.ranks.view` (Default `true`) |
 | `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 
-Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. Die `.others`-Nodes für Flight, Speed, Gamemode, Heal und Feed besitzen die jeweilige Basispermission als Child. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
+Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes für Flight, Speed, Gamemode, Heal und Feed besitzen die jeweilige Basispermission als Child. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
 
 ## Command UX Standard
 
@@ -429,6 +470,12 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
 - `dev.vapee.core.seat.SeatHarness`
 - `dev.vapee.core.worlddisplay.WorldDisplayHarness`
+- `dev.vapee.core.rank.RankServiceHarness`
+- `dev.vapee.core.rank.RankCommandHarness`
+- `dev.vapee.core.rank.RanksCommandHarness`
+- `dev.vapee.core.presentation.PresentationHarness`
+- `dev.vapee.core.chat.ChatHarness`
+- `dev.vapee.core.config.ConfigServiceHarness`
 
 Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 

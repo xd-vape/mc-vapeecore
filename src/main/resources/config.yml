@@ -4,5 +4,8 @@ server:
 messages:
   prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
 
+ranks:
+  track: "ranks"
+
 settings:
   debug: false

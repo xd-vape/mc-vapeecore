@@ -119,12 +119,14 @@ public final class CommandHelpHarness {
         CommandHelpPage core = page(CoreCommand.class, "HELP_PAGE");
         Capture player = capture(Set.of(
                 "vapeecore.message.use", "vapeecore.social.ignore", "vapeecore.lobby.spawn",
-                "vapeecore.settings.use", "vapeecore.economy.coins"
+                "vapeecore.settings.use", "vapeecore.economy.coins",
+                "vapeecore.rank.view", "vapeecore.ranks.view"
         ));
         new CommandHelpRenderer(player.messageService()).send(player.sender(), core);
         String playerText = player.singleText();
-        check(playerText.contains("/spawn") && playerText.contains("/coins"),
-                "core help shows permitted player commands");
+        check(playerText.contains("/spawn") && playerText.contains("/coins")
+                        && playerText.contains("/rank [player]") && playerText.contains("/ranks"),
+                "core help shows permitted player and rank commands");
         check(!playerText.contains("/setspawn") && !playerText.contains("/build")
                         && !playerText.contains("/fly") && !playerText.contains("/speed")
                         && !playerText.contains("/gamemode") && !playerText.contains("/tphere")
@@ -149,7 +151,8 @@ public final class CommandHelpHarness {
                 "vapeecore.utility.fly", "vapeecore.utility.speed", "vapeecore.utility.gamemode",
                 "vapeecore.utility.teleport", "vapeecore.utility.teleport.here",
                 "vapeecore.utility.heal", "vapeecore.utility.feed",
-                "vapeecore.warp.admin", "vapeecore.blackjack.admin"
+                "vapeecore.warp.admin", "vapeecore.blackjack.admin",
+                "vapeecore.rank.view", "vapeecore.ranks.view"
         ));
         new CommandHelpRenderer(admin.messageService()).send(admin.sender(), core);
         String adminText = admin.singleText();
@@ -185,8 +188,9 @@ public final class CommandHelpHarness {
         check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 14,
                 "blackjack setup help contains all fourteen actions including preview");
         check(render(setup).contains("/blackjack setup preview <id>")
-                        && render(setup).contains("physical blackjack table"),
-                "blackjack help explains physical table surface setup and preview");
+                        && render(setup).contains("physical blackjack table")
+                        && render(setup).contains("dealer position facing the table"),
+                "blackjack help explains dealer facing, physical table surface setup and preview");
         check(invokeSuggestions(BlackjackCommand.class, "setupSuggestions", "pre")
                         .equals(List.of("preview")),
                 "blackjack preview is offered by setup completion");
@@ -201,6 +205,7 @@ public final class CommandHelpHarness {
                         && workflowText.contains("1. Build the physical table in the world.")
                         && workflowText.contains("2. Create its disabled configuration draft:")
                         && workflowText.contains("/blackjack setup create casino-1")
+                        && workflowText.contains("dealer position facing the table")
                         && workflowText.contains("6. Look at the playing surface:")
                         && workflowText.contains("/blackjack setup display casino-1")
                         && workflowText.contains("7. Look at every seat")

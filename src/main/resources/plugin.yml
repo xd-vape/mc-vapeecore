@@ -93,6 +93,14 @@ commands:
     description: Restore player hunger
     usage: /feed [player]
     permission: vapeecore.utility.feed
+  rank:
+    description: Shows a player's server rank
+    usage: /rank [player]
+    permission: vapeecore.rank.view
+  ranks:
+    description: Shows the public server ranks
+    usage: /ranks
+    permission: vapeecore.ranks.view
 
 permissions:
   vapeecore.admin:
@@ -179,3 +187,9 @@ permissions:
   vapeecore.warp.admin:
     description: Allows configuring warp destinations
     default: op
+  vapeecore.rank.view:
+    description: Allows viewing an online player's server rank
+    default: true
+  vapeecore.ranks.view:
+    description: Allows viewing the public server rank progression
+    default: true

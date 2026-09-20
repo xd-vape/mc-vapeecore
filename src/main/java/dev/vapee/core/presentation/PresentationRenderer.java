@@ -4,6 +4,8 @@ import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.permission.LuckPermsService;
+import dev.vapee.core.rank.RankInfo;
+import dev.vapee.core.rank.RankService;
 import dev.vapee.core.presentation.config.PresentationConfig;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
@@ -20,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -37,6 +40,7 @@ public final class PresentationRenderer {
     private final ConfigService configService;
     private final MessageService messageService;
     private final LuckPermsService luckPermsService;
+    private final RankService rankService;
     private final EconomyService economyService;
     private final Logger logger;
     private final LegacyComponentSerializer legacySerializer;
@@ -50,6 +54,7 @@ public final class PresentationRenderer {
             ConfigService configService,
             MessageService messageService,
             LuckPermsService luckPermsService,
+            RankService rankService,
             EconomyService economyService,
             PresentationConfig presentationConfig
     ) {
@@ -57,6 +62,7 @@ public final class PresentationRenderer {
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
+        this.rankService = Objects.requireNonNull(rankService, "rankService");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
         PresentationConfig validatedConfig = Objects.requireNonNull(presentationConfig, "presentationConfig");
         this.logger = plugin.getLogger();
@@ -153,9 +159,11 @@ public final class PresentationRenderer {
         Component suffix = luckPermsService.getSuffix(uniqueId)
                 .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
-        Component group = luckPermsService.getPrimaryGroup(uniqueId)
-                .map(Component::text)
-                .orElse(Component.empty());
+        RankValues rankValues = resolveRankValues(
+                rankService.getPrimaryRank(uniqueId),
+                luckPermsService.getPrimaryGroup(uniqueId)
+        );
+        Component rankId = Component.text(rankValues.id());
         Component coins = renderCoins(economyService.getCoins(uniqueId));
 
         return TagResolver.resolver(
@@ -163,11 +171,25 @@ public final class PresentationRenderer {
                 Placeholder.component("name", player.displayName()),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
-                Placeholder.component("group", group),
+                Placeholder.component("rank", Component.text(rankValues.displayName())),
+                Placeholder.component("rank_id", rankId),
+                Placeholder.component("group", rankId),
                 Placeholder.component("coins", coins),
                 Placeholder.component("online", Component.text(plugin.getServer().getOnlinePlayers().size())),
                 Placeholder.component("max_players", Component.text(plugin.getServer().getMaxPlayers()))
         );
+    }
+
+    static RankValues resolveRankValues(
+            Optional<RankInfo> rankInfo,
+            Optional<String> primaryGroupFallback
+    ) {
+        Optional<RankInfo> validatedRankInfo = Objects.requireNonNull(rankInfo, "rankInfo");
+        String rankId = validatedRankInfo.map(RankInfo::id)
+                .or(() -> Objects.requireNonNull(primaryGroupFallback, "primaryGroupFallback"))
+                .orElse("");
+        String displayName = validatedRankInfo.map(RankInfo::displayName).orElse(rankId);
+        return new RankValues(displayName, rankId);
     }
 
     private Component renderCoins(OptionalLong coins) {
@@ -238,6 +260,8 @@ public final class PresentationRenderer {
                 Placeholder.component("name", Component.empty()),
                 Placeholder.component("prefix", Component.empty()),
                 Placeholder.component("suffix", Component.empty()),
+                Placeholder.component("rank", Component.empty()),
+                Placeholder.component("rank_id", Component.empty()),
                 Placeholder.component("group", Component.empty()),
                 Placeholder.component("coins", Component.empty()),
                 Placeholder.component("online", Component.empty()),
@@ -278,6 +302,14 @@ public final class PresentationRenderer {
             Objects.requireNonNull(tablistName, "tablistName");
             Objects.requireNonNull(tablistHeader, "tablistHeader");
             Objects.requireNonNull(tablistFooter, "tablistFooter");
+        }
+    }
+
+    record RankValues(String displayName, String id) {
+
+        RankValues {
+            Objects.requireNonNull(displayName, "displayName");
+            Objects.requireNonNull(id, "id");
         }
     }
 }

@@ -4,6 +4,7 @@ import dev.vapee.core.activity.blackjack.presentation.BlackjackAction;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackDisplayGeometry;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackWorldViewService;
 import dev.vapee.core.activity.blackjack.card.BlackjackCard;
+import dev.vapee.core.activity.blackjack.card.BlackjackHand;
 import dev.vapee.core.activity.blackjack.card.BlackjackRank;
 import dev.vapee.core.activity.blackjack.card.BlackjackSuit;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
@@ -16,6 +17,7 @@ import dev.vapee.core.activity.location.ActivityPosition;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.Color;
+import org.bukkit.entity.Display;
 import org.bukkit.util.Vector;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -23,9 +25,17 @@ import org.joml.Vector3f;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 public final class BlackjackPresentationHarness {
 
+    private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
     private static int checks;
 
     private BlackjackPresentationHarness() { }
@@ -52,6 +62,9 @@ public final class BlackjackPresentationHarness {
                 && BlackjackDisplayGeometry.RESULT_SCALE <= 0.28F, "results use their own compact scale");
         check(BlackjackDisplayGeometry.STATUS_SCALE >= 0.32F
                 && BlackjackDisplayGeometry.STATUS_SCALE <= 0.42F, "status stays compact");
+        check(BlackjackDisplayGeometry.DEALER_HAND_SCALE >= 0.28F
+                && BlackjackDisplayGeometry.DEALER_HAND_SCALE <= 0.34F,
+                "floating dealer hand has its own readable compact scale");
         check(invokeText("idleStatusText", new Class<?>[]{int.class, int.class}, 1, 5)
                         .equals("1 / 5"),
                 "idle table status is player-facing and contains no internal enum");
@@ -69,7 +82,7 @@ public final class BlackjackPresentationHarness {
         check(new BlackjackCard(BlackjackRank.ACE, BlackjackSuit.SPADES).getDisplayText().equals("A♠")
                         && new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.HEARTS).getDisplayText().equals("10♥"),
                 "card text is compact without rank/suit whitespace");
-        assertDistinctCardStyles();
+        assertDealerPresentation();
 
         World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
                 (proxy, method, arguments) -> method.getName().equals("getName") ? "world" : null);
@@ -104,12 +117,14 @@ public final class BlackjackPresentationHarness {
         assertHorizontalOrientation(BlackjackDisplayGeometry.seatCardRotation(
                         world, definition.displayAnchor(), seat.position()), anchor, center,
                 "player cards read from the seat toward table center");
-        Location dealerAnchor = BlackjackDisplayGeometry.dealerCardAnchor(world, definition);
-        check(Math.abs(dealerAnchor.getY() - (64.75D + BlackjackDisplayGeometry.CARD_HOVER)) < 0.0001D,
-                "dealer cards use table surface height instead of dealer feet height");
-        check(dealerAnchor.getZ() < center.getZ(), "dealer anchor uses the table-local forward side");
-        assertHorizontalOrientation(BlackjackDisplayGeometry.dealerCardRotation(definition.displayAnchor()),
-                center, dealerAnchor, "dealer cards read from the player/table side");
+        assertDealerLocation(world, 0.0F, 8.0D, 64.5D, 5.0D, 8.0D, 5.75D);
+        assertDealerLocation(world, 90.0F, 8.0D, 64.5D, 5.0D, 7.25D, 5.0D);
+        assertDealerLocation(world, 180.0F, 8.0D, 64.5D, 5.0D, 8.0D, 4.25D);
+        assertDealerLocation(world, -90.0F, 8.0D, 64.5D, 5.0D, 8.75D, 5.0D);
+        Location dealerHand = BlackjackDisplayGeometry.dealerHandLocation(world, definition);
+        check(Math.abs(dealerHand.getY()
+                        - (definition.dealer().y() + BlackjackDisplayGeometry.DEALER_HAND_VERTICAL_OFFSET)) < 0.0001D,
+                "dealer hand Y depends on dealer position rather than table surface Y");
         Location resultAnchor = BlackjackDisplayGeometry.resultAnchor(
                 world, definition.displayAnchor(), seat.position());
         check(Math.abs(resultAnchor.getY() - (64.75D + BlackjackDisplayGeometry.RESULT_HEIGHT)) < 0.0001D
@@ -131,18 +146,94 @@ public final class BlackjackPresentationHarness {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void assertDistinctCardStyles() throws Exception {
+    private static void assertDealerPresentation() throws Exception {
+        BlackjackHand hand = new BlackjackHand(List.of(
+                new BlackjackCard(BlackjackRank.KING, BlackjackSuit.DIAMONDS),
+                new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.SPADES)
+        ));
+        Map<String, Component> hidden = invokeDealerDisplays(hand, true);
+        check(hidden.keySet().equals(java.util.Set.of("dealer-hand")),
+                "dealer uses exactly one stable world display key");
+        String hiddenText = PLAIN.serialize(hidden.get("dealer-hand"));
+        check(hiddenText.equals("K♦   ◆\nDealer • 10")
+                        && !hiddenText.contains("7♠") && !hiddenText.contains("17"),
+                "player turn hides the hole card and exposes only the visible value");
+        Map<String, Component> revealed = invokeDealerDisplays(hand, false);
+        Component revealedComponent = revealed.get("dealer-hand");
+        check(PLAIN.serialize(revealedComponent).equals("K♦   7♠\nDealer • 17"),
+                "dealer turn reveals every card and the full value");
+        check(containsTextWithColor(revealedComponent, "K♦", NamedTextColor.RED)
+                        && containsTextWithColor(revealedComponent, "7♠", NamedTextColor.WHITE),
+                "dealer component colors red and black suits independently for the dark background");
+        check(revealedComponent.decoration(TextDecoration.ITALIC) == TextDecoration.State.FALSE,
+                "dealer component explicitly disables italic text");
+
+        BlackjackHand longHand = new BlackjackHand(List.of(
+                new BlackjackCard(BlackjackRank.KING, BlackjackSuit.DIAMONDS),
+                new BlackjackCard(BlackjackRank.TWO, BlackjackSuit.SPADES),
+                new BlackjackCard(BlackjackRank.THREE, BlackjackSuit.HEARTS),
+                new BlackjackCard(BlackjackRank.ACE, BlackjackSuit.CLUBS),
+                new BlackjackCard(BlackjackRank.FOUR, BlackjackSuit.DIAMONDS)
+        ));
+        Map<String, Component> longDisplay = invokeDealerDisplays(longHand, false);
+        check(longDisplay.size() == 1 && PLAIN.serialize(longDisplay.get("dealer-hand"))
+                        .equals("K♦   2♠   3♥   A♣\n4♦\nDealer • 20"),
+                "long dealer hand wraps after four cards without creating another entity");
+
         Class<?> styleType = Arrays.stream(BlackjackWorldViewService.class.getDeclaredClasses())
                 .filter(type -> type.getSimpleName().equals("DisplayStyle"))
                 .findFirst().orElseThrow();
         Object open = Enum.valueOf((Class) styleType, "OPEN_CARD");
-        Object hidden = Enum.valueOf((Class) styleType, "HIDDEN_CARD");
+        Object dealer = Enum.valueOf((Class) styleType, "DEALER_HAND");
         var background = BlackjackWorldViewService.class.getDeclaredMethod("background", styleType);
         background.setAccessible(true);
         Color openColor = (Color) background.invoke(null, open);
-        Color hiddenColor = (Color) background.invoke(null, hidden);
-        check(!openColor.equals(hiddenColor) && openColor.getRed() > hiddenColor.getRed(),
-                "open and hidden cards use visibly different styles");
+        Color dealerColor = (Color) background.invoke(null, dealer);
+        check(!openColor.equals(dealerColor) && openColor.getRed() > dealerColor.getRed(),
+                "floating dealer hand uses a distinct semi-transparent dark style");
+        var billboard = BlackjackWorldViewService.class.getDeclaredMethod("billboard", styleType, Quaternionf.class);
+        billboard.setAccessible(true);
+        check(billboard.invoke(null, dealer, null) == Display.Billboard.VERTICAL,
+                "floating dealer hand uses a vertical billboard without card-plane rotation");
+        var seatCardKey = BlackjackWorldViewService.class.getDeclaredMethod("seatCardKey", int.class, int.class);
+        seatCardKey.setAccessible(true);
+        check(seatCardKey.invoke(null, 3, 2).equals("seat-3-card-2"),
+                "player card world display keys remain unchanged");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Component> invokeDealerDisplays(BlackjackHand hand, boolean hidden) throws Exception {
+        var method = BlackjackWorldViewService.class.getDeclaredMethod(
+                "dealerDisplays", BlackjackHand.class, boolean.class);
+        method.setAccessible(true);
+        return (Map<String, Component>) method.invoke(null, hand, hidden);
+    }
+
+    private static void assertDealerLocation(
+            World world,
+            float yaw,
+            double x,
+            double y,
+            double z,
+            double expectedX,
+            double expectedZ
+    ) {
+        Location location = BlackjackDisplayGeometry.dealerHandLocation(
+                world, new ActivityPosition("world", x, y, z, yaw, 0.0F));
+        check(Math.abs(location.getX() - expectedX) < 0.0001D
+                        && Math.abs(location.getZ() - expectedZ) < 0.0001D
+                        && Math.abs(location.getY()
+                        - (y + BlackjackDisplayGeometry.DEALER_HAND_VERTICAL_OFFSET)) < 0.0001D,
+                "dealer yaw " + yaw + " places the floating hand in front of the dealer");
+    }
+
+    private static boolean containsTextWithColor(Component component, String text, NamedTextColor color) {
+        if (component instanceof TextComponent value
+                && value.content().equals(text)
+                && color.equals(value.color())) {
+            return true;
+        }
+        return component.children().stream().anyMatch(child -> containsTextWithColor(child, text, color));
     }
 
     private static void check(boolean condition, String message) {

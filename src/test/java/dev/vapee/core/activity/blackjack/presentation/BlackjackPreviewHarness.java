@@ -50,6 +50,17 @@ public final class BlackjackPreviewHarness {
         check(gateway.markers.stream().allMatch(marker -> marker.location().getY() >= 65.10D),
                 "preview markers are lifted from the configured table surface");
 
+        ActivityPosition dealer = new ActivityPosition("world", 10.5D, 64.5D, 16.5D, 0.0F, 0.0F);
+        draft.setDealer(dealer);
+        BlackjackPreviewService.PreviewMarker dealerMarker = BlackjackPreviewService.buildMarkers(world, draft)
+                .stream()
+                .filter(marker -> marker.id().equals("dealer-hand"))
+                .findFirst().orElseThrow();
+        org.bukkit.Location productionDealerLocation = BlackjackDisplayGeometry.dealerHandLocation(world, dealer);
+        check(dealerMarker.text().equals("DEALER HAND")
+                        && distanceSquared(dealerMarker.location(), productionDealerLocation) < 0.0000001D,
+                "preview dealer marker uses the exact floating production-hand location");
+
         draft.setEnabled(true);
         gateway.clearCreated();
         BlackjackPreviewService.PreviewResult enabledResult = service.show(admin, draft);
@@ -80,6 +91,13 @@ public final class BlackjackPreviewHarness {
                 "preview cleanup never touches the production display owner");
 
         System.out.println("BlackjackPreviewHarness passed " + checks + " checks.");
+    }
+
+    private static double distanceSquared(org.bukkit.Location first, org.bukkit.Location second) {
+        double x = first.getX() - second.getX();
+        double y = first.getY() - second.getY();
+        double z = first.getZ() - second.getZ();
+        return x * x + y * y + z * z;
     }
 
     private static void check(boolean condition, String message) {

@@ -18,6 +18,7 @@ import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
+import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.reload.ReloadService;
 import dev.vapee.core.settings.SettingsModule;
 import dev.vapee.core.seat.SeatModule;
@@ -37,6 +38,7 @@ public final class VapeeCore extends JavaPlugin {
     private CommandHelpRenderer commandHelpRenderer;
     private ModuleManager moduleManager;
     private PermissionModule permissionModule;
+    private RankModule rankModule;
     private PlayerModule playerModule;
     private SocialModule socialModule;
     private EconomyModule economyModule;
@@ -63,17 +65,19 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager = new ModuleManager(getLogger());
 
         permissionModule = new PermissionModule(this);
+        rankModule = new RankModule(this, configService, permissionModule, messageService);
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService, commandHelpRenderer);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
-        chatModule = new ChatModule(this, permissionModule, socialModule, messageService);
+        chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
         presentationModule = new PresentationModule(
                 this,
                 configService,
                 messageService,
                 permissionModule,
+                rankModule,
                 playerModule,
                 economyModule,
                 lobbyModule
@@ -112,6 +116,7 @@ public final class VapeeCore extends JavaPlugin {
                 messageService
         );
         moduleManager.register(permissionModule);
+        moduleManager.register(rankModule);
         moduleManager.register(playerModule);
         moduleManager.register(socialModule);
         moduleManager.register(economyModule);
