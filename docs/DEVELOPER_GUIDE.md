@@ -51,6 +51,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | World display module lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayModule` |
 | Coins | `dev.vapee.core.economy` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
+| Kumulative Online-/Playtime-Rewards | `dev.vapee.core.onlinereward` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
@@ -77,7 +78,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 
 | File | Owner | Purpose | `/core reload`? | Runtime mutable? | Defaults |
 |---|---|---|---:|---|---|
-| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track` | Ja | Durch Reload | `src/main/resources/config.yml` |
+| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track`, Online-Reward-Regeln und -Nachricht | Ja | Durch Reload | `src/main/resources/config.yml` |
 | `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
@@ -85,7 +86,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 
-Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` gehört zum bereits vorhandenen `ConfigService`; weder `RankModule` noch `RewardModule` fügen einen sechsten Teilnehmer hinzu. Reward besitzt keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
+Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward und OnlineReward fügen keinen sechsten Teilnehmer hinzu. Reward besitzt keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu, sodass Enabled-, Intervall-, Coin- und Nachrichtenänderungen nach Apply ohne Neustart gelten. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
 ## Module map und Reihenfolge
 
@@ -97,20 +98,21 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
-7. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-8. **Chat** – globaler Chat und lesende Rank-Placeholder.
-9. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-10. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-11. **Settings** – Settings-Inventar und `/settings`.
-12. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-13. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-14. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-15. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-16. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-17. **Warp** – dynamische Warp-Persistence und Admin-Command.
-18. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+7. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
+8. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+9. **Chat** – globaler Chat und lesende Rank-Placeholder.
+10. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+11. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+12. **Settings** – Settings-Inventar und `/settings`.
+13. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+14. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+15. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+16. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+17. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+18. **Warp** – dynamische Warp-Persistence und Admin-Command.
+19. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Reward → Economy → Social → Player → Rank → Permission. Reward flusht dabei alle dirty Player, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. OnlineReward stoppt zuerst seinen Processing-Task; Reward flusht anschließend dirty Coins und den bereits im selben `CorePlayer` aktualisierten Fortschritt, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -129,6 +131,10 @@ Player + Economy
   ↑
 Reward
 
+Config + Player + Reward + Message
+  ↑
+OnlineReward
+
 Lobby + Activity
   ↑
 Utility
@@ -146,7 +152,7 @@ Lobby + Player + Settings + Warp
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von Activity, Mine, Quest, Rank, Chat oder Presentation. Künftige Features hängen als Consumer in Richtung `Feature → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von OnlineReward, Activity, Mine, Quest, Rank, Chat oder Presentation. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt, Activity, Rank, LuckPerms, Mine, Quest, Blackjack, Warp oder Lobby. Features hängen in Richtung `Feature → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
 ## Reward Foundation
 
@@ -158,7 +164,21 @@ Der Service ist Main-Thread-owned und hält niemals Bukkit-`Player`-Referenzen. 
 
 Direkte und administrative Operationen `EconomyService#setCoins`, `addCoins` und `removeCoins` bleiben sofort persistiert und rollen ihre Wallet-Mutation bei einem Save-Fehler weiterhin zurück. Der Deferred-Economy-Pfad ist ausschließlich eine Infrastrukturgrenze für `RewardService`; Feature-Code darf ihn nicht direkt aufrufen. Beispiele für spätere Consumer wären Onlinezeit mit `PLAYTIME`, Quests mit `QUEST`, eine Mine oder ein Minigame mit `ACTIVITY` und Server-Events mit `EVENT`. Phase 16B aktiviert keinen davon.
 
-Reward führt keine Config oder eigene Datei ein, erweitert das Player-YAML-Schema nicht und besitzt keine History, kein Ledger, keine Offline-Queue, keine Multiplikatoren, keine Commands, Permissions oder Player-Nachrichten. Eine exakt einmalige, über harte Abstürze hinweg garantierte Auszahlung ist deshalb ausdrücklich nicht Teil dieser Foundation.
+Reward selbst führt keine Config oder eigene Datei ein und besitzt keine History, kein Ledger, keine Offline-Queue, keine Multiplikatoren, Commands, Permissions oder Player-Nachrichten. Das Player-Schema wird ausschließlich durch den konkreten OnlineReward-Consumer um dessen notwendigen Fortschritt erweitert. Eine exakt einmalige, über harte Abstürze hinweg garantierte Auszahlung ist deshalb weiterhin nicht Teil der Foundation.
+
+## Online / Playtime Rewards
+
+`OnlineRewardModule` besitzt genau einen synchronen 20-Tick-Task. Der Adapter iteriert `Server#getOnlinePlayers()`, liest `Player#getStatistic(Statistic.PLAY_ONE_MINUTE)` und übergibt UUID plus Tickwert an den Bukkit-armen `OnlineRewardService`. Der historische Statistikname bedeutet weiterhin Ticks mit 20 Ticks pro Sekunde. Presentation nutzt unverändert dieselbe Quelle für `<playtime>`; OnlineReward führt keine eigene Sekundenuhr und keine neuen Presentation-Placeholder ein. Ein technischer Fehler eines Players wird isoliert, damit der wiederkehrende Task alle anderen weiterverarbeitet.
+
+Der persistente Domain-State ist `OnlineRewardProgress`. Initialisiert enthält er genau `processedPlaytimeTicks >= 0`; andernfalls ist er uninitialized. `FilePlayerRepository` schreibt den Wert als `rewards.online.processed-playtime-ticks`. Fehlt `rewards`, `online` oder der Key, bleibt das Profil gültig und uninitialized. Negative, falsch typisierte oder strukturell ungültige optionale Reward-Daten erzeugen eine Warnung und werden ebenfalls als uninitialized behandelt. Beim ersten Processing wird ausschließlich die aktuelle Minecraft-Statistik als Baseline gesetzt: Es gibt keine Auszahlung für bereits vor Phase 16C gespielte Zeit.
+
+Normaler Fortschritt ist `currentPlaytimeTicks - processedPlaytimeTicks`. Unter einem vollständigen Intervall bleibt `processed` unverändert, sodass der Rest automatisch Logout, Login und Serverneustart überlebt. Bei Fälligkeit werden alle vollständigen Intervalle in genau einem `RewardService.grantCoins(uuid, totalCoins, PLAYTIME, "online:playtime")` aggregiert. Nur `SUCCESS` erhöht `processed` um `intervalCount × intervalTicks`; der Rest bleibt bestehen. `PLAYER_NOT_LOADED`, Balance- oder Multiplikations-Overflow verändern den Fortschritt nicht. Ein Statistik-Rollback beziehungsweise negativer Wert rebased ohne Reward sicher auf den nicht negativen aktuellen Wert.
+
+Ein erfolgreicher Grant mutiert das Wallet sofort und markiert den Player in der Reward Foundation dirty. OnlineReward aktualisiert danach im selben Main-Thread-Durchlauf den Progress. Der nächste Reward-Batch-Flush speichert dadurch Coins und Fortschritt gemeinsam; `OnlineRewardService` ruft niemals `savePlayer` oder Economy direkt auf. Baseline-, Disable- und Rebase-Änderungen werden erst durch Quit, Shutdown oder einen anderen normalen Player-Save dauerhaft. Bei einem harten Crash kann deren letzte In-Memory-Aktualisierung deshalb fehlen; dieses begrenzte Baseline-Fenster ist bewusst akzeptiert.
+
+Die immutable Config-View aus `config.yml` enthält `online-rewards.enabled`, `interval-minutes`, `coins`, `message.enabled` und `message.format`. Defaults sind `true`, `60`, `250`, `true` und die dokumentierte MiniMessage. Positive Ganzzahlen, sichere Minuten-zu-Ticks-Konvertierung und das Nachrichtenformat werden beim Laden validiert; Fehler warnen, verwenden Defaults und verändern die Datei nicht. Ein Reload setzt keinen Fortschritt zurück: Ein kleineres Intervall kann vorhandenen Rest beim nächsten Check fällig machen, ein neuer Coin-Wert gilt nur für die nächste Auszahlung.
+
+Bei `enabled: false` wird die In-Memory-Baseline regelmäßig auf die aktuelle Statistik gesetzt. Deaktivierte Zeit wird daher nach Reaktivierung nicht bezahlt; gespeichert wird weiterhin nur über den normalen Player-Lifecycle. Erfolgreiche Rewards können über den globalen `MessageService` gemeldet werden. `<coins>`, `<minutes>`, `<intervals>` und `<balance>` werden als sichere unparsed Placeholder eingesetzt. Ein ungültiges Config-Template fällt bereits beim Laden zurück; ein unerwarteter Sendefehler ändert weder Coins noch Progress. Phase 16C besitzt keine AFK-Erkennung, daher zählt verbundene Minecraft-Spielzeit derzeit auch während AFK. Es gibt keine Permission, Commands, Claims, Limits, Zufallswerte, Multiplikatoren oder Kopplung an Welt, Activity, Blackjack, Rank, Mine oder Quest.
 
 ## Ranks & Server Identity
 
@@ -172,7 +192,7 @@ Jeder öffentliche Rank sollte in LuckPerms einen Group Display Name besitzen. F
 
 Neue Ränge benötigen keine VapeeCore-Codeänderung. Der empfohlene LuckPerms-Ablauf ist: Gruppe erstellen, Group Display Name setzen, `vapeecore.rank.color` setzen, optional `vapeecore.rank.description` setzen und die Gruppe an den konfigurierten `ranks`-Track anhängen. Weder Gruppen-IDs noch deren Farben werden in Production Code abgebildet.
 
-Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren könnten über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16B implementiert weder Mine noch `coin-multiplier`; die Rank-Domain bleibt unabhängig von Reward und Economy.
+Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren könnten über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16C implementiert weder Mine noch `coin-multiplier`; Online Rewards sind für alle Ränge identisch und besitzen keine LuckPerms-Abhängigkeit.
 
 Presentation und Chat unterstützen `<rank>` als farbiges Component aus dem freundlichen Primary-Rank-Namen, `<rank_name>` als normalen Player Display Name in der Primary-Rank-Farbe sowie `<rank_id>` als rohe Primary Group. `<name>` bleibt der unveränderte Player Display Name; `<group>` bleibt als Compatibility-Alias identisch zu `<rank_id>`; `<prefix>` und `<suffix>` bleiben die effektiven LuckPerms-Metawerte. Der Chat-Renderer wird pro `AsyncChatEvent` neu erzeugt, damit Papers viewer-unaware Cache nicht die erste Nachricht für Folge-Events wiederverwendet. Der Async-Pfad liest nur bereits geladene LuckPerms-Cached-Data, verwendet keine Player-Statistik und setzt Playertext weiterhin als sichere Adventure Component ein.
 
@@ -504,8 +524,11 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.economy.EconomyServiceHarness`
 - `dev.vapee.core.reward.RewardServiceHarness`
 - `dev.vapee.core.reward.RewardLifecycleHarness`
+- `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`
+- `dev.vapee.core.onlinereward.OnlineRewardLifecycleHarness`
+- `dev.vapee.core.player.repository.PlayerRewardPersistenceHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 18 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 19 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

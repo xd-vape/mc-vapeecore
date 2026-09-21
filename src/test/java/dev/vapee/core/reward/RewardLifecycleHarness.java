@@ -51,7 +51,7 @@ public final class RewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "lobbyModule", "chatModule", "privateMessageModule",
+                "rewardModule", "onlineRewardModule", "lobbyModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule",
                 "seatModule", "worldDisplayModule", "blackjackModule", "warpModule",
                 "lobbyExperienceModule"
@@ -62,13 +62,15 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 18,
-                "VapeeCore registers exactly eighteen modules");
+        check(count(coreSource, "moduleManager.register(") == 19,
+                "VapeeCore registers exactly nineteen modules after Phase 16C");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")
+                        < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
+                        && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
-                "RewardModule is constructed directly after Economy and before Lobby");
+                "RewardModule remains after Economy and before its OnlineReward consumer");
         check(coreSource.contains(
                         "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
                 ),

@@ -14,6 +14,7 @@ Sie dient als zentrale Referenz für:
 - Adventure Components
 - MiniMessage
 - Playtime
+- Online-Reward-Nachrichten
 - zukünftige neue Ränge
 
 ---
@@ -39,6 +40,7 @@ Sie dient als zentrale Referenz für:
 17. [Tablist konfigurieren](#17-tablist-konfigurieren)
 18. [Scoreboard konfigurieren](#18-scoreboard-konfigurieren)
 19. [Playtime](#19-playtime)
+   - [Online-Reward-Nachricht](#online-reward-nachricht)
 20. [LuckPerms Prefix und Suffix](#20-luckperms-prefix-und-suffix)
 21. [Legacy `&` Farben](#21-legacy--farben)
 22. [`§` Farbcodes](#22--farbcodes)
@@ -63,6 +65,7 @@ Die wichtigste Regel lautet:
 | `chat.yml` | MiniMessage | `<gold>Text</gold>` |
 | `presentation.yml` | MiniMessage | `<aqua>Text</aqua>` |
 | `config.yml -> messages.prefix` | MiniMessage | `<gray>[<aqua>VapeeCore</aqua>]</gray>` |
+| `config.yml -> online-rewards.message.format` | MiniMessage | `<green>+<coins> Coins</green>` |
 | `vapeecore.rank.color` | Adventure-Farbname oder Hex | `gold` |
 | `vapeecore.rank.color` | Adventure-Hex | `#ffaa00` |
 | LuckPerms Prefix/Suffix mit `legacy-ampersand` | Legacy `&` | `&6VIP &8| &f` |
@@ -136,6 +139,8 @@ Beispiel:
 messages:
   prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
 ```
+
+Auch `online-rewards.message.format` ist ein MiniMessage-Template. Es verwendet sichere numerische Placeholder; Details stehen im Abschnitt [Online-Reward-Nachricht](#online-reward-nachricht).
 
 ---
 
@@ -1172,6 +1177,38 @@ oder:
 
 ---
 
+## Online-Reward-Nachricht
+
+Die automatische Nachricht nach einem erfolgreichen Playtime-Reward steht in der Live-Datei:
+
+```text
+plugins/VapeeCore/config.yml
+```
+
+Beispiel:
+
+```yaml
+online-rewards:
+  message:
+    enabled: true
+    format: "<green>You received <gold><coins> Coins</gold> for <yellow><minutes> minutes</yellow> of playtime.</green>"
+```
+
+`format` ist MiniMessage und unterstützt diese Online-Reward-Placeholder:
+
+| Placeholder | Bedeutung |
+|---|---|
+| `<coins>` | tatsächlich mit diesem Reward gewährte Coins |
+| `<minutes>` | tatsächlich vergütete Minuten |
+| `<intervals>` | Anzahl gleichzeitig vergüteter Intervalle |
+| `<balance>` | neue Coin-Balance nach dem Reward |
+
+Bei drei gleichzeitig fälligen 60-Minuten-Intervallen mit je 250 Coins sind die Werte beispielsweise `750`, `180`, `3` und die danach aktuelle Balance. Die Werte werden als sichere unparsed Placeholder eingesetzt und nicht erneut als MiniMessage interpretiert. Ein ungültiges Template verwendet den internen Default und verändert die Live-Datei nicht.
+
+`<playtime>` gehört weiterhin ausschließlich zu `presentation.yml` und zeigt die gesamte Minecraft-Spielzeit. Es ist kein Placeholder für `online-rewards.message.format`; umgekehrt stehen die vier Reward-Placeholder nicht in Scoreboard oder Tablist zur Verfügung.
+
+---
+
 # 20. LuckPerms Prefix und Suffix
 
 VapeeCore unterstützt weiterhin klassische LuckPerms Prefixes und Suffixes.
@@ -1726,6 +1763,14 @@ messages:
 
 ranks:
   track: "ranks"
+
+online-rewards:
+  enabled: true
+  interval-minutes: 60
+  coins: 250
+  message:
+    enabled: true
+    format: "<green>You received <gold><coins> Coins</gold> for <yellow><minutes> minutes</yellow> of playtime.</green>"
 
 settings:
   debug: false

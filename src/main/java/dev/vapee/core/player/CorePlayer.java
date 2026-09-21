@@ -1,6 +1,7 @@
 package dev.vapee.core.player;
 
 import dev.vapee.core.economy.CoinWallet;
+import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
 
@@ -15,6 +16,7 @@ public final class CorePlayer {
     private final PlayerSettings settings;
     private final CoinWallet wallet;
     private final PlayerSocial social;
+    private final OnlineRewardProgress onlineRewardProgress;
     private String name;
     private Instant lastJoin;
 
@@ -27,6 +29,28 @@ public final class CorePlayer {
             CoinWallet wallet,
             PlayerSocial social
     ) {
+        this(
+                uniqueId,
+                name,
+                firstJoin,
+                lastJoin,
+                settings,
+                wallet,
+                social,
+                OnlineRewardProgress.uninitialized()
+        );
+    }
+
+    public CorePlayer(
+            UUID uniqueId,
+            String name,
+            Instant firstJoin,
+            Instant lastJoin,
+            PlayerSettings settings,
+            CoinWallet wallet,
+            PlayerSocial social,
+            OnlineRewardProgress onlineRewardProgress
+    ) {
         this.uniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
         this.name = requireName(name);
         this.firstJoin = Objects.requireNonNull(firstJoin, "firstJoin");
@@ -34,6 +58,10 @@ public final class CorePlayer {
         this.settings = Objects.requireNonNull(settings, "settings");
         this.wallet = Objects.requireNonNull(wallet, "wallet");
         this.social = Objects.requireNonNull(social, "social");
+        this.onlineRewardProgress = Objects.requireNonNull(
+                onlineRewardProgress,
+                "onlineRewardProgress"
+        );
         if (social.isIgnoring(uniqueId)) {
             throw new IllegalArgumentException("A player cannot ignore themselves");
         }
@@ -65,6 +93,10 @@ public final class CorePlayer {
 
     public PlayerSocial getSocial() {
         return social;
+    }
+
+    public OnlineRewardProgress getOnlineRewardProgress() {
+        return onlineRewardProgress;
     }
 
     public void updateName(String name) {

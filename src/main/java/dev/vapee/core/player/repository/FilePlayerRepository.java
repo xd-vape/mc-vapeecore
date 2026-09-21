@@ -1,6 +1,7 @@
 package dev.vapee.core.player.repository;
 
 import dev.vapee.core.economy.CoinWallet;
+import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
@@ -91,6 +92,9 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
             configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
             configuration.set("economy.coins", player.getWallet().getCoins());
+            player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
+                    ticks -> configuration.set("rewards.online.processed-playtime-ticks", ticks)
+            );
             List<String> ignoredPlayers = player.getSocial().getIgnoredPlayers().stream()
                     .map(UUID::toString)
                     .sorted()
@@ -123,6 +127,11 @@ public final class FilePlayerRepository implements PlayerRepository {
         PlayerSettings settings = readSettings(uniqueId, playerFile, configuration);
         CoinWallet wallet = readWallet(playerFile, configuration);
         PlayerSocial social = readSocial(uniqueId, playerFile, configuration);
+        OnlineRewardProgress onlineRewardProgress = readOnlineRewardProgress(
+                uniqueId,
+                playerFile,
+                configuration
+        );
 
         try {
             return new CorePlayer(
@@ -132,7 +141,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     Instant.ofEpochMilli(lastJoinMillis),
                     settings,
                     wallet,
-                    social
+                    social,
+                    onlineRewardProgress
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -263,6 +273,50 @@ public final class FilePlayerRepository implements PlayerRepository {
         return PlayerSocial.of(ignoredPlayers);
     }
 
+    private OnlineRewardProgress readOnlineRewardProgress(
+            UUID uniqueId,
+            Path playerFile,
+            YamlConfiguration configuration
+    ) {
+        if (!configuration.contains("rewards")) {
+            return OnlineRewardProgress.uninitialized();
+        }
+        if (!configuration.isConfigurationSection("rewards")) {
+            logInvalidOptionalState(uniqueId, playerFile, "rewards", "expected a YAML section");
+            return OnlineRewardProgress.uninitialized();
+        }
+        if (!configuration.contains("rewards.online")) {
+            return OnlineRewardProgress.uninitialized();
+        }
+        if (!configuration.isConfigurationSection("rewards.online")) {
+            logInvalidOptionalState(
+                    uniqueId,
+                    playerFile,
+                    "rewards.online",
+                    "expected a YAML section"
+            );
+            return OnlineRewardProgress.uninitialized();
+        }
+
+        String key = "rewards.online.processed-playtime-ticks";
+        if (!configuration.contains(key)) {
+            return OnlineRewardProgress.uninitialized();
+        }
+        Object value = configuration.get(key);
+        if (!(value instanceof Byte || value instanceof Short
+                || value instanceof Integer || value instanceof Long)) {
+            logInvalidOptionalState(uniqueId, playerFile, key, "expected a non-negative integer");
+            return OnlineRewardProgress.uninitialized();
+        }
+
+        long processedTicks = ((Number) value).longValue();
+        if (processedTicks < 0L) {
+            logInvalidOptionalState(uniqueId, playerFile, key, "must not be negative");
+            return OnlineRewardProgress.uninitialized();
+        }
+        return OnlineRewardProgress.initialized(processedTicks);
+    }
+
     private boolean readBooleanSetting(
             UUID uniqueId,
             Path playerFile,
@@ -286,6 +340,13 @@ public final class FilePlayerRepository implements PlayerRepository {
     private void logInvalidSetting(UUID uniqueId, Path playerFile, String key, String reason) {
         logger.warning("Invalid player setting '" + key + "' for " + uniqueId + " in "
                 + playerFile + ": " + reason + "; using its default value."
+        );
+    }
+
+    private void logInvalidOptionalState(UUID uniqueId, Path playerFile, String key, String reason) {
+        logger.warning("Invalid optional player state '" + key + "' for " + uniqueId + " in "
+                + playerFile + ": " + reason
+                + "; treating online rewards as uninitialized so the next process establishes a safe baseline."
         );
     }
 
