@@ -20,6 +20,7 @@ import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.reload.ReloadService;
+import dev.vapee.core.reward.RewardModule;
 import dev.vapee.core.settings.SettingsModule;
 import dev.vapee.core.seat.SeatModule;
 import dev.vapee.core.social.SocialModule;
@@ -42,6 +43,7 @@ public final class VapeeCore extends JavaPlugin {
     private PlayerModule playerModule;
     private SocialModule socialModule;
     private EconomyModule economyModule;
+    private RewardModule rewardModule;
     private LobbyModule lobbyModule;
     private ChatModule chatModule;
     private PrivateMessageModule privateMessageModule;
@@ -69,6 +71,7 @@ public final class VapeeCore extends JavaPlugin {
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService, commandHelpRenderer);
+        rewardModule = new RewardModule(this, playerModule, economyModule);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
         chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
@@ -120,6 +123,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(playerModule);
         moduleManager.register(socialModule);
         moduleManager.register(economyModule);
+        moduleManager.register(rewardModule);
         moduleManager.register(lobbyModule);
         moduleManager.register(chatModule);
         moduleManager.register(privateMessageModule);

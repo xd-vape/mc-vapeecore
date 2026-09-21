@@ -50,6 +50,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | World text/item display lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayService` |
 | World display module lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayModule` |
 | Coins | `dev.vapee.core.economy` |
+| Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
@@ -84,7 +85,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 
-Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` gehört zum bereits vorhandenen `ConfigService`; `RankModule` fügt keinen sechsten Teilnehmer hinzu. Der Reload wird zweiphasig vorbereitet und angewendet. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
+Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` gehört zum bereits vorhandenen `ConfigService`; weder `RankModule` noch `RewardModule` fügen einen sechsten Teilnehmer hinzu. Reward besitzt keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
 ## Module map und Reihenfolge
 
@@ -95,20 +96,21 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 3. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
-6. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-7. **Chat** – globaler Chat und lesende Rank-Placeholder.
-8. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-9. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-10. **Settings** – Settings-Inventar und `/settings`.
-11. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-12. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-13. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-14. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-15. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-16. **Warp** – dynamische Warp-Persistence und Admin-Command.
-17. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+6. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
+7. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+8. **Chat** – globaler Chat und lesende Rank-Placeholder.
+9. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+10. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+11. **Settings** – Settings-Inventar und `/settings`.
+12. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+13. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+14. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+15. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+16. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+17. **Warp** – dynamische Warp-Persistence und Admin-Command.
+18. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Economy → Social → Player → Rank → Permission. Rank besitzt dabei keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Reward → Economy → Social → Player → Rank → Permission. Reward flusht dabei alle dirty Player, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -122,6 +124,10 @@ Chat  Presentation
 Player
   ↑
 Lobby
+
+Player + Economy
+  ↑
+Reward
 
 Lobby + Activity
   ↑
@@ -140,7 +146,19 @@ Lobby + Player + Settings + Warp
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von Activity, Mine, Quest, Rank, Chat oder Presentation. Künftige Features hängen als Consumer in Richtung `Feature → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+
+## Reward Foundation
+
+`RewardService` besitzt ausschließlich die technische Frage, **wie** ein positiver Gameplay-Coin-Reward dem geladenen Player gutgeschrieben und effizient gespeichert wird. Das jeweilige Feature bleibt Owner der fachlichen Fragen, **wann** und **warum** der Reward entsteht. Es erzeugt einen `RewardGrant(UUID playerId, long coins, RewardSource source, String reason)` oder nutzt die gleichwertige Convenience-Methode. Quellen sind `PLAYTIME`, `QUEST`, `ACTIVITY`, `EVENT`, `ACHIEVEMENT`, `ADMIN` und `SYSTEM`; Resultate sind `SUCCESS`, `PLAYER_NOT_LOADED` oder `BALANCE_OVERFLOW` und enthalten bei Erfolg die resultierende Balance.
+
+Der Service ist Main-Thread-owned und hält niemals Bukkit-`Player`-Referenzen. Ein erfolgreicher Grant verändert das Wallet sofort über den klar abgegrenzten Deferred-Pfad des `EconomyService` und markiert ausschließlich die UUID dirty. Das `RewardModule` besitzt genau einen gemeinsamen synchronen 20-Tick-Task. Dieser flusht jeden dirty Player unabhängig von der Anzahl seiner Grants nur einmal, indem der aktuelle `CorePlayer` gespeichert wird. Damit schreiben auch zwischenzeitliche direkte Economy-Mutationen keinen veralteten Snapshot zurück.
+
+`RewardListener` läuft bei Quit mit `LOWEST` und flusht vor dem regulären `PlayerListener` mit `NORMAL`, der den Player speichert und aus dem Cache entfernt. Beim Modul-Shutdown wird zuerst der gemeinsame Task gestoppt und danach geflusht; wegen der rückwärts laufenden Modulreihenfolge stehen Economy und Player dabei noch bereit. Ein fehlgeschlagener Save wird pro Player protokolliert, blockiert keine anderen Player und lässt dessen UUID für den nächsten Tick dirty. Das Wallet wird dabei absichtlich nicht zurückgerollt. Ist ein dirty Player bereits ungeladen, wird der Marker entfernt, weil `PlayerService#unloadPlayer` vor dem Entfernen immer gespeichert hat. Ein harter Prozessabbruch kann höchstens ungefähr das 20-Tick-Fenster seit dem letzten erfolgreichen Flush verlieren.
+
+Direkte und administrative Operationen `EconomyService#setCoins`, `addCoins` und `removeCoins` bleiben sofort persistiert und rollen ihre Wallet-Mutation bei einem Save-Fehler weiterhin zurück. Der Deferred-Economy-Pfad ist ausschließlich eine Infrastrukturgrenze für `RewardService`; Feature-Code darf ihn nicht direkt aufrufen. Beispiele für spätere Consumer wären Onlinezeit mit `PLAYTIME`, Quests mit `QUEST`, eine Mine oder ein Minigame mit `ACTIVITY` und Server-Events mit `EVENT`. Phase 16B aktiviert keinen davon.
+
+Reward führt keine Config oder eigene Datei ein, erweitert das Player-YAML-Schema nicht und besitzt keine History, kein Ledger, keine Offline-Queue, keine Multiplikatoren, keine Commands, Permissions oder Player-Nachrichten. Eine exakt einmalige, über harte Abstürze hinweg garantierte Auszahlung ist deshalb ausdrücklich nicht Teil dieser Foundation.
 
 ## Ranks & Server Identity
 
@@ -154,7 +172,7 @@ Jeder öffentliche Rank sollte in LuckPerms einen Group Display Name besitzen. F
 
 Neue Ränge benötigen keine VapeeCore-Codeänderung. Der empfohlene LuckPerms-Ablauf ist: Gruppe erstellen, Group Display Name setzen, `vapeecore.rank.color` setzen, optional `vapeecore.rank.description` setzen und die Gruppe an den konfigurierten `ranks`-Track anhängen. Weder Gruppen-IDs noch deren Farben werden in Production Code abgebildet.
 
-Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren können über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16A.1 implementiert weder Mine noch `coin-multiplier` und verändert den `EconomyService` nicht.
+Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren könnten über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16B implementiert weder Mine noch `coin-multiplier`; die Rank-Domain bleibt unabhängig von Reward und Economy.
 
 Presentation und Chat unterstützen `<rank>` als farbiges Component aus dem freundlichen Primary-Rank-Namen, `<rank_name>` als normalen Player Display Name in der Primary-Rank-Farbe sowie `<rank_id>` als rohe Primary Group. `<name>` bleibt der unveränderte Player Display Name; `<group>` bleibt als Compatibility-Alias identisch zu `<rank_id>`; `<prefix>` und `<suffix>` bleiben die effektiven LuckPerms-Metawerte. Der Chat-Renderer wird pro `AsyncChatEvent` neu erzeugt, damit Papers viewer-unaware Cache nicht die erste Nachricht für Folge-Events wiederverwendet. Der Async-Pfad liest nur bereits geladene LuckPerms-Cached-Data, verwendet keine Player-Statistik und setzt Playertext weiterhin als sichere Adventure Component ein.
 
@@ -483,8 +501,11 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.presentation.PlaytimeFormatterHarness`
 - `dev.vapee.core.chat.ChatHarness`
 - `dev.vapee.core.config.ConfigServiceHarness`
+- `dev.vapee.core.economy.EconomyServiceHarness`
+- `dev.vapee.core.reward.RewardServiceHarness`
+- `dev.vapee.core.reward.RewardLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 18 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

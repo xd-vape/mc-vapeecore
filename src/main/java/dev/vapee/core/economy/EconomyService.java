@@ -46,7 +46,28 @@ public final class EconomyService {
         UUID validatedUniqueId = requireUniqueId(uniqueId);
         requirePositive(amount);
 
-        Optional<CorePlayer> player = playerService.getPlayer(validatedUniqueId);
+        return mutateAdd(validatedUniqueId, amount, this::persistBalance);
+    }
+
+    /**
+     * Updates the loaded wallet without persisting it. Gameplay reward features must use
+     * RewardService so its shared batch flush can track and persist this mutation.
+     */
+    public EconomyResult addCoinsDeferred(UUID uniqueId, long amount) {
+        UUID validatedUniqueId = requireUniqueId(uniqueId);
+        requirePositive(amount);
+
+        return mutateAdd(validatedUniqueId, amount, this::applyBalance);
+    }
+
+    private EconomyResult mutateAdd(
+            UUID uniqueId,
+            long amount,
+            BalanceApplication balanceApplication
+    ) {
+        Objects.requireNonNull(balanceApplication, "balanceApplication");
+
+        Optional<CorePlayer> player = playerService.getPlayer(uniqueId);
         if (player.isEmpty()) {
             return EconomyResult.PLAYER_NOT_LOADED;
         }
@@ -57,7 +78,7 @@ public final class EconomyService {
         } catch (ArithmeticException exception) {
             return EconomyResult.BALANCE_OVERFLOW;
         }
-        return persistBalance(validatedUniqueId, player.get(), newBalance);
+        return balanceApplication.apply(uniqueId, player.get(), newBalance);
     }
 
     public EconomyResult removeCoins(UUID uniqueId, long amount) {
@@ -90,6 +111,11 @@ public final class EconomyService {
         return EconomyResult.SUCCESS;
     }
 
+    private EconomyResult applyBalance(UUID uniqueId, CorePlayer player, long newBalance) {
+        player.getWallet().setCoins(newBalance);
+        return EconomyResult.SUCCESS;
+    }
+
     private UUID requireUniqueId(UUID uniqueId) {
         return Objects.requireNonNull(uniqueId, "uniqueId");
     }
@@ -104,5 +130,11 @@ public final class EconomyService {
         if (amount <= 0L) {
             throw new IllegalArgumentException("Coin amount must be positive");
         }
+    }
+
+    @FunctionalInterface
+    private interface BalanceApplication {
+
+        EconomyResult apply(UUID uniqueId, CorePlayer player, long newBalance);
     }
 }
