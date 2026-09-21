@@ -33,7 +33,11 @@ public final class ChatListener implements Listener {
         }
 
         event.renderer(
-                ChatRenderer.viewerUnaware(chatService::render)
+                createRenderer(chatService::render)
         );
+    }
+
+    static ChatRenderer createRenderer(ChatRenderer.ViewerUnaware renderer) {
+        return ChatRenderer.viewerUnaware(Objects.requireNonNull(renderer, "renderer"));
     }
 }

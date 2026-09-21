@@ -95,7 +95,7 @@ public final class RanksCommand implements TabExecutor {
             output = output.append(Component.newline())
                     .append(Component.newline())
                     .append(Component.text((index + 1) + ". ", NamedTextColor.GRAY))
-                    .append(Component.text(rank.displayName(), NamedTextColor.WHITE));
+                    .append(rank.displayComponent());
             if (currentRankId.filter(rank.id()::equals).isPresent()) {
                 output = output.append(Component.text(" • You", NamedTextColor.AQUA));
             }

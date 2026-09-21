@@ -2,6 +2,8 @@ package dev.vapee.core.rank;
 
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.permission.LuckPermsService;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +16,7 @@ import java.util.function.Supplier;
 public final class RankService {
 
     public static final String DESCRIPTION_META_KEY = "vapeecore.rank.description";
+    public static final String COLOR_META_KEY = "vapeecore.rank.color";
 
     private final Supplier<String> trackNameSupplier;
     private final Gateway gateway;
@@ -60,14 +63,28 @@ public final class RankService {
                         information.displayName().filter(value -> !value.isBlank())
                                 .orElseGet(() -> fallbackDisplayName(validatedGroupId)),
                         information.description(),
+                        information.color().flatMap(RankService::parseColor),
                         information.weight()
                 ))
                 .orElseGet(() -> new RankInfo(
                         validatedGroupId,
                         fallbackDisplayName(validatedGroupId),
                         Optional.empty(),
+                        Optional.empty(),
                         java.util.OptionalInt.empty()
                 ));
+    }
+
+    static Optional<TextColor> parseColor(String rawColor) {
+        if (rawColor == null || rawColor.isBlank()) {
+            return Optional.empty();
+        }
+
+        String normalizedColor = rawColor.trim();
+        if (normalizedColor.matches("#[0-9a-fA-F]{6}")) {
+            return Optional.ofNullable(TextColor.fromHexString(normalizedColor));
+        }
+        return Optional.ofNullable(NamedTextColor.NAMES.value(normalizedColor.toLowerCase(Locale.ROOT)));
     }
 
     private String currentTrackName() {
@@ -126,7 +143,7 @@ public final class RankService {
 
         @Override
         public Optional<LuckPermsService.GroupInformation> getGroupInformation(String groupId) {
-            return luckPermsService.getGroupInformation(groupId, DESCRIPTION_META_KEY);
+            return luckPermsService.getGroupInformation(groupId, DESCRIPTION_META_KEY, COLOR_META_KEY);
         }
 
         @Override

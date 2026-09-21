@@ -4,6 +4,8 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.rank.command.RanksCommand;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -49,6 +51,10 @@ public final class RanksCommandHarness {
                 "/ranks omits the description line when meta is missing");
         check(playerList.contains("2. VIP • You"),
                 "player sender receives a discreet current-rank marker");
+        check(hasColoredText(fixture.lastComponent(), "Member", NamedTextColor.GRAY)
+                        && hasColoredText(fixture.lastComponent(), "VIP", NamedTextColor.GOLD)
+                        && hasColoredText(fixture.lastComponent(), "Premium", NamedTextColor.AQUA),
+                "/ranks renders every track entry in its individual rank color");
 
         CommandSender console = fixture.console();
         command.onCommand(console, null, "ranks", new String[0]);
@@ -75,6 +81,13 @@ public final class RanksCommandHarness {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static boolean hasColoredText(Component component, String text, TextColor color) {
+        if (color.equals(component.color()) && PLAIN.serialize(component).contains(text)) {
+            return true;
+        }
+        return component.children().stream().anyMatch(child -> hasColoredText(child, text, color));
     }
 
     private static final class Fixture implements RankService.Gateway {
@@ -134,7 +147,11 @@ public final class RanksCommandHarness {
         }
 
         private String last() {
-            return PLAIN.serialize(messages.getLast());
+            return PLAIN.serialize(lastComponent());
+        }
+
+        private Component lastComponent() {
+            return messages.getLast();
         }
 
         @Override
@@ -146,10 +163,10 @@ public final class RanksCommandHarness {
         public Optional<LuckPermsService.GroupInformation> getGroupInformation(String groupId) {
             return switch (groupId) {
                 case "default" -> Optional.of(group(
-                        "default", "Member", "Standard community rank."
+                        "default", "Member", "Standard community rank.", "gray"
                 ));
-                case "vip" -> Optional.of(group("vip", "VIP", "Supporter rank."));
-                case "premium" -> Optional.of(group("premium", "Premium", null));
+                case "vip" -> Optional.of(group("vip", "VIP", "Supporter rank.", "gold"));
+                case "premium" -> Optional.of(group("premium", "Premium", null, "aqua"));
                 default -> Optional.empty();
             };
         }
@@ -162,12 +179,14 @@ public final class RanksCommandHarness {
         private static LuckPermsService.GroupInformation group(
                 String id,
                 String displayName,
-                String description
+                String description,
+                String color
         ) {
             return new LuckPermsService.GroupInformation(
                     id,
                     Optional.of(displayName),
                     Optional.ofNullable(description),
+                    Optional.ofNullable(color),
                     OptionalInt.empty()
             );
         }

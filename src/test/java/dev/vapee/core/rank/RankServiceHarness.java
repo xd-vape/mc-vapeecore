@@ -1,6 +1,8 @@
 package dev.vapee.core.rank;
 
 import dev.vapee.core.permission.LuckPermsService;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 
 import java.util.HashMap;
 import java.util.List;
@@ -23,15 +25,21 @@ public final class RankServiceHarness {
         Gateway gateway = new Gateway();
         gateway.primaryGroups.put(playerId, "vip");
         gateway.groups.put("vip", group(
-                "vip", "VIP", "Supporter rank.", OptionalInt.of(50)
+                "vip", "VIP", "Supporter rank.", "gold", OptionalInt.of(50)
         ));
         gateway.groups.put("default", group(
-                "default", "Member", null, OptionalInt.empty()
+                "default", "User", null, "gray", OptionalInt.empty()
         ));
         gateway.groups.put("premium", group(
-                "premium", null, null, OptionalInt.empty()
+                "premium", null, null, null, OptionalInt.empty()
         ));
-        gateway.tracks.put("ranks", List.of("default", "vip", "premium"));
+        gateway.groups.put("developer", group(
+                "developer", "Developer", "Development Team", "#c35cff", OptionalInt.of(80)
+        ));
+        gateway.groups.put("event_host", group(
+                "event_host", "Event Host", null, "banana", OptionalInt.empty()
+        ));
+        gateway.tracks.put("ranks", List.of("default", "vip", "premium", "developer", "event_host"));
         gateway.tracks.put("empty", List.of());
 
         RankService service = new RankService(trackName::get, gateway);
@@ -40,10 +48,14 @@ public final class RankServiceHarness {
         check(primary.displayName().equals("VIP"), "LuckPerms display name is resolved");
         check(primary.description().orElseThrow().equals("Supporter rank."),
                 "rank description meta is resolved");
+        check(primary.color().orElseThrow().equals(NamedTextColor.GOLD),
+                "named rank color is normalized to Adventure TextColor");
         check(primary.weight().orElseThrow() == 50, "group weight is exposed when present");
 
         RankInfo member = service.getPublicRanks().ranks().getFirst();
         check(member.description().isEmpty(), "missing rank description stays empty");
+        check(member.displayName().equals("User") && member.color().orElseThrow().equals(NamedTextColor.GRAY),
+                "friendly default display name and color both come from LuckPerms");
         check(member.weight().isEmpty(), "missing group weight stays empty");
         check(service.getPrimaryRank(UUID.randomUUID()).isEmpty(),
                 "unloaded user returns an empty primary rank");
@@ -53,6 +65,7 @@ public final class RankServiceHarness {
         check(missing.id().equals("missing-group")
                         && missing.displayName().equals("Missing Group")
                         && missing.description().isEmpty()
+                        && missing.color().isEmpty()
                         && missing.weight().isEmpty(),
                 "missing group data uses a controlled generic fallback");
         gateway.primaryGroups.put(playerId, "vip");
@@ -62,13 +75,35 @@ public final class RankServiceHarness {
                         && ranks.trackName().equals("ranks"),
                 "configured track is used");
         check(ranks.ranks().stream().map(RankInfo::id).toList()
-                        .equals(List.of("default", "vip", "premium")),
+                        .equals(List.of("default", "vip", "premium", "developer", "event_host")),
                 "LuckPerms track order is preserved");
         check(ranks.ranks().get(2).displayName().equals("Premium"),
                 "missing display name uses a generic ID fallback");
         check(RankService.fallbackDisplayName("vip").equals("VIP")
-                        && RankService.fallbackDisplayName("default").equals("Default"),
+                        && RankService.fallbackDisplayName("default").equals("Default")
+                        && RankService.fallbackDisplayName("senior_builder").equals("Senior Builder"),
                 "fallback normalization has no rank-name mapping");
+        RankInfo developer = ranks.ranks().get(3);
+        check(developer.displayName().equals("Developer")
+                        && developer.description().orElseThrow().equals("Development Team")
+                        && developer.color().orElseThrow().equals(TextColor.color(0xc35cff))
+                        && developer.weight().orElseThrow() == 80,
+                "an arbitrary future rank resolves display, hex color, description, and weight");
+        check(ranks.ranks().get(2).color().isEmpty()
+                        && ranks.ranks().get(2).effectiveColor().equals(NamedTextColor.WHITE),
+                "missing color uses the neutral component fallback");
+        check(ranks.ranks().get(4).color().isEmpty()
+                        && ranks.ranks().get(4).effectiveColor().equals(NamedTextColor.WHITE),
+                "invalid color is safely discarded and uses the neutral fallback");
+        check(List.of("gray", "gold", "aqua", "green", "red", "dark_red", "light_purple").stream()
+                        .allMatch(value -> RankService.parseColor(value).isPresent()),
+                "all required named Adventure colors are accepted generically");
+        check(RankService.parseColor("#55ffaa").orElseThrow().equals(TextColor.color(0x55ffaa)),
+                "six-digit hex rank colors are accepted");
+        check(RankService.parseColor("banana").isEmpty()
+                        && RankService.parseColor("#abcd").isEmpty()
+                        && RankService.parseColor(" ").isEmpty(),
+                "invalid, malformed, and blank colors return empty");
 
         trackName.set("missing");
         RankService.RankTrackResult missingTrack = service.getPublicRanks();
@@ -90,12 +125,14 @@ public final class RankServiceHarness {
             String id,
             String displayName,
             String description,
+            String color,
             OptionalInt weight
     ) {
         return new LuckPermsService.GroupInformation(
                 id,
                 Optional.ofNullable(displayName),
                 Optional.ofNullable(description),
+                Optional.ofNullable(color),
                 weight
         );
     }

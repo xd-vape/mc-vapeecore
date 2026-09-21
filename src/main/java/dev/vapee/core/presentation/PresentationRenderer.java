@@ -13,6 +13,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.bukkit.Statistic;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -159,37 +160,40 @@ public final class PresentationRenderer {
         Component suffix = luckPermsService.getSuffix(uniqueId)
                 .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
-        RankValues rankValues = resolveRankValues(
-                rankService.getPrimaryRank(uniqueId),
-                luckPermsService.getPrimaryGroup(uniqueId)
-        );
-        Component rankId = Component.text(rankValues.id());
+        Optional<RankInfo> rankInfo = rankService.getPrimaryRank(uniqueId);
         Component coins = renderCoins(economyService.getCoins(uniqueId));
+        long playtimeTicks = (long) player.getStatistic(Statistic.PLAY_ONE_MINUTE);
 
         return TagResolver.resolver(
+                createRankAndPlaytimePlaceholders(rankInfo, player.displayName(), playtimeTicks),
                 Placeholder.component("server", Component.text(configService.getServerName())),
                 Placeholder.component("name", player.displayName()),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
-                Placeholder.component("rank", Component.text(rankValues.displayName())),
-                Placeholder.component("rank_id", rankId),
-                Placeholder.component("group", rankId),
                 Placeholder.component("coins", coins),
                 Placeholder.component("online", Component.text(plugin.getServer().getOnlinePlayers().size())),
                 Placeholder.component("max_players", Component.text(plugin.getServer().getMaxPlayers()))
         );
     }
 
-    static RankValues resolveRankValues(
+    static TagResolver createRankAndPlaytimePlaceholders(
             Optional<RankInfo> rankInfo,
-            Optional<String> primaryGroupFallback
+            Component displayName,
+            long playtimeTicks
     ) {
         Optional<RankInfo> validatedRankInfo = Objects.requireNonNull(rankInfo, "rankInfo");
-        String rankId = validatedRankInfo.map(RankInfo::id)
-                .or(() -> Objects.requireNonNull(primaryGroupFallback, "primaryGroupFallback"))
-                .orElse("");
-        String displayName = validatedRankInfo.map(RankInfo::displayName).orElse(rankId);
-        return new RankValues(displayName, rankId);
+        Component validatedDisplayName = Objects.requireNonNull(displayName, "displayName");
+        Component rank = validatedRankInfo.map(RankInfo::displayComponent).orElse(Component.empty());
+        Component rankName = validatedRankInfo.map(value -> value.colorize(validatedDisplayName))
+                .orElse(validatedDisplayName);
+        Component rankId = Component.text(validatedRankInfo.map(RankInfo::id).orElse(""));
+        return TagResolver.resolver(
+                Placeholder.component("rank", rank),
+                Placeholder.component("rank_name", rankName),
+                Placeholder.component("rank_id", rankId),
+                Placeholder.component("group", rankId),
+                Placeholder.unparsed("playtime", PlaytimeFormatter.formatTicks(playtimeTicks))
+        );
     }
 
     private Component renderCoins(OptionalLong coins) {
@@ -254,15 +258,17 @@ public final class PresentationRenderer {
         }
     }
 
-    private TagResolver emptyPlaceholders() {
+    static TagResolver emptyPlaceholders() {
         return TagResolver.resolver(
                 Placeholder.component("server", Component.empty()),
                 Placeholder.component("name", Component.empty()),
+                Placeholder.component("rank_name", Component.empty()),
                 Placeholder.component("prefix", Component.empty()),
                 Placeholder.component("suffix", Component.empty()),
                 Placeholder.component("rank", Component.empty()),
                 Placeholder.component("rank_id", Component.empty()),
                 Placeholder.component("group", Component.empty()),
+                Placeholder.component("playtime", Component.empty()),
                 Placeholder.component("coins", Component.empty()),
                 Placeholder.component("online", Component.empty()),
                 Placeholder.component("max_players", Component.empty())
@@ -305,11 +311,4 @@ public final class PresentationRenderer {
         }
     }
 
-    record RankValues(String displayName, String id) {
-
-        RankValues {
-            Objects.requireNonNull(displayName, "displayName");
-            Objects.requireNonNull(id, "id");
-        }
-    }
 }

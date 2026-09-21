@@ -112,7 +112,7 @@ public final class RankCommand implements TabExecutor {
                 .append(Component.newline())
                 .append(label("Player: ")).append(Component.text(playerName, NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Rank: ")).append(Component.text(rank.displayName(), NamedTextColor.WHITE))
+                .append(label("Rank: ")).append(rank.displayComponent())
                 .append(Component.newline())
                 .append(label("Group: ")).append(Component.text(rank.id(), NamedTextColor.WHITE));
         if (rank.description().isPresent()) {

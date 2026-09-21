@@ -4,6 +4,8 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.rank.command.RankCommand;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -46,12 +48,16 @@ public final class RankCommandHarness {
                         && fixture.last().contains("Rank: Member")
                         && fixture.last().contains("Group: default"),
                 "/rank shows the player's own rank");
+        check(hasColoredText(fixture.lastComponent(), "Member", NamedTextColor.GRAY),
+                "/rank renders the friendly self rank in its configured color");
 
         command.onCommand(self, null, "rank", new String[]{"Other"});
         check(fixture.last().contains("Player: Other")
                         && fixture.last().contains("Rank: VIP")
                         && fixture.last().contains("Description: Supporter rank."),
                 "/rank <onlinePlayer> shows the target rank");
+        check(hasColoredText(fixture.lastComponent(), "VIP", NamedTextColor.GOLD),
+                "/rank renders a target rank in its own configured color");
 
         command.onCommand(self, null, "rank", new String[]{"NotOnline"});
         check(fixture.last().endsWith("That player is not online."),
@@ -82,6 +88,13 @@ public final class RankCommandHarness {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static boolean hasColoredText(Component component, String text, TextColor color) {
+        if (color.equals(component.color()) && PLAIN.serialize(component).contains(text)) {
+            return true;
+        }
+        return component.children().stream().anyMatch(child -> hasColoredText(child, text, color));
     }
 
     private static final class Fixture implements RankService.Gateway {
@@ -152,7 +165,11 @@ public final class RankCommandHarness {
         }
 
         private String last() {
-            return PLAIN.serialize(messages.getLast());
+            return PLAIN.serialize(lastComponent());
+        }
+
+        private Component lastComponent() {
+            return messages.getLast();
         }
 
         @Override
@@ -163,8 +180,8 @@ public final class RankCommandHarness {
         @Override
         public Optional<LuckPermsService.GroupInformation> getGroupInformation(String groupId) {
             return switch (groupId) {
-                case "default" -> Optional.of(group("default", "Member", null));
-                case "vip" -> Optional.of(group("vip", "VIP", "Supporter rank."));
+                case "default" -> Optional.of(group("default", "Member", null, "gray"));
+                case "vip" -> Optional.of(group("vip", "VIP", "Supporter rank.", "gold"));
                 default -> Optional.empty();
             };
         }
@@ -177,12 +194,14 @@ public final class RankCommandHarness {
         private static LuckPermsService.GroupInformation group(
                 String id,
                 String displayName,
-                String description
+                String description,
+                String color
         ) {
             return new LuckPermsService.GroupInformation(
                     id,
                     Optional.of(displayName),
                     Optional.ofNullable(description),
+                    Optional.ofNullable(color),
                     OptionalInt.empty()
             );
         }

@@ -83,16 +83,13 @@ public final class ChatService {
             Component suffix = luckPermsService.getSuffix(uniqueId)
                     .map(value -> deserializeMeta(value, currentState.metaFormat()))
                     .orElse(Component.empty());
-            RankValues rankValues = resolveRankValues(
-                    rankService.getPrimaryRank(uniqueId),
-                    luckPermsService.getPrimaryGroup(uniqueId)
-            );
+            Optional<RankInfo> rankInfo = rankService.getPrimaryRank(uniqueId);
 
             TagResolver placeholders = createPlaceholders(
                     prefix,
                     validatedDisplayName,
                     suffix,
-                    rankValues,
+                    rankInfo,
                     validatedMessage
             );
             return messageService.deserialize(currentState.chatFormat(), placeholders);
@@ -111,32 +108,24 @@ public final class ChatService {
             Component prefix,
             Component displayName,
             Component suffix,
-            RankValues rankValues,
+            Optional<RankInfo> rankInfo,
             Component message
     ) {
-        RankValues validatedRankValues = Objects.requireNonNull(rankValues, "rankValues");
-        Component rankId = Component.text(validatedRankValues.id());
+        Optional<RankInfo> validatedRankInfo = Objects.requireNonNull(rankInfo, "rankInfo");
+        String rawRankId = validatedRankInfo.map(RankInfo::id).orElse("");
+        Component rankId = Component.text(rawRankId);
+        Component rank = validatedRankInfo.map(RankInfo::displayComponent).orElse(Component.empty());
+        Component rankName = validatedRankInfo.map(value -> value.colorize(displayName)).orElse(displayName);
         return TagResolver.resolver(
                     Placeholder.component("prefix", prefix),
                     Placeholder.component("name", displayName),
+                    Placeholder.component("rank_name", rankName),
                     Placeholder.component("suffix", suffix),
-                    Placeholder.component("rank", Component.text(validatedRankValues.displayName())),
+                    Placeholder.component("rank", rank),
                     Placeholder.component("rank_id", rankId),
                     Placeholder.component("group", rankId),
                     Placeholder.component("message", message)
         );
-    }
-
-    static RankValues resolveRankValues(
-            Optional<RankInfo> rankInfo,
-            Optional<String> primaryGroupFallback
-    ) {
-        Optional<RankInfo> validatedRankInfo = Objects.requireNonNull(rankInfo, "rankInfo");
-        String rankId = validatedRankInfo.map(RankInfo::id)
-                .or(() -> Objects.requireNonNull(primaryGroupFallback, "primaryGroupFallback"))
-                .orElse("");
-        String displayName = validatedRankInfo.map(RankInfo::displayName).orElse(rankId);
-        return new RankValues(displayName, rankId);
     }
 
     private Component deserializeMeta(String value, ChatConfig.MetaFormat metaFormat) {
@@ -148,15 +137,7 @@ public final class ChatService {
     }
 
     private String validateFormat(String configuredFormat) {
-        TagResolver emptyPlaceholders = TagResolver.resolver(
-                Placeholder.component("prefix", Component.empty()),
-                Placeholder.component("name", Component.empty()),
-                Placeholder.component("suffix", Component.empty()),
-                Placeholder.component("rank", Component.empty()),
-                Placeholder.component("rank_id", Component.empty()),
-                Placeholder.component("group", Component.empty()),
-                Placeholder.component("message", Component.empty())
-        );
+        TagResolver emptyPlaceholders = emptyPlaceholders();
 
         try {
             MiniMessage.builder()
@@ -173,6 +154,19 @@ public final class ChatService {
             );
             return ChatConfig.DEFAULT_FORMAT;
         }
+    }
+
+    static TagResolver emptyPlaceholders() {
+        return TagResolver.resolver(
+                Placeholder.component("prefix", Component.empty()),
+                Placeholder.component("name", Component.empty()),
+                Placeholder.component("rank_name", Component.empty()),
+                Placeholder.component("suffix", Component.empty()),
+                Placeholder.component("rank", Component.empty()),
+                Placeholder.component("rank_id", Component.empty()),
+                Placeholder.component("group", Component.empty()),
+                Placeholder.component("message", Component.empty())
+        );
     }
 
     private Component fallback(Component sourceDisplayName, Component message) {
@@ -193,11 +187,4 @@ public final class ChatService {
         }
     }
 
-    record RankValues(String displayName, String id) {
-
-        RankValues {
-            Objects.requireNonNull(displayName, "displayName");
-            Objects.requireNonNull(id, "id");
-        }
-    }
 }

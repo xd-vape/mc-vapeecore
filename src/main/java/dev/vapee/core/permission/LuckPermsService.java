@@ -40,18 +40,27 @@ public final class LuckPermsService {
                 .map(user -> user.getCachedData().getMetaData().getMetaValue(validatedKey));
     }
 
-    public Optional<GroupInformation> getGroupInformation(String groupId, String descriptionMetaKey) {
+    public Optional<GroupInformation> getGroupInformation(
+            String groupId,
+            String descriptionMetaKey,
+            String colorMetaKey
+    ) {
         String validatedGroupId = requireNonBlank(groupId, "Group IDs");
-        String validatedMetaKey = requireNonBlank(descriptionMetaKey, "Meta keys");
+        String validatedDescriptionMetaKey = requireNonBlank(descriptionMetaKey, "Meta keys");
+        String validatedColorMetaKey = requireNonBlank(colorMetaKey, "Meta keys");
         Group group = luckPerms.getGroupManager().getGroup(validatedGroupId);
         if (group == null) {
             return Optional.empty();
         }
 
+        var metaData = group.getCachedData().getMetaData();
+
         return Optional.of(new GroupInformation(
                 group.getName(),
                 Optional.ofNullable(group.getDisplayName()).filter(value -> !value.isBlank()),
-                Optional.ofNullable(group.getCachedData().getMetaData().getMetaValue(validatedMetaKey))
+                Optional.ofNullable(metaData.getMetaValue(validatedDescriptionMetaKey))
+                        .filter(value -> !value.isBlank()),
+                Optional.ofNullable(metaData.getMetaValue(validatedColorMetaKey))
                         .filter(value -> !value.isBlank()),
                 group.getWeight()
         ));
@@ -86,6 +95,7 @@ public final class LuckPermsService {
             String id,
             Optional<String> displayName,
             Optional<String> description,
+            Optional<String> color,
             OptionalInt weight
     ) {
 
@@ -93,6 +103,7 @@ public final class LuckPermsService {
             Objects.requireNonNull(id, "id");
             displayName = Objects.requireNonNull(displayName, "displayName");
             description = Objects.requireNonNull(description, "description");
+            color = Objects.requireNonNull(color, "color");
             Objects.requireNonNull(weight, "weight");
         }
     }

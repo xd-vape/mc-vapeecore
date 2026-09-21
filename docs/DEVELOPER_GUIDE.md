@@ -57,9 +57,9 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Rank integration | `dev.vapee.core.rank` |
 | `/rank` | `dev.vapee.core.rank.command.RankCommand` |
 | `/ranks` | `dev.vapee.core.rank.command.RanksCommand` |
-| Rank display name / description / weight | `RankService` und `LuckPermsService` |
-| Rank placeholder | `RankService` und `PresentationRenderer` |
-| Rank prefix / Farbe / Badge | LuckPerms-Prefix |
+| Rank display name / description / color / weight | `RankService` und `LuckPermsService` |
+| Rank- und Playtime-Placeholder | `RankInfo`, `PresentationRenderer` und `PlaytimeFormatter` |
+| Rank Prefix / Suffix / Badge | LuckPerms-Meta; Farbe separat über `vapeecore.rank.color` |
 | Chat | `dev.vapee.core.chat` |
 | Private messages | `dev.vapee.core.privatemessage` |
 | Scoreboard / Tablist | `dev.vapee.core.presentation` |
@@ -146,17 +146,23 @@ LobbyExperience
 
 LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms. `/rank` und `/ranks` sind reine Lese-Commands im VapeeCore-Namespace und besitzen bewusst keine Alias-Flut.
 
-`PermissionModule` stellt die einzige LuckPerms-Provider-Verbindung her. `LuckPermsService` kapselt geladene User, Group Information und Track Groups, ohne LuckPerms-API-Typen in andere Features zu leaken. `RankService` bildet diese Werte auf das immutable `RankInfo(id, displayName, description, weight)` ab. Normale Online-Abfragen verwenden ausschließlich `UserManager#getUser`; es gibt kein `loadUser`, kein `join()` und keinen dauerhaften Rank-Cache. Ist der User nicht geladen, liefert `getPrimaryRank` `Optional.empty()`. Fehlt die Group unerwartet, bleibt die bekannte ID erhalten und Display Name, Description und Weight fallen kontrolliert zurück.
+`PermissionModule` stellt die einzige LuckPerms-Provider-Verbindung her. `LuckPermsService` kapselt geladene User, Group Information und Track Groups, ohne LuckPerms-API-Typen in andere Features zu leaken. Eine Group-Auflösung liest Display Name, Description, rohe Color Meta und Weight gemeinsam. `RankService` bildet diese Werte auf das immutable `RankInfo(id, displayName, description, color, weight)` ab. Normale Online-Abfragen verwenden ausschließlich `UserManager#getUser`; es gibt kein `loadUser`, kein `join()` und keinen dauerhaften Rank-Cache. Ist der User nicht geladen, liefert `getPrimaryRank` `Optional.empty()`. Fehlt die Group unerwartet, bleibt die bekannte ID erhalten und Display Name, Description, Color und Weight fallen kontrolliert zurück.
 
 Der öffentliche Track steht unter `config.yml` → `ranks.track`; Default und Fallback sind `ranks`. Der Wert muss ein non-blank String sein, sonst warnt `ConfigService`, verwendet `ranks` und verändert die Datei nicht. Nur die in diesem LuckPerms-Track enthaltenen Gruppen erscheinen in `/ranks`; interne Gruppen bleiben unsichtbar. `Track#getGroups()` bestimmt die Reihenfolge, nicht Alphabet oder Weight. Da `RankService` den aktuellen Configwert bei jeder Listenabfrage liest, wirkt ein geänderter Track nach `/core reload` sofort, ohne sechsten Reload-Teilnehmer.
 
-Jeder öffentliche Rank sollte in LuckPerms einen Display Name besitzen. Fehlt er, erzeugt VapeeCore ohne hartcodiertes Mapping einen neutralen Namen aus der Group-ID. Die optionale Beschreibung kommt aus dem zentralen Group-Meta-Key `vapeecore.rank.description`; Weight bleibt reine Metadateninformation. Farben und Badges gehören weiterhin in den LuckPerms-Prefix, nicht in eine Java-Farbtabelle.
+Jeder öffentliche Rank sollte in LuckPerms einen Group Display Name besitzen. Fehlt er, erzeugt VapeeCore ohne hartcodiertes Mapping einen neutralen Namen aus der Group-ID, zum Beispiel `senior_builder` → `Senior Builder`. Die optionale Beschreibung kommt aus `vapeecore.rank.description`; die Rank-Farbe kommt aus `vapeecore.rank.color`; Weight bleibt reine Metadateninformation. `RankService` akzeptiert Adventure Named Colors wie `gray`, `gold`, `aqua`, `green`, `red`, `dark_red` und `light_purple` sowie sechsstellige Hexwerte wie `#55ffaa`. Fehlende oder ungültige Werte bleiben `Optional.empty()` und werden bei der Ausgabe neutral weiß dargestellt. Prefix und Suffix bleiben unabhängig davon kompatibel und sind für Rank-Farbe nicht erforderlich.
 
-Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren können über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16A implementiert weder Mine noch `coin-multiplier` und verändert den `EconomyService` nicht.
+Neue Ränge benötigen keine VapeeCore-Codeänderung. Der empfohlene LuckPerms-Ablauf ist: Gruppe erstellen, Group Display Name setzen, `vapeecore.rank.color` setzen, optional `vapeecore.rank.description` setzen und die Gruppe an den konfigurierten `ranks`-Track anhängen. Weder Gruppen-IDs noch deren Farben werden in Production Code abgebildet.
 
-Presentation und Chat unterstützen `<rank>` als freundlichen Primary-Rank-Namen sowie `<rank_id>` als rohe Primary Group. `<group>` bleibt als Compatibility-Alias identisch zu `<rank_id>`. `<prefix>` und `<suffix>` bleiben die effektiven LuckPerms-Metawerte. Dieselben Presentation-Placeholder gelten für Scoreboard, `tablist.name-format`, Header und Footer. Das Default-Scoreboard verwendet nun `<rank>`; das Default-Tablistformat bleibt `<prefix><name><suffix>`. Das Chat-Defaultformat bleibt ebenfalls unverändert und fügt nicht automatisch einen zweiten Rank neben dem Prefix ein. Der Async-Chatpfad liest nur bereits geladene LuckPerms-Cached-Data, verwendet keine Main-Thread-only Bukkit-Operationen und setzt Playertext weiterhin als sichere Adventure Component ein.
+Feature-Zugriff basiert ausschließlich auf Permissions, nie auf Rank-Namen. Builder-Funktionen prüfen `vapeecore.utility.build`. Spätere Mine-Zugriffe verwenden `vapeecore.mine.<mine>`; spätere Reward-Multiplikatoren können über Permissions oder optionales LuckPerms-Meta modelliert werden. Phase 16A.1 implementiert weder Mine noch `coin-multiplier` und verändert den `EconomyService` nicht.
 
-Der neue Resource-Default überschreibt keine bestehende `plugins/VapeeCore/presentation.yml`. Ein vorhandenes `<group>` funktioniert weiterhin; Administratoren können die Live-Datei manuell auf `<rank>` umstellen und mit `/core reload` aktivieren.
+Presentation und Chat unterstützen `<rank>` als farbiges Component aus dem freundlichen Primary-Rank-Namen, `<rank_name>` als normalen Player Display Name in der Primary-Rank-Farbe sowie `<rank_id>` als rohe Primary Group. `<name>` bleibt der unveränderte Player Display Name; `<group>` bleibt als Compatibility-Alias identisch zu `<rank_id>`; `<prefix>` und `<suffix>` bleiben die effektiven LuckPerms-Metawerte. Der Chat-Renderer wird pro `AsyncChatEvent` neu erzeugt, damit Papers viewer-unaware Cache nicht die erste Nachricht für Folge-Events wiederverwendet. Der Async-Pfad liest nur bereits geladene LuckPerms-Cached-Data, verwendet keine Player-Statistik und setzt Playertext weiterhin als sichere Adventure Component ein.
+
+Presentation besitzt vollständig `<server>`, `<name>`, `<rank_name>`, `<prefix>`, `<suffix>`, `<rank>`, `<rank_id>`, `<group>`, `<playtime>`, `<coins>`, `<online>` und `<max_players>`; dieselben Placeholder gelten für Scoreboard, `tablist.name-format`, Header und Footer. `<playtime>` stammt ausschließlich aus `Player#getStatistic(Statistic.PLAY_ONE_MINUTE)`. Der historische Statistikname ist irreführend: Der Wert sind Ticks, also 20 Ticks pro Sekunde. `PlaytimeFormatter` rechnet mit `long`, klemmt negative Werte auf null und zeigt unter einer Stunde Minuten, unter einem Tag Stunden und Minuten sowie ab einem Tag Tage und Stunden. Es existieren weder eigene Persistence noch zusätzliche Scheduler- oder Polling-Tasks.
+
+Das Default-Scoreboard zeigt Rank, Playtime, Coins und Onlinezahl im kompakten Label/Wert-Layout; `<rank>` darf dabei nicht von einer äußeren weißen Farbe überschrieben werden. Das Default-Tablistformat und Chat-Defaultformat bleiben `<prefix><name><suffix>`-basiert und ändern bestehende Darstellung nicht automatisch.
+
+Der neue Resource-Default überschreibt keine bestehende `plugins/VapeeCore/presentation.yml`. Ein vorhandenes `<group>` funktioniert weiterhin; Administratoren müssen das neue Label/Wert-Layout und `<playtime>` auf einem bestehenden Dev- oder Live-Server bei Bedarf manuell in dessen Datei übernehmen und mit `/core reload` aktivieren.
 
 ## Lobby player state
 
@@ -474,6 +480,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.rank.RankCommandHarness`
 - `dev.vapee.core.rank.RanksCommandHarness`
 - `dev.vapee.core.presentation.PresentationHarness`
+- `dev.vapee.core.presentation.PlaytimeFormatterHarness`
 - `dev.vapee.core.chat.ChatHarness`
 - `dev.vapee.core.config.ConfigServiceHarness`
 
