@@ -72,8 +72,12 @@ try {
     Set-Content -LiteralPath $pidFile -Value $serverProcess.Id -Encoding ascii
     Write-Host "Managed Paper server started with PID $($serverProcess.Id)."
     Write-Host 'Build & Deploy will send a clean stop automatically.'
+    Write-Host 'Paper console commands can be entered directly in this window.'
 
     $stopSent = $false
+    $consoleInputOpen = $true
+    $consoleReader = [System.IO.StreamReader]::new([Console]::OpenStandardInput())
+    $consoleReadTask = $null
     while (-not $serverProcess.HasExited) {
         if (-not $stopSent -and (Test-Path -LiteralPath $stopRequestFile)) {
             Remove-Item -LiteralPath $stopRequestFile -Force -ErrorAction SilentlyContinue
@@ -81,6 +85,32 @@ try {
             $serverProcess.StandardInput.WriteLine('stop')
             $serverProcess.StandardInput.Flush()
             $stopSent = $true
+        }
+
+        if ($consoleInputOpen -and $null -eq $consoleReadTask) {
+            try {
+                $consoleReadTask = $consoleReader.ReadLineAsync()
+            } catch {
+                $consoleInputOpen = $false
+                Write-Warning "Console input is not available: $($_.Exception.Message)"
+            }
+        }
+
+        if ($null -ne $consoleReadTask -and $consoleReadTask.IsCompleted) {
+            try {
+                $command = $consoleReadTask.GetAwaiter().GetResult()
+                if ($null -eq $command) {
+                    $consoleInputOpen = $false
+                } elseif (-not $serverProcess.HasExited) {
+                    $serverProcess.StandardInput.WriteLine($command)
+                    $serverProcess.StandardInput.Flush()
+                }
+            } catch {
+                $consoleInputOpen = $false
+                Write-Warning "Console input could not be forwarded to Paper: $($_.Exception.Message)"
+            } finally {
+                $consoleReadTask = $null
+            }
         }
 
         Start-Sleep -Milliseconds 100

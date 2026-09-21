@@ -52,6 +52,11 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Coins | `dev.vapee.core.economy` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
 | Kumulative Online-/Playtime-Rewards | `dev.vapee.core.onlinereward` |
+| Quest Progress Engine | `dev.vapee.core.quest.QuestService` |
+| Quest Definition Domain | `QuestDefinition` und `QuestDefinitionRegistry` |
+| Technische Quest Progress Keys | `QuestProgressKey` |
+| Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
+| Daily-Quest-Auswahl und Rotation | Noch nicht implementiert; folgt in Phase 17B |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
@@ -86,7 +91,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 
-Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward und OnlineReward fügen keinen sechsten Teilnehmer hinzu. Reward besitzt keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu, sodass Enabled-, Intervall-, Coin- und Nachrichtenänderungen nach Apply ohne Neustart gelten. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
+Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward, OnlineReward und Quest fügen keinen sechsten Teilnehmer hinzu. Reward und Quest besitzen keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu, sodass Enabled-, Intervall-, Coin- und Nachrichtenänderungen nach Apply ohne Neustart gelten. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
 ## Module map und Reihenfolge
 
@@ -99,20 +104,21 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
 7. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
-8. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-9. **Chat** – globaler Chat und lesende Rank-Placeholder.
-10. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-11. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-12. **Settings** – Settings-Inventar und `/settings`.
-13. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-14. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-15. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-16. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-17. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-18. **Warp** – dynamische Warp-Persistence und Admin-Command.
-19. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+8. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
+9. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+10. **Chat** – globaler Chat und lesende Rank-Placeholder.
+11. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+12. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+13. **Settings** – Settings-Inventar und `/settings`.
+14. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+15. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+16. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+17. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+18. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+19. **Warp** – dynamische Warp-Persistence und Admin-Command.
+20. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. OnlineReward stoppt zuerst seinen Processing-Task; Reward flusht anschließend dirty Coins und den bereits im selben `CorePlayer` aktualisierten Fortschritt, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Quest → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. Quest stoppt zuerst seinen Flush-Task und speichert dirty Quest-State, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -135,6 +141,10 @@ Config + Player + Reward + Message
   ↑
 OnlineReward
 
+Player + Reward
+  ↑
+Quest
+
 Lobby + Activity
   ↑
 Utility
@@ -152,7 +162,7 @@ Lobby + Player + Settings + Warp
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von OnlineReward, Activity, Mine, Quest, Rank, Chat oder Presentation. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt, Activity, Rank, LuckPerms, Mine, Quest, Blackjack, Warp oder Lobby. Features hängen in Richtung `Feature → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von OnlineReward, Activity, Mine, Quest, Rank, Chat oder Presentation. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt, Activity, Rank, LuckPerms, Mine, Quest, Blackjack, Warp oder Lobby. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
 ## Reward Foundation
 
@@ -162,9 +172,9 @@ Der Service ist Main-Thread-owned und hält niemals Bukkit-`Player`-Referenzen. 
 
 `RewardListener` läuft bei Quit mit `LOWEST` und flusht vor dem regulären `PlayerListener` mit `NORMAL`, der den Player speichert und aus dem Cache entfernt. Beim Modul-Shutdown wird zuerst der gemeinsame Task gestoppt und danach geflusht; wegen der rückwärts laufenden Modulreihenfolge stehen Economy und Player dabei noch bereit. Ein fehlgeschlagener Save wird pro Player protokolliert, blockiert keine anderen Player und lässt dessen UUID für den nächsten Tick dirty. Das Wallet wird dabei absichtlich nicht zurückgerollt. Ist ein dirty Player bereits ungeladen, wird der Marker entfernt, weil `PlayerService#unloadPlayer` vor dem Entfernen immer gespeichert hat. Ein harter Prozessabbruch kann höchstens ungefähr das 20-Tick-Fenster seit dem letzten erfolgreichen Flush verlieren.
 
-Direkte und administrative Operationen `EconomyService#setCoins`, `addCoins` und `removeCoins` bleiben sofort persistiert und rollen ihre Wallet-Mutation bei einem Save-Fehler weiterhin zurück. Der Deferred-Economy-Pfad ist ausschließlich eine Infrastrukturgrenze für `RewardService`; Feature-Code darf ihn nicht direkt aufrufen. Beispiele für spätere Consumer wären Onlinezeit mit `PLAYTIME`, Quests mit `QUEST`, eine Mine oder ein Minigame mit `ACTIVITY` und Server-Events mit `EVENT`. Phase 16B aktiviert keinen davon.
+Direkte und administrative Operationen `EconomyService#setCoins`, `addCoins` und `removeCoins` bleiben sofort persistiert und rollen ihre Wallet-Mutation bei einem Save-Fehler weiterhin zurück. Der Deferred-Economy-Pfad ist ausschließlich eine Infrastrukturgrenze für `RewardService`; Feature-Code darf ihn nicht direkt aufrufen. OnlineReward verwendet `PLAYTIME`, die Quest Foundation `QUEST`; spätere Mine-, Minigame- oder Event-Systeme können ihre passende Quelle nutzen, ohne Reward zu koppeln.
 
-Reward selbst führt keine Config oder eigene Datei ein und besitzt keine History, kein Ledger, keine Offline-Queue, keine Multiplikatoren, Commands, Permissions oder Player-Nachrichten. Das Player-Schema wird ausschließlich durch den konkreten OnlineReward-Consumer um dessen notwendigen Fortschritt erweitert. Eine exakt einmalige, über harte Abstürze hinweg garantierte Auszahlung ist deshalb weiterhin nicht Teil der Foundation.
+Reward selbst führt keine Config oder eigene Datei ein und besitzt keine History, kein Ledger, keine Offline-Queue, keine Multiplikatoren, Commands, Permissions oder Player-Nachrichten. Konkrete Consumer erweitern das bestehende Player-Profil nur um ihren eigenen notwendigen Zustand: OnlineReward unter `rewards.online`, Quest unter `quests.active`. Eine exakt einmalige, über harte Abstürze hinweg garantierte Auszahlung ist deshalb weiterhin nicht Teil der Foundation.
 
 ## Online / Playtime Rewards
 
@@ -179,6 +189,47 @@ Ein erfolgreicher Grant mutiert das Wallet sofort und markiert den Player in der
 Die immutable Config-View aus `config.yml` enthält `online-rewards.enabled`, `interval-minutes`, `coins`, `message.enabled` und `message.format`. Defaults sind `true`, `60`, `250`, `true` und die dokumentierte MiniMessage. Positive Ganzzahlen, sichere Minuten-zu-Ticks-Konvertierung und das Nachrichtenformat werden beim Laden validiert; Fehler warnen, verwenden Defaults und verändern die Datei nicht. Ein Reload setzt keinen Fortschritt zurück: Ein kleineres Intervall kann vorhandenen Rest beim nächsten Check fällig machen, ein neuer Coin-Wert gilt nur für die nächste Auszahlung.
 
 Bei `enabled: false` wird die In-Memory-Baseline regelmäßig auf die aktuelle Statistik gesetzt. Deaktivierte Zeit wird daher nach Reaktivierung nicht bezahlt; gespeichert wird weiterhin nur über den normalen Player-Lifecycle. Erfolgreiche Rewards können über den globalen `MessageService` gemeldet werden. `<coins>`, `<minutes>`, `<intervals>` und `<balance>` werden als sichere unparsed Placeholder eingesetzt. Ein ungültiges Config-Template fällt bereits beim Laden zurück; ein unerwarteter Sendefehler ändert weder Coins noch Progress. Phase 16C besitzt keine AFK-Erkennung, daher zählt verbundene Minecraft-Spielzeit derzeit auch während AFK. Es gibt keine Permission, Commands, Claims, Limits, Zufallswerte, Multiplikatoren oder Kopplung an Welt, Activity, Blackjack, Rank, Mine oder Quest.
+
+## Quest Foundation
+
+Das Quest-System besitzt ausschließlich die fachliche Frage, ob ein geladener Spieler eine zugewiesene Quest erfüllt hat. Gameplay-Features werden später kleine Producer und rufen `QuestService#addProgress(UUID, QuestProgressKey, long)` auf. Der Service kennt diese Quellen nicht und importiert insbesondere weder Mine, Blackjack, Activity noch OnlineReward. Bei Completion delegiert er den Coin-Grant an `RewardService`; Economy wird niemals direkt verwendet. `QuestModule` hängt deshalb nur von `JavaPlugin`, `PlayerModule` und `RewardModule` ab. Es ist kein `ReloadParticipant` und besitzt keine Config, Commands, Permissions, Messages oder Presentation.
+
+`QuestDefinition` ist ein immutable Record aus `id`, `name`, `description`, `progressKey`, positivem `long target` und positiven `long rewardCoins`. Die technische ID erfüllt `[a-z0-9][a-z0-9_-]{0,63}`; Name und Beschreibung sind non-blank, bleiben aber normale Domain-Strings ohne MiniMessage-Verarbeitung. `QuestProgressKey` ist ein validiertes Value Object nach `[a-z0-9][a-z0-9:._-]{0,127}`. Keys werden ausschließlich exakt verglichen. Es existieren weder ein hartcodiertes Quest-Type-Enum noch Prefix-/Wildcard-Matching; ein Producer kann bei echtem Bedarf mehrere Signale wie `mine:block:any` und `mine:block:stone` melden.
+
+`QuestDefinitionRegistry` hält den zur Laufzeit bekannten Katalog. `findById`, `snapshot` und `snapshotById` liefern immutable Sichten in deterministischer ID-Reihenfolge. `replaceAll` baut zuerst einen vollständigen Kandidaten auf und lehnt Nullwerte oder Duplicate-IDs ab, bevor es den Runtime-Katalog austauscht. Ein Fehler lässt den alten Katalog vollständig erhalten. Phase 17A erzeugt beim Modulstart absichtlich ein leeres Registry; YAML-Loading und konkrete Production-Definitionen folgen erst mit dem Daily-System.
+
+`CorePlayer` besitzt genau einen `PlayerQuestState`. Dessen aktuelle Assignment-Map enthält pro Quest ausschließlich ein immutable `PlayerQuestProgress(questId, progress, status)`; Definition, Name, Beschreibung, Target und Reward werden nicht dupliziert. Die Statuswerte bedeuten:
+
+- `ACTIVE`: Fortschritt liegt im normalen Servicepfad unter dem aktuellen Target.
+- `REWARD_PENDING`: Target wurde erreicht, aber der Reward wurde nicht erfolgreich bestätigt; der Fortschritt wird am Target gehalten.
+- `COMPLETED`: Target und erfolgreicher Reward sind bestätigt; weitere Progress-Signale werden vollständig ignoriert.
+
+Die Assignment-API arbeitet nur gegen bereits geladene `CorePlayer`. `assignQuest` liefert für unbekannte Definition oder ungeladenen Player ein Domain-Result und setzt eine vorhandene Assignment niemals auf null zurück. `replaceAssignments` validiert vor jeder Mutation alle IDs, Duplicates und Definitionen und ersetzt danach atomisch den gesamten State durch frische `ACTIVE`-Einträge bei null. Diese Grenze ist für den späteren Daily Reset vorgesehen. `clearAssignments` ist bei leerem State ein sauberer No-op. `getActiveQuests` liefert für geladene Player eine immutable, definition-backed `QuestView`-Liste; persistierte IDs ohne aktuelle Definition bleiben intern erhalten und werden in dieser Sicht ausgelassen.
+
+`addProgress` akzeptiert ausschließlich positive Mengen. Ein Signal aktualisiert jede `ACTIVE`-Assignment mit exakt gleichem `QuestProgressKey`; andere, unbekannte und completed Assignments bleiben unverändert. Der Service berechnet zuerst `remaining = target - current` und wendet höchstens `min(amount, remaining)` an. Dadurch kann selbst `Long.MAX_VALUE` weder überlaufen noch Progress über das Target heben. Erreicht eine Quest das Target, wird sie vor dem Grant auf `REWARD_PENDING` gesetzt und anschließend synchron über `RewardService.grantCoins(playerId, rewardCoins, RewardSource.QUEST, "quest:" + id)` ausgezahlt. Jede gleichzeitig abgeschlossene Quest besitzt ihren eigenen Grant und technischen Grund; Rewards verschiedener Quests werden nicht aggregiert.
+
+Nur `RewardStatus.SUCCESS` setzt den Status auf `COMPLETED`. `PLAYER_NOT_LOADED`, `BALANCE_OVERFLOW` und andere normale Misserfolge lassen `REWARD_PENDING` bestehen. `retryPendingRewards` versucht alle bekannten Pending-Assignments erneut. Auch ein weiteres passendes Progress-Signal darf diesen kontrollierten Retry auslösen, erhöht den Fortschritt aber nicht. Ein fehlgeschlagener Retry verändert keinen State und erzeugt keinen unnötigen Dirty-Marker; ein erfolgreicher Retry wird dirty. Eine unerwartete `RuntimeException` aus dem Reward-Pfad wird geloggt und lässt die Quest mindestens pending, statt Completion vorzutäuschen oder Fortschritt zu verlieren.
+
+`FilePlayerRepository` persistiert den aktuellen Zustand deterministisch im bestehenden Profil:
+
+```yaml
+quests:
+  active:
+    daily_miner:
+      progress: 120
+      status: ACTIVE
+    daily_playtime:
+      progress: 30
+      status: COMPLETED
+```
+
+Fehlt `quests` oder `quests.active`, wird `PlayerQuestState.empty()` geladen. Eine falsch typisierte Quest-Section oder ein beschädigter einzelner Eintrag erzeugt eine kontrollierte Warning und wird als optionaler Feature-State ausgelassen, ohne Name, Settings, Wallet, Social oder OnlineReward des Players unbrauchbar zu machen. Gültige unbekannte Quest-IDs werden dagegen bewusst geladen und beim nächsten Save erhalten. Ohne Registry-Definition gibt es für sie weder Progress, Completion noch Reward. Load allein führt niemals einen Reward oder eine automatische Completion aus; `ACTIVE`, `REWARD_PENDING` und `COMPLETED` überleben Logout und Restart.
+
+Quest-Mutationen sind Main-Thread-owned und sofort im `CorePlayer` sichtbar. `QuestService` hält nur dirty UUIDs und ruft nicht pro Signal `savePlayer` auf. `QuestModule` besitzt genau einen gemeinsamen synchronen 100-Tick-Flush, also ungefähr fünf Sekunden. `flushPlayer` speichert nur geladene dirty Player über `PlayerService#savePlayer`; Erfolg entfernt den Marker, ein Save-Fehler bleibt isoliert und wird im nächsten Batch erneut versucht. `flushAll` arbeitet über einen UUID-Snapshot, damit ein Fehler andere Player nicht blockiert. `QuestListener` läuft bei Quit mit `LOWEST` vor dem normalen Player-Unload. Beim Disable wird zuerst der Task gestoppt, dann geflusht, der Listener abgemeldet und das Dirty Tracking geleert.
+
+RewardService und QuestService speichern jeweils den gesamten aktuellen `CorePlayer`, niemals getrennte Balance- oder Quest-Snapshots. Ein Reward-Flush kann daher aktuellen Quest-State mitpersistieren und ein späterer Quest-Flush redundant sein, aber keiner kann einen alten Teilzustand zurückschreiben. Bei einem harten JVM-/OS-Abbruch können die letzten ungefähr fünf Sekunden Quest-Progress verloren gehen; Coins und Completion-State im selben noch nicht gespeicherten In-Memory-Profil teilen dieses Batching-Fenster. Normales Quit, Plugin-Disable und Server-Shutdown flushen kontrolliert.
+
+Phase 17B kann später Definitionen per `QuestDefinitionRegistry#replaceAll` laden, mit `QuestService#replaceAssignments` drei bis vier Daily Quests setzen und Producer für `playtime:minute`, `mine:block:any`, `blackjack:win`, `activity:complete` oder `location:visit:mine` anbinden. Phase 17A implementiert ausdrücklich noch keine Daily-Rotation, Cycle-ID, Reset-Zeit, Auswahl, konkreten Quests, Gameplay-Hooks, Mine, `/quests`, GUI, Claim-Button, Feedback, Kategorien, Voraussetzungen, Ränge oder Multiplikatoren.
 
 ## Ranks & Server Identity
 
@@ -396,6 +447,11 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 | Warp-Command-UX | `WarpCommand` |
 | Utility-Bukkit-Mutationen und Flight-/Speed-Cleanup | `UtilityService` |
 | Utility-Argumente, Rechte, Guards, Texte oder Completion | jeweilige Klasse unter `utility/command` |
+| Quest Progress Engine | `QuestService` |
+| Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
+| Technische Quest Progress Keys | `QuestProgressKey` und später die Konstanten des produzierenden Features |
+| Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
+| Daily-Quest-Auswahl | Noch nicht implementiert; Phase 17B |
 
 ## Utility ownership und Lifecycle
 
@@ -527,8 +583,12 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`
 - `dev.vapee.core.onlinereward.OnlineRewardLifecycleHarness`
 - `dev.vapee.core.player.repository.PlayerRewardPersistenceHarness`
+- `dev.vapee.core.quest.QuestDefinitionHarness`
+- `dev.vapee.core.quest.QuestServiceHarness`
+- `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
+- `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 19 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 20 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

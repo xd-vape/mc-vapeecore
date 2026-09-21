@@ -51,7 +51,7 @@ public final class RewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "lobbyModule", "chatModule", "privateMessageModule",
+                "rewardModule", "onlineRewardModule", "questModule", "lobbyModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule",
                 "seatModule", "worldDisplayModule", "blackjackModule", "warpModule",
                 "lobbyExperienceModule"
@@ -62,15 +62,17 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 19,
-                "VapeeCore registers exactly nineteen modules after Phase 16C");
+        check(count(coreSource, "moduleManager.register(") == 20,
+                "VapeeCore registers exactly twenty modules after Phase 17A");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
+                        < coreSource.indexOf("questModule = new QuestModule")
+                        && coreSource.indexOf("questModule = new QuestModule")
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
-                "RewardModule remains after Economy and before its OnlineReward consumer");
+                "RewardModule remains after Economy and before OnlineReward and Quest consumers");
         check(coreSource.contains(
                         "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
                 ),

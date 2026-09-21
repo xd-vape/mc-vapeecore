@@ -10,25 +10,20 @@ scoreboard:
   lobby-only: true
   title: "<aqua><bold><server></bold></aqua>"
   lines:
+    - "<gray>Coins:</gray>"
+    - "<gold><coins></gold> "
     - ""
     - "<gray>Rank:</gray>"
-    - "<rank>"
+    - "<white><rank></white>"
     - ""
     - "<gray>Playtime:</gray>"
-    - "<yellow><playtime></yellow>"
-    - ""
-    - "<gray>Coins:</gray>"
-    - "<gold><coins></gold>"
-    - ""
-    - "<gray>Online:</gray> <white><online>/<max_players></white>"
-    - ""
+    - "<blue><playtime></blue>"
 
 tablist:
   enabled: true
-  name-format: "<prefix><name><suffix>"
+  name-format: "<rank_name>"
   header:
     - "<aqua><bold><server></bold></aqua>"
-    - "<gray>Welcome <white><name></white></gray>"
+    - "<gray>The place to meet new friends, hang out and play games together!</gray>"
   footer:
-    - "<gray>Online: <white><online>/<max_players></white></gray>"
-    - "<gray>Coins: <gold><coins></gold></gray>"
+    - "<gray>you dont need to pay for extra features!</gray>"

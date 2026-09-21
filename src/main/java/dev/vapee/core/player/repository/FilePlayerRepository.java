@@ -5,6 +5,10 @@ import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
+import dev.vapee.core.quest.PlayerQuestProgress;
+import dev.vapee.core.quest.PlayerQuestState;
+import dev.vapee.core.quest.QuestStatus;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -15,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -95,6 +100,11 @@ public final class FilePlayerRepository implements PlayerRepository {
             player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
                     ticks -> configuration.set("rewards.online.processed-playtime-ticks", ticks)
             );
+            for (PlayerQuestProgress progress : player.getQuestState().snapshot().values()) {
+                String questPath = "quests.active." + progress.questId();
+                configuration.set(questPath + ".progress", progress.progress());
+                configuration.set(questPath + ".status", progress.status().name());
+            }
             List<String> ignoredPlayers = player.getSocial().getIgnoredPlayers().stream()
                     .map(UUID::toString)
                     .sorted()
@@ -132,6 +142,7 @@ public final class FilePlayerRepository implements PlayerRepository {
                 playerFile,
                 configuration
         );
+        PlayerQuestState questState = readQuestState(uniqueId, playerFile, configuration);
 
         try {
             return new CorePlayer(
@@ -142,7 +153,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     settings,
                     wallet,
                     social,
-                    onlineRewardProgress
+                    onlineRewardProgress,
+                    questState
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -317,6 +329,84 @@ public final class FilePlayerRepository implements PlayerRepository {
         return OnlineRewardProgress.initialized(processedTicks);
     }
 
+    private PlayerQuestState readQuestState(
+            UUID uniqueId,
+            Path playerFile,
+            YamlConfiguration configuration
+    ) {
+        if (!configuration.contains("quests")) {
+            return PlayerQuestState.empty();
+        }
+        if (!configuration.isConfigurationSection("quests")) {
+            logInvalidQuestState(uniqueId, playerFile, "quests", "expected a YAML section");
+            return PlayerQuestState.empty();
+        }
+        if (!configuration.contains("quests.active")) {
+            return PlayerQuestState.empty();
+        }
+        ConfigurationSection activeSection = configuration.getConfigurationSection("quests.active");
+        if (activeSection == null) {
+            logInvalidQuestState(uniqueId, playerFile, "quests.active", "expected a YAML section");
+            return PlayerQuestState.empty();
+        }
+
+        List<PlayerQuestProgress> progressEntries = new ArrayList<>();
+        for (String questId : activeSection.getKeys(false).stream().sorted().toList()) {
+            String questPath = "quests.active." + questId;
+            ConfigurationSection questSection = configuration.getConfigurationSection(questPath);
+            if (questSection == null) {
+                logInvalidQuestState(uniqueId, playerFile, questPath, "expected a YAML section");
+                continue;
+            }
+
+            Object progressValue = questSection.get("progress");
+            if (!(progressValue instanceof Byte || progressValue instanceof Short
+                    || progressValue instanceof Integer || progressValue instanceof Long)) {
+                logInvalidQuestState(
+                        uniqueId,
+                        playerFile,
+                        questPath + ".progress",
+                        "expected a non-negative integer"
+                );
+                continue;
+            }
+            long progress = ((Number) progressValue).longValue();
+            if (progress < 0L) {
+                logInvalidQuestState(
+                        uniqueId,
+                        playerFile,
+                        questPath + ".progress",
+                        "must not be negative"
+                );
+                continue;
+            }
+
+            Object statusValue = questSection.get("status");
+            if (!(statusValue instanceof String statusName)) {
+                logInvalidQuestState(
+                        uniqueId,
+                        playerFile,
+                        questPath + ".status",
+                        "expected ACTIVE, REWARD_PENDING, or COMPLETED"
+                );
+                continue;
+            }
+
+            try {
+                QuestStatus status = QuestStatus.valueOf(statusName);
+                progressEntries.add(new PlayerQuestProgress(questId, progress, status));
+            } catch (IllegalArgumentException exception) {
+                logInvalidQuestState(
+                        uniqueId,
+                        playerFile,
+                        questPath,
+                        "invalid quest ID or status"
+                );
+            }
+        }
+        return PlayerQuestState.of(progressEntries);
+    }
+
     private boolean readBooleanSetting(
             UUID uniqueId,
             Path playerFile,
@@ -347,6 +437,12 @@ public final class FilePlayerRepository implements PlayerRepository {
         logger.warning("Invalid optional player state '" + key + "' for " + uniqueId + " in "
                 + playerFile + ": " + reason
                 + "; treating online rewards as uninitialized so the next process establishes a safe baseline."
+        );
+    }
+
+    private void logInvalidQuestState(UUID uniqueId, Path playerFile, String key, String reason) {
+        logger.warning("Invalid optional quest state '" + key + "' for " + uniqueId + " in "
+                + playerFile + ": " + reason + "; skipping the affected quest state."
         );
     }
 

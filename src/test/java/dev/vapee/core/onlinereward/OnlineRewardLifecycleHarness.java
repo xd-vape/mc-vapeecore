@@ -33,7 +33,7 @@ public final class OnlineRewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "lobbyModule", "chatModule",
+                "rewardModule", "onlineRewardModule", "questModule", "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
                 "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
                 "warpModule", "lobbyExperienceModule"
@@ -44,13 +44,15 @@ public final class OnlineRewardLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-16C order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 19,
-                "VapeeCore registers exactly nineteen modules");
+        check(count(coreSource, "moduleManager.register(") == 20,
+                "VapeeCore registers exactly twenty modules");
         check(coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
+                        < coreSource.indexOf("questModule = new QuestModule")
+                        && coreSource.indexOf("questModule = new QuestModule")
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
-                "OnlineReward is constructed directly after Reward and before Lobby");
+                "OnlineReward remains directly after Reward and before Quest and Lobby");
         check(coreSource.contains(
                         "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
                 ),
