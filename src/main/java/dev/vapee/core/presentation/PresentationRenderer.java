@@ -167,7 +167,6 @@ public final class PresentationRenderer {
         return TagResolver.resolver(
                 createRankAndPlaytimePlaceholders(rankInfo, player.displayName(), playtimeTicks),
                 Placeholder.component("server", Component.text(configService.getServerName())),
-                Placeholder.component("name", player.displayName()),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
                 Placeholder.component("coins", coins),
@@ -188,6 +187,7 @@ public final class PresentationRenderer {
                 .orElse(validatedDisplayName);
         Component rankId = Component.text(validatedRankInfo.map(RankInfo::id).orElse(""));
         return TagResolver.resolver(
+                Placeholder.component("name", validatedDisplayName),
                 Placeholder.component("rank", rank),
                 Placeholder.component("rank_name", rankName),
                 Placeholder.component("rank_id", rankId),

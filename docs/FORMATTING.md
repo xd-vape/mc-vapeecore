@@ -1496,6 +1496,21 @@ plugins/VapeeCore/presentation.yml
 
 Bestehende Live-Dateien müssen bei neuen Einstellungen gegebenenfalls manuell angepasst werden.
 
+Für Rank-Farben in bestehenden Live-Configs konkret:
+
+```yaml
+# plugins/VapeeCore/chat.yml
+format: "<rank_name><dark_gray> » </dark_gray><white><message></white>"
+```
+
+```yaml
+# plugins/VapeeCore/presentation.yml
+tablist:
+  name-format: "<rank_name>"
+```
+
+Wer Prefix und Suffix anzeigen möchte, kann sie um `<rank_name>` ergänzen. Der bisherige `<prefix><name><suffix>`-Namenspfad färbt `<name>` nicht automatisch. Nach der manuellen Änderung `/core reload` ausführen; VapeeCore überschreibt die Live-Dateien nicht.
+
 ---
 
 # 25. Reload
@@ -1809,18 +1824,14 @@ scoreboard:
   title: "<aqua><bold><server></bold></aqua>"
 
   lines:
+    - "<gray>Coins:</gray>"
+    - "<gold><coins></gold> "
     - ""
     - "<gray>Rank:</gray>"
     - "<rank>"
     - ""
     - "<gray>Playtime:</gray>"
-    - "<yellow><playtime></yellow>"
-    - ""
-    - "<gray>Coins:</gray>"
-    - "<gold><coins></gold>"
-    - ""
-    - "<gray>Online:</gray> <white><online>/<max_players></white>"
-    - ""
+    - "<blue><playtime></blue>"
 
 tablist:
   enabled: true
@@ -1828,11 +1839,10 @@ tablist:
 
   header:
     - "<aqua><bold><server></bold></aqua>"
-    - "<gray>Welcome <white><name></white></gray>"
+    - "<gray>The place to meet new friends, hang out and play games together!</gray>"
 
   footer:
-    - "<gray>Online: <white><online>/<max_players></white></gray>"
-    - "<gray>Coins: <gold><coins></gold></gray>"
+    - "<gray>you dont need to pay for extra features!</gray>"
 ```
 
 ---

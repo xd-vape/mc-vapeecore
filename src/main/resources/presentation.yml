@@ -14,7 +14,7 @@ scoreboard:
     - "<gold><coins></gold> "
     - ""
     - "<gray>Rank:</gray>"
-    - "<white><rank></white>"
+    - "<rank>"
     - ""
     - "<gray>Playtime:</gray>"
     - "<blue><playtime></blue>"

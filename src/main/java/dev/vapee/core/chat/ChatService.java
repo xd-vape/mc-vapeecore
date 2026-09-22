@@ -60,7 +60,7 @@ public final class ChatService {
         ChatConfig.State validatedConfigState = Objects.requireNonNull(configState, "configState");
         return new RuntimeState(
                 validatedConfigState.enabled(),
-                validateFormat(validatedConfigState.format()),
+                validateFormat(validatedConfigState.format(), configFile, logger),
                 validatedConfigState.metaFormat()
         );
     }
@@ -136,7 +136,7 @@ public final class ChatService {
         };
     }
 
-    private String validateFormat(String configuredFormat) {
+    static String validateFormat(String configuredFormat, Path configFile, Logger logger) {
         TagResolver emptyPlaceholders = emptyPlaceholders();
 
         try {

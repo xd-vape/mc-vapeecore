@@ -1,5 +1,6 @@
 package dev.vapee.core.presentation;
 
+import dev.vapee.core.presentation.config.PresentationConfig;
 import dev.vapee.core.rank.RankInfo;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -20,6 +21,8 @@ public final class PresentationHarness {
     }
 
     public static void main(String[] args) {
+        check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<rank_name>"),
+                "missing tablist name format uses the rank-colored default");
         TextColor rankColor = TextColor.color(0xc35cff);
         RankInfo rank = new RankInfo(
                 "developer",
@@ -42,6 +45,32 @@ public final class PresentationHarness {
                 "<rank> keeps the friendly display name and configured rank color");
         check(hasColoredText(rendered, "rx29", rankColor),
                 "<rank_name> applies the primary-rank color to the player display name");
+        Component coloredTabName = MINI_MESSAGE.deserialize(
+                PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT,
+                PresentationRenderer.createRankAndPlaytimePlaceholders(
+                        Optional.of(rank), Component.text("rx29"), 0L
+                )
+        );
+        check(PLAIN.serialize(coloredTabName).equals("rx29")
+                        && hasColoredText(coloredTabName, "rx29", rankColor),
+                "default tablist name uses the configured hex rank color");
+
+        Component normalName = Component.text("TestPlayer", NamedTextColor.YELLOW);
+        RankInfo owner = new RankInfo(
+                "owner", "Owner", Optional.empty(), Optional.of(NamedTextColor.DARK_RED), OptionalInt.empty()
+        );
+        Component named = MINI_MESSAGE.deserialize(
+                "<name>|<rank_name>|<rank>|<rank_id>|<group>",
+                PresentationRenderer.createRankAndPlaytimePlaceholders(
+                        Optional.of(owner), normalName, 0L
+                )
+        );
+        check(PLAIN.serialize(named).equals("TestPlayer|TestPlayer|Owner|owner|owner"),
+                "presentation keeps friendly rank, technical ID, alias, and normal name distinct");
+        check(hasColoredText(named, "TestPlayer", NamedTextColor.YELLOW)
+                        && hasColoredText(named, "TestPlayer", NamedTextColor.DARK_RED)
+                        && hasColoredText(named, "Owner", NamedTextColor.DARK_RED),
+                "named rank color applies to rank_name and rank without changing name");
 
         RankInfo missingColor = new RankInfo(
                 "event_host",

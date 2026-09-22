@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 public final class ChatConfig {
 
     public static final String DEFAULT_FORMAT =
-            "<prefix><name><suffix><dark_gray> » </dark_gray><white><message></white>";
+            "<rank_name><dark_gray> » </dark_gray><white><message></white>";
 
     private static final String RESOURCE_NAME = "chat.yml";
 

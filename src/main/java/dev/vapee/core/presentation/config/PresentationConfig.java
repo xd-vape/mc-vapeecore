@@ -18,25 +18,26 @@ public final class PresentationConfig {
 
     public static final long DEFAULT_UPDATE_INTERVAL_TICKS = 20L;
     public static final String DEFAULT_SCOREBOARD_TITLE = "<aqua><bold><server></bold></aqua>";
-    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<prefix><name><suffix>";
+    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<rank_name>";
 
     private static final String RESOURCE_NAME = "presentation.yml";
     private static final int MAX_SCOREBOARD_LINES = 15;
     private static final List<String> DEFAULT_SCOREBOARD_LINES = List.of(
+            "<gray>Coins:</gray>",
+            "<gold><coins></gold> ",
             "",
-            "<gray>Rank:</gray> <white><group></white>",
-            "<gray>Coins:</gray> <gold><coins></gold>",
+            "<gray>Rank:</gray>",
+            "<rank>",
             "",
-            "<gray>Online:</gray> <white><online>/<max_players></white>",
-            ""
+            "<gray>Playtime:</gray>",
+            "<blue><playtime></blue>"
     );
     private static final List<String> DEFAULT_TABLIST_HEADER = List.of(
             "<aqua><bold><server></bold></aqua>",
-            "<gray>Welcome <white><name></white></gray>"
+            "<gray>The place to meet new friends, hang out and play games together!</gray>"
     );
     private static final List<String> DEFAULT_TABLIST_FOOTER = List.of(
-            "<gray>Online: <white><online>/<max_players></white></gray>",
-            "<gray>Coins: <gold><coins></gold></gray>"
+            "<gray>you dont need to pay for extra features!</gray>"
     );
 
     private final JavaPlugin plugin;
