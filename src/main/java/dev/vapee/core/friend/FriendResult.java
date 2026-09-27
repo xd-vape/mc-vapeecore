@@ -1,0 +1,16 @@
+package dev.vapee.core.friend;
+
+public enum FriendResult {
+    SUCCESS,
+    AUTO_ACCEPTED,
+    SELF,
+    ALREADY_FRIENDS,
+    REQUEST_ALREADY_SENT,
+    REQUEST_NOT_FOUND,
+    NOT_FRIENDS,
+    BLOCKED,
+    REQUESTS_DISABLED,
+    FRIEND_LIMIT_REACHED,
+    INCOMING_LIMIT_REACHED,
+    OUTGOING_LIMIT_REACHED
+}
