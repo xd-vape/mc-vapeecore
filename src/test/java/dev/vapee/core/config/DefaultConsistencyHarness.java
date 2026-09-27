@@ -2,6 +2,7 @@ package dev.vapee.core.config;
 
 import dev.vapee.core.chat.config.ChatConfig;
 import dev.vapee.core.presentation.config.PresentationConfig;
+import dev.vapee.core.quest.daily.DailyQuestConfig;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.InputStream;
@@ -58,6 +59,19 @@ public final class DefaultConsistencyHarness {
         check(presentationDefaults.tablistHeader().equals(presentation.getStringList("tablist.header"))
                         && presentationDefaults.tablistFooter().equals(presentation.getStringList("tablist.footer")),
                 "tablist header and footer fallbacks match the resource");
+
+        YamlConfiguration daily = resource("daily-quests.yml");
+        DailyQuestConfig.State dailyDefaults = DailyQuestConfig.State.defaults();
+        check(!dailyDefaults.enabled() && !daily.getBoolean("enabled"),
+                "daily quests are disabled in both Java and the fresh-install resource");
+        check(dailyDefaults.questsPerDay() == daily.getInt("quests-per-day")
+                        && dailyDefaults.questsPerDay() == 4,
+                "daily slot count matches the resource");
+        check(dailyDefaults.resetTime().toString().equals(daily.getString("reset.time"))
+                        && dailyDefaults.timezoneSetting().equals(daily.getString("reset.timezone"))
+                        && dailyDefaults.definitions().isEmpty()
+                        && daily.getConfigurationSection("quests").getKeys(false).isEmpty(),
+                "daily reset and empty catalog defaults match the resource");
 
         System.out.println("DefaultConsistencyHarness passed " + checks + " checks.");
     }

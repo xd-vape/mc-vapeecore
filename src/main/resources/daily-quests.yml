@@ -1,0 +1,9 @@
+enabled: false
+
+quests-per-day: 4
+
+reset:
+  time: "00:00"
+  timezone: "system"
+
+quests: {}

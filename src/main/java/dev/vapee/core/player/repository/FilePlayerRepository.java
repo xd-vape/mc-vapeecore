@@ -7,6 +7,8 @@ import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestProgress;
 import dev.vapee.core.quest.PlayerQuestState;
+import dev.vapee.core.quest.daily.DailyQuestCycleId;
+import dev.vapee.core.quest.daily.PlayerDailyQuestState;
 import dev.vapee.core.quest.QuestStatus;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -100,6 +102,9 @@ public final class FilePlayerRepository implements PlayerRepository {
             player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
                     ticks -> configuration.set("rewards.online.processed-playtime-ticks", ticks)
             );
+            player.getDailyQuestState().cycleId().ifPresent(
+                    cycleId -> configuration.set("quests.daily.cycle-id", cycleId.toString())
+            );
             for (PlayerQuestProgress progress : player.getQuestState().snapshot().values()) {
                 String questPath = "quests.active." + progress.questId();
                 configuration.set(questPath + ".progress", progress.progress());
@@ -143,6 +148,7 @@ public final class FilePlayerRepository implements PlayerRepository {
                 configuration
         );
         PlayerQuestState questState = readQuestState(uniqueId, playerFile, configuration);
+        PlayerDailyQuestState dailyQuestState = readDailyQuestState(uniqueId, playerFile, configuration);
 
         try {
             return new CorePlayer(
@@ -154,7 +160,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     wallet,
                     social,
                     onlineRewardProgress,
-                    questState
+                    questState,
+                    dailyQuestState
             );
         } catch (RuntimeException exception) {
             throw invalidPlayerFile(playerFile, "Invalid player values", exception);
@@ -405,6 +412,47 @@ public final class FilePlayerRepository implements PlayerRepository {
             }
         }
         return PlayerQuestState.of(progressEntries);
+    }
+
+    private PlayerDailyQuestState readDailyQuestState(
+            UUID uniqueId,
+            Path playerFile,
+            YamlConfiguration configuration
+    ) {
+        if (!configuration.contains("quests") || !configuration.isConfigurationSection("quests")) {
+            return PlayerDailyQuestState.uninitialized();
+        }
+        if (!configuration.contains("quests.daily")) {
+            return PlayerDailyQuestState.uninitialized();
+        }
+        if (!configuration.isConfigurationSection("quests.daily")) {
+            logInvalidDailyState(uniqueId, playerFile, "quests.daily", "expected a YAML section");
+            return PlayerDailyQuestState.uninitialized();
+        }
+        String path = "quests.daily.cycle-id";
+        if (!configuration.contains(path)) {
+            return PlayerDailyQuestState.uninitialized();
+        }
+        Object value = configuration.get(path);
+        if (!(value instanceof String stringValue)) {
+            logInvalidDailyState(uniqueId, playerFile, path, "expected an ISO date string");
+            return PlayerDailyQuestState.uninitialized();
+        }
+        try {
+            DailyQuestCycleId cycleId = DailyQuestCycleId.parse(stringValue);
+            if (!cycleId.toString().equals(stringValue)) {
+                throw new IllegalArgumentException("non-canonical date");
+            }
+            return PlayerDailyQuestState.initialized(cycleId);
+        } catch (RuntimeException exception) {
+            logInvalidDailyState(uniqueId, playerFile, path, "expected a valid yyyy-MM-dd date");
+            return PlayerDailyQuestState.uninitialized();
+        }
+    }
+
+    private void logInvalidDailyState(UUID uniqueId, Path playerFile, String key, String reason) {
+        logger.warning("Invalid optional daily quest state '" + key + "' for " + uniqueId + " in "
+                + playerFile + ": " + reason + "; treating DailyQuest as uninitialized.");
     }
 
     private boolean readBooleanSetting(

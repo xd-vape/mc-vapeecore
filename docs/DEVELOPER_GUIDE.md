@@ -56,7 +56,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Quest Definition Domain | `QuestDefinition` und `QuestDefinitionRegistry` |
 | Technische Quest Progress Keys | `QuestProgressKey` |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
-| Daily-Quest-Auswahl und Rotation | Noch nicht implementiert; folgt in Phase 17B |
+| Daily-Quest-Auswahl und Rotation | `dev.vapee.core.quest.daily` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
@@ -79,7 +79,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 
 **`src/main/resources/*.yml` sind nur Defaults, die in die Plugin-JAR gepackt werden. `plugins/VapeeCore/*.yml` sind die tatsächlich verwendeten Dateien eines laufenden Servers.**
 
-Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Live-Datei. Bei einer bestehenden Dev- oder Produktionsinstallation muss der neue Wert auch in der Datei unter `plugins/VapeeCore/` eingetragen werden. `/core reload` liest nur seine fünf registrierten Live-Dateien neu. `blackjack.yml` und `warps.yml` werden stattdessen durch ihre Admin-Commands zur Laufzeit geschrieben und aktualisiert.
+Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Live-Datei. Bei einer bestehenden Dev- oder Produktionsinstallation muss der neue Wert auch in der Datei unter `plugins/VapeeCore/` eingetragen werden. `/core reload` liest seine sechs registrierten Live-Dateien neu. `blackjack.yml` und `warps.yml` werden stattdessen durch ihre Admin-Commands zur Laufzeit geschrieben und aktualisiert.
 
 | File | Owner | Purpose | `/core reload`? | Runtime mutable? | Defaults |
 |---|---|---|---:|---|---|
@@ -88,10 +88,11 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
 | `presentation.yml` | `PresentationConfig` / `PresentationModule` | Sidebar, Tablist, Updateintervall | Ja | Durch Reload | `src/main/resources/presentation.yml` |
+| `daily-quests.yml` | `DailyQuestConfig` / `DailyQuestModule` | Daily-Slots, Reset, Zeitzone und Quest-Katalog | Ja | Durch Reload; Player-Rotation erst beim nächsten Sync | `src/main/resources/daily-quests.yml` |
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 
-Die fünf Reload-Teilnehmer bleiben exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml` und `presentation.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward, OnlineReward und Quest fügen keinen sechsten Teilnehmer hinzu. Reward und Quest besitzen keine eigene Config- oder Datendatei. Der Reload wird zweiphasig vorbereitet und angewendet. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu, sodass Enabled-, Intervall-, Coin- und Nachrichtenänderungen nach Apply ohne Neustart gelten. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
+Die sechs Reload-Teilnehmer sind exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml` und `daily-quests.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward, OnlineReward und die generische Quest Foundation sind selbst keine Reload-Teilnehmer. Reward und Quest besitzen keine eigene Config- oder Datendatei; DailyQuest besitzt die Katalog-Datei. Der Reload wird zweiphasig vorbereitet und angewendet. `DailyQuestModule` tauscht beim Apply Config und Registry aus und stellt beim Rollback beide vorherigen Snapshots wieder her; Player-Assignments werden erst im nächsten normalen Sync berührt. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
 ## Module map und Reihenfolge
 
@@ -105,20 +106,21 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 6. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
 7. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
 8. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
-9. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-10. **Chat** – globaler Chat und lesende Rank-Placeholder.
-11. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-12. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-13. **Settings** – Settings-Inventar und `/settings`.
-14. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-15. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-16. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-17. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-18. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-19. **Warp** – dynamische Warp-Persistence und Admin-Command.
-20. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+9. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
+10. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+11. **Chat** – globaler Chat und lesende Rank-Placeholder.
+12. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+13. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+14. **Settings** – Settings-Inventar und `/settings`.
+15. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+16. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+17. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+18. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+19. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+20. **Warp** – dynamische Warp-Persistence und Admin-Command.
+21. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → Quest → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. Quest stoppt zuerst seinen Flush-Task und speichert dirty Quest-State, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State und benötigt keine zusätzliche Cleanup-Logik. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -145,6 +147,10 @@ Player + Reward
   ↑
 Quest
 
+Player + Quest
+  ↑
+DailyQuest
+
 Lobby + Activity
   ↑
 Utility
@@ -162,7 +168,7 @@ Lobby + Player + Settings + Warp
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab; es besitzt insbesondere keine Abhängigkeit von OnlineReward, Activity, Mine, Quest, Rank, Chat oder Presentation. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt, Activity, Rank, LuckPerms, Mine, Quest, Blackjack, Warp oder Lobby. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
 ## Reward Foundation
 
@@ -196,7 +202,7 @@ Das Quest-System besitzt ausschließlich die fachliche Frage, ob ein geladener S
 
 `QuestDefinition` ist ein immutable Record aus `id`, `name`, `description`, `progressKey`, positivem `long target` und positiven `long rewardCoins`. Die technische ID erfüllt `[a-z0-9][a-z0-9_-]{0,63}`; Name und Beschreibung sind non-blank, bleiben aber normale Domain-Strings ohne MiniMessage-Verarbeitung. `QuestProgressKey` ist ein validiertes Value Object nach `[a-z0-9][a-z0-9:._-]{0,127}`. Keys werden ausschließlich exakt verglichen. Es existieren weder ein hartcodiertes Quest-Type-Enum noch Prefix-/Wildcard-Matching; ein Producer kann bei echtem Bedarf mehrere Signale wie `mine:block:any` und `mine:block:stone` melden.
 
-`QuestDefinitionRegistry` hält den zur Laufzeit bekannten Katalog. `findById`, `snapshot` und `snapshotById` liefern immutable Sichten in deterministischer ID-Reihenfolge. `replaceAll` baut zuerst einen vollständigen Kandidaten auf und lehnt Nullwerte oder Duplicate-IDs ab, bevor es den Runtime-Katalog austauscht. Ein Fehler lässt den alten Katalog vollständig erhalten. Phase 17A erzeugt beim Modulstart absichtlich ein leeres Registry; YAML-Loading und konkrete Production-Definitionen folgen erst mit dem Daily-System.
+`QuestDefinitionRegistry` hält den zur Laufzeit bekannten Katalog. `findById`, `snapshot` und `snapshotById` liefern immutable Sichten in deterministischer ID-Reihenfolge. `replaceAll` baut zuerst einen vollständigen Kandidaten auf und lehnt Nullwerte oder Duplicate-IDs ab, bevor es den Runtime-Katalog austauscht. Ein Fehler lässt den alten Katalog vollständig erhalten. `QuestModule` erzeugt zunächst ein leeres Registry; `DailyQuestModule` lädt danach die Definitionen aus `daily-quests.yml` hinein. Der ausgelieferte Katalog ist absichtlich leer.
 
 `CorePlayer` besitzt genau einen `PlayerQuestState`. Dessen aktuelle Assignment-Map enthält pro Quest ausschließlich ein immutable `PlayerQuestProgress(questId, progress, status)`; Definition, Name, Beschreibung, Target und Reward werden nicht dupliziert. Die Statuswerte bedeuten:
 
@@ -229,7 +235,38 @@ Quest-Mutationen sind Main-Thread-owned und sofort im `CorePlayer` sichtbar. `Qu
 
 RewardService und QuestService speichern jeweils den gesamten aktuellen `CorePlayer`, niemals getrennte Balance- oder Quest-Snapshots. Ein Reward-Flush kann daher aktuellen Quest-State mitpersistieren und ein späterer Quest-Flush redundant sein, aber keiner kann einen alten Teilzustand zurückschreiben. Bei einem harten JVM-/OS-Abbruch können die letzten ungefähr fünf Sekunden Quest-Progress verloren gehen; Coins und Completion-State im selben noch nicht gespeicherten In-Memory-Profil teilen dieses Batching-Fenster. Normales Quit, Plugin-Disable und Server-Shutdown flushen kontrolliert.
 
-Phase 17B kann später Definitionen per `QuestDefinitionRegistry#replaceAll` laden, mit `QuestService#replaceAssignments` drei bis vier Daily Quests setzen und Producer für `playtime:minute`, `mine:block:any`, `blackjack:win`, `activity:complete` oder `location:visit:mine` anbinden. Phase 17A implementiert ausdrücklich noch keine Daily-Rotation, Cycle-ID, Reset-Zeit, Auswahl, konkreten Quests, Gameplay-Hooks, Mine, `/quests`, GUI, Claim-Button, Feedback, Kategorien, Voraussetzungen, Ränge oder Multiplikatoren.
+Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende Quest Foundation. Konkrete Default-Quests und Producer für `playtime:minute`, `mine:block:any`, `blackjack:win`, `activity:complete` oder `location:visit:mine` sind noch nicht implementiert. `/quests`, GUI, Claim-Button, Completion-Feedback, Mine und Blackjack-Hooks folgen später.
+
+## Daily Quest Cycle & Configuration
+
+`DailyQuestModule` hängt nur von `JavaPlugin`, `PlayerModule` und `QuestModule` ab. Es ist Owner von `plugins/VapeeCore/daily-quests.yml`, `DailyQuestConfig`, `DailyQuestService`, einem Join-Listener und genau einem gemeinsamen synchronen 1200-Tick-Sync-Task. Es besitzt weder eigenen Save-Task noch Quit-Listener, Command, Permission, GUI oder Player-Nachricht. Die generische Quest Foundation bleibt Owner von Definition-Registry, Progress, Completion, Reward-Retry und dem 100-Tick-Dirty-Flush.
+
+Die Resource liefert `enabled: false`, `quests-per-day: 4`, `reset.time: "00:00"`, `reset.timezone: "system"` und `quests: {}`. Das ist bewusst noch kein sichtbares Feature: Ohne UI und Production-Progress-Producer würden aktive Standardquests den Spielern nichts Nützliches bieten. Administratoren können Definitionen etwa so ergänzen; die Keys sind erst nach einem späteren Producer tatsächlich fortschreitbar:
+
+```yaml
+enabled: true
+quests-per-day: 4
+reset:
+  time: "04:00"
+  timezone: "Europe/Berlin"
+quests:
+  play_30_minutes:
+    name: "Regular"
+    description: "Play for 30 minutes."
+    progress-key: "playtime:minute"
+    target: 30
+    reward-coins: 250
+```
+
+Slots, Reset-Zeit, Zeitzone sowie Quest-Name, Beschreibung, Progress-Key, Target und Reward werden in `daily-quests.yml` geändert. `DailyQuestConfig` verwendet für fehlende oder falsch typisierte allgemeine Einstellungen sichere Defaults und Warnungen; ungültige Quest-Definitionen brechen dagegen den vollständigen Prepare-Schritt ab. `/core reload` bereitet alle sechs Teilnehmer vor, bevor DailyQuest Config und Registry austauscht; ein Rollback stellt beide alten Snapshots wieder her. Apply verändert keine Player-Assignments. Bestehende IDs erhalten bei geändertem Target oder Reward sofort die neue Definition; entfernte IDs bleiben im Playerprofil, bekommen aber weder Fortschritt noch Reward. IDs während eines laufenden Cycles deshalb möglichst nicht entfernen oder umbenennen.
+
+`DailyQuestCycleId` ist das lokale ISO-Datum des letzten Reset-Boundary, gespeichert als `quests.daily.cycle-id: "yyyy-MM-dd"`. `DailyQuestCycleResolver` berechnet es aus `Instant`, konfigurierter `ZoneId` und `LocalTime`: `system` nutzt die aktuelle Systemzeitzone, explizite IANA-IDs etwa `Europe/Berlin` sind möglich. Der Resolver vergleicht echte Instants mit dem zonengerechten Boundary und bleibt damit auch bei DST-Lücken und doppelten Stunden stabil; er wartet nie pauschal 24 Stunden. Bei Reset 04:00 gehört 03:59 noch zum Vortag und 04:00 zum neuen Cycle.
+
+`DailyQuestSelector` sortiert alle Definitionen nach SHA-256 über kanonische Spieler-UUID, Cycle-ID und Quest-ID, mit Quest-ID als Tie-Breaker. Es wählt höchstens `quests-per-day` unterschiedliche IDs, unabhängig von der YAML-/Collection-Reihenfolge. `DailyQuestService#syncPlayer(UUID, Instant)` wählt beim ersten Sync ausschließlich den aktuellen Cycle, nicht versäumte Tage. Gleiche Cycle-ID ist ein No-op: weder Reload noch Restart setzt Progress zurück, selbst wenn sich `quests-per-day` inzwischen geändert hat. Beim nächsten Cycle ersetzt `QuestService#replaceAssignments` alte ACTIVE-/COMPLETED-Einträge durch neue ACTIVE-Einträge bei null; erst danach wird die Cycle-ID gesetzt. Ein leerer aktiver Katalog erzeugt keine Assignments und keinen Cycle-Fortschritt; ein kleiner Katalog füllt nur die vorhandenen Slots. `enabled: false` lässt vorhandenen State unangetastet. Änderungen an Reset-Zeit oder Zeitzone können beim nächsten Sync einen anderen aktuellen Cycle ergeben.
+
+Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
+
+Ownership-Kurzform: Daily-Anzahl, Reset und Definitionen → `daily-quests.yml`; Cycle-Rechnung → `DailyQuestCycleResolver`; Auswahl → `DailyQuestSelector`; Assignment/Rotation → `DailyQuestService`; Fortschritt, Completion und Coin-Reward → `QuestService` und `RewardService`. Phase 17C ergänzt erst die sichtbare Quest-UX und erste Producer. `docs/FORMATTING.md` bleibt unverändert, da Phase 17B keine Player-facing Templates einführt.
 
 ## Ranks & Server Identity
 
@@ -451,7 +488,10 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 | Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
 | Technische Quest Progress Keys | `QuestProgressKey` und später die Konstanten des produzierenden Features |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
-| Daily-Quest-Auswahl | Noch nicht implementiert; Phase 17B |
+| Daily-Quest-Anzahl, Reset, Zeitzone und Definitionen | `daily-quests.yml` |
+| Daily-Cycle-Berechnung | `DailyQuestCycleResolver` |
+| Deterministische Daily-Auswahl | `DailyQuestSelector` |
+| Daily-Assignment und Rotation | `DailyQuestService` |
 
 ## Utility ownership und Lifecycle
 
@@ -588,7 +628,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
 - `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 20 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 21 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

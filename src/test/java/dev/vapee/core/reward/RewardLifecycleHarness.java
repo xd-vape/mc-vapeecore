@@ -51,7 +51,8 @@ public final class RewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "questModule", "lobbyModule", "chatModule", "privateMessageModule",
+                "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
+                "lobbyModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule",
                 "seatModule", "worldDisplayModule", "blackjackModule", "warpModule",
                 "lobbyExperienceModule"
@@ -62,8 +63,8 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 20,
-                "VapeeCore registers exactly twenty modules after Phase 17A");
+        check(count(coreSource, "moduleManager.register(") == 21,
+                "VapeeCore registers exactly twenty-one modules after Phase 17B");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")
@@ -74,9 +75,10 @@ public final class RewardLifecycleHarness {
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
                 "RewardModule remains after Economy and before OnlineReward and Quest consumers");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
+                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                                + "                        presentationModule, dailyQuestModule)"
                 ),
-                "reload remains limited to the existing five participants");
+                "reload adds DailyQuest after the existing five participants");
 
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
         check(!pluginYaml.contains("vapeecore.reward") && !pluginYaml.contains("reward:"),

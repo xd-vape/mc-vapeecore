@@ -50,7 +50,7 @@ public final class QuestLifecycleHarness {
         check(CoreModule.class.isAssignableFrom(QuestModule.class),
                 "QuestModule is a regular CoreModule");
         check(!ReloadParticipant.class.isAssignableFrom(QuestModule.class),
-                "QuestModule is not a sixth ReloadParticipant");
+                "QuestModule itself remains outside the reload participants");
         check(QuestModule.QUEST_FLUSH_INTERVAL_TICKS == 100L,
                 "QuestModule owns the central one-hundred-tick flush cadence");
         check(List.of(QuestModule.class.getConstructor(
@@ -67,7 +67,8 @@ public final class QuestLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "questModule", "lobbyModule", "chatModule",
+                "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
+                "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
                 "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
                 "warpModule", "lobbyExperienceModule"
@@ -78,27 +79,28 @@ public final class QuestLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-17A order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 20,
-                "VapeeCore registers exactly twenty modules");
+        check(count(coreSource, "moduleManager.register(") == 21,
+                "VapeeCore registers exactly twenty-one modules");
         check(coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("questModule = new QuestModule")
                         && coreSource.indexOf("questModule = new QuestModule")
+                        < coreSource.indexOf("dailyQuestModule = new DailyQuestModule")
+                        && coreSource.indexOf("dailyQuestModule = new DailyQuestModule")
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
-                "Quest is constructed directly after OnlineReward and before Lobby");
+                "Quest and DailyQuest are constructed between OnlineReward and Lobby");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
+                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                                + "                        presentationModule, dailyQuestModule)"
                 ),
-                "reload wiring remains exactly the existing five participants");
+                "reload wiring adds DailyQuest after the existing five participants");
 
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
         check(!pluginYaml.contains("quests:")
                         && !pluginYaml.contains("questadmin")
                         && !pluginYaml.contains("vapeecore.quest"),
                 "Quest adds no command or permission to plugin.yml");
-        try (Stream<Path> resources = Files.walk(Path.of("src/main/resources"))) {
-            check(resources.noneMatch(path -> path.getFileName().toString().toLowerCase().contains("quest")),
-                    "Quest adds no YAML or other configuration resource");
-        }
+        check(Files.isRegularFile(Path.of("src/main/resources/daily-quests.yml")),
+                "DailyQuest adds exactly its own configuration resource");
 
         String questSource = questProductionSource();
         check(!questSource.contains("import dev.vapee.core.economy")
@@ -192,7 +194,8 @@ public final class QuestLifecycleHarness {
     private static String questProductionSource() throws IOException {
         StringBuilder source = new StringBuilder();
         try (Stream<Path> files = Files.walk(Path.of("src/main/java/dev/vapee/core/quest"))) {
-            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")
+                    && path.getParent().equals(Path.of("src/main/java/dev/vapee/core/quest"))).toList()) {
                 source.append(Files.readString(file));
             }
         }

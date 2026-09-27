@@ -33,7 +33,8 @@ public final class OnlineRewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "questModule", "lobbyModule", "chatModule",
+                "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
+                "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
                 "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
                 "warpModule", "lobbyExperienceModule"
@@ -44,8 +45,8 @@ public final class OnlineRewardLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-16C order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 20,
-                "VapeeCore registers exactly twenty modules");
+        check(count(coreSource, "moduleManager.register(") == 21,
+                "VapeeCore registers exactly twenty-one modules");
         check(coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
@@ -54,9 +55,10 @@ public final class OnlineRewardLifecycleHarness {
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
                 "OnlineReward remains directly after Reward and before Quest and Lobby");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)"
+                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                                + "                        presentationModule, dailyQuestModule)"
                 ),
-                "reload wiring remains exactly the existing five participants");
+                "reload keeps OnlineReward outside the six participants");
     }
 
     private static void testTaskAndShutdownStructure() throws IOException {

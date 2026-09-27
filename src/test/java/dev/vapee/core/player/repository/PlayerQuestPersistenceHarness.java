@@ -8,6 +8,7 @@ import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestProgress;
 import dev.vapee.core.quest.PlayerQuestState;
 import dev.vapee.core.quest.QuestStatus;
+import dev.vapee.core.quest.daily.DailyQuestCycleId;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -42,6 +43,7 @@ public final class PlayerQuestPersistenceHarness {
             testInvalidIndividualEntries(directory, repository, handler);
             testInvalidSections(directory, repository, handler);
             testUnknownDefinitionAndRestartState(directory, repository);
+            testDailyState(directory, repository, handler);
         } finally {
             try (var files = Files.list(directory)) {
                 for (Path file : files.toList()) {
@@ -198,6 +200,55 @@ public final class PlayerQuestPersistenceHarness {
                 "pending and completed duplicate-protection states survive restart");
         check(loaded.getWallet().getCoins() == 0L,
                 "repository load alone never grants quest coins or performs completion");
+    }
+
+    private static void testDailyState(
+            Path directory,
+            FilePlayerRepository repository,
+            CapturingHandler handler
+    ) throws IOException {
+        UUID legacyId = UUID.randomUUID();
+        Path legacyFile = directory.resolve(legacyId + ".yml");
+        Files.writeString(legacyFile, basicPlayerYaml("LegacyDaily") + "quests:\n  active: {}\n");
+        check(repository.findByUniqueId(legacyId).orElseThrow().getDailyQuestState().cycleId().isEmpty(),
+                "legacy player without quests.daily has uninitialized daily state");
+
+        UUID playerId = UUID.randomUUID();
+        PlayerQuestState quests = PlayerQuestState.of(List.of(
+                new PlayerQuestProgress("active", 3L, QuestStatus.ACTIVE),
+                new PlayerQuestProgress("completed", 10L, QuestStatus.COMPLETED),
+                new PlayerQuestProgress("pending", 10L, QuestStatus.REWARD_PENDING)
+        ));
+        CorePlayer player = player(playerId, quests);
+        player.getDailyQuestState().setCycleId(DailyQuestCycleId.parse("2026-09-22"));
+        repository.save(player);
+        String saved = Files.readString(directory.resolve(playerId + ".yml"));
+        check(saved.contains("daily:") && (saved.contains("cycle-id: '2026-09-22'")
+                        || saved.contains("cycle-id: 2026-09-22")),
+                "daily cycle is persisted as one canonical ISO date string");
+        CorePlayer loaded = repository.findByUniqueId(playerId).orElseThrow();
+        check(loaded.getDailyQuestState().cycleId().orElseThrow().toString().equals("2026-09-22")
+                        && loaded.getQuestState().snapshot().equals(quests.snapshot()),
+                "cycle and ACTIVE, COMPLETED, and PENDING assignments round-trip together");
+        check(loaded.getWallet().getCoins() == 0L
+                        && loaded.getOnlineRewardProgress().getProcessedPlaytimeTicks().isEmpty()
+                        && loaded.getSocial().getIgnoredPlayers().isEmpty()
+                        && loaded.getSettings().isScoreboardEnabled(),
+                "daily persistence leaves economy, online reward, social, and settings intact");
+
+        for (String dailyValue : List.of("invalid", "{cycle-id: 123}", "{cycle-id: banana}")) {
+            UUID invalidId = UUID.randomUUID();
+            Path invalidFile = directory.resolve(invalidId + ".yml");
+            Files.writeString(invalidFile, basicPlayerYaml("InvalidDaily")
+                    + "quests:\n  daily: " + dailyValue + "\n"
+                    + "  active:\n    valid:\n      progress: 5\n      status: ACTIVE\n");
+            handler.messages.clear();
+            CorePlayer invalid = repository.findByUniqueId(invalidId).orElseThrow();
+            check(invalid.getDailyQuestState().cycleId().isEmpty()
+                            && invalid.getQuestState().snapshot().get("valid").progress() == 5L
+                            && handler.messages.stream().anyMatch(message -> message.contains("daily quest state")),
+                    "invalid daily value " + dailyValue + " warns without discarding active quests");
+        }
     }
 
     private static CorePlayer player(UUID playerId, PlayerQuestState questState) {

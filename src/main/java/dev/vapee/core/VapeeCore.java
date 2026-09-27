@@ -20,6 +20,7 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.presentation.PresentationModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.quest.QuestModule;
+import dev.vapee.core.quest.daily.DailyQuestModule;
 import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.reload.ReloadService;
 import dev.vapee.core.reward.RewardModule;
@@ -48,6 +49,7 @@ public final class VapeeCore extends JavaPlugin {
     private RewardModule rewardModule;
     private OnlineRewardModule onlineRewardModule;
     private QuestModule questModule;
+    private DailyQuestModule dailyQuestModule;
     private LobbyModule lobbyModule;
     private ChatModule chatModule;
     private PrivateMessageModule privateMessageModule;
@@ -84,6 +86,7 @@ public final class VapeeCore extends JavaPlugin {
                 messageService
         );
         questModule = new QuestModule(this, playerModule, rewardModule);
+        dailyQuestModule = new DailyQuestModule(this, playerModule, questModule);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
         chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
@@ -138,6 +141,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(rewardModule);
         moduleManager.register(onlineRewardModule);
         moduleManager.register(questModule);
+        moduleManager.register(dailyQuestModule);
         moduleManager.register(lobbyModule);
         moduleManager.register(chatModule);
         moduleManager.register(privateMessageModule);
@@ -154,7 +158,8 @@ public final class VapeeCore extends JavaPlugin {
 
         ReloadService reloadService = new ReloadService(
                 getLogger(),
-                List.of(configService, lobbyModule, chatModule, privateMessageModule, presentationModule)
+                List.of(configService, lobbyModule, chatModule, privateMessageModule,
+                        presentationModule, dailyQuestModule)
         );
         registerCommands(
                 playerModule.getPlayerService(),

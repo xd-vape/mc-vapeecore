@@ -5,6 +5,7 @@ import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestState;
+import dev.vapee.core.quest.daily.PlayerDailyQuestState;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -19,6 +20,7 @@ public final class CorePlayer {
     private final PlayerSocial social;
     private final OnlineRewardProgress onlineRewardProgress;
     private final PlayerQuestState questState;
+    private final PlayerDailyQuestState dailyQuestState;
     private String name;
     private Instant lastJoin;
 
@@ -78,6 +80,22 @@ public final class CorePlayer {
             OnlineRewardProgress onlineRewardProgress,
             PlayerQuestState questState
     ) {
+        this(uniqueId, name, firstJoin, lastJoin, settings, wallet, social,
+                onlineRewardProgress, questState, PlayerDailyQuestState.uninitialized());
+    }
+
+    public CorePlayer(
+            UUID uniqueId,
+            String name,
+            Instant firstJoin,
+            Instant lastJoin,
+            PlayerSettings settings,
+            CoinWallet wallet,
+            PlayerSocial social,
+            OnlineRewardProgress onlineRewardProgress,
+            PlayerQuestState questState,
+            PlayerDailyQuestState dailyQuestState
+    ) {
         this.uniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
         this.name = requireName(name);
         this.firstJoin = Objects.requireNonNull(firstJoin, "firstJoin");
@@ -90,6 +108,7 @@ public final class CorePlayer {
                 "onlineRewardProgress"
         );
         this.questState = Objects.requireNonNull(questState, "questState");
+        this.dailyQuestState = Objects.requireNonNull(dailyQuestState, "dailyQuestState");
         if (social.isIgnoring(uniqueId)) {
             throw new IllegalArgumentException("A player cannot ignore themselves");
         }
@@ -129,6 +148,10 @@ public final class CorePlayer {
 
     public PlayerQuestState getQuestState() {
         return questState;
+    }
+
+    public PlayerDailyQuestState getDailyQuestState() {
+        return dailyQuestState;
     }
 
     public void updateName(String name) {
