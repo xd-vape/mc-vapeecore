@@ -51,6 +51,7 @@ public final class RewardLifecycleHarness {
         String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
+                "identityModule",
                 "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
                 "lobbyModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule",
@@ -63,8 +64,8 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 21,
-                "VapeeCore registers exactly twenty-one modules after Phase 17B");
+        check(count(coreSource, "moduleManager.register(") == 22,
+                "VapeeCore registers exactly twenty-two modules after Phase 17C");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")

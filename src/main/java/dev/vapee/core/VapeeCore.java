@@ -7,6 +7,7 @@ import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.economy.EconomyModule;
+import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.experience.LobbyExperienceModule;
 import dev.vapee.core.lobby.warp.WarpModule;
@@ -46,6 +47,7 @@ public final class VapeeCore extends JavaPlugin {
     private PlayerModule playerModule;
     private SocialModule socialModule;
     private EconomyModule economyModule;
+    private IdentityModule identityModule;
     private RewardModule rewardModule;
     private OnlineRewardModule onlineRewardModule;
     private QuestModule questModule;
@@ -77,6 +79,7 @@ public final class VapeeCore extends JavaPlugin {
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, messageService, commandHelpRenderer);
+        identityModule = new IdentityModule(this, playerModule, rankModule, economyModule, messageService);
         rewardModule = new RewardModule(this, playerModule, economyModule);
         onlineRewardModule = new OnlineRewardModule(
                 this,
@@ -138,6 +141,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(playerModule);
         moduleManager.register(socialModule);
         moduleManager.register(economyModule);
+        moduleManager.register(identityModule);
         moduleManager.register(rewardModule);
         moduleManager.register(onlineRewardModule);
         moduleManager.register(questModule);

@@ -50,6 +50,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | World text/item display lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayService` |
 | World display module lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayModule` |
 | Coins | `dev.vapee.core.economy` |
+| Known-Player-Name/UUID-Lookup | `PlayerService`, `FilePlayerRepository` und `PlayerIdentityService` |
+| `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
 | Kumulative Online-/Playtime-Rewards | `dev.vapee.core.onlinereward` |
 | Quest Progress Engine | `dev.vapee.core.quest.QuestService` |
@@ -103,24 +105,25 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 3. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
-6. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
-7. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
-8. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
-9. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
-10. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-11. **Chat** – globaler Chat und lesende Rank-Placeholder.
-12. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-13. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-14. **Settings** – Settings-Inventar und `/settings`.
-15. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-16. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-17. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-18. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-19. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-20. **Warp** – dynamische Warp-Persistence und Admin-Command.
-21. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+6. **Identity** – Known-Player-Lookup, immutable Profile und `/profile`.
+7. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
+8. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
+9. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
+10. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
+11. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+12. **Chat** – globaler Chat und lesende Rank-Placeholder.
+13. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+14. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+15. **Settings** – Settings-Inventar und `/settings`.
+16. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+17. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+18. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+19. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+20. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+21. **Warp** – dynamische Warp-Persistence und Admin-Command.
+22. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Identity → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Identity deregistriert nur `/profile`; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -169,6 +172,18 @@ LobbyExperience
 ```
 
 `RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+
+## Player Identity & Profile Foundation (Phase 17C)
+
+`IdentityModule` hängt nur von `JavaPlugin`, `PlayerModule`, `RankModule`, `EconomyModule` und `MessageService` ab. Es steht unmittelbar nach Economy und vor Reward, besitzt weder Listener noch Task noch eigene Config/Persistence und ist keiner der sechs Reload-Teilnehmer. Beim Shutdown werden Command-Executor und Tab-Completer entfernt und Service-Referenzen freigegeben. Friends und Clans sollen später auf `PlayerIdentityService` zugreifen, nicht eigene Name-Resolver oder Player-YAML-Scans bauen.
+
+`PlayerIdentity(UUID, name, firstJoin, lastJoin)` ist ein validierter immutable Snapshot ohne `CorePlayer`- oder Bukkit-Referenz. `PlayerIdentityService#findById(UUID)`, `findByName(String)` und `resolve(String)` geben bekannte Spieler als Snapshot zurück; Namensauflösung unterscheidet `FOUND`, `NOT_FOUND` und `AMBIGUOUS`. UUID-Eingaben müssen bereits in VapeeCore bekannt sein. `PlayerProfile` ergänzt `online`, `coins`, optionalen `RankInfo` und optionale Playtime-Ticks. `PlayerProfileService#getProfile(UUID)` und `resolveProfile(String)` kombinieren ausschließlich bestehende Quellen, ohne Player zu laden, Coins oder Settings zu mutieren oder LuckPerms-User nachzuladen.
+
+Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonisch benannte `<uuid>.yml`-Dateien einmalig auf Name und Join-Zeitpunkte geprüft; der Index speichert normalisierten Namen (`Locale.ROOT`) → UUID-Set und hält keine `CorePlayer` dauerhaft im Speicher. Ungültige Metadaten werden protokolliert und übersprungen. Erst nach erfolgreichem atomarem Datei-Replace aktualisiert `save` den Index und entfernt den alten Namen. `PlayerService#findKnownIdsByName` bevorzugt aktuelle geladene Namen und filtert veraltete Disk-Namen geladener Spieler. Kollisionen werden nicht willkürlich entschieden; `/profile <uuid>` bleibt die eindeutige Alternative. Ein Lookup scannt nicht erneut das Verzeichnis. Der Index ist keine zusätzliche Datenbank oder Datei; das Player-YAML-Schema bleibt unverändert. Bukkit-`OfflinePlayer`, Mojang-Requests und externe UUID-Suche werden nicht benutzt.
+
+`EconomyService#getKnownCoins(UUID)` liest beim geladenen Player den aktuellen Wallet-Stand, bei bekanntem Offline-Player dessen persistiertes Wallet und liefert bei unbekannter UUID `OptionalLong.empty()`; `getCoins` und alle Mutationen behalten ihre Loaded-Player-Semantik. Der Online-Status stammt vom tatsächlichen Paper-Player (`isOnline`), nicht vom Cache. Nur online werden `RankService#getPrimaryRank` (LuckPerms-Cache, `RankInfo.displayComponent()` für die Farbe) und `Statistic.PLAY_ONE_MINUTE` gelesen. Offline sind Rank und Playtime bewusst leer; weder Rank noch Reward-Progress werden als Profile-Snapshot persistiert. Der gemeinsame `dev.vapee.core.format.PlaytimeFormatter` hält das bisherige Format; `presentation.PlaytimeFormatter` delegiert aus Kompatibilitätsgründen dorthin.
+
+`/profile` zeigt dem Spieler das eigene Profil; die Console muss `/profile <player|uuid>` angeben. Mit einem Ziel funktionieren Online-Name, bekannter Offline-Name und bekannte UUID. Unbekannte oder mehrdeutige Namen erhalten kontrollierte Meldungen, Lesefehler werden geloggt und nicht als Stacktrace in Chat ausgegeben. `vapeecore.profile.view` ist standardmäßig für alle erlaubt. Tab Completion zeigt nur Online-Namen, keine Liste aller bekannten Offline-Spieler. Spielernamen werden ausschließlich als `Component.text` ausgegeben, nie als MiniMessage ausgewertet. First/Last Join werden als `yyyy-MM-dd HH:mm` in der Server-Zeitzone gezeigt; Last Join ist kein Last Seen. Kein GUI und kein neues Hauptmenü.
 
 ## Reward Foundation
 
@@ -266,7 +281,7 @@ Slots, Reset-Zeit, Zeitzone sowie Quest-Name, Beschreibung, Progress-Key, Target
 
 Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
 
-Ownership-Kurzform: Daily-Anzahl, Reset und Definitionen → `daily-quests.yml`; Cycle-Rechnung → `DailyQuestCycleResolver`; Auswahl → `DailyQuestSelector`; Assignment/Rotation → `DailyQuestService`; Fortschritt, Completion und Coin-Reward → `QuestService` und `RewardService`. Phase 17C ergänzt erst die sichtbare Quest-UX und erste Producer. `docs/FORMATTING.md` bleibt unverändert, da Phase 17B keine Player-facing Templates einführt.
+Ownership-Kurzform: Daily-Anzahl, Reset und Definitionen → `daily-quests.yml`; Cycle-Rechnung → `DailyQuestCycleResolver`; Auswahl → `DailyQuestSelector`; Assignment/Rotation → `DailyQuestService`; Fortschritt, Completion und Coin-Reward → `QuestService` und `RewardService`. Die sichtbare Quest-UX und erste Producer folgen später. `docs/FORMATTING.md` bleibt unverändert, da Phase 17B keine Player-facing Templates einführt.
 
 ## Ranks & Server Identity
 
@@ -618,6 +633,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.chat.ChatHarness`
 - `dev.vapee.core.config.ConfigServiceHarness`
 - `dev.vapee.core.economy.EconomyServiceHarness`
+- `dev.vapee.core.identity.IdentityHarness`
+- `dev.vapee.core.identity.ProfileHarness`
 - `dev.vapee.core.reward.RewardServiceHarness`
 - `dev.vapee.core.reward.RewardLifecycleHarness`
 - `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`
@@ -628,7 +645,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
 - `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 21 Modulen, `/core`, `/core reload`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 22 Modulen, `/core`, `/core reload`, `/profile`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

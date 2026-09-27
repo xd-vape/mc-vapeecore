@@ -8,10 +8,13 @@ import dev.vapee.core.player.social.PlayerSocial;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -73,6 +76,26 @@ public final class PlayerService {
             return Optional.of(loadedPlayer);
         }
         return repository.findByUniqueId(validatedUniqueId);
+    }
+
+    public Set<UUID> findKnownIdsByName(String name) {
+        String normalized = Objects.requireNonNull(name, "name").toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return Set.of();
+        }
+        Set<UUID> current = new HashSet<>();
+        for (CorePlayer player : loadedPlayers.values()) {
+            if (player.getName().toLowerCase(Locale.ROOT).equals(normalized)) {
+                current.add(player.getUniqueId());
+            }
+        }
+        if (!current.isEmpty()) {
+            return Set.copyOf(current);
+        }
+        Set<UUID> persisted = new HashSet<>(repository.findUniqueIdsByName(name));
+        persisted.removeIf(uniqueId -> loadedPlayers.containsKey(uniqueId)
+                && !loadedPlayers.get(uniqueId).getName().toLowerCase(Locale.ROOT).equals(normalized));
+        return Set.copyOf(persisted);
     }
 
     public boolean isLoaded(UUID uniqueId) {

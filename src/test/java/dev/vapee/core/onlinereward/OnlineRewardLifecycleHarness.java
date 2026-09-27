@@ -45,8 +45,8 @@ public final class OnlineRewardLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-16C order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 21,
-                "VapeeCore registers exactly twenty-one modules");
+        check(count(coreSource, "moduleManager.register(") == 22,
+                "VapeeCore registers exactly twenty-two modules");
         check(coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")

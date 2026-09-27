@@ -24,6 +24,12 @@ public final class EconomyService {
         return OptionalLong.of(player.get().getWallet().getCoins());
     }
 
+    public OptionalLong getKnownCoins(UUID uniqueId) {
+        return playerService.findKnownPlayer(requireUniqueId(uniqueId))
+                .map(player -> OptionalLong.of(player.getWallet().getCoins()))
+                .orElseGet(OptionalLong::empty);
+    }
+
     public Optional<Boolean> hasCoins(UUID uniqueId, long amount) {
         UUID validatedUniqueId = requireUniqueId(uniqueId);
         requireNonNegative(amount);

@@ -20,11 +20,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,6 +37,8 @@ public final class FilePlayerRepository implements PlayerRepository {
 
     private final Path playersDirectory;
     private final Logger logger;
+    private final Map<UUID, String> indexedNames = new HashMap<>();
+    private final Map<String, Set<UUID>> nameIndex = new HashMap<>();
 
     public FilePlayerRepository(Path playersDirectory, Logger logger) {
         this.playersDirectory = Objects.requireNonNull(playersDirectory, "playersDirectory")
@@ -50,6 +56,46 @@ public final class FilePlayerRepository implements PlayerRepository {
 
         if (!Files.isDirectory(playersDirectory)) {
             throw invalidStorage("Player storage path is not a directory: " + playersDirectory);
+        }
+
+        indexedNames.clear();
+        nameIndex.clear();
+        try (var files = Files.list(playersDirectory)) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                String filename = file.getFileName().toString();
+                if (!filename.endsWith(".yml")) {
+                    continue;
+                }
+                UUID uniqueId;
+                try {
+                    uniqueId = UUID.fromString(filename.substring(0, filename.length() - 4));
+                } catch (IllegalArgumentException exception) {
+                    logger.warning("Ignoring non-player YAML in player storage: " + file);
+                    continue;
+                }
+                if (!filename.equals(uniqueId + ".yml")) {
+                    logger.warning("Ignoring non-canonical player filename: " + file);
+                    continue;
+                }
+                try {
+                    YamlConfiguration configuration = new YamlConfiguration();
+                    configuration.load(file.toFile());
+                    String name = configuration.getString("name");
+                    if (name == null || name.isBlank()) {
+                        throw new IllegalStateException("missing or blank name");
+                    }
+                    long firstJoin = readIndexEpochMillis(configuration, "first-join");
+                    long lastJoin = readIndexEpochMillis(configuration, "last-join");
+                    if (lastJoin < firstJoin) {
+                        throw new IllegalStateException("last-join precedes first-join");
+                    }
+                    indexName(uniqueId, name);
+                } catch (IOException | InvalidConfigurationException | RuntimeException exception) {
+                    logger.log(Level.WARNING, "Skipping invalid identity metadata in " + file + ".", exception);
+                }
+            }
+        } catch (IOException exception) {
+            throw storageFailure("index player names", playersDirectory, exception);
         }
 
         logger.info("Player storage ready at " + playersDirectory + ".");
@@ -119,6 +165,7 @@ public final class FilePlayerRepository implements PlayerRepository {
 
             replacePlayerFile(temporaryFile, playerFile);
             temporaryFile = null;
+            indexName(player.getUniqueId(), player.getName());
         } catch (IOException | RuntimeException exception) {
             throw storageFailure("save player data", playerFile, exception);
         } finally {
@@ -129,6 +176,36 @@ public final class FilePlayerRepository implements PlayerRepository {
     @Override
     public boolean exists(UUID uniqueId) {
         return Files.isRegularFile(getPlayerFile(uniqueId));
+    }
+
+    @Override
+    public Set<UUID> findUniqueIdsByName(String name) {
+        Objects.requireNonNull(name, "name");
+        if (name.isBlank()) {
+            return Set.of();
+        }
+        return Set.copyOf(nameIndex.getOrDefault(name.toLowerCase(Locale.ROOT), Set.of()));
+    }
+
+    private void indexName(UUID uniqueId, String name) {
+        String previous = indexedNames.put(uniqueId, name);
+        if (previous != null) {
+            String oldKey = previous.toLowerCase(Locale.ROOT);
+            Set<UUID> oldIds = nameIndex.get(oldKey);
+            oldIds.remove(uniqueId);
+            if (oldIds.isEmpty()) {
+                nameIndex.remove(oldKey);
+            }
+        }
+        nameIndex.computeIfAbsent(name.toLowerCase(Locale.ROOT), ignored -> new HashSet<>()).add(uniqueId);
+    }
+
+    private long readIndexEpochMillis(YamlConfiguration configuration, String key) {
+        Object value = configuration.get(key);
+        if (!(value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long)) {
+            throw new IllegalStateException("missing or invalid " + key);
+        }
+        return ((Number) value).longValue();
     }
 
     private CorePlayer readPlayer(UUID uniqueId, Path playerFile, YamlConfiguration configuration) {

@@ -25,6 +25,10 @@ commands:
     description: View and manage coin balances
     usage: /coins help
     permission: vapeecore.economy.coins
+  profile:
+    description: Shows a VapeeCore player profile
+    usage: /profile [player|uuid]
+    permission: vapeecore.profile.view
   msg:
     description: Send a private message to an online player
     usage: /msg <player> <message>
@@ -168,6 +172,9 @@ permissions:
       vapeecore.utility.feed: true
   vapeecore.economy.coins:
     description: Allows viewing your own coin balance
+    default: true
+  vapeecore.profile.view:
+    description: Allows viewing player profiles
     default: true
   vapeecore.economy.admin:
     description: Allows managing online player coin balances
