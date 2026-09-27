@@ -121,8 +121,8 @@ public final class IdentityHarness {
                         && core.indexOf("moduleManager.register(identityModule)")
                         < core.indexOf("moduleManager.register(rewardModule)"),
                 "Identity registers directly after Economy");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 22,
-                "twenty-two modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 23,
+                "twenty-three modules register");
         String source = Files.readString(Path.of("src/main/java/dev/vapee/core/identity/IdentityModule.java"));
         check(!source.contains("runTask") && !source.contains("registerEvents")
                         && source.contains("setExecutor(null)") && source.contains("setTabCompleter(null)"),

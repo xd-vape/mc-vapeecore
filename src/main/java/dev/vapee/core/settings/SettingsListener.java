@@ -71,7 +71,8 @@ public final class SettingsListener implements Listener {
         }
         if (slot != SettingsMenu.SCOREBOARD_SLOT
                 && slot != SettingsMenu.SOUNDS_SLOT
-                && slot != SettingsMenu.PRIVATE_MESSAGES_SLOT) {
+                && slot != SettingsMenu.PRIVATE_MESSAGES_SLOT
+                && slot != SettingsMenu.FRIEND_REQUESTS_SLOT) {
             return;
         }
 
@@ -120,6 +121,10 @@ public final class SettingsListener implements Listener {
                 case SettingsMenu.PRIVATE_MESSAGES_SLOT -> playerSettingsService.setPrivateMessagesEnabled(
                         uniqueId,
                         !settings.isPrivateMessagesEnabled()
+                );
+                case SettingsMenu.FRIEND_REQUESTS_SLOT -> playerSettingsService.setFriendRequestsEnabled(
+                        uniqueId,
+                        !settings.isFriendRequestsEnabled()
                 );
                 default -> false;
             };

@@ -7,6 +7,12 @@ messages:
 ranks:
   track: "ranks"
 
+friends:
+  limits:
+    max-friends: 100
+    max-incoming-requests: 25
+    max-outgoing-requests: 25
+
 online-rewards:
   enabled: true
   interval-minutes: 60

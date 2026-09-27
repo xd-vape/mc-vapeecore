@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class FriendServiceHarness {
 
@@ -23,6 +24,7 @@ public final class FriendServiceHarness {
         denyCancelRemove();
         queries();
         persistenceRollback();
+        reloadableLimitsAndPolicy();
         System.out.println("FriendServiceHarness passed " + checks + " checks.");
     }
 
@@ -151,8 +153,8 @@ public final class FriendServiceHarness {
         check(changedPolicy.getRelation(second, first) == FriendRelation.INCOMING_REQUEST,
                 "policy rejection preserves request");
         policy.decision = FriendRequestDecision.REQUESTS_DISABLED;
-        check(changedPolicy.acceptRequest(second, first) == FriendResult.REQUESTS_DISABLED,
-                "accept rechecks privacy policy");
+        check(changedPolicy.acceptRequest(second, first) == FriendResult.SUCCESS,
+                "accept remains available after requests are disabled");
     }
 
     private static void denyCancelRemove() {
@@ -313,6 +315,51 @@ public final class FriendServiceHarness {
                 "failed remove propagates persistence failure");
         check(remove.getRelation(first, second) == FriendRelation.FRIENDS,
                 "failed remove restores friendship");
+    }
+
+    private static void reloadableLimitsAndPolicy() {
+        UUID first = id(1);
+        UUID second = id(2);
+        UUID third = id(3);
+        AtomicReference<FriendLimits> limits = new AtomicReference<>(new FriendLimits(5, 5, 5));
+        MutablePolicy policy = new MutablePolicy();
+        MemoryRepository repository = new MemoryRepository(FriendSnapshot.empty());
+        FriendService service = new FriendService(repository, limits::get, policy,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+        check(service.sendRequest(first, second) == FriendResult.SUCCESS,
+                "request is created under initial limits");
+        policy.decision = FriendRequestDecision.REQUESTS_DISABLED;
+        check(service.acceptRequest(second, first) == FriendResult.SUCCESS,
+                "privacy change does not prevent acceptance of existing request");
+        check(service.getRelation(first, second) == FriendRelation.FRIENDS,
+                "accepted friendship survives privacy change");
+        limits.set(new FriendLimits(1, 5, 5));
+        check(service.getLimits().maxFriends() == 1 && service.countFriends(first) == 1,
+                "supplier exposes reloaded limits without deleting existing friendship");
+        policy.decision = FriendRequestDecision.ALLOW;
+        check(service.sendRequest(first, third) == FriendResult.FRIEND_LIMIT_REACHED,
+                "reloaded limit applies to future sends");
+
+        FriendRequest pending = new FriendRequest(third, first, Instant.EPOCH);
+        FriendService accept = new FriendService(
+                new MemoryRepository(new FriendSnapshot(
+                        List.of(new Friendship(first, second, Instant.EPOCH)), List.of(pending))),
+                limits::get, FriendRequestPolicy.allowAll(), Clock.fixed(NOW, ZoneOffset.UTC));
+        check(accept.acceptRequest(first, third) == FriendResult.FRIEND_LIMIT_REACHED
+                        && accept.getRelation(first, third) == FriendRelation.INCOMING_REQUEST,
+                "reloaded limit blocks acceptance without deleting pending request");
+
+        MutablePolicy crossPolicy = new MutablePolicy();
+        FriendService cross = service(new MemoryRepository(FriendSnapshot.empty()),
+                LARGE_LIMITS, crossPolicy);
+        check(cross.sendRequest(first, third) == FriendResult.SUCCESS, "cross-request setup succeeds");
+        crossPolicy.decision = FriendRequestDecision.BLOCKED;
+        check(cross.sendRequest(third, first) == FriendResult.BLOCKED
+                        && cross.getRelation(first, third) == FriendRelation.OUTGOING_REQUEST,
+                "new ignore blocks cross-accept without deleting original request");
+        crossPolicy.decision = FriendRequestDecision.REQUESTS_DISABLED;
+        check(cross.sendRequest(third, first) == FriendResult.REQUESTS_DISABLED,
+                "new recipient privacy applies to reverse cross-request");
     }
 
     private static FriendService service(

@@ -37,6 +37,15 @@ public final class PlayerSettingsService {
         return getSettings(uniqueId).map(PlayerSettings::isLobbyPlayersVisible);
     }
 
+    public Optional<Boolean> areFriendRequestsEnabled(UUID uniqueId) {
+        return getSettings(uniqueId).map(PlayerSettings::isFriendRequestsEnabled);
+    }
+
+    public Optional<Boolean> areKnownFriendRequestsEnabled(UUID uniqueId) {
+        return playerService.findKnownPlayer(Objects.requireNonNull(uniqueId, "uniqueId"))
+                .map(player -> player.getSettings().isFriendRequestsEnabled());
+    }
+
     public boolean setScoreboardEnabled(UUID uniqueId, boolean enabled) {
         return updateSettings(
                 uniqueId,
@@ -71,6 +80,12 @@ public final class PlayerSettingsService {
                 PlayerSettings::isLobbyPlayersVisible,
                 PlayerSettings::setLobbyPlayersVisible
         );
+    }
+
+    public boolean setFriendRequestsEnabled(UUID uniqueId, boolean enabled) {
+        return updateSettings(uniqueId, enabled,
+                PlayerSettings::isFriendRequestsEnabled,
+                PlayerSettings::setFriendRequestsEnabled);
     }
 
     private boolean updateSettings(

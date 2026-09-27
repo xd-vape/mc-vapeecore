@@ -48,10 +48,10 @@ public final class RewardLifecycleHarness {
         check(RewardModule.FLUSH_INTERVAL_TICKS == 20L,
                 "RewardModule owns one-second flush cadence centrally");
 
-        String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
+        String coreSource = normalizeLineEndings(Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java")));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "identityModule",
+                "identityModule", "friendModule",
                 "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
                 "lobbyModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule",
@@ -64,8 +64,8 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 22,
-                "VapeeCore registers exactly twenty-two modules after Phase 17C");
+        check(count(coreSource, "moduleManager.register(") == 23,
+                "VapeeCore registers exactly twenty-three modules after Phase 18A.2");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")
@@ -186,6 +186,10 @@ public final class RewardLifecycleHarness {
         Logger logger = Logger.getLogger("RewardLifecycleHarness-" + System.nanoTime());
         logger.setUseParentHandlers(false);
         return logger;
+    }
+
+    private static String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static void check(boolean condition, String message) {

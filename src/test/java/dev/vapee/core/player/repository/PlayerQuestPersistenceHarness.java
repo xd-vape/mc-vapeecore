@@ -67,7 +67,8 @@ public final class PlayerQuestPersistenceHarness {
         check(legacy.getQuestState().isEmpty(),
                 "legacy player without quests section loads an empty quest state");
         repository.save(legacy);
-        check(!Files.readString(legacyFile).contains("quests:"),
+        check(!java.util.regex.Pattern.compile("(?m)^quests:")
+                        .matcher(Files.readString(legacyFile)).find(),
                 "empty quest state follows the existing convention and omits its YAML section");
 
         UUID playerId = UUID.randomUUID();
