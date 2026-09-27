@@ -4,6 +4,7 @@ import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -50,7 +51,9 @@ public final class GameModeCommand implements TabExecutor {
     ) {
         this(
                 utilityService,
-                Objects.requireNonNull(plugin, "plugin").getServer()::getPlayerExact,
+                new OnlinePlayerResolver(
+                        () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
+                )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(lobbyPlayerStateService, "lobbyPlayerStateService")::isBuildMode,
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
@@ -158,6 +161,9 @@ public final class GameModeCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (args.length == 1) {
+            if (!sender.hasPermission(PERMISSION) && !sender.hasPermission(OTHERS_PERMISSION)) {
+                return List.of();
+            }
             String prefix = args[0].toLowerCase(Locale.ROOT);
             return MODES.stream().filter(mode -> mode.startsWith(prefix)).toList();
         }

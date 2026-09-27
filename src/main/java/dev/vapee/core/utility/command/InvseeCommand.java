@@ -1,9 +1,8 @@
 package dev.vapee.core.utility.command;
 
-import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.utility.InvseeService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
-import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
@@ -17,51 +16,44 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-public final class TeleportHereCommand implements TabExecutor {
+public final class InvseeCommand implements TabExecutor {
 
-    public static final String PERMISSION = "vapeecore.utility.teleport.here";
-    public static final String BYPASS_PERMISSION = TeleportCommand.BYPASS_PERMISSION;
+    public static final String PERMISSION = "vapeecore.utility.invsee";
+    public static final String MODIFY_PERMISSION = "vapeecore.utility.invsee.modify";
 
-    private final UtilityService utilityService;
+    private final InvseeService invseeService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
-    private final Predicate<UUID> activityCheck;
     private final BiConsumer<CommandSender, Component> messageSender;
 
-    public TeleportHereCommand(
+    public InvseeCommand(
             JavaPlugin plugin,
-            UtilityService utilityService,
-            ActivityService activityService,
+            InvseeService invseeService,
             MessageService messageService
     ) {
         this(
-                utilityService,
+                invseeService,
                 new OnlinePlayerResolver(
                         () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
-                Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(messageService, "messageService")::send
         );
     }
 
-    TeleportHereCommand(
-            UtilityService utilityService,
+    InvseeCommand(
+            InvseeService invseeService,
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
-            Predicate<UUID> activityCheck,
             BiConsumer<CommandSender, Component> messageSender
     ) {
-        this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
+        this.invseeService = Objects.requireNonNull(invseeService, "invseeService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
-        this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
     }
 
@@ -76,12 +68,12 @@ public final class TeleportHereCommand implements TabExecutor {
             invalidUsage(sender);
             return true;
         }
-        if (!(sender instanceof Player player)) {
-            error(sender, "A destination player is required; console has no location.");
+        if (!(sender instanceof Player viewer)) {
+            error(sender, "This command can only be used by a player because it opens an inventory.");
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            error(sender, "You do not have permission to teleport another player to you.");
+            error(sender, "You do not have permission to inspect inventories.");
             return true;
         }
 
@@ -90,27 +82,14 @@ public final class TeleportHereCommand implements TabExecutor {
             playerNotOnline(sender, args[0]);
             return true;
         }
-        if (player.getUniqueId().equals(target.getUniqueId())) {
-            error(sender, "You are already here.");
+        if (invseeService.openSnapshot(viewer, target) == null) {
+            error(sender, "The read-only inventory snapshot could not be opened.");
             return true;
         }
-        if (!sender.hasPermission(BYPASS_PERMISSION)) {
-            if (activityCheck.test(player.getUniqueId())) {
-                error(sender, "You cannot use this command while participating in an activity.");
-                return true;
-            }
-            if (activityCheck.test(target.getUniqueId())) {
-                error(sender, "That player is participating in an activity.");
-                return true;
-            }
-        }
-        if (!utilityService.teleport(target, player)) {
-            error(sender, "Teleport failed or was cancelled.");
-            return true;
-        }
-        messageSender.accept(sender, Component.text("Teleported ", NamedTextColor.GREEN)
+        messageSender.accept(sender, Component.text("Opened a read-only inventory snapshot for ",
+                        NamedTextColor.GREEN)
                 .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                .append(Component.text(" to you.", NamedTextColor.GREEN)));
+                .append(Component.text(".", NamedTextColor.GREEN)));
         return true;
     }
 
@@ -124,15 +103,14 @@ public final class TeleportHereCommand implements TabExecutor {
         if (args.length != 1 || !sender.hasPermission(PERMISSION)) {
             return List.of();
         }
-        UUID selfId = sender instanceof Player player ? player.getUniqueId() : null;
-        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], selfId);
+        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], null);
     }
 
     private void invalidUsage(CommandSender sender) {
         messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
                 .append(Component.newline())
                 .append(Component.text("Use: ", NamedTextColor.YELLOW))
-                .append(Component.text("/tphere <player>", NamedTextColor.AQUA)));
+                .append(Component.text("/invsee <player>", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

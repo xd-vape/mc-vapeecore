@@ -83,7 +83,7 @@ commands:
     permission: vapeecore.utility.gamemode
   tp:
     description: Teleport to an online player
-    usage: /tp <player>
+    usage: /tp <target> | /tp <player> <target>
     permission: vapeecore.utility.teleport
   tphere:
     description: Teleport an online player to you
@@ -97,6 +97,22 @@ commands:
     description: Restore player hunger
     usage: /feed [player]
     permission: vapeecore.utility.feed
+  ping:
+    description: Show an online player's latency
+    usage: /ping [player]
+    permission: vapeecore.utility.ping
+  clear:
+    description: Clear a safe player inventory
+    usage: /clear [player]
+    permission: vapeecore.utility.clear
+  invsee:
+    description: Open a read-only snapshot of an online player's inventory
+    usage: /invsee <player>
+    permission: vapeecore.utility.invsee
+  enderchest:
+    description: Open an online player's ender chest
+    usage: /enderchest [player]
+    permission: vapeecore.utility.enderchest
   rank:
     description: Shows a player's server rank
     usage: /rank [player]
@@ -151,6 +167,14 @@ permissions:
   vapeecore.utility.teleport:
     description: Allows teleporting to an online player
     default: op
+  vapeecore.utility.teleport.others:
+    description: Allows teleporting one online player to another
+    default: op
+    children:
+      vapeecore.utility.teleport: true
+  vapeecore.utility.teleport.bypass:
+    description: Allows bypassing VapeeCore teleport state guards
+    default: op
   vapeecore.utility.teleport.here:
     description: Allows teleporting an online player to yourself
     default: op
@@ -170,6 +194,38 @@ permissions:
     default: op
     children:
       vapeecore.utility.feed: true
+  vapeecore.utility.ping:
+    description: Allows viewing personal latency
+    default: op
+  vapeecore.utility.ping.others:
+    description: Allows viewing another online player's latency
+    default: op
+    children:
+      vapeecore.utility.ping: true
+  vapeecore.utility.clear:
+    description: Allows clearing a safe personal inventory
+    default: op
+  vapeecore.utility.clear.others:
+    description: Allows clearing another online player's safe inventory
+    default: op
+    children:
+      vapeecore.utility.clear: true
+  vapeecore.utility.invsee:
+    description: Allows read-only inspection of online player inventories
+    default: op
+  vapeecore.utility.invsee.modify:
+    description: Reserved for a future safe invsee mutation mode
+    default: op
+    children:
+      vapeecore.utility.invsee: true
+  vapeecore.utility.enderchest:
+    description: Allows opening a personal ender chest
+    default: op
+  vapeecore.utility.enderchest.others:
+    description: Allows opening and modifying another online player's ender chest
+    default: op
+    children:
+      vapeecore.utility.enderchest: true
   vapeecore.economy.coins:
     description: Allows viewing your own coin balance
     default: true

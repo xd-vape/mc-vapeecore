@@ -4,6 +4,7 @@ import org.bukkit.GameMode;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
@@ -111,6 +112,21 @@ public final class UtilityService {
         validatedPlayer.setFoodLevel(20);
         validatedPlayer.setSaturation(20.0F);
         validatedPlayer.setExhaustion(0.0F);
+    }
+
+    public void clearInventory(Player player) {
+        requirePrimaryThread();
+        Player validatedPlayer = Objects.requireNonNull(player, "player");
+        validatedPlayer.getInventory().clear();
+        validatedPlayer.getInventory().setArmorContents(new ItemStack[4]);
+        validatedPlayer.getInventory().setItemInOffHand(null);
+    }
+
+    public void openEnderChest(Player viewer, Player owner) {
+        requirePrimaryThread();
+        Player validatedViewer = Objects.requireNonNull(viewer, "viewer");
+        Player validatedOwner = Objects.requireNonNull(owner, "owner");
+        validatedViewer.openInventory(validatedOwner.getEnderChest());
     }
 
     public void clearManagedFlight(Player player) {
