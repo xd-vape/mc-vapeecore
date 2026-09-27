@@ -8,10 +8,14 @@ import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.utility.command.BuildCommand;
+import dev.vapee.core.utility.command.ClearCommand;
+import dev.vapee.core.utility.command.EnderChestCommand;
 import dev.vapee.core.utility.command.FeedCommand;
 import dev.vapee.core.utility.command.FlyCommand;
 import dev.vapee.core.utility.command.GameModeCommand;
 import dev.vapee.core.utility.command.HealCommand;
+import dev.vapee.core.utility.command.InvseeCommand;
+import dev.vapee.core.utility.command.PingCommand;
 import dev.vapee.core.utility.command.SpeedCommand;
 import dev.vapee.core.utility.command.TeleportCommand;
 import dev.vapee.core.utility.command.TeleportHereCommand;
@@ -34,6 +38,7 @@ public final class UtilityModule implements CoreModule {
     private final List<PluginCommand> registeredCommands = new ArrayList<>();
     private UtilityService utilityService;
     private UtilityListener utilityListener;
+    private InvseeService invseeService;
 
     public UtilityModule(
             JavaPlugin plugin,
@@ -59,6 +64,7 @@ public final class UtilityModule implements CoreModule {
         ActivityService activityService = activityModule.getActivityService();
         UtilityService newUtilityService = new UtilityService(plugin);
         UtilityListener newUtilityListener = new UtilityListener(plugin, newUtilityService);
+        InvseeService newInvseeService = new InvseeService(plugin);
 
         registerCommand("build", new BuildCommand(
                 plugin,
@@ -82,15 +88,26 @@ public final class UtilityModule implements CoreModule {
                 plugin, newUtilityService, activityService, messageService));
         registerCommand("feed", new FeedCommand(
                 plugin, newUtilityService, activityService, messageService));
+        registerCommand("ping", new PingCommand(plugin, messageService));
+        registerCommand("clear", new ClearCommand(
+                plugin, newUtilityService, activityService, lobbyPlayerStateService, messageService));
+        registerCommand("invsee", new InvseeCommand(plugin, newInvseeService, messageService));
+        registerCommand("enderchest", new EnderChestCommand(plugin, newUtilityService, messageService));
 
         plugin.getServer().getPluginManager().registerEvents(newUtilityListener, plugin);
+        plugin.getServer().getPluginManager().registerEvents(newInvseeService, plugin);
         utilityService = newUtilityService;
         utilityListener = newUtilityListener;
-        plugin.getLogger().info("Utility module enabled with 8 command(s).");
+        invseeService = newInvseeService;
+        plugin.getLogger().info("Utility module enabled with " + registeredCommands.size() + " command(s).");
     }
 
     @Override
     public void disable() {
+        if (invseeService != null) {
+            invseeService.disable();
+            HandlerList.unregisterAll(invseeService);
+        }
         if (utilityListener != null) {
             utilityListener.disable();
             HandlerList.unregisterAll(utilityListener);
@@ -104,6 +121,7 @@ public final class UtilityModule implements CoreModule {
         }
         registeredCommands.clear();
         utilityListener = null;
+        invseeService = null;
         utilityService = null;
     }
 

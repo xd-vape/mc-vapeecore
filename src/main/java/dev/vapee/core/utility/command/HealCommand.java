@@ -2,6 +2,7 @@ package dev.vapee.core.utility.command;
 
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -42,7 +43,9 @@ public final class HealCommand implements TabExecutor {
     ) {
         this(
                 utilityService,
-                Objects.requireNonNull(plugin, "plugin").getServer()::getPlayerExact,
+                new OnlinePlayerResolver(
+                        () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
+                )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(messageService, "messageService")::send

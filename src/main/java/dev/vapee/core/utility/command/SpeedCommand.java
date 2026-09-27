@@ -2,6 +2,7 @@ package dev.vapee.core.utility.command;
 
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
 import dev.vapee.core.utility.UtilitySpeedResult;
 import net.kyori.adventure.text.Component;
@@ -44,7 +45,9 @@ public final class SpeedCommand implements TabExecutor {
     ) {
         this(
                 utilityService,
-                Objects.requireNonNull(plugin, "plugin").getServer()::getPlayerExact,
+                new OnlinePlayerResolver(
+                        () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
+                )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(messageService, "messageService")::send
@@ -137,6 +140,9 @@ public final class SpeedCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (args.length == 1) {
+            if (!sender.hasPermission(PERMISSION) && !sender.hasPermission(OTHERS_PERMISSION)) {
+                return List.of();
+            }
             return IntStream.rangeClosed(1, 10)
                     .mapToObj(Integer::toString)
                     .filter(value -> value.startsWith(args[0]))

@@ -1,6 +1,7 @@
 package dev.vapee.core.utility.command;
 
 import dev.vapee.core.activity.ActivityService;
+import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
@@ -23,22 +24,23 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-public final class TeleportCommand implements TabExecutor {
+public final class ClearCommand implements TabExecutor {
 
-    public static final String PERMISSION = "vapeecore.utility.teleport";
-    public static final String OTHERS_PERMISSION = "vapeecore.utility.teleport.others";
-    public static final String BYPASS_PERMISSION = "vapeecore.utility.teleport.bypass";
+    public static final String PERMISSION = "vapeecore.utility.clear";
+    public static final String OTHERS_PERMISSION = "vapeecore.utility.clear.others";
 
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final Predicate<UUID> activityCheck;
+    private final Predicate<UUID> buildCheck;
     private final BiConsumer<CommandSender, Component> messageSender;
 
-    public TeleportCommand(
+    public ClearCommand(
             JavaPlugin plugin,
             UtilityService utilityService,
             ActivityService activityService,
+            LobbyPlayerStateService lobbyPlayerStateService,
             MessageService messageService
     ) {
         this(
@@ -48,21 +50,24 @@ public final class TeleportCommand implements TabExecutor {
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
+                Objects.requireNonNull(lobbyPlayerStateService, "lobbyPlayerStateService")::isBuildMode,
                 Objects.requireNonNull(messageService, "messageService")::send
         );
     }
 
-    TeleportCommand(
+    ClearCommand(
             UtilityService utilityService,
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> activityCheck,
+            Predicate<UUID> buildCheck,
             BiConsumer<CommandSender, Component> messageSender
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
+        this.buildCheck = Objects.requireNonNull(buildCheck, "buildCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
     }
 
@@ -73,78 +78,55 @@ public final class TeleportCommand implements TabExecutor {
             @NotNull String label,
             @NotNull String[] args
     ) {
-        if (args.length < 1 || args.length > 2) {
+        if (args.length > 1) {
             invalidUsage(sender);
             return true;
         }
 
-        Player source;
         Player target;
-        if (args.length == 1) {
+        if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A source player is required when using this form from console.");
+                error(sender, "A player target is required when using this command from the console.");
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to teleport to another player.");
+                error(sender, "You do not have permission to clear your inventory.");
                 return true;
             }
-            source = player;
+            target = player;
+        } else {
             target = playerLookup.apply(args[0]);
             if (target == null) {
                 playerNotOnline(sender, args[0]);
                 return true;
             }
-        } else {
-            if (!sender.hasPermission(OTHERS_PERMISSION)) {
-                error(sender, "You do not have permission to teleport one player to another.");
-                return true;
-            }
-            source = playerLookup.apply(args[0]);
-            if (source == null) {
-                playerNotOnline(sender, args[0]);
-                return true;
-            }
-            target = playerLookup.apply(args[1]);
-            if (target == null) {
-                playerNotOnline(sender, args[1]);
+            boolean self = sender instanceof Player player
+                    && player.getUniqueId().equals(target.getUniqueId());
+            if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
+                error(sender, self
+                        ? "You do not have permission to clear your inventory."
+                        : "You do not have permission to clear another player's inventory.");
                 return true;
             }
         }
 
-        if (source.getUniqueId().equals(target.getUniqueId())) {
-            error(sender, args.length == 1
-                    ? "You are already at your own location."
-                    : "Source and target are the same player.");
+        if (activityCheck.test(target.getUniqueId())) {
+            error(sender, "That inventory is controlled by an activity and cannot be cleared.");
             return true;
         }
-        if (!sender.hasPermission(BYPASS_PERMISSION)) {
-            if (activityCheck.test(source.getUniqueId())) {
-                error(sender, source.equals(sender)
-                        ? "You cannot use this command while participating in an activity."
-                        : "The source player is participating in an activity.");
-                return true;
-            }
-            if (activityCheck.test(target.getUniqueId())) {
-                error(sender, "The destination player is participating in an activity.");
-                return true;
-            }
-        }
-        if (!utilityService.teleport(source, target)) {
-            error(sender, "Teleport failed or was cancelled.");
+        if (buildCheck.test(target.getUniqueId())) {
+            error(sender, "That inventory is controlled by build mode and cannot be cleared.");
             return true;
         }
-        if (args.length == 1) {
-            messageSender.accept(sender, Component.text("Teleported to ", NamedTextColor.GREEN)
-                    .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                    .append(Component.text(".", NamedTextColor.GREEN)));
-        } else {
-            messageSender.accept(sender, Component.text("Teleported ", NamedTextColor.GREEN)
-                    .append(Component.text(source.getName(), NamedTextColor.WHITE))
-                    .append(Component.text(" to ", NamedTextColor.GREEN))
-                    .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                    .append(Component.text(".", NamedTextColor.GREEN)));
-        }
+
+        utilityService.clearInventory(target);
+        boolean self = sender instanceof Player player
+                && player.getUniqueId().equals(target.getUniqueId());
+        messageSender.accept(sender, self
+                ? Component.text("Inventory cleared.", NamedTextColor.GREEN)
+                : Component.text("Cleared ", NamedTextColor.GREEN)
+                        .append(Component.text(target.getName(), NamedTextColor.WHITE))
+                        .append(Component.text("'s inventory.", NamedTextColor.GREEN)));
         return true;
     }
 
@@ -155,28 +137,17 @@ public final class TeleportCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        OnlinePlayerResolver resolver = new OnlinePlayerResolver(onlinePlayersSupplier);
-        if (args.length == 1) {
-            if (sender instanceof Player player && sender.hasPermission(PERMISSION)) {
-                return resolver.suggest(args[0], player.getUniqueId());
-            }
-            if (sender.hasPermission(OTHERS_PERMISSION)) {
-                return resolver.suggest(args[0], null);
-            }
+        if (args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
             return List.of();
         }
-        if (args.length == 2 && sender.hasPermission(OTHERS_PERMISSION)) {
-            Player source = playerLookup.apply(args[0]);
-            return resolver.suggest(args[1], source == null ? null : source.getUniqueId());
-        }
-        return List.of();
+        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], null);
     }
 
     private void invalidUsage(CommandSender sender) {
         messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
                 .append(Component.newline())
                 .append(Component.text("Use: ", NamedTextColor.YELLOW))
-                .append(Component.text("/tp <target> | /tp <player> <target>", NamedTextColor.AQUA)));
+                .append(Component.text("/clear [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

@@ -1,10 +1,10 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, eine zentrale Reward Foundation, kumulative Online-/Playtime-Rewards, eine generische Quest Foundation mit Daily-Cycle und konfigurierbarem Katalog, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, grundlegende Utility-Commands, ein leichtgewichtiges Activity-Fundament, Community-Sitze, native World Displays, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Rank-Integration bereit. Der aktuelle Stand ist Phase 17C „Player Identity & Profile Foundation“.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, eine persistente Social-/Ignore-Grundlage, eine Coin-Economy, eine zentrale Reward Foundation, kumulative Online-/Playtime-Rewards, eine generische Quest Foundation mit Daily-Cycle und konfigurierbarem Katalog, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche, sichere Staff-Utilities, ein leichtgewichtiges Activity-Fundament, Community-Sitze, native World Displays, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience und eine lesende LuckPerms-Rank-Integration bereit. Der aktuelle Stand ist Phase 17C.1 „Core Commands & Permission Hardening“.
 
 ## Developer Documentation
 
-Die praktische Architektur-, Ownership-, Config-, Command- und Erweiterungsdokumentation liegt in [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md). Dort sind auch der verbindliche Command-UX-Standard und die Checkliste für neue Commands dokumentiert.
+Die praktische Architektur-, Ownership-, Config-, Command- und Erweiterungsdokumentation liegt in [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md). Die vollständige kanonische Permission- und Rangübersicht liegt in [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Voraussetzungen
 
@@ -155,7 +155,7 @@ Das `LobbyModule` verwendet die separate Datei `plugins/VapeeCore/lobby.yml`. `/
 
 ### Utility Commands
 
-Phase 15A.3 erweitert dasselbe `UtilityModule` um `/fly`, `/speed`, `/gamemode` (Alias `/gm`), `/tp`, `/tphere`, `/heal` und `/feed`. Alle Player-Ziele werden exakt und ausschließlich online aufgelöst; Self- und Others-Rechte bleiben getrennt. Flight und Speed sind reine Laufzeit-Zustände: Join, Quit und Modul-Shutdown bereinigen sie, ohne Player-YAMLs oder neue Konfigurationen zu verändern. Gamemode, Movement, Teleport, Heal und Feed sind während einer Activity gesperrt, soweit sie deren Gameplay-State verändern würden. BUILD bleibt vollständig im `LobbyPlayerStateService`; `/fly` greift dort nicht ein, `/gamemode` wahrt dessen CREATIVE-Invariante und Teleports verlassen BUILD über den bestehenden World-Change-Flow. Die konkreten Permissions, Zustandsregeln und Erweiterungspunkte stehen im Developer Guide.
+Das `UtilityModule` stellt zwölf granulare Staff-/Builder-Commands bereit: `/build`, `/fly`, `/speed`, `/gamemode` (`/gm`), `/tp`, `/tphere`, `/heal`, `/feed`, `/ping`, `/clear`, `/invsee` und `/enderchest`. Player-Ziele werden case-insensitive, aber ausschließlich als vollständige Namen aus der aktuellen Online-Spielermenge aufgelöst. Self- und Others-Rechte bleiben strikt getrennt; `/tp <player> <target>` benötigt immer `vapeecore.utility.teleport.others`, während `teleport.bypass` nur interne VapeeCore-State-Guards umgeht. Activity-/BUILD-Inventare werden nicht blind gelöscht, und `/invsee` verwendet einen vollständig geschützten read-only Snapshot statt des fremden Live-Inventars. Die vollständige Permission- und Rangmatrix steht in [docs/PERMISSIONS.md](docs/PERMISSIONS.md), Ownership und Lifecycle im Developer Guide.
 
 ### Activity Foundation
 

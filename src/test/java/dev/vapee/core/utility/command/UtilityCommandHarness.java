@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -7,11 +8,12 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.PlayerInventory;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,13 +30,28 @@ public final class UtilityCommandHarness {
     }
 
     public static void main(String[] args) {
+        testOnlinePlayerResolver();
         testFly();
         testSpeed();
         testGameMode();
         testTeleport();
         testTeleportHere();
         testHealAndFeed();
+        testPingClearAndEnderChest();
         System.out.println("UtilityCommandHarness passed " + checks + " checks.");
+    }
+
+    private static void testOnlinePlayerResolver() {
+        Fixture fixture = new Fixture();
+        MutablePlayer player = fixture.player("_ImVentex_", GameMode.SURVIVAL);
+        OnlinePlayerResolver resolver = new OnlinePlayerResolver(fixture::onlinePlayers);
+        check(resolver.resolveExact("_imventex_") == player.player,
+                "online resolver is case-insensitive for complete names");
+        check(resolver.resolveExact("Vent") == null,
+                "online resolver never guesses a partial mutation target");
+        player.online = false;
+        check(resolver.resolveExact("_ImVentex_") == null,
+                "online resolver never falls back to an offline player");
     }
 
     private static void testFly() {
@@ -99,6 +116,9 @@ public final class UtilityCommandHarness {
         command.onCommand(self.player, null, "fly", new String[]{"Other"});
         check(other.allowFlight && fixture.last().equals("Flight enabled for Other."),
                 "fly others mutates the exact target");
+        command.onCommand(fixture.console(Set.of(FlyCommand.OTHERS_PERMISSION)), null,
+                "fly", new String[]{"Other"});
+        check(!other.allowFlight, "fly console with others permission mutates only its target");
 
         self.permissions.remove(FlyCommand.OTHERS_PERMISSION);
         check(command.onTabComplete(self.player, null, "fly", new String[]{""}).isEmpty(),
@@ -137,6 +157,9 @@ public final class UtilityCommandHarness {
         command.onCommand(self.player, null, "speed", new String[]{"10", "Other"});
         check(fixture.last().equals("Flight speed for Other set to 10/10.") && close(other.flySpeed, 1.0F),
                 "speed changes a creative target's flight channel");
+        command.onCommand(fixture.console(Set.of(SpeedCommand.OTHERS_PERMISSION)), null,
+                "speed", new String[]{"5", "Other"});
+        check(other.flySpeed < 1.0F, "speed console requires and honors the others permission");
         fixture.activityPlayers.add(other.id);
         command.onCommand(self.player, null, "speed", new String[]{"4", "Other"});
         check(fixture.last().contains("participating in an activity"), "speed blocks activity targets");
@@ -198,6 +221,10 @@ public final class UtilityCommandHarness {
         check(other.gameMode == GameMode.SPECTATOR
                         && fixture.last().equals("Other's game mode changed to Spectator."),
                 "gamemode changes an authorized online target");
+        command.onCommand(fixture.console(Set.of(GameModeCommand.OTHERS_PERMISSION)), null,
+                "gamemode", new String[]{"survival", "Other"});
+        check(other.gameMode == GameMode.SURVIVAL,
+                "gamemode console requires and honors the others permission");
 
         check(command.onTabComplete(self.player, null, "gamemode", new String[]{""})
                         .equals(List.of("survival", "creative", "adventure", "spectator")),
@@ -211,19 +238,36 @@ public final class UtilityCommandHarness {
         Fixture fixture = new Fixture();
         MutablePlayer self = fixture.player("Self", GameMode.SURVIVAL, TeleportCommand.PERMISSION);
         MutablePlayer other = fixture.player("Other", GameMode.SURVIVAL);
+        MutablePlayer third = fixture.player("Third", GameMode.SURVIVAL);
         TeleportCommand command = new TeleportCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
         );
+        self.permissions.remove(TeleportCommand.PERMISSION);
+        command.onCommand(self.player, null, "tp", new String[]{"Other"});
+        check(fixture.last().contains("do not have permission") && !self.teleported,
+                "tp self form rejects a missing permission before mutation");
+        self.permissions.add(TeleportCommand.PERMISSION);
         command.onCommand(fixture.console(Set.of(TeleportCommand.PERMISSION)), null, "tp", new String[]{"Other"});
-        check(fixture.last().contains("only be used by a player"), "tp is player-only");
+        check(fixture.last().contains("source player is required"), "tp one-argument console form is denied");
         command.onCommand(self.player, null, "tp", new String[]{"Missing"});
         check(fixture.last().equals("Player 'Missing' is not online."), "tp rejects offline targets");
-        command.onCommand(self.player, null, "tp", new String[]{"Self"});
-        check(fixture.last().equals("You are already that player."), "tp handles self without teleporting");
+        command.onCommand(self.player, null, "tp", new String[]{"selF"});
+        check(fixture.last().contains("already at your own location"), "tp handles case-insensitive self without mutation");
+        command.onCommand(self.player, null, "tp", new String[]{"Oth"});
+        check(fixture.last().equals("Player 'Oth' is not online."), "tp rejects partial target names");
         fixture.activityPlayers.add(self.id);
         command.onCommand(self.player, null, "tp", new String[]{"Other"});
         check(fixture.last().contains("participating in an activity"), "tp blocks activity senders");
+        fixture.activityPlayers.clear();
+        fixture.activityPlayers.add(other.id);
+        command.onCommand(self.player, null, "tp", new String[]{"Other"});
+        check(fixture.last().contains("destination player is participating"),
+                "tp blocks activity destinations");
+        self.permissions.add(TeleportCommand.BYPASS_PERMISSION);
+        command.onCommand(self.player, null, "tp", new String[]{"Other"});
+        check(fixture.last().equals("Teleported to Other."), "tp bypass skips only internal activity guards");
+        self.permissions.remove(TeleportCommand.BYPASS_PERMISSION);
         fixture.activityPlayers.clear();
         self.teleportResult = false;
         command.onCommand(self.player, null, "tp", new String[]{"Other"});
@@ -231,8 +275,48 @@ public final class UtilityCommandHarness {
         self.teleportResult = true;
         command.onCommand(self.player, null, "tp", new String[]{"Other"});
         check(fixture.last().equals("Teleported to Other."), "tp reports successful teleport");
-        check(command.onTabComplete(self.player, null, "tp", new String[]{""}).equals(List.of("Other")),
-                "tp completion filters self");
+
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(fixture.last().contains("one player to another") && !other.teleported,
+                "tp source-target form never inherits the self permission");
+        self.permissions.add(TeleportCommand.OTHERS_PERMISSION);
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(other.teleported && fixture.last().equals("Teleported Other to Third."),
+                "tp source-target form mutates the named source only with others permission");
+        other.teleported = false;
+        other.online = false;
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(fixture.last().equals("Player 'Other' is not online.") && !other.teleported,
+                "tp source-target rejects offline sources");
+        other.online = true;
+        third.online = false;
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(fixture.last().equals("Player 'Third' is not online.") && !other.teleported,
+                "tp source-target rejects offline destinations");
+        third.online = true;
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "other"});
+        check(fixture.last().contains("same player") && !other.teleported,
+                "tp source-target handles an identical source and target");
+        fixture.activityPlayers.add(other.id);
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(fixture.last().contains("source player is participating") && !other.teleported,
+                "tp source-target blocks an activity source");
+        self.permissions.add(TeleportCommand.BYPASS_PERMISSION);
+        command.onCommand(self.player, null, "tp", new String[]{"Other", "Third"});
+        check(other.teleported, "tp source-target bypass permits an activity source");
+        fixture.activityPlayers.clear();
+
+        self.permissions.remove(TeleportCommand.OTHERS_PERMISSION);
+        self.permissions.remove(TeleportCommand.BYPASS_PERMISSION);
+        check(command.onTabComplete(self.player, null, "tp", new String[]{""})
+                        .equals(List.of("Other", "Third")),
+                "tp self-form completion filters the sender");
+        check(command.onTabComplete(fixture.console(Set.of()), null, "tp", new String[]{""}).isEmpty(),
+                "tp completion is hidden without permission");
+        self.permissions.add(TeleportCommand.OTHERS_PERMISSION);
+        check(command.onTabComplete(self.player, null, "tp", new String[]{"Other", ""})
+                        .equals(List.of("Self", "Third")),
+                "tp second-argument completion excludes the selected source");
     }
 
     private static void testTeleportHere() {
@@ -245,7 +329,7 @@ public final class UtilityCommandHarness {
         );
         command.onCommand(fixture.console(Set.of(TeleportHereCommand.PERMISSION)), null,
                 "tphere", new String[]{"Other"});
-        check(fixture.last().contains("only be used by a player"), "tphere is player-only");
+        check(fixture.last().contains("console has no location"), "tphere is player-only");
         command.onCommand(self.player, null, "tphere", new String[]{"Self"});
         check(fixture.last().equals("You are already here."), "tphere handles self");
         command.onCommand(self.player, null, "tphere", new String[]{"Missing"});
@@ -265,8 +349,20 @@ public final class UtilityCommandHarness {
         other.teleportResult = true;
         command.onCommand(self.player, null, "tphere", new String[]{"Other"});
         check(fixture.last().equals("Teleported Other to you."), "tphere reports successful teleport");
+        fixture.activityPlayers.add(other.id);
+        self.permissions.add(TeleportHereCommand.BYPASS_PERMISSION);
+        command.onCommand(self.player, null, "tphere", new String[]{"Other"});
+        check(fixture.last().equals("Teleported Other to you."), "tphere bypass skips its activity guard");
+        fixture.activityPlayers.clear();
         check(command.onTabComplete(self.player, null, "tphere", new String[]{""}).equals(List.of("Other")),
                 "tphere completion filters self");
+        self.permissions.remove(TeleportHereCommand.PERMISSION);
+        check(command.onTabComplete(self.player, null, "tphere", new String[]{""}).isEmpty(),
+                "tphere completion is hidden without permission");
+        other.teleported = false;
+        command.onCommand(self.player, null, "tphere", new String[]{"Other"});
+        check(fixture.last().contains("do not have permission") && !other.teleported,
+                "tphere rejects a missing permission before mutation");
     }
 
     private static void testHealAndFeed() {
@@ -317,10 +413,94 @@ public final class UtilityCommandHarness {
         feed.onCommand(self.player, null, "feed", new String[]{"Other"});
         check(other.food == 20 && fixture.last().equals("Fed Other."),
                 "feed others mutates the authorized target");
+        other.health = 2.0D;
+        other.food = 2;
+        heal.onCommand(fixture.console(Set.of(HealCommand.OTHERS_PERMISSION)), null,
+                "heal", new String[]{"Other"});
+        feed.onCommand(fixture.console(Set.of(FeedCommand.OTHERS_PERMISSION)), null,
+                "feed", new String[]{"Other"});
+        check(close(other.health, other.maxHealth) && other.food == 20,
+                "heal and feed console forms require and honor their others permissions");
         check(heal.onTabComplete(self.player, null, "heal", new String[]{"o"}).equals(List.of("Other")),
                 "heal completion is permission-aware and filtered");
         check(feed.onTabComplete(self.player, null, "feed", new String[]{"o"}).equals(List.of("Other")),
                 "feed completion is permission-aware and filtered");
+    }
+
+    private static void testPingClearAndEnderChest() {
+        Fixture fixture = new Fixture();
+        MutablePlayer self = fixture.player("Self", GameMode.SURVIVAL,
+                PingCommand.PERMISSION, ClearCommand.PERMISSION, EnderChestCommand.PERMISSION);
+        MutablePlayer other = fixture.player("Other", GameMode.SURVIVAL);
+        self.ping = 24;
+        other.ping = 42;
+
+        PingCommand ping = new PingCommand(fixture::lookup, fixture::onlinePlayers, fixture.messages);
+        ping.onCommand(self.player, null, "ping", new String[0]);
+        check(fixture.last().equals("Your ping: 24 ms"), "ping reports self latency");
+        ping.onCommand(self.player, null, "ping", new String[]{"Other"});
+        check(fixture.last().contains("permission"), "ping others requires its dedicated permission");
+        self.permissions.add(PingCommand.OTHERS_PERMISSION);
+        ping.onCommand(self.player, null, "ping", new String[]{"oThEr"});
+        check(fixture.last().equals("Other's ping: 42 ms"), "ping reports a case-insensitive online target");
+        ping.onCommand(fixture.console(Set.of(PingCommand.OTHERS_PERMISSION)), null,
+                "ping", new String[]{"Other"});
+        check(fixture.last().equals("Other's ping: 42 ms"), "ping supports an authorized console target");
+        ping.onCommand(fixture.console(Set.of()), null, "ping", new String[0]);
+        check(fixture.last().contains("target is required"), "ping console requires a target");
+        ping.onCommand(self.player, null, "ping", new String[]{"Missing"});
+        check(fixture.last().equals("Player 'Missing' is not online."), "ping rejects unknown targets");
+        self.permissions.remove(PingCommand.OTHERS_PERMISSION);
+        check(ping.onTabComplete(self.player, null, "ping", new String[]{""}).isEmpty(),
+                "ping hides completion without others permission");
+
+        ClearCommand clear = new ClearCommand(
+                fixture.service, fixture::lookup, fixture::onlinePlayers,
+                fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages
+        );
+        clear.onCommand(fixture.console(Set.of(ClearCommand.OTHERS_PERMISSION)), null,
+                "clear", new String[0]);
+        check(fixture.last().contains("target is required"), "clear console requires a target");
+        clear.onCommand(self.player, null, "clear", new String[]{"Other"});
+        check(fixture.last().contains("another player's inventory") && other.inventoryClearCalls == 0,
+                "clear self permission never mutates another inventory");
+        self.permissions.add(ClearCommand.OTHERS_PERMISSION);
+        fixture.activityPlayers.add(other.id);
+        clear.onCommand(self.player, null, "clear", new String[]{"Other"});
+        check(fixture.last().contains("controlled by an activity") && other.inventoryClearCalls == 0,
+                "clear protects activity-owned inventories");
+        fixture.activityPlayers.clear();
+        fixture.buildPlayers.add(other.id);
+        clear.onCommand(self.player, null, "clear", new String[]{"Other"});
+        check(fixture.last().contains("controlled by build mode") && other.inventoryClearCalls == 0,
+                "clear protects build-owned inventories");
+        fixture.buildPlayers.clear();
+        clear.onCommand(self.player, null, "clear", new String[]{"Other"});
+        check(other.inventoryClearCalls == 1 && other.armorCleared && other.offhandCleared
+                        && fixture.last().equals("Cleared Other's inventory."),
+                "clear safely clears storage, armor and offhand after all guards");
+
+        EnderChestCommand enderChest = new EnderChestCommand(
+                fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.messages
+        );
+        enderChest.onCommand(fixture.console(Set.of(EnderChestCommand.OTHERS_PERMISSION)), null,
+                "enderchest", new String[]{"Other"});
+        check(fixture.last().contains("only be used by a player"), "enderchest denies console GUI access");
+        enderChest.onCommand(self.player, null, "enderchest", new String[0]);
+        check(self.openedInventory == self.enderChest, "enderchest opens the player's own live chest");
+        enderChest.onCommand(self.player, null, "enderchest", new String[]{"Other"});
+        check(fixture.last().contains("another player's ender chest")
+                        && self.openedInventory != other.enderChest,
+                "enderchest others requires its dedicated permission");
+        self.permissions.add(EnderChestCommand.OTHERS_PERMISSION);
+        enderChest.onCommand(self.player, null, "enderchest", new String[]{"other"});
+        check(self.openedInventory == other.enderChest
+                        && fixture.last().equals("Opened Other's ender chest."),
+                "enderchest opens only an exact online target's live chest");
+        other.online = false;
+        enderChest.onCommand(self.player, null, "enderchest", new String[]{"Other"});
+        check(fixture.last().equals("Player 'Other' is not online."),
+                "enderchest performs no offline-player lookup");
     }
 
     private static boolean close(double actual, double expected) {
@@ -337,7 +517,6 @@ public final class UtilityCommandHarness {
     private static final class Fixture {
         private final List<Component> output = new ArrayList<>();
         private final List<MutablePlayer> players = new ArrayList<>();
-        private final Map<String, MutablePlayer> playersByExactName = new HashMap<>();
         private final Set<UUID> buildPlayers = new HashSet<>();
         private final Set<UUID> activityPlayers = new HashSet<>();
         private final BiConsumer<CommandSender, Component> messages = (sender, component) -> output.add(component);
@@ -354,13 +533,15 @@ public final class UtilityCommandHarness {
         private MutablePlayer player(String name, GameMode gameMode, String... permissions) {
             MutablePlayer player = new MutablePlayer(name, gameMode, Set.of(permissions));
             players.add(player);
-            playersByExactName.put(name, player);
             return player;
         }
 
         private Player lookup(String name) {
-            MutablePlayer player = playersByExactName.get(name);
-            return player == null || !player.online ? null : player.player;
+            return players.stream()
+                    .filter(candidate -> candidate.online && candidate.name.equalsIgnoreCase(name))
+                    .map(candidate -> candidate.player)
+                    .findFirst()
+                    .orElse(null);
         }
 
         private Collection<Player> onlinePlayers() {
@@ -399,11 +580,26 @@ public final class UtilityCommandHarness {
         private int fireTicks;
         private int freezeTicks;
         private boolean teleportResult = true;
+        private boolean teleported;
+        private int ping;
+        private int inventoryClearCalls;
+        private boolean armorCleared;
+        private boolean offhandCleared;
+        private final Inventory enderChest;
+        private final PlayerInventory inventory;
+        private Inventory openedInventory;
 
         private MutablePlayer(String name, GameMode gameMode, Set<String> permissions) {
             this.name = name;
             this.gameMode = gameMode;
             this.permissions = new HashSet<>(permissions);
+            this.enderChest = proxy(Inventory.class, (method, arguments) -> defaultValue(method.getReturnType()));
+            this.inventory = proxy(PlayerInventory.class, (method, arguments) -> switch (method.getName()) {
+                case "clear" -> set(() -> inventoryClearCalls++);
+                case "setArmorContents" -> set(() -> armorCleared = true);
+                case "setItemInOffHand" -> set(() -> offhandCleared = arguments[0] == null);
+                default -> defaultValue(method.getReturnType());
+            });
             this.player = proxy(Player.class, (method, arguments) -> switch (method.getName()) {
                 case "getUniqueId" -> id;
                 case "getName" -> name;
@@ -430,8 +626,15 @@ public final class UtilityCommandHarness {
                 case "setExhaustion" -> set(() -> exhaustion = (float) arguments[0]);
                 case "setFireTicks" -> set(() -> fireTicks = (int) arguments[0]);
                 case "setFreezeTicks" -> set(() -> freezeTicks = (int) arguments[0]);
+                case "getPing" -> ping;
+                case "getInventory" -> inventory;
+                case "getEnderChest" -> enderChest;
+                case "openInventory" -> set(() -> openedInventory = (Inventory) arguments[0]);
                 case "getLocation" -> new Location(null, 1.0D, 2.0D, 3.0D);
-                case "teleport" -> teleportResult;
+                case "teleport" -> {
+                    teleported = teleportResult;
+                    yield teleportResult;
+                }
                 default -> defaultValue(method.getReturnType());
             });
         }

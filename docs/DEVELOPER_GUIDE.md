@@ -499,6 +499,7 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 | Warp-Command-UX | `WarpCommand` |
 | Utility-Bukkit-Mutationen und Flight-/Speed-Cleanup | `UtilityService` |
 | Utility-Argumente, Rechte, Guards, Texte oder Completion | jeweilige Klasse unter `utility/command` |
+| Invsee-Snapshot, Read-only-Schutz und View-Lifecycle | `InvseeService` und `InvseeInventoryHolder` |
 | Quest Progress Engine | `QuestService` |
 | Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
 | Technische Quest Progress Keys | `QuestProgressKey` und später die Konstanten des produzierenden Features |
@@ -510,25 +511,27 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 
 ## Utility ownership und Lifecycle
 
-`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt einen `UtilityService` und den ausschließlich für Cleanup zuständigen `UtilityListener`, registriert acht Commands und anschließend den Listener. Es ist kein `ReloadParticipant` und besitzt keine Configdatei. Beim Disable werden verwaltetes Flight und beide Speed-Kanäle online normalisiert, UUID-Mengen geleert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
+`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; Module Count und Reload Count bleiben 22 beziehungsweise 6. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
 
-`UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal und Feed. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
+`UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal, Feed, sicheres Inventory-Clear und das Öffnen echter Enderchests. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
 
 `UtilityListener` entfernt beim Quit den UUID-State und normalisiert verwaltete Bewegung soweit noch sicher möglich. Beim Join vergisst er zunächst möglichen stale Runtime-State und plant die eigentliche Normalisierung einen Tick später. Dadurch läuft zuerst der bereits geplante Lobby-Join-State; anschließend setzt Utility Walk Speed auf `0.2F`, Fly Speed auf `0.1F` und entfernt in `SURVIVAL`/`ADVENTURE` unerwartetes Flight. Native Flight-Semantik in `CREATIVE`/`SPECTATOR` bleibt erhalten. Diese Join-Normalisierung deckt auch Prozessabbrüche ab, bei denen reguläres Disable-Cleanup nicht lief.
 
-Die Commands lösen Targets ausschließlich über `Server#getPlayerExact` auf. Es gibt weder fuzzy Namen noch `OfflinePlayer`. Bei optionalem Target reicht für Self die Basispermission; ein anderes Target und Console-mit-Target benötigen `.others`. Player-Completion wird ohne `.others` nicht offengelegt und sonst case-insensitive stabil sortiert. Gruppen oder Ränge sind keine Business-Logik. Eine mögliche, ausschließlich externe LuckPerms-Konfiguration wäre beispielsweise:
-
-- Builder: `vapeecore.utility.build`, `vapeecore.utility.fly`, `vapeecore.utility.speed`
-- Moderator: `vapeecore.utility.teleport`, `vapeecore.utility.teleport.here`, `vapeecore.utility.heal`, `vapeecore.utility.feed`
-- Admin: alle gewünschten `vapeecore.utility.*`-Permissions
+`OnlinePlayerResolver` löst Targets ausschließlich aus `Server#getOnlinePlayers()` über einen vollständigen, case-insensitive Namen auf. Es gibt weder Partial-/Fuzzy-Matches noch `OfflinePlayer`, Identity-Lookup oder Netzwerkzugriff. Bei optionalem Target reicht für Self die Basispermission; ein anderes Target und Console-mit-Target benötigen `.others`. Player-Completion wird ohne die erforderliche Permission nicht offengelegt und sonst case-insensitive stabil sortiert. Playernamen werden ausschließlich als `Component.text` gerendert. Gruppen oder Ränge sind keine Business-Logik; die kanonischen externen LuckPerms-Empfehlungen stehen in `docs/PERMISSIONS.md`.
 
 VapeeCore kennt die Gruppennamen Builder, Moderator und Admin ausdrücklich nicht; sie sind nur Beispiele für eine Serverkonfiguration.
 
 `/fly` verwaltet ausschließlich Flight in `SURVIVAL` und `ADVENTURE`. BUILD sowie `CREATIVE`/`SPECTATOR` behalten ihren jeweiligen nativen Owner. `/speed` akzeptiert Level 1–10; Level 1 entspricht Walk `0.2F` beziehungsweise Fly `0.1F`, Level 10 jeweils `1.0F`. Der Fly-Kanal gilt bei aktivem Fliegen sowie in `CREATIVE`/`SPECTATOR`, sonst der Walk-Kanal. `/gamemode` akzeptiert vollständige Namen, `s/c/a/sp` und `0/1/2/3`; Completion zeigt nur vollständige Namen. Ein BUILD-Target wird abgewiesen. Ein späterer Lobby-Resync darf einen temporär gesetzten Gamemode wieder auf `lobby.yml` normalisieren; Creative allein schaltet nie BUILD oder Protection-Bypass ein.
 
-`/tp` teleportiert nur den ausführenden Spieler zu einem exakten Online-Target, `/tphere` nur ein Online-Target zum ausführenden Spieler. Es gibt keine Zwei-Target- oder Console-Form. BUILD-Teleports werden nicht doppelt behandelt: Ein tatsächlicher Weltwechsel löst den bestehenden `LobbyListener`-Cleanup aus, ein Teleport innerhalb derselben Lobby-Welt behält BUILD. Die Plugin-Commands `/gamemode` und `/tp` sind bewusst vereinfachte VapeeCore-Varianten; die Vanilla-Kommandos bleiben über `/minecraft:gamemode` und `/minecraft:tp` erreichbar.
+`/tp <target>` teleportiert den ausführenden Player zum exakten Online-Ziel und benötigt `vapeecore.utility.teleport`. `/tp <player> <target>` teleportiert die benannte Quelle zum benannten Ziel, funktioniert auch aus der Console und benötigt unabhängig von Self-Rechten `vapeecore.utility.teleport.others`. Die Console darf die Ein-Argument-Form nicht verwenden, weil sie keinen Player-Standort beziehungsweise keine Player-Quelle besitzt. Gleiche Quelle und Ziel werden ohne Mutation abgewiesen. `/tphere <player>` bleibt Player-only und benötigt `vapeecore.utility.teleport.here`.
 
-Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen direkt und schmal `ActivityService.isParticipating(UUID)` ab. Das generische Activity-Framework erhält keine Utility-Regeln. `/tphere` prüft Sender und Target. `/heal` setzt aktuelle Max-Health sowie Fire-/Freeze-Ticks zurück, verändert aber weder Hunger, Inventory, Gamemode noch Potion Effects. `/feed` setzt Food 20, Saturation 20 und Exhaustion 0, verändert aber Health nicht.
+Ohne `vapeecore.utility.teleport.bypass` schützen `/tp` und `/tphere` Activity-Teilnehmer als bewegte Quelle und Activity-Ziele als internen State-Guard. Der Bypass überspringt ausschließlich diese VapeeCore-Prüfungen. Der eigentliche synchrone Bukkit/Paper-Teleport läuft unverändert weiter; ein gecanceltes `PlayerTeleportEvent`, ein technischer Fehler oder `teleport(...) == false` wird weiterhin als Fehler gemeldet. BUILD-Teleports werden nicht doppelt behandelt: Ein tatsächlicher Weltwechsel löst den bestehenden `LobbyListener`-Cleanup aus, ein Teleport innerhalb derselben Lobby-Welt behält BUILD.
+
+Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen direkt und schmal `ActivityService.isParticipating(UUID)` ab. Das generische Activity-Framework erhält keine Utility-Regeln. `/heal` setzt aktuelle Max-Health sowie Fire-/Freeze-Ticks zurück, verändert aber weder Hunger, Inventory, Gamemode noch Potion Effects. `/feed` setzt Food 20, Saturation 20 und Exhaustion 0, verändert aber Health nicht. `/clear` blockiert sowohl Activity- als auch BUILD-Targets und besitzt absichtlich keinen Bypass; erst nach den Guards löscht `UtilityService` Storage, Armor und Offhand.
+
+`/ping` liest ausschließlich den synchron verfügbaren Ping eines Online-Spielers und erzeugt weder Persistence noch Scheduler. `/enderchest` öffnet für Self oder ein online befindliches Others-Target das echte Enderchest. Die Others-Form ist deshalb eine mutierbare Staff-Funktion und nur für Admin/Owner vorgesehen; die Console wird abgewiesen, weil sie kein Inventar-UI öffnen kann.
+
+`/invsee <player>` erstellt dagegen immer einen 54-Slot-Snapshot: Slots 0–8 enthalten die Hotbar, 9–35 das Main Inventory, 45–48 Helmet/Chestplate/Leggings/Boots und Slot 50 die Offhand. Jedes Item wird geklont. `InvseeInventoryHolder` bindet Viewer-UUID, Target-UUID und exakt die erzeugte Inventory-Instanz; Titel werden nie als Sicherheitsmerkmal verwendet. `InvseeService` canceln jeden Click einschließlich Shift, Number Key, Double Click, Collect, Drop, Creative und Offhand/Hotbar Swap sowie jeden Drag. Forged, falsche oder stale Holder bleiben ebenfalls read-only. Close, Viewer-Quit, Target-Quit und Module-Disable entfernen die UUID-basierte Runtime-View; dauerhafte Player-Referenzen oder Scheduler existieren nicht. `vapeecore.utility.invsee.modify` ist reserviert und in Phase 17C.1 nicht aktiv.
 
 ## Commands und permissions
 
@@ -541,10 +544,15 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/fly [player]` | Command-managed Flight umschalten | `FlyCommand` | `vapeecore.utility.fly`, fremde Targets: `.fly.others` |
 | `/speed <1-10> [player]` | Kontextabhängigen Walk-/Fly-Speed setzen | `SpeedCommand` | `vapeecore.utility.speed`, fremde Targets: `.speed.others` |
 | `/gamemode`, `/gm` | Gamemode setzen | `GameModeCommand` | `vapeecore.utility.gamemode`, fremde Targets: `.gamemode.others` |
-| `/tp <player>` | Zum Online-Spieler teleportieren | `TeleportCommand` | `vapeecore.utility.teleport` |
+| `/tp <target>` | Selbst zum Online-Spieler teleportieren | `TeleportCommand` | `vapeecore.utility.teleport` |
+| `/tp <player> <target>` | Online-Spieler A zu B teleportieren | `TeleportCommand` | `vapeecore.utility.teleport.others`; interner Guard-Bypass: `.teleport.bypass` |
 | `/tphere <player>` | Online-Spieler zum Sender teleportieren | `TeleportHereCommand` | `vapeecore.utility.teleport.here` |
 | `/heal [player]` | Aktuelle Max-Health wiederherstellen | `HealCommand` | `vapeecore.utility.heal`, fremde Targets: `.heal.others` |
 | `/feed [player]` | Hunger, Saturation und Exhaustion normalisieren | `FeedCommand` | `vapeecore.utility.feed`, fremde Targets: `.feed.others` |
+| `/ping [player]` | Online-Latenz anzeigen | `PingCommand` | `vapeecore.utility.ping`, fremde Targets: `.ping.others` |
+| `/clear [player]` | Sicheres Player-Inventar löschen | `ClearCommand` | `vapeecore.utility.clear`, fremde Targets: `.clear.others` |
+| `/invsee <player>` | Read-only Inventory-Snapshot öffnen | `InvseeCommand` | `vapeecore.utility.invsee`; `.invsee.modify` reserviert/inaktiv |
+| `/enderchest [player]` | Echtes Enderchest öffnen | `EnderChestCommand` | `vapeecore.utility.enderchest`, fremde Targets: `.enderchest.others` |
 | `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
@@ -554,7 +562,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 
-Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes für Flight, Speed, Gamemode, Heal und Feed besitzen die jeweilige Basispermission als Child. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Produktionscode prüft den alten Namen nicht mehr. Der alte Name umgeht insbesondere niemals direkt die Lobby-Protection.
+Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
 
 ## Command UX Standard
 
@@ -621,6 +629,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.utility.command.BuildCommandHarness`
 - `dev.vapee.core.utility.UtilityServiceHarness`
 - `dev.vapee.core.utility.command.UtilityCommandHarness`
+- `dev.vapee.core.utility.UtilityInventoryHarness`
 - `dev.vapee.core.message.CommandHelpHarness`
 - `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
 - `dev.vapee.core.seat.SeatHarness`
