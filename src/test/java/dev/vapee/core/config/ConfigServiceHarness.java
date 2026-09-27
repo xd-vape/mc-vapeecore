@@ -152,6 +152,46 @@ public final class ConfigServiceHarness {
                     "invalid online reward MiniMessage warns and uses the safe fallback");
             check(Files.readString(configFile).equals(invalidMessage),
                     "invalid online reward MiniMessage leaves config.yml unchanged");
+
+            Files.writeString(configFile, "server:\n  name: Legacy\n");
+            service.load();
+            check(service.getFriendLimits().maxFriends() == 100
+                            && service.getFriendLimits().maxIncomingRequests() == 25
+                            && service.getFriendLimits().maxOutgoingRequests() == 25,
+                    "legacy config uses central friend limit defaults");
+            Files.writeString(configFile, "friends:\n  limits:\n    max-friends: 5\n"
+                    + "    max-incoming-requests: 3\n    max-outgoing-requests: 4\n");
+            service.load();
+            check(service.getFriendLimits().maxFriends() == 5
+                            && service.getFriendLimits().maxIncomingRequests() == 3
+                            && service.getFriendLimits().maxOutgoingRequests() == 4,
+                    "custom friend limits load");
+            Files.writeString(configFile, "friends:\n  limits:\n    max-friends: 1\n"
+                    + "    max-incoming-requests: 2\n    max-outgoing-requests: 3\n");
+            var friendPlan = service.prepareReload();
+            check(service.getFriendLimits().maxFriends() == 5,
+                    "friend limit reload preparation does not mutate current state");
+            friendPlan.apply();
+            check(service.getFriendLimits().maxFriends() == 1
+                            && service.getFriendLimits().maxIncomingRequests() == 2,
+                    "friend limits update on successful reload");
+            friendPlan.rollback();
+            check(service.getFriendLimits().maxFriends() == 5,
+                    "friend limit rollback restores previous state");
+
+            String invalidFriends = "friends:\n  limits:\n    max-friends: 0\n"
+                    + "    max-incoming-requests: -1\n    max-outgoing-requests: nope\n";
+            Files.writeString(configFile, invalidFriends);
+            handler.messages.clear();
+            service.load();
+            check(service.getFriendLimits().maxFriends() == 100
+                            && service.getFriendLimits().maxIncomingRequests() == 25
+                            && service.getFriendLimits().maxOutgoingRequests() == 25,
+                    "zero, negative, and wrong-type friend limits use defaults");
+            check(handler.messages.stream().filter(message -> message.contains("friends.limits.")).count() == 3,
+                    "each invalid friend limit warns");
+            check(Files.readString(configFile).equals(invalidFriends),
+                    "invalid friend limits never rewrite config.yml");
         } finally {
             Files.deleteIfExists(configFile);
             Files.deleteIfExists(directory);

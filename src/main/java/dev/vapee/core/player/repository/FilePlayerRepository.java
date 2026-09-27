@@ -143,6 +143,7 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.scoreboard", player.getSettings().isScoreboardEnabled());
             configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
+            configuration.set("settings.friend-requests", player.getSettings().isFriendRequestsEnabled());
             configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
             configuration.set("economy.coins", player.getWallet().getCoins());
             player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
@@ -287,6 +288,13 @@ public final class FilePlayerRepository implements PlayerRepository {
                 configuration,
                 "settings.private-messages",
                 settings.isPrivateMessagesEnabled()
+        ));
+        settings.setFriendRequestsEnabled(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.friend-requests",
+                settings.isFriendRequestsEnabled()
         ));
         settings.setLobbyPlayersVisible(readBooleanSetting(
                 uniqueId,

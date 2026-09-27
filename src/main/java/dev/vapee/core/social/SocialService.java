@@ -84,6 +84,18 @@ public final class SocialService {
         return ignoredPlayers != null && ignoredPlayers.contains(Objects.requireNonNull(target, "target"));
     }
 
+    public boolean isKnownIgnoring(UUID owner, UUID target) {
+        UUID validatedOwner = Objects.requireNonNull(owner, "owner");
+        UUID validatedTarget = Objects.requireNonNull(target, "target");
+        Set<UUID> snapshot = ignoreSnapshots.get(validatedOwner);
+        if (snapshot != null) {
+            return snapshot.contains(validatedTarget);
+        }
+        return playerService.findKnownPlayer(validatedOwner)
+                .map(player -> player.getSocial().isIgnoring(validatedTarget))
+                .orElse(false);
+    }
+
     public Set<UUID> getIgnoredPlayers(UUID owner) {
         Set<UUID> ignoredPlayers = ignoreSnapshots.get(Objects.requireNonNull(owner, "owner"));
         return ignoredPlayers == null ? Set.of() : ignoredPlayers;

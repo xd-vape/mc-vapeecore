@@ -30,10 +30,11 @@ public final class OnlineRewardLifecycleHarness {
         check(OnlineRewardModule.PROCESS_INTERVAL_TICKS == 20L,
                 "OnlineReward processing cadence is exactly twenty ticks");
 
-        String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
+        String coreSource = normalizeLineEndings(Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java")));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
+                "identityModule", "friendModule", "rewardModule", "onlineRewardModule",
+                "questModule", "dailyQuestModule",
                 "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
                 "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
@@ -45,8 +46,8 @@ public final class OnlineRewardLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-16C order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 22,
-                "VapeeCore registers exactly twenty-two modules");
+        check(count(coreSource, "moduleManager.register(") == 23,
+                "VapeeCore registers exactly twenty-three modules");
         check(coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
@@ -62,9 +63,9 @@ public final class OnlineRewardLifecycleHarness {
     }
 
     private static void testTaskAndShutdownStructure() throws IOException {
-        String moduleSource = Files.readString(
+        String moduleSource = normalizeLineEndings(Files.readString(
                 Path.of("src/main/java/dev/vapee/core/onlinereward/OnlineRewardModule.java")
-        );
+        ));
         check(count(moduleSource, "runTaskTimer(") == 1,
                 "OnlineRewardModule owns exactly one shared scheduler task");
         check(moduleSource.contains("this::processOnlinePlayers")
@@ -132,6 +133,10 @@ public final class OnlineRewardLifecycleHarness {
                         && !presentation.contains("next_reward")
                         && !presentation.contains("reward_progress"),
                 "existing playtime presentation stays unchanged without reward-progress placeholders");
+    }
+
+    private static String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static int count(String value, String needle) {

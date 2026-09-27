@@ -64,10 +64,11 @@ public final class QuestLifecycleHarness {
                 )),
                 "QuestModule depends only on JavaPlugin, PlayerModule, and RewardModule");
 
-        String coreSource = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
+        String coreSource = normalizeLineEndings(Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java")));
         List<String> expectedOrder = List.of(
                 "permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
+                "identityModule", "friendModule", "rewardModule", "onlineRewardModule",
+                "questModule", "dailyQuestModule",
                 "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
                 "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
@@ -79,8 +80,8 @@ public final class QuestLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-17A order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 22,
-                "VapeeCore registers exactly twenty-two modules");
+        check(count(coreSource, "moduleManager.register(") == 23,
+                "VapeeCore registers exactly twenty-three modules");
         check(coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("questModule = new QuestModule")
                         && coreSource.indexOf("questModule = new QuestModule")
@@ -171,9 +172,9 @@ public final class QuestLifecycleHarness {
     }
 
     private static void testTaskAndShutdownStructure() throws IOException {
-        String moduleSource = Files.readString(
+        String moduleSource = normalizeLineEndings(Files.readString(
                 Path.of("src/main/java/dev/vapee/core/quest/QuestModule.java")
-        );
+        ));
         check(count(moduleSource, "runTaskTimer(") == 1,
                 "QuestModule owns exactly one shared scheduler task and no task per player");
         check(moduleSource.contains("this::flushSafely")
@@ -230,6 +231,10 @@ public final class QuestLifecycleHarness {
         Logger logger = Logger.getLogger("QuestLifecycleHarness-" + System.nanoTime());
         logger.setUseParentHandlers(false);
         return logger;
+    }
+
+    private static String normalizeLineEndings(String value) {
+        return value.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     private static void check(boolean condition, String message) {

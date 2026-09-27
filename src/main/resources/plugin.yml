@@ -29,6 +29,12 @@ commands:
     description: Shows a VapeeCore player profile
     usage: /profile [player|uuid]
     permission: vapeecore.profile.view
+  friend:
+    aliases:
+      - friends
+    description: Manage your friends
+    usage: /friend help
+    permission: vapeecore.friend.use
   msg:
     description: Send a private message to an online player
     usage: /msg <player> <message>
@@ -231,6 +237,9 @@ permissions:
     default: true
   vapeecore.profile.view:
     description: Allows viewing player profiles
+    default: true
+  vapeecore.friend.use:
+    description: Allows using the friends system
     default: true
   vapeecore.economy.admin:
     description: Allows managing online player coin balances

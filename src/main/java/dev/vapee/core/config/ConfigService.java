@@ -1,5 +1,6 @@
 package dev.vapee.core.config;
 
+import dev.vapee.core.friend.FriendLimits;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import dev.vapee.core.onlinereward.OnlineRewardConfig;
@@ -84,6 +85,10 @@ public final class ConfigService implements ReloadParticipant {
         return state.onlineRewardConfig();
     }
 
+    public FriendLimits getFriendLimits() {
+        return state.friendLimits();
+    }
+
     private CoreConfigState readState() {
         YamlConfiguration configuration = loadConfiguration();
         return new CoreConfigState(
@@ -91,8 +96,34 @@ public final class ConfigService implements ReloadParticipant {
                 readString(configuration, "messages.prefix", DEFAULT_MESSAGE_PREFIX),
                 readBoolean(configuration, "settings.debug", false),
                 readNonBlankString(configuration, "ranks.track", DEFAULT_RANK_TRACK),
-                readOnlineRewardConfig(configuration)
+                readOnlineRewardConfig(configuration),
+                readFriendLimits(configuration)
         );
+    }
+
+    private FriendLimits readFriendLimits(YamlConfiguration configuration) {
+        return new FriendLimits(
+                readPositiveInt(configuration, "friends.limits.max-friends", FriendLimits.DEFAULT_MAX_FRIENDS),
+                readPositiveInt(configuration, "friends.limits.max-incoming-requests",
+                        FriendLimits.DEFAULT_MAX_INCOMING_REQUESTS),
+                readPositiveInt(configuration, "friends.limits.max-outgoing-requests",
+                        FriendLimits.DEFAULT_MAX_OUTGOING_REQUESTS)
+        );
+    }
+
+    private int readPositiveInt(YamlConfiguration configuration, String path, int defaultValue) {
+        if (!configuration.contains(path)) {
+            return defaultValue;
+        }
+        Object value = configuration.get(path);
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            long candidate = ((Number) value).longValue();
+            if (candidate > 0L && candidate <= Integer.MAX_VALUE) {
+                return (int) candidate;
+            }
+        }
+        warnInvalidValue(path, "a positive integer", defaultValue);
+        return defaultValue;
     }
 
     private OnlineRewardConfig readOnlineRewardConfig(YamlConfiguration configuration) {
@@ -246,7 +277,8 @@ public final class ConfigService implements ReloadParticipant {
             String messagePrefix,
             boolean debugEnabled,
             String rankTrack,
-            OnlineRewardConfig onlineRewardConfig
+            OnlineRewardConfig onlineRewardConfig,
+            FriendLimits friendLimits
     ) {
 
         private CoreConfigState {
@@ -254,6 +286,7 @@ public final class ConfigService implements ReloadParticipant {
             Objects.requireNonNull(messagePrefix, "messagePrefix");
             Objects.requireNonNull(rankTrack, "rankTrack");
             Objects.requireNonNull(onlineRewardConfig, "onlineRewardConfig");
+            Objects.requireNonNull(friendLimits, "friendLimits");
         }
 
         private static CoreConfigState defaults() {
@@ -262,7 +295,8 @@ public final class ConfigService implements ReloadParticipant {
                     DEFAULT_MESSAGE_PREFIX,
                     false,
                     DEFAULT_RANK_TRACK,
-                    OnlineRewardConfig.defaults()
+                    OnlineRewardConfig.defaults(),
+                    FriendLimits.defaults()
             );
         }
     }

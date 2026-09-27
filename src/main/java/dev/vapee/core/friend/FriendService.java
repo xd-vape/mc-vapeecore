@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Main-thread-owned friends domain service. It deliberately contains no Bukkit
@@ -15,7 +16,7 @@ import java.util.UUID;
 public final class FriendService {
 
     private final FriendRepository repository;
-    private final FriendLimits limits;
+    private final Supplier<FriendLimits> limitsSupplier;
     private final FriendRequestPolicy requestPolicy;
     private final Clock clock;
     private Map<FriendPair, Friendship> friendships;
@@ -27,8 +28,17 @@ public final class FriendService {
             FriendRequestPolicy requestPolicy,
             Clock clock
     ) {
+        this(repository, () -> Objects.requireNonNull(limits, "limits"), requestPolicy, clock);
+    }
+
+    public FriendService(
+            FriendRepository repository,
+            Supplier<FriendLimits> limitsSupplier,
+            FriendRequestPolicy requestPolicy,
+            Clock clock
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository");
-        this.limits = Objects.requireNonNull(limits, "limits");
+        this.limitsSupplier = Objects.requireNonNull(limitsSupplier, "limitsSupplier");
         this.requestPolicy = Objects.requireNonNull(requestPolicy, "requestPolicy");
         this.clock = Objects.requireNonNull(clock, "clock");
 
@@ -46,6 +56,7 @@ public final class FriendService {
     }
 
     public FriendResult sendRequest(UUID sender, UUID recipient) {
+        FriendLimits limits = getLimits();
         UUID validatedSender = Objects.requireNonNull(sender, "sender");
         UUID validatedRecipient = Objects.requireNonNull(recipient, "recipient");
         if (validatedSender.equals(validatedRecipient)) {
@@ -65,7 +76,7 @@ public final class FriendService {
         if (policyResult != null) {
             return policyResult;
         }
-        if (atFriendLimit(validatedSender) || atFriendLimit(validatedRecipient)) {
+        if (atFriendLimit(validatedSender, limits) || atFriendLimit(validatedRecipient, limits)) {
             return FriendResult.FRIEND_LIMIT_REACHED;
         }
 
@@ -96,6 +107,7 @@ public final class FriendService {
     }
 
     public FriendResult acceptRequest(UUID recipient, UUID sender) {
+        FriendLimits limits = getLimits();
         UUID validatedRecipient = Objects.requireNonNull(recipient, "recipient");
         UUID validatedSender = Objects.requireNonNull(sender, "sender");
         if (validatedRecipient.equals(validatedSender)) {
@@ -112,10 +124,10 @@ public final class FriendService {
         }
 
         FriendResult policyResult = evaluatePolicy(validatedSender, validatedRecipient);
-        if (policyResult != null) {
+        if (policyResult == FriendResult.BLOCKED) {
             return policyResult;
         }
-        if (atFriendLimit(validatedSender) || atFriendLimit(validatedRecipient)) {
+        if (atFriendLimit(validatedSender, limits) || atFriendLimit(validatedRecipient, limits)) {
             return FriendResult.FRIEND_LIMIT_REACHED;
         }
 
@@ -243,6 +255,10 @@ public final class FriendService {
         return count;
     }
 
+    public FriendLimits getLimits() {
+        return Objects.requireNonNull(limitsSupplier.get(), "friend limits");
+    }
+
     private FriendResult evaluatePolicy(UUID sender, UUID recipient) {
         FriendRequestDecision decision = Objects.requireNonNull(
                 requestPolicy.evaluate(sender, recipient),
@@ -255,7 +271,7 @@ public final class FriendService {
         };
     }
 
-    private boolean atFriendLimit(UUID player) {
+    private boolean atFriendLimit(UUID player, FriendLimits limits) {
         return countFriends(player) >= limits.maxFriends();
     }
 

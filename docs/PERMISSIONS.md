@@ -22,6 +22,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.message.use` | `true` | `/msg`, `/reply`, `/r` | Private Online-Nachrichten. |
 | `vapeecore.settings.use` | `true` | `/settings` | Eigenes Settings-Menü. |
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
+| `vapeecore.friend.use` | `true` | `/friend`, `/friends` | Eigene Freundschaften und Anfragen anzeigen und verwalten; alle Subcommands. |
 | `vapeecore.rank.view` | `true` | `/rank [player]` | Eigenen oder einen Online-Rank anzeigen. |
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
@@ -69,6 +70,7 @@ Die Matrix ist ein bewusst konservativer Ausgangspunkt. Elternvererbung sollte i
 - `vapeecore.message.use`
 - `vapeecore.settings.use`
 - `vapeecore.social.ignore`
+- `vapeecore.friend.use`
 - `vapeecore.rank.view`
 - `vapeecore.ranks.view`
 - `vapeecore.profile.view`

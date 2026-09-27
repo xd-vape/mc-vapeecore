@@ -6,22 +6,26 @@ public final class PlayerSettings {
     private static final boolean DEFAULT_SOUNDS_ENABLED = true;
     private static final boolean DEFAULT_PRIVATE_MESSAGES_ENABLED = true;
     private static final boolean DEFAULT_LOBBY_PLAYERS_VISIBLE = true;
+    private static final boolean DEFAULT_FRIEND_REQUESTS_ENABLED = true;
 
     private boolean scoreboardEnabled;
     private boolean soundsEnabled;
     private boolean privateMessagesEnabled;
     private boolean lobbyPlayersVisible;
+    private boolean friendRequestsEnabled;
 
     private PlayerSettings(
             boolean scoreboardEnabled,
             boolean soundsEnabled,
             boolean privateMessagesEnabled,
-            boolean lobbyPlayersVisible
+            boolean lobbyPlayersVisible,
+            boolean friendRequestsEnabled
     ) {
         this.scoreboardEnabled = scoreboardEnabled;
         this.soundsEnabled = soundsEnabled;
         this.privateMessagesEnabled = privateMessagesEnabled;
         this.lobbyPlayersVisible = lobbyPlayersVisible;
+        this.friendRequestsEnabled = friendRequestsEnabled;
     }
 
     public static PlayerSettings defaults() {
@@ -29,7 +33,8 @@ public final class PlayerSettings {
                 DEFAULT_SCOREBOARD_ENABLED,
                 DEFAULT_SOUNDS_ENABLED,
                 DEFAULT_PRIVATE_MESSAGES_ENABLED,
-                DEFAULT_LOBBY_PLAYERS_VISIBLE
+                DEFAULT_LOBBY_PLAYERS_VISIBLE,
+                DEFAULT_FRIEND_REQUESTS_ENABLED
         );
     }
 
@@ -63,5 +68,13 @@ public final class PlayerSettings {
 
     public void setLobbyPlayersVisible(boolean lobbyPlayersVisible) {
         this.lobbyPlayersVisible = lobbyPlayersVisible;
+    }
+
+    public boolean isFriendRequestsEnabled() {
+        return friendRequestsEnabled;
+    }
+
+    public void setFriendRequestsEnabled(boolean friendRequestsEnabled) {
+        this.friendRequestsEnabled = friendRequestsEnabled;
     }
 }

@@ -24,6 +24,7 @@ public final class SettingsMenu {
     public static final int SCOREBOARD_SLOT = 11;
     public static final int SOUNDS_SLOT = 13;
     public static final int PRIVATE_MESSAGES_SLOT = 15;
+    public static final int FRIEND_REQUESTS_SLOT = 17;
     public static final int CLOSE_SLOT = 22;
 
     private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
@@ -106,6 +107,16 @@ public final class SettingsMenu {
                                 "private messages to you."
                         ),
                         settings.isPrivateMessagesEnabled()
+                )
+        );
+        validatedInventory.setItem(
+                FRIEND_REQUESTS_SLOT,
+                createToggleItem(
+                        Material.PLAYER_HEAD,
+                        "Friend Requests",
+                        List.of("Choose whether other players can send",
+                                "friend requests to you."),
+                        settings.isFriendRequestsEnabled()
                 )
         );
         validatedInventory.setItem(CLOSE_SLOT, createCloseItem());
