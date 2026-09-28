@@ -47,6 +47,12 @@ public final class FriendCommandHarness {
             CommandSender console = fixture.console();
             Player denied = fixture.player("Denied", true, false);
 
+            run(command, alice);
+            check(fixture.openedMenus.equals(List.of(alice.getUniqueId())),
+                    "/friend without arguments opens the friends menu");
+            command.onCommand(alice, null, "friends", new String[0]);
+            check(fixture.openedMenus.size() == 2,
+                    "/friends alias without arguments opens the same menu");
             run(command, console, "help");
             check(fixture.last().contains("Only players"), "console cannot manage friends");
             run(command, denied, "add", "Bob");
@@ -209,6 +215,7 @@ public final class FriendCommandHarness {
         private final MessageService messageService;
         private final Map<UUID, Player> online = new HashMap<>();
         private final Map<UUID, List<Component>> messages = new HashMap<>();
+        private final List<UUID> openedMenus = new ArrayList<>();
         private final MemoryRepository repository = new MemoryRepository();
         private final FriendService friends;
         private FriendRequestDecision policy = FriendRequestDecision.ALLOW;
@@ -278,7 +285,8 @@ public final class FriendCommandHarness {
 
         private FriendCommand command(FriendService service) {
             return new FriendCommand(service, identities, messageService,
-                    new CommandHelpRenderer(messageService), online::values, online::get, logger());
+                    new CommandHelpRenderer(messageService), online::values, online::get, logger(),
+                    player -> openedMenus.add(player.getUniqueId()));
         }
 
         private String last() {

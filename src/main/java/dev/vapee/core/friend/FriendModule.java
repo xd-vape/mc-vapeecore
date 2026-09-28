@@ -3,6 +3,8 @@ package dev.vapee.core.friend;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.friend.command.FriendCommand;
+import dev.vapee.core.friend.gui.FriendMenu;
+import dev.vapee.core.friend.gui.FriendMenuListener;
 import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
@@ -11,6 +13,7 @@ import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.social.SocialModule;
 import dev.vapee.core.social.SocialService;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.nio.file.Path;
@@ -28,6 +31,8 @@ public final class FriendModule implements CoreModule {
     private final CommandHelpRenderer helpRenderer;
 
     private FriendService friendService;
+    private FriendMenu friendMenu;
+    private FriendMenuListener friendMenuListener;
     private PluginCommand friendCommand;
 
     public FriendModule(JavaPlugin plugin, ConfigService configService, PlayerModule playerModule,
@@ -56,19 +61,27 @@ public final class FriendModule implements CoreModule {
         FriendRequestPolicy policy = createPolicy(social, settings);
         FriendService service = new FriendService(repository,
                 configService::getFriendLimits, policy, Clock.systemUTC());
+        FriendMenu menu = new FriendMenu(plugin, service, identityModule.getIdentityService(), messageService);
+        FriendMessages feedback = new FriendMessages(messageService, plugin.getServer()::getPlayer);
+        FriendMenuListener listener = new FriendMenuListener(menu, service, feedback,
+                messageService, plugin.getLogger());
         PluginCommand command = Objects.requireNonNull(plugin.getCommand("friend"),
                 "Command 'friend' is missing from plugin.yml");
         try {
             FriendCommand executor = new FriendCommand(plugin, service,
-                    identityModule.getIdentityService(), messageService, helpRenderer);
+                    identityModule.getIdentityService(), messageService, helpRenderer, menu);
+            plugin.getServer().getPluginManager().registerEvents(listener, plugin);
             command.setExecutor(executor);
             command.setTabCompleter(executor);
         } catch (RuntimeException exception) {
+            HandlerList.unregisterAll(listener);
             command.setExecutor(null);
             command.setTabCompleter(null);
             throw exception;
         }
         friendService = service;
+        friendMenu = menu;
+        friendMenuListener = listener;
         friendCommand = command;
         plugin.getLogger().info("Friend module enabled.");
     }
@@ -90,12 +103,23 @@ public final class FriendModule implements CoreModule {
 
     @Override
     public void disable() {
-        if (friendCommand != null) {
-            friendCommand.setExecutor(null);
-            friendCommand.setTabCompleter(null);
+        try {
+            if (friendMenu != null) {
+                friendMenu.closeOpenInventories();
+            }
+        } finally {
+            if (friendMenuListener != null) {
+                HandlerList.unregisterAll(friendMenuListener);
+            }
+            if (friendCommand != null) {
+                friendCommand.setExecutor(null);
+                friendCommand.setTabCompleter(null);
+            }
+            friendCommand = null;
+            friendMenuListener = null;
+            friendMenu = null;
+            friendService = null;
         }
-        friendCommand = null;
-        friendService = null;
     }
 
     public FriendService getFriendService() {

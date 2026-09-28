@@ -53,6 +53,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Known-Player-Name/UUID-Lookup | `PlayerService`, `FilePlayerRepository` und `PlayerIdentityService` |
 | `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
+| Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
 | Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Slot 17) |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
@@ -110,7 +111,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Identity** – Known-Player-Lookup, immutable Profile und `/profile`.
-7. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend`.
+7. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend` und Friends-GUI.
 8. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
 9. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
 10. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
@@ -192,7 +193,7 @@ Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonis
 
 ## Friends Foundation und Integration (Phase 18A.1/18A.2)
 
-`FriendModule` startet direkt nach Identity und vor Reward. Es injiziert Plugin, `ConfigService`, Player, Social, Identity, `MessageService` und den gemeinsamen Help-Renderer. Es besitzt `FriendService`, das zentrale `FileFriendRepository` für `plugins/VapeeCore/friends.yml` und den einen `/friend`-Command mit Alias `/friends`. Beim Disable werden Executor und Tab-Completer entfernt. Es registriert keinen Listener, Task oder weiteren Reload-Teilnehmer und hat keine Economy-, Rank-, Quest- oder Presentation-Abhängigkeit.
+`FriendModule` startet direkt nach Identity und vor Reward. Es injiziert Plugin, `ConfigService`, Player, Social, Identity, `MessageService` und den gemeinsamen Help-Renderer. Es besitzt `FriendService`, das zentrale `FileFriendRepository` für `plugins/VapeeCore/friends.yml`, den `/friend`-Command mit Alias `/friends` und seit Phase 18B genau einen GUI-Listener. Beim Disable schließt es offene eigene Inventare, meldet den Listener ab und entfernt Executor und Tab-Completer. Bei einem fehlgeschlagenen Enable werden teilweise registrierte Listener und Command-Handler ebenfalls entfernt. Es besitzt keinen Task oder weiteren Reload-Teilnehmer und hat keine Economy-, Rank-, Quest- oder Presentation-Abhängigkeit.
 
 `friends.yml` ist die einzige Friends-Datendatei und enthält `schema-version: 1`, ungerichtete Freundschaften und gerichtete Anfragen mit UUIDs und Zeitpunkten. Eine fehlende Datei bedeutet einen leeren State; das erste erfolgreiche Speichern erzeugt sie. Der Repository-Start validiert den vollständigen Snapshot; beschädigte oder nicht unterstützte Daten lassen das Modul kontrolliert scheitern statt sie zu überschreiben. Mutationen schreiben zuerst einen neuen, validierten Snapshot per temporärer Datei und atomarem Move, mit Replace-Fallback falls das Dateisystem keinen atomaren Move unterstützt. Erst nach erfolgreichem Save tauscht `FriendService` den In-Memory-State aus; ein Fehler behält den vorherigen Zustand. Domain und Service speichern keine Bukkit-`Player`-Referenzen. Lese-APIs für Beziehung, Freunde, eingehende und ausgehende Anfragen bleiben unveränderliche Snapshots.
 
@@ -200,7 +201,15 @@ Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonis
 
 Die Policy prüft `SocialService#isKnownIgnoring` in beiden Richtungen, dann `PlayerSettingsService#areKnownFriendRequestsEnabled` beim Empfänger. Beide Abfragen verwenden für geladene Spieler den aktuellen State und für bekannte Offline-Spieler die persistierten Player-Daten lesend, ohne sie in den Player-Cache zu laden. Unbekannte Empfänger werden abgelehnt. Ignore blockiert neue und anzunehmende Anfragen; deaktivierte `settings.friend-requests` verhindern nur neue Anfragen, nicht das Annehmen bestehender. Der Key ist standardmäßig `true`, wird beim Player-Save unter `settings.friend-requests` gespeichert und im bestehenden 27-Slot-`SettingsMenu` über Slot 17 umgeschaltet. Fehlende/alte Player-Keys laden als `true`, ein Save-Fehler rollt den Settings-Wert zurück.
 
-`/friend help|add|accept|deny|cancel|remove|list|requests` ist ausschließlich für Spieler mit `vapeecore.friend.use` (Default `true`). `FriendCommand` nutzt `PlayerIdentityService#resolve` für bekannte Namen/UUIDs, weist unbekannte und mehrdeutige Namen kontrolliert ab und zeigt Namen als Adventure-Text mit UUID-Fallback an. Erfolgreiche neue Anfragen und Annahmen benachrichtigen den Gegenpart nur, wenn er gerade online ist; es gibt keine Offline-Mail. Tab Completion beschränkt sich auf sinnvolle Subcommands und bekannte beziehungsweise online sichtbare Ziele. Keine Friends-GUI, kein Teleport, kein Presence-Service und keine zusätzlichen Player-YAML-Friends-Listen.
+`/friend help|add|accept|deny|cancel|remove|list|requests` ist ausschließlich für Spieler mit `vapeecore.friend.use` (Default `true`). `/friend` und `/friends` ohne Argumente öffnen die GUI; explizites `/friend help` nutzt weiterhin den gemeinsamen Help-Renderer. `FriendCommand` nutzt `PlayerIdentityService#resolve` für bekannte Namen/UUIDs, weist unbekannte und mehrdeutige Namen kontrolliert ab und zeigt Namen als Adventure-Text mit UUID-Fallback an. Erfolgreiche neue Anfragen und Annahmen benachrichtigen den Gegenpart nur, wenn er gerade online ist; es gibt keine Offline-Mail. Command und GUI teilen die kleine `FriendMessages`-Logik für Resultate und Online-Benachrichtigungen. Tab Completion beschränkt sich unverändert auf sinnvolle Subcommands und bekannte beziehungsweise online sichtbare Ziele. Kein Teleport, kein Presence-Service und keine zusätzlichen Player-YAML-Friends-Listen.
+
+### Friends-GUI (Phase 18B)
+
+`FriendMenu` besitzt die Darstellung und eine instanzgebundene Registry aktuell geöffneter Inventare; `FriendMenuListener` besitzt ausschließlich die Inventory-Events und delegiert jede fachliche Mutation an `FriendService`. Der 54-Slot-View hat 45 Content-Slots und die Navigation unten: 45 Previous, 46 Add Friend, 47 Friends, 48 Incoming, 49 Close, 50 Outgoing, 52 Refresh, 53 Next. `FriendMenuView` unterscheidet `FRIENDS`, `INCOMING` und `OUTGOING`. Eine leere Liste bleibt gültige Seite 0; Seiten werden nach einer Mutation auf die letzte existierende Seite begrenzt. Freundeseinträge werden stabil nach bekanntem Namen ohne Groß-/Kleinschreibung, dann UUID sortiert. Fehlende Identity-Namen erscheinen als UUID. `Server#getPlayer(UUID)` plus `isOnline()` ist die einzige Online-Quelle; für Offline-Spieler werden weder Skin- noch Netzwerk-/`OfflinePlayer`-Lookups gestartet.
+
+`FriendMenuHolder` speichert Besitzer-UUID, View, Page und die serverseitige Content-Slot→Target-UUID-Zuordnung und bindet genau eine Inventory-Instanz. Der Listener cancelt zunächst jeden Click/Drag eines FriendMenu-Holders, auch in Bottom Inventory oder bei gefälschtem Holder. Eine Aktion erfordert zusätzlich passenden Viewer, exakt gebundenes Inventory und Registrierung als aktuell geöffnetes Menü; alte oder nachgebildete Inventare bleiben inert. Weder Titel noch Item-Name, Lore, SkullMeta oder NBT sind Sicherheits- oder Target-Quelle. Bei Close/Quit wird der aktive Verweis nur für genau dieses Inventar entfernt, beim Modul-Disable werden noch offene Friends-Inventare geschlossen.
+
+Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. Eingehend bedeutet Linksklick Accept und Rechtsklick Deny, ausgehend bedeutet Links- oder Rechtsklick Cancel. Bei jedem Klick prüft der `FriendService` die Relation erneut; verschwundene Requests/Freundschaften erhalten eine kontrollierte Meldung und die Ansicht wird neu aufgebaut. Nach erfolgreichem Accept wird der online befindliche Sender wie beim Text-Command benachrichtigt. Persistenz-/Runtime-Fehler werden mit UUID-Kontext geloggt, die GUI wird geschlossen und der Spieler erhält nur eine kurze Fehlermeldung. Der Add-Button schließt die GUI und sendet eine Adventure-Component mit `suggestCommand("/friend add ")`; er startet kein Chat-, Sign- oder Anvil-Capture. Es gibt keinen Tick-Refresh, keine zweite Privacy-Einstellung und keine neue Permission.
 
 ## Reward Foundation
 
@@ -573,7 +582,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
-| `/friend`, `/friends` | Freundschaften und Anfragen anzeigen/verwalten | `FriendCommand` | `vapeecore.friend.use` (Default `true`) |
+| `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
 | `/ranks` | Öffentliche LuckPerms-Track-Reihenfolge anzeigen | `RanksCommand` | `vapeecore.ranks.view` (Default `true`) |
@@ -668,6 +677,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.friend.FriendIntegrationHarness`
 - `dev.vapee.core.friend.FriendCommandHarness`
 - `dev.vapee.core.friend.FriendLifecycleHarness`
+- `dev.vapee.core.friend.gui.FriendMenuHarness`
+- `dev.vapee.core.friend.gui.FriendMenuSecurityHarness`
 - `dev.vapee.core.reward.RewardServiceHarness`
 - `dev.vapee.core.reward.RewardLifecycleHarness`
 - `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`

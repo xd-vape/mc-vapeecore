@@ -6,8 +6,10 @@ import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.friend.FriendRelation;
 import dev.vapee.core.friend.FriendRequest;
+import dev.vapee.core.friend.FriendMessages;
 import dev.vapee.core.friend.FriendResult;
 import dev.vapee.core.friend.FriendService;
+import dev.vapee.core.friend.gui.FriendMenu;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.PlayerLookupResult;
@@ -30,6 +32,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -58,27 +61,30 @@ public final class FriendCommand implements TabExecutor {
     private final MessageService messages;
     private final CommandHelpRenderer helpRenderer;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayers;
-    private final Function<UUID, Player> onlinePlayer;
     private final Logger logger;
+    private final Consumer<Player> openMenu;
+    private final FriendMessages feedback;
 
     public FriendCommand(JavaPlugin plugin, FriendService friends, PlayerIdentityService identities,
-                         MessageService messages, CommandHelpRenderer helpRenderer) {
+                         MessageService messages, CommandHelpRenderer helpRenderer, FriendMenu menu) {
         this(friends, identities, messages, helpRenderer,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getOnlinePlayers,
-                plugin.getServer()::getPlayer, plugin.getLogger());
+                plugin.getServer()::getPlayer, plugin.getLogger(), Objects.requireNonNull(menu, "menu")::open);
     }
 
     public FriendCommand(FriendService friends, PlayerIdentityService identities,
                          MessageService messages, CommandHelpRenderer helpRenderer,
                          Supplier<? extends Collection<? extends Player>> onlinePlayers,
-                         Function<UUID, Player> onlinePlayer, Logger logger) {
+                         Function<UUID, Player> onlinePlayer, Logger logger, Consumer<Player> openMenu) {
         this.friends = Objects.requireNonNull(friends, "friends");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
         this.onlinePlayers = Objects.requireNonNull(onlinePlayers, "onlinePlayers");
-        this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
+        Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.openMenu = Objects.requireNonNull(openMenu, "openMenu");
+        this.feedback = new FriendMessages(messages, onlinePlayer);
     }
 
     @Override
@@ -93,7 +99,11 @@ public final class FriendCommand implements TabExecutor {
             return true;
         }
         try {
-            if (args.length == 0 || (args.length == 1 && args[0].equalsIgnoreCase("help"))) {
+            if (args.length == 0) {
+                openMenu.accept(player);
+                return true;
+            }
+            if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
                 helpRenderer.send(sender, HELP);
                 return true;
             }
@@ -128,7 +138,7 @@ public final class FriendCommand implements TabExecutor {
                 case "remove" -> friends.removeFriend(player.getUniqueId(), target.uniqueId());
                 default -> throw new IllegalStateException("Unexpected friend action");
             };
-            sendResult(player, action, target, result);
+            feedback.report(player, action, target.uniqueId(), target.name(), result);
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process friend command for " + player.getUniqueId() + ".", exception);
             send(sender, "The friends data could not be updated. Check the server log.", NamedTextColor.RED);
@@ -216,55 +226,6 @@ public final class FriendCommand implements TabExecutor {
 
     private java.util.Optional<String> knownName(UUID uniqueId) {
         return identities.findById(uniqueId).map(PlayerIdentity::name);
-    }
-
-    private void sendResult(Player player, String action, PlayerIdentity target, FriendResult result) {
-        if (result == FriendResult.SUCCESS) {
-            String message = switch (action) {
-                case "add" -> "Friend request sent to ";
-                case "accept" -> "You are now friends with ";
-                case "deny" -> "Friend request declined from ";
-                case "cancel" -> "Friend request canceled for ";
-                case "remove" -> "Removed friend ";
-                default -> throw new IllegalStateException("Unexpected friend action");
-            };
-            messages.send(player, Component.text(message, NamedTextColor.GREEN)
-                    .append(Component.text(target.name(), NamedTextColor.WHITE)));
-            if (action.equals("add")) {
-                notifyOnline(target.uniqueId(), player.getName(), " sent you a friend request.");
-            } else if (action.equals("accept")) {
-                notifyOnline(target.uniqueId(), player.getName(), " accepted your friend request.");
-            }
-            return;
-        }
-        if (result == FriendResult.AUTO_ACCEPTED) {
-            messages.send(player, Component.text("You are now friends with ", NamedTextColor.GREEN)
-                    .append(Component.text(target.name(), NamedTextColor.WHITE)));
-            notifyOnline(target.uniqueId(), player.getName(), " is now your friend.");
-            return;
-        }
-        String message = switch (result) {
-            case SELF -> "You cannot add yourself.";
-            case ALREADY_FRIENDS -> "You are already friends.";
-            case REQUEST_ALREADY_SENT -> "A friend request is already pending.";
-            case REQUEST_NOT_FOUND -> "No matching friend request was found.";
-            case NOT_FRIENDS -> "You are not friends with that player.";
-            case BLOCKED -> "The friend request could not be processed.";
-            case REQUESTS_DISABLED -> "This player is not accepting friend requests.";
-            case FRIEND_LIMIT_REACHED -> "A friend limit has been reached.";
-            case INCOMING_LIMIT_REACHED -> "This player has too many incoming requests.";
-            case OUTGOING_LIMIT_REACHED -> "You have too many outgoing requests.";
-            default -> throw new IllegalStateException("Unexpected friend result: " + result);
-        };
-        send(player, message, NamedTextColor.RED);
-    }
-
-    private void notifyOnline(UUID uniqueId, String senderName, String suffix) {
-        Player recipient = onlinePlayer.apply(uniqueId);
-        if (recipient != null && recipient.isOnline()) {
-            messages.send(recipient, Component.text(senderName, NamedTextColor.WHITE)
-                    .append(Component.text(suffix, NamedTextColor.GREEN)));
-        }
     }
 
     private void send(CommandSender sender, String text, NamedTextColor color) {
