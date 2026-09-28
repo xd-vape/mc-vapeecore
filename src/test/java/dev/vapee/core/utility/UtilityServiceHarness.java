@@ -139,8 +139,16 @@ public final class UtilityServiceHarness {
 
         player.teleportResult = false;
         check(!service.teleport(player.player, target.player), "teleport propagates a cancelled result");
+        check(!service.teleport(player.player, new Location(null, 4, 5, 6)),
+                "location teleport also propagates a cancelled result");
         player.teleportResult = true;
         check(service.teleport(player.player, target.player), "teleport propagates a successful result");
+        check(service.teleport(player.player, new Location(null, 4, 5, 6)),
+                "location teleport propagates a successful result");
+        try {
+            service.teleport(player.player, (Location) null);
+            throw new AssertionError("null destination must fail");
+        } catch (NullPointerException expected) { checks++; }
     }
 
     private static void testMainThreadGuard() {
@@ -157,6 +165,10 @@ public final class UtilityServiceHarness {
         } catch (IllegalStateException expected) {
             checks++;
         }
+        try {
+            service.teleport(player.player, new Location(null, 1, 2, 3));
+            throw new AssertionError("off-thread teleport should fail");
+        } catch (IllegalStateException expected) { checks++; }
     }
 
     private static UtilityService service(MutablePlayer... players) {

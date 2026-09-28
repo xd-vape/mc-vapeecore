@@ -88,8 +88,10 @@ commands:
     usage: /gamemode <mode> [player]
     permission: vapeecore.utility.gamemode
   tp:
-    description: Teleport to an online player
-    usage: /tp <target> | /tp <player> <target>
+    aliases:
+      - teleport
+    description: Teleport players to players, coordinates or worlds
+    usage: /tp <player> | /tp <x> <y> <z> [yaw pitch] | /tp <source> <target> | /tp <source> <x> <y> <z> [yaw pitch] | /tp world <world> <x> <y> <z> [yaw pitch] | /tp <source> world <world> <x> <y> <z> [yaw pitch]
     permission: vapeecore.utility.teleport
   tphere:
     description: Teleport an online player to you
@@ -171,13 +173,24 @@ permissions:
     children:
       vapeecore.utility.gamemode: true
   vapeecore.utility.teleport:
-    description: Allows teleporting to an online player
+    description: Allows teleporting yourself to an online player or coordinates
     default: op
   vapeecore.utility.teleport.others:
-    description: Allows teleporting one online player to another
+    description: Allows teleporting an online player to another player or coordinates
     default: op
     children:
       vapeecore.utility.teleport: true
+  vapeecore.utility.teleport.world:
+    description: Allows teleporting yourself to coordinates in a loaded world
+    default: op
+    children:
+      vapeecore.utility.teleport: true
+  vapeecore.utility.teleport.others.world:
+    description: Allows teleporting an online player to coordinates in a loaded world
+    default: op
+    children:
+      vapeecore.utility.teleport.others: true
+      vapeecore.utility.teleport.world: true
   vapeecore.utility.teleport.bypass:
     description: Allows bypassing VapeeCore teleport state guards
     default: op

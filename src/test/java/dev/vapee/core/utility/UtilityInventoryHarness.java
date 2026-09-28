@@ -241,8 +241,20 @@ public final class UtilityInventoryHarness {
         );
         check(utilityCommands.stream().allMatch(name -> yaml.contains("commands." + name)),
                 "plugin.yml registers all twelve utility commands");
-        check("/tp <target> | /tp <player> <target>".equals(yaml.getString("commands.tp.usage")),
-                "plugin.yml publishes both teleport forms");
+        String teleportUsage = yaml.getString("commands.tp.usage", "");
+        check(teleportUsage.contains("/tp <player>")
+                        && teleportUsage.contains("/tp <x> <y> <z> [yaw pitch]")
+                        && teleportUsage.contains("/tp <source> world <world> <x> <y> <z> [yaw pitch]"),
+                "plugin.yml publishes complete teleport grammar");
+        check(yaml.getStringList("commands.tp.aliases").equals(List.of("teleport")),
+                "teleport is an alias, not a thirteenth command");
+        check(yaml.contains("permissions.vapeecore.utility.teleport.world")
+                        && yaml.contains("permissions.vapeecore.utility.teleport.others.world"),
+                "plugin.yml publishes both world permissions");
+        check(yaml.getBoolean("permissions.vapeecore.utility.teleport.world.children.vapeecore.utility.teleport")
+                        && yaml.getBoolean("permissions.vapeecore.utility.teleport.others.world.children.vapeecore.utility.teleport.others")
+                        && yaml.getBoolean("permissions.vapeecore.utility.teleport.others.world.children.vapeecore.utility.teleport.world"),
+                "world permissions have the intended inheritance");
 
         Set<String> newPermissions = Set.of(
                 "vapeecore.utility.teleport.others",

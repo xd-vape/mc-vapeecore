@@ -40,8 +40,10 @@ Self- und Others-Rechte werden im Command-Code getrennt geprüft. Eine Basisperm
 | `vapeecore.utility.speed.others` | `op` | `/speed <1-10> <player>` | Ändert Speed eines Online-Spielers; Child: `.speed`. |
 | `vapeecore.utility.gamemode` | `op` | `/gamemode <mode>`, `/gm` | Nur Self; Gamemode-Mutation. |
 | `vapeecore.utility.gamemode.others` | `op` | `/gamemode <mode> <player>` | Ändert Gamemode eines Online-Spielers; Child: `.gamemode`. |
-| `vapeecore.utility.teleport` | `op` | `/tp <target>` | Teleportiert den ausführenden Spieler zu einem Online-Ziel. Gewährt **nicht** `/tp A B`. |
-| `vapeecore.utility.teleport.others` | `op` | `/tp <player> <target>` | Teleportiert Online-Spieler A zu Online-Spieler B; Child: `.teleport`. Hohes Staff-Recht. |
+| `vapeecore.utility.teleport` | `op` | `/tp <target>` oder `/tp <x> <y> <z> [yaw pitch]` | Teleportiert nur den ausführenden Spieler zu einem Online-Spieler oder Koordinaten in seiner aktuellen Welt. Gewährt keine Others- oder expliziten World-Ziele. |
+| `vapeecore.utility.teleport.others` | `op` | `/tp <source> <target>` oder `/tp <source> <x> <y> <z> [yaw pitch]` | Teleportiert einen Online-Spieler; Child: `.teleport`. Auch Console mit benannter Quelle. |
+| `vapeecore.utility.teleport.world` | `op` | `/tp world <world> <x> <y> <z> [yaw pitch]` | Self-Ziel in einer explizit benannten, geladenen Welt; Child: `.teleport`. |
+| `vapeecore.utility.teleport.others.world` | `op` | `/tp <source> world <world> <x> <y> <z> [yaw pitch]` | Benannte Online-Quelle in explizite Welt; Children: `.teleport.others` und `.teleport.world`. Auch Console. |
 | `vapeecore.utility.teleport.here` | `op` | `/tphere <player>` | Teleportiert ein Online-Ziel zum ausführenden Spieler. |
 | `vapeecore.utility.teleport.bypass` | `op` | `/tp`, `/tphere` | Umgeht ausschließlich interne VapeeCore-Teleport-State-Guards, etwa Activity Participation. Umgeht niemals Events anderer Plugins, Event-Cancellation, Offline-Checks oder ein `false` von Bukkit/Paper. Kritisches Admin-Recht. |
 | `vapeecore.utility.heal` | `op` | `/heal` | Nur Self; Max-Health, Fire und Freeze. |
@@ -57,7 +59,7 @@ Self- und Others-Rechte werden im Command-Code getrennt geprüft. Eine Basisperm
 | `vapeecore.utility.enderchest` | `op` | `/enderchest` | Öffnet das eigene echte Enderchest. |
 | `vapeecore.utility.enderchest.others` | `op` | `/enderchest <player>` | Öffnet das echte, mutierbare Enderchest eines Online-Spielers; Child: `.enderchest`. Nur Admin/Owner empfohlen. |
 
-Utility-Targets werden ausschließlich über vollständige, case-insensitive Namen aus der aktuellen Online-Spielermenge aufgelöst. Partielle Namen, `OfflinePlayer`, Mojang-API- oder Netzwerk-Lookups werden nicht verwendet.
+Utility-Targets werden ausschließlich über vollständige, case-insensitive Namen aus der aktuellen Online-Spielermenge aufgelöst. Partielle Namen, `OfflinePlayer`, Mojang-API- oder Netzwerk-Lookups werden nicht verwendet. `/tp` und `/teleport` verwenden dieselbe Grammatik: XYZ darf absolut, relativ (`~`) oder vollständig lokal (`^`) sein; optionales Yaw/Pitch erlaubt absolute und `~`-relative Rotation. `^` darf nicht mit absoluten/`~`-XYZ gemischt werden. Relative und lokale Werte beziehen sich immer auf die bewegte Quelle, auch bei Console- und expliziten Weltformen. Eine Player→Player-Teleportation darf ohne `.world` zwischen Welten wechseln. Die World-Rechte gelten nur für frei benannte Welt+Koordinaten-Ziele. Bypass umgeht keine Berechtigungen, Eingabefehler oder externe Event-Cancellation.
 
 ## Empfohlene Rangmatrix
 
@@ -117,7 +119,11 @@ Alles von Moderator, zusätzlich:
 - `vapeecore.utility.speed.others`
 - `vapeecore.utility.gamemode`
 - `vapeecore.utility.gamemode.others`
+- `vapeecore.utility.teleport`
 - `vapeecore.utility.teleport.others`
+- `vapeecore.utility.teleport.world`
+- `vapeecore.utility.teleport.others.world`
+- `vapeecore.utility.teleport.here`
 - `vapeecore.utility.teleport.bypass`
 - `vapeecore.utility.heal.others`
 - `vapeecore.utility.feed.others`
