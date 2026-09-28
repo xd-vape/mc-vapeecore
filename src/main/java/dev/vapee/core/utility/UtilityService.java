@@ -1,6 +1,7 @@
 package dev.vapee.core.utility;
 
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
@@ -95,7 +96,14 @@ public final class UtilityService {
         requirePrimaryThread();
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         Player validatedTarget = Objects.requireNonNull(target, "target");
-        return validatedPlayer.teleport(validatedTarget.getLocation());
+        return teleport(validatedPlayer, validatedTarget.getLocation().clone());
+    }
+
+    public boolean teleport(Player source, Location destination) {
+        requirePrimaryThread();
+        Player validatedSource = Objects.requireNonNull(source, "source");
+        Location validatedDestination = Objects.requireNonNull(destination, "destination");
+        return validatedSource.teleport(validatedDestination.clone());
     }
 
     public void heal(Player player) {

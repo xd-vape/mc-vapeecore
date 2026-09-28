@@ -22,7 +22,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | `/fly` | `dev.vapee.core.utility.command.FlyCommand` |
 | `/speed` | `dev.vapee.core.utility.command.SpeedCommand` |
 | `/gamemode` und `/gm` | `dev.vapee.core.utility.command.GameModeCommand` |
-| `/tp` | `dev.vapee.core.utility.command.TeleportCommand` |
+| `/tp`, `/teleport` | `dev.vapee.core.utility.command.TeleportCommand`, `dev.vapee.core.utility.teleport.TeleportParser` |
 | `/tphere` | `dev.vapee.core.utility.command.TeleportHereCommand` |
 | `/heal` | `dev.vapee.core.utility.command.HealCommand` |
 | `/feed` | `dev.vapee.core.utility.command.FeedCommand` |
@@ -549,9 +549,15 @@ VapeeCore kennt die Gruppennamen Builder, Moderator und Admin ausdrücklich nich
 
 `/fly` verwaltet ausschließlich Flight in `SURVIVAL` und `ADVENTURE`. BUILD sowie `CREATIVE`/`SPECTATOR` behalten ihren jeweiligen nativen Owner. `/speed` akzeptiert Level 1–10; Level 1 entspricht Walk `0.2F` beziehungsweise Fly `0.1F`, Level 10 jeweils `1.0F`. Der Fly-Kanal gilt bei aktivem Fliegen sowie in `CREATIVE`/`SPECTATOR`, sonst der Walk-Kanal. `/gamemode` akzeptiert vollständige Namen, `s/c/a/sp` und `0/1/2/3`; Completion zeigt nur vollständige Namen. Ein BUILD-Target wird abgewiesen. Ein späterer Lobby-Resync darf einen temporär gesetzten Gamemode wieder auf `lobby.yml` normalisieren; Creative allein schaltet nie BUILD oder Protection-Bypass ein.
 
-`/tp <target>` teleportiert den ausführenden Player zum exakten Online-Ziel und benötigt `vapeecore.utility.teleport`. `/tp <player> <target>` teleportiert die benannte Quelle zum benannten Ziel, funktioniert auch aus der Console und benötigt unabhängig von Self-Rechten `vapeecore.utility.teleport.others`. Die Console darf die Ein-Argument-Form nicht verwenden, weil sie keinen Player-Standort beziehungsweise keine Player-Quelle besitzt. Gleiche Quelle und Ziel werden ohne Mutation abgewiesen. `/tphere <player>` bleibt Player-only und benötigt `vapeecore.utility.teleport.here`.
+`/tp` und sein Alias `/teleport` gehören VapeeCore; `/minecraft:tp` und `/minecraft:teleport` bleiben Vanilla-Namespace-Commands und werden nicht abgefangen. `TeleportParser` unter `utility.teleport` besitzt die Grammatik und Koordinatenmathematik ohne `CommandSender`-Abhängigkeit. `TeleportCommand` besitzt Sender-/Permission-Matrix, exakte Online-Player-/World-Auflösung, Activity-Guards, Completion und Adventure-Feedback. `UtilityService` führt ausschließlich den synchronen Bukkit-Teleport aus und propagiert `false` bei Event-Cancellation oder technischer Ablehnung; Ziel-Locations werden kopiert. Vor jeder Mutation werden alle Argumente vollständig geprüft.
 
-Ohne `vapeecore.utility.teleport.bypass` schützen `/tp` und `/tphere` Activity-Teilnehmer als bewegte Quelle und Activity-Ziele als internen State-Guard. Der Bypass überspringt ausschließlich diese VapeeCore-Prüfungen. Der eigentliche synchrone Bukkit/Paper-Teleport läuft unverändert weiter; ein gecanceltes `PlayerTeleportEvent`, ein technischer Fehler oder `teleport(...) == false` wird weiterhin als Fehler gemeldet. BUILD-Teleports werden nicht doppelt behandelt: Ein tatsächlicher Weltwechsel löst den bestehenden `LobbyListener`-Cleanup aus, ein Teleport innerhalb derselben Lobby-Welt behält BUILD.
+Die Grammatik ist `/tp <target>`, `/tp <x> <y> <z> [yaw pitch]`, `/tp <source> <target>`, `/tp <source> <x> <y> <z> [yaw pitch]`, `/tp world <world> <x> <y> <z> [yaw pitch]` oder `/tp <source> world <world> <x> <y> <z> [yaw pitch]`. Player-Namen sind case-insensitive, aber exakt und ausschließlich online; keine Selectors, Entities, Partial-/Offline-/Identity-Lookups. Weltnamen sind ebenfalls case-insensitive und exakt, aber nur bereits geladene Welten werden akzeptiert. Player→Player darf ohne World-Recht zwischen Welten wechseln. Eine explizite Welt ersetzt nur die Zielwelt: Es gibt weder Nether-Skalierung noch World-Auto-Load, Safe-Ground-Verschiebung, WorldBorder-Clamp oder dauerhafte Chunk-Tickets.
+
+XYZ unterstützt endliche absolute Zahlen und `~`-relative Offsets auf Basis der **bewegten Quelle**. Sobald ein `^` vorkommt, müssen alle drei XYZ-Tokens lokal sein: `^X` entlang der lokalen Linksachse, `^Y` entlang der nach oben gedrehten Achse, `^Z` entlang der Blickrichtung. Die Basis ist immer Position plus Yaw/Pitch der Quelle, auch wenn der ausführende Sender ein anderer Spieler oder die Console ist. Ohne Yaw/Pitch bleibt die Source-Rotation erhalten; optional können beide Werte absolut oder mit `~` relativ zur Source-Rotation sein. Nicht-endliche Werte werden abgewiesen, Pitch wird deterministisch auf −90° bis +90° geklemmt. Das Ziel wird weder nachträglich geerdet noch an Weltgrenzen angepasst.
+
+Self→Player/-Koordinaten erfordert `.teleport`, Self→explizite Welt `.teleport.world`, Other→Player/-Koordinaten `.teleport.others` und Other→explizite Welt `.teleport.others.world`. In `plugin.yml` gewähren `.others` und `.world` jeweils `.teleport` als Child; `.others.world` gewährt beide speziellen Rechte. Die Console darf nur Formen mit explizit benannter Online-Quelle ausführen und hat nie einen impliziten Self-Standort. Gleiche Quelle und Ziel werden ohne Mutation abgewiesen. `/tphere <player>` bleibt Player-only mit eigenem Recht `.teleport.here`.
+
+Ohne `vapeecore.utility.teleport.bypass` schützen `/tp` und `/tphere` Activity-Teilnehmer als bewegte Quelle und bei Player→Player auch Activity-Ziele als internen State-Guard. Koordinatenziele haben keinen Zielspieler-Guard. Der Bypass überspringt ausschließlich diese VapeeCore-Prüfungen, nicht Syntax, Rechte, Offline-/World-Checks, `PlayerTeleportEvent`-Cancellation oder `teleport(...) == false`. Fehlgeschlagene Teleports erhalten keine Erfolgsmeldung. BUILD-Teleports werden nicht doppelt behandelt: Ein tatsächlicher Weltwechsel löst den bestehenden `LobbyListener`-Cleanup aus, ein Teleport innerhalb derselben Lobby-Welt behält BUILD.
 
 Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen direkt und schmal `ActivityService.isParticipating(UUID)` ab. Das generische Activity-Framework erhält keine Utility-Regeln. `/heal` setzt aktuelle Max-Health sowie Fire-/Freeze-Ticks zurück, verändert aber weder Hunger, Inventory, Gamemode noch Potion Effects. `/feed` setzt Food 20, Saturation 20 und Exhaustion 0, verändert aber Health nicht. `/clear` blockiert sowohl Activity- als auch BUILD-Targets und besitzt absichtlich keinen Bypass; erst nach den Guards löscht `UtilityService` Storage, Armor und Offhand.
 
@@ -570,8 +576,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/fly [player]` | Command-managed Flight umschalten | `FlyCommand` | `vapeecore.utility.fly`, fremde Targets: `.fly.others` |
 | `/speed <1-10> [player]` | Kontextabhängigen Walk-/Fly-Speed setzen | `SpeedCommand` | `vapeecore.utility.speed`, fremde Targets: `.speed.others` |
 | `/gamemode`, `/gm` | Gamemode setzen | `GameModeCommand` | `vapeecore.utility.gamemode`, fremde Targets: `.gamemode.others` |
-| `/tp <target>` | Selbst zum Online-Spieler teleportieren | `TeleportCommand` | `vapeecore.utility.teleport` |
-| `/tp <player> <target>` | Online-Spieler A zu B teleportieren | `TeleportCommand` | `vapeecore.utility.teleport.others`; interner Guard-Bypass: `.teleport.bypass` |
+| `/tp`, `/teleport` | Self/Other zu Player, XYZ oder expliziter Welt teleportieren | `TeleportCommand`, `TeleportParser` | `.teleport`, `.teleport.others`, `.teleport.world`, `.teleport.others.world`; interner Guard-Bypass: `.teleport.bypass` |
 | `/tphere <player>` | Online-Spieler zum Sender teleportieren | `TeleportHereCommand` | `vapeecore.utility.teleport.here` |
 | `/heal [player]` | Aktuelle Max-Health wiederherstellen | `HealCommand` | `vapeecore.utility.heal`, fremde Targets: `.heal.others` |
 | `/feed [player]` | Hunger, Saturation und Exhaustion normalisieren | `FeedCommand` | `vapeecore.utility.feed`, fremde Targets: `.feed.others` |
@@ -655,6 +660,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`
 - `dev.vapee.core.utility.UtilityServiceHarness`
+- `dev.vapee.core.utility.TeleportParserHarness`
+- `dev.vapee.core.utility.command.TeleportCommandHarness`
 - `dev.vapee.core.utility.command.UtilityCommandHarness`
 - `dev.vapee.core.utility.UtilityInventoryHarness`
 - `dev.vapee.core.message.CommandHelpHarness`

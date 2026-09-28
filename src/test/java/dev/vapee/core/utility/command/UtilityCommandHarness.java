@@ -309,13 +309,13 @@ public final class UtilityCommandHarness {
         self.permissions.remove(TeleportCommand.OTHERS_PERMISSION);
         self.permissions.remove(TeleportCommand.BYPASS_PERMISSION);
         check(command.onTabComplete(self.player, null, "tp", new String[]{""})
-                        .equals(List.of("Other", "Third")),
+                        .equals(List.of("^", "~", "Other", "Third")),
                 "tp self-form completion filters the sender");
         check(command.onTabComplete(fixture.console(Set.of()), null, "tp", new String[]{""}).isEmpty(),
                 "tp completion is hidden without permission");
         self.permissions.add(TeleportCommand.OTHERS_PERMISSION);
         check(command.onTabComplete(self.player, null, "tp", new String[]{"Other", ""})
-                        .equals(List.of("Self", "Third")),
+                        .equals(List.of("^", "~", "Self", "Third")),
                 "tp second-argument completion excludes the selected source");
     }
 
