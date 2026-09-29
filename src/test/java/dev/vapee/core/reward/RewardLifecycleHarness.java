@@ -64,8 +64,8 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 23,
-                "VapeeCore registers exactly twenty-three modules after Phase 18A.2");
+        check(count(coreSource, "moduleManager.register(") == 24,
+                "VapeeCore registers exactly twenty-four modules after Phase 19B");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")

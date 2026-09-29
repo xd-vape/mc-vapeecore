@@ -13,6 +13,18 @@ friends:
     max-incoming-requests: 25
     max-outgoing-requests: 25
 
+clans:
+  limits:
+    max-members: 25
+    max-outgoing-invites: 25
+    max-incoming-invites: 10
+    name:
+      min-length: 3
+      max-length: 24
+    tag:
+      min-length: 2
+      max-length: 8
+
 online-rewards:
   enabled: true
   interval-minutes: 60

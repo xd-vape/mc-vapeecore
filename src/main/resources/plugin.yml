@@ -35,6 +35,12 @@ commands:
     description: Manage your friends
     usage: /friend help
     permission: vapeecore.friend.use
+  clan:
+    aliases:
+      - clans
+    description: Manage your clan
+    usage: /clan help
+    permission: vapeecore.clan.use
   msg:
     description: Send a private message to an online player
     usage: /msg <player> <message>
@@ -253,6 +259,9 @@ permissions:
     default: true
   vapeecore.friend.use:
     description: Allows using the friends system
+    default: true
+  vapeecore.clan.use:
+    description: Allows using the clan system
     default: true
   vapeecore.economy.admin:
     description: Allows managing online player coin balances

@@ -1,5 +1,6 @@
 package dev.vapee.core.config;
 
+import dev.vapee.core.clan.ClanLimits;
 import dev.vapee.core.friend.FriendLimits;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
@@ -89,6 +90,10 @@ public final class ConfigService implements ReloadParticipant {
         return state.friendLimits();
     }
 
+    public ClanLimits getClanLimits() {
+        return state.clanLimits();
+    }
+
     private CoreConfigState readState() {
         YamlConfiguration configuration = loadConfiguration();
         return new CoreConfigState(
@@ -97,7 +102,8 @@ public final class ConfigService implements ReloadParticipant {
                 readBoolean(configuration, "settings.debug", false),
                 readNonBlankString(configuration, "ranks.track", DEFAULT_RANK_TRACK),
                 readOnlineRewardConfig(configuration),
-                readFriendLimits(configuration)
+                readFriendLimits(configuration),
+                readClanLimits(configuration)
         );
     }
 
@@ -109,6 +115,29 @@ public final class ConfigService implements ReloadParticipant {
                 readPositiveInt(configuration, "friends.limits.max-outgoing-requests",
                         FriendLimits.DEFAULT_MAX_OUTGOING_REQUESTS)
         );
+    }
+
+    private ClanLimits readClanLimits(YamlConfiguration configuration) {
+        ClanLimits defaults = ClanLimits.defaults();
+        int minName = readPositiveInt(configuration, "clans.limits.name.min-length", defaults.minNameLength());
+        int maxName = readPositiveInt(configuration, "clans.limits.name.max-length", defaults.maxNameLength());
+        int minTag = readPositiveInt(configuration, "clans.limits.tag.min-length", defaults.minTagLength());
+        int maxTag = readPositiveInt(configuration, "clans.limits.tag.max-length", defaults.maxTagLength());
+        if (minName > maxName) {
+            logger.warning("Invalid clan name length range; using default name limits.");
+            minName = defaults.minNameLength();
+            maxName = defaults.maxNameLength();
+        }
+        if (minTag > maxTag) {
+            logger.warning("Invalid clan tag length range; using default tag limits.");
+            minTag = defaults.minTagLength();
+            maxTag = defaults.maxTagLength();
+        }
+        return new ClanLimits(
+                readPositiveInt(configuration, "clans.limits.max-members", defaults.maxMembers()),
+                readPositiveInt(configuration, "clans.limits.max-outgoing-invites", defaults.maxOutgoingInvites()),
+                readPositiveInt(configuration, "clans.limits.max-incoming-invites", defaults.maxIncomingInvites()),
+                minName, maxName, minTag, maxTag);
     }
 
     private int readPositiveInt(YamlConfiguration configuration, String path, int defaultValue) {
@@ -278,7 +307,8 @@ public final class ConfigService implements ReloadParticipant {
             boolean debugEnabled,
             String rankTrack,
             OnlineRewardConfig onlineRewardConfig,
-            FriendLimits friendLimits
+            FriendLimits friendLimits,
+            ClanLimits clanLimits
     ) {
 
         private CoreConfigState {
@@ -287,6 +317,7 @@ public final class ConfigService implements ReloadParticipant {
             Objects.requireNonNull(rankTrack, "rankTrack");
             Objects.requireNonNull(onlineRewardConfig, "onlineRewardConfig");
             Objects.requireNonNull(friendLimits, "friendLimits");
+            Objects.requireNonNull(clanLimits, "clanLimits");
         }
 
         private static CoreConfigState defaults() {
@@ -296,7 +327,8 @@ public final class ConfigService implements ReloadParticipant {
                     false,
                     DEFAULT_RANK_TRACK,
                     OnlineRewardConfig.defaults(),
-                    FriendLimits.defaults()
+                    FriendLimits.defaults(),
+                    ClanLimits.defaults()
             );
         }
     }
