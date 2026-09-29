@@ -6,11 +6,15 @@ import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.PlayerRepository;
 import dev.vapee.core.player.settings.PlayerSettingsService;
+import dev.vapee.core.settings.SettingsMenu;
+import dev.vapee.core.settings.SettingsListener;
+import dev.vapee.core.settings.SettingsMenuFixture;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -41,6 +45,8 @@ final class VisibilityMenuFixture {
     final VisiblePlayersMenu visiblePlayersMenu;
     final VisibilitySettingsListener visibilityListener;
     final VisiblePlayersListener visiblePlayersListener;
+    final SettingsMenu rootMenu;
+    final SettingsListener rootListener;
     int applyCalls;
     int hotbarCalls;
     int settingsBackCalls;
@@ -53,8 +59,12 @@ final class VisibilityMenuFixture {
                 this::visibilityInventory, VisibilitySpecItem::new);
         visiblePlayersMenu = new VisiblePlayersMenu(settings, identities, messages, this::onlinePlayer,
                 this::visibleInventory, VisibleSpecItem::new);
+        rootMenu = SettingsMenuFixture.createMenu(settings, messages, this::onlinePlayer,
+                (holder, size) -> inventory(holder, size));
+        rootListener = SettingsMenuFixture.createListener(rootMenu, settings, ignored -> { },
+                visibilityMenu::open, this::sound, messages, logger());
         visibilityListener = new VisibilitySettingsListener(visibilityMenu, visiblePlayersMenu,
-                ignored -> settingsBackCalls++, settings, ignored -> applyCalls++,
+                player -> { settingsBackCalls++; rootMenu.open(player); }, settings, ignored -> applyCalls++,
                 ignored -> hotbarCalls++, this::sound, messages, logger());
         visiblePlayersListener = new VisiblePlayersListener(visiblePlayersMenu, visibilityMenu,
                 settings, ignored -> applyCalls++, this::sound, messages, logger());
@@ -112,6 +122,19 @@ final class VisibilityMenuFixture {
         InventoryClickEvent event = clickEvent(player, top, rawSlot, click);
         visiblePlayersListener.onInventoryClick(event);
         return event;
+    }
+
+    InventoryClickEvent rootClick(TestPlayer player, Inventory top, int rawSlot, ClickType click) {
+        InventoryClickEvent event = clickEvent(player, top, rawSlot, click);
+        rootListener.onInventoryClick(event);
+        return event;
+    }
+
+    private void closeEvent(TestPlayer player, Inventory top) {
+        InventoryCloseEvent event = new InventoryCloseEvent(view(player, top));
+        rootListener.onInventoryClose(event);
+        visibilityListener.onInventoryClose(event);
+        visiblePlayersListener.onInventoryClose(event);
     }
 
     private InventoryClickEvent clickEvent(TestPlayer player, Inventory top, int rawSlot, ClickType click) {
@@ -180,11 +203,13 @@ final class VisibilityMenuFixture {
                 case "isOnline" -> this.online;
                 case "hasPermission" -> permitted;
                 case "openInventory" -> {
+                    if (open != null) closeEvent(this, open);
                     open = (Inventory) arguments[0];
                     yield view(this, open);
                 }
                 case "getOpenInventory" -> view(this, open == null ? bottom : open);
                 case "closeInventory" -> {
+                    if (open != null) closeEvent(this, open);
                     closeCalls++;
                     open = bottom;
                     yield null;
@@ -247,6 +272,7 @@ final class VisibilityMenuFixture {
     static final class MemoryRepository implements PlayerRepository {
         final Map<UUID, CorePlayer> data = new HashMap<>();
         boolean failNext;
+        int saves;
 
         @Override public Optional<CorePlayer> findByUniqueId(UUID id) { return Optional.ofNullable(data.get(id)); }
         @Override public void save(CorePlayer player) {
@@ -255,6 +281,7 @@ final class VisibilityMenuFixture {
                 throw new IllegalStateException("simulated persistence failure");
             }
             data.put(player.getUniqueId(), player);
+            saves++;
         }
         @Override public boolean exists(UUID id) { return data.containsKey(id); }
         @Override public Set<UUID> findUniqueIdsByName(String name) {

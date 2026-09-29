@@ -175,9 +175,11 @@ public final class VisiblePlayersMenu {
     }
 
     private ItemSpec entryItem(Entry entry) {
-        return spec(Material.PLAYER_HEAD, entry.name(), NamedTextColor.AQUA,
-                List.of(entry.online() ? "Online" : "Offline", "UUID: " + entry.id(),
-                        "Right-click to remove."));
+        return new ItemSpec(Material.PLAYER_HEAD, uiText(entry.name(), NamedTextColor.AQUA),
+                List.of(uiText(entry.online() ? "Online" : "Offline",
+                                entry.online() ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+                        uiText("UUID: " + entry.id(), NamedTextColor.GRAY),
+                        uiText("Right-click to remove.", NamedTextColor.GRAY)));
     }
 
     private ItemStack item(Material material, String name, NamedTextColor color, List<String> lore) {

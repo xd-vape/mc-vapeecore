@@ -6,13 +6,14 @@ import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.presentation.PresentationService;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
-import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 
 import java.util.Objects;
@@ -68,15 +69,13 @@ public final class SettingsListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         Inventory topInventory = event.getView().getTopInventory();
-        SettingsInventoryHolder holder = getSettingsHolder(topInventory);
-        if (holder == null) {
+        if (!(topInventory.getHolder() instanceof SettingsInventoryHolder holder)) {
             return;
         }
 
         event.setCancelled(true);
-        HumanEntity clickingEntity = event.getWhoClicked();
-        if (!(clickingEntity instanceof Player player)
-                || !holder.getOwnerUniqueId().equals(player.getUniqueId())) {
+        if (!(event.getWhoClicked() instanceof Player player)
+                || !settingsMenu.isActive(player, topInventory, holder)) {
             return;
         }
         if (event.getClickedInventory() != topInventory) {
@@ -91,37 +90,52 @@ public final class SettingsListener implements Listener {
             player.closeInventory();
             return;
         }
-        if (slot == SettingsMenu.VISIBILITY_SLOT) {
+        if (slot == SettingsMenu.REFRESH_SLOT) {
+            refreshOrClose(player, topInventory);
+            return;
+        }
+        if (slot == SettingsMenu.VISIBILITY_SLOT || slot == SettingsMenu.VISIBILITY_STATUS_SLOT) {
+            if (playerSettingsService.getSettings(player.getUniqueId()).isEmpty()) {
+                handleUnavailableProfile(player);
+                return;
+            }
             visibilityMenuOpener.accept(player);
             return;
         }
-        if (slot != SettingsMenu.SCOREBOARD_SLOT
-                && slot != SettingsMenu.SOUNDS_SLOT
-                && slot != SettingsMenu.PRIVATE_MESSAGES_SLOT
-                && slot != SettingsMenu.FRIEND_REQUESTS_SLOT) {
+        int featureSlot = switch (slot) {
+            case SettingsMenu.SCOREBOARD_SLOT, SettingsMenu.SCOREBOARD_STATUS_SLOT -> SettingsMenu.SCOREBOARD_SLOT;
+            case SettingsMenu.SOUNDS_SLOT, SettingsMenu.SOUNDS_STATUS_SLOT -> SettingsMenu.SOUNDS_SLOT;
+            case SettingsMenu.PRIVATE_MESSAGES_SLOT, SettingsMenu.PRIVATE_MESSAGES_STATUS_SLOT ->
+                    SettingsMenu.PRIVATE_MESSAGES_SLOT;
+            case SettingsMenu.FRIEND_REQUESTS_SLOT, SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT ->
+                    SettingsMenu.FRIEND_REQUESTS_SLOT;
+            default -> -1;
+        };
+        if (featureSlot < 0) {
             return;
         }
 
-        toggleSetting(player, topInventory, slot);
+        toggleSetting(player, topInventory, featureSlot);
     }
 
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
-        Inventory topInventory = event.getView().getTopInventory();
-        SettingsInventoryHolder holder = getSettingsHolder(topInventory);
-        if (holder == null) {
-            return;
-        }
-
-        if (!holder.getOwnerUniqueId().equals(event.getWhoClicked().getUniqueId())) {
-            event.setCancelled(true);
-            return;
-        }
-
-        int topSize = topInventory.getSize();
-        if (event.getRawSlots().stream().anyMatch(slot -> slot < topSize)) {
+        if (event.getView().getTopInventory().getHolder() instanceof SettingsInventoryHolder) {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        Inventory top = event.getView().getTopInventory();
+        if (top.getHolder() instanceof SettingsInventoryHolder holder) {
+            settingsMenu.forgetIfActive(holder.getOwnerUniqueId(), top);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        settingsMenu.forget(event.getPlayer().getUniqueId());
     }
 
     private void toggleSetting(Player player, Inventory inventory, int slot) {
@@ -185,6 +199,7 @@ public final class SettingsListener implements Listener {
     }
 
     private void handleUnavailableProfile(Player player) {
+        settingsMenu.forget(player.getUniqueId());
         player.closeInventory();
         messageService.send(player, "<red>Your player profile is not available.</red>");
     }
@@ -206,12 +221,5 @@ public final class SettingsListener implements Listener {
                     exception
             );
         }
-    }
-
-    private SettingsInventoryHolder getSettingsHolder(Inventory inventory) {
-        if (!(inventory.getHolder() instanceof SettingsInventoryHolder holder)) {
-            return null;
-        }
-        return holder.getInventory() == inventory ? holder : null;
     }
 }

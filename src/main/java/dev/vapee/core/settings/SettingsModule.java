@@ -143,6 +143,11 @@ public final class SettingsModule implements CoreModule {
     @Override
     public void disable() {
         closeVisibilityMenus();
+        try {
+            if (settingsMenu != null) settingsMenu.closeOpenInventories();
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING, "Could not close all player settings menus.", exception);
+        }
         if (settingsListener != null) {
             HandlerList.unregisterAll(settingsListener);
         }

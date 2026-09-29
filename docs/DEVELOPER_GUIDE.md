@@ -56,7 +56,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
 | `/clan`, Clan-Regeln und zentrale Persistence | `dev.vapee.core.clan`, `clans.yml` |
 | Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
-| Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Slot 17) |
+| Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Feature 16, Status 25) |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
 | Kumulative Online-/Playtime-Rewards | `dev.vapee.core.onlinereward` |
@@ -208,7 +208,7 @@ Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonis
 
 `FriendService#sendRequest` prüft Self, bestehende Freundschaft/Anfrage, Policy und Limits. Eine Gegenanfrage wird atomar als Freundschaft angenommen. `acceptRequest` nimmt nur eine vorhandene eingehende Anfrage an; `denyRequest`, `cancelRequest` und `removeFriend` entfernen nur ihre jeweilige gerichtete Anfrage oder Freundschaft. `FriendLimits` stammen als immutable View aus `ConfigService`: `friends.limits.max-friends: 100`, `max-incoming-requests: 25`, `max-outgoing-requests: 25`. Fehlende oder ungültige nichtpositive Werte warnen und verwenden Defaults. Der Service liest die aktuellen Limits bei jeder relevanten Operation, daher wirken erfolgreiche `/core reload`-Änderungen ohne Friend-Reload. Bereits bestehende Beziehungen/Anfragen werden bei einer Senkung nicht gelöscht; neue Aktionen beachten die neuen Grenzen. Ein fehlgeschlagener Reload stellt den vorherigen Config-Snapshot wieder her.
 
-Die Policy prüft `SocialService#isKnownIgnoring` in beiden Richtungen, dann `PlayerSettingsService#areKnownFriendRequestsEnabled` beim Empfänger. Beide Abfragen verwenden für geladene Spieler den aktuellen State und für bekannte Offline-Spieler die persistierten Player-Daten lesend, ohne sie in den Player-Cache zu laden. Unbekannte Empfänger werden abgelehnt. Ignore blockiert neue und anzunehmende Anfragen; deaktivierte `settings.friend-requests` verhindern nur neue Anfragen, nicht das Annehmen bestehender. Der Key ist standardmäßig `true`, wird beim Player-Save unter `settings.friend-requests` gespeichert und im bestehenden 27-Slot-`SettingsMenu` über Slot 17 umgeschaltet. Fehlende/alte Player-Keys laden als `true`, ein Save-Fehler rollt den Settings-Wert zurück.
+Die Policy prüft `SocialService#isKnownIgnoring` in beiden Richtungen, dann `PlayerSettingsService#areKnownFriendRequestsEnabled` beim Empfänger. Beide Abfragen verwenden für geladene Spieler den aktuellen State und für bekannte Offline-Spieler die persistierten Player-Daten lesend, ohne sie in den Player-Cache zu laden. Unbekannte Empfänger werden abgelehnt. Ignore blockiert neue und anzunehmende Anfragen; deaktivierte `settings.friend-requests` verhindern nur neue Anfragen, nicht das Annehmen bestehender. Der Key ist standardmäßig `true`, wird beim Player-Save unter `settings.friend-requests` gespeichert und im 54-Slot-`SettingsMenu` über Feature 16 oder Status 25 umgeschaltet. Fehlende/alte Player-Keys laden als `true`, ein Save-Fehler rollt den Settings-Wert zurück.
 
 `/friend help|add|accept|deny|cancel|remove|list|requests` ist ausschließlich für Spieler mit `vapeecore.friend.use` (Default `true`). `/friend` und `/friends` ohne Argumente öffnen die GUI; explizites `/friend help` nutzt weiterhin den gemeinsamen Help-Renderer. `FriendCommand` nutzt `PlayerIdentityService#resolve` für bekannte Namen/UUIDs, weist unbekannte und mehrdeutige Namen kontrolliert ab und zeigt Namen als Adventure-Text mit UUID-Fallback an. Erfolgreiche neue Anfragen und Annahmen benachrichtigen den Gegenpart nur, wenn er gerade online ist; es gibt keine Offline-Mail. Command und GUI teilen die kleine `FriendMessages`-Logik für Resultate und Online-Benachrichtigungen. Tab Completion beschränkt sich unverändert auf sinnvolle Subcommands und bekannte beziehungsweise online sichtbare Ziele. Kein Teleport, kein Presence-Service und keine zusätzlichen Player-YAML-Friends-Listen.
 
@@ -387,17 +387,41 @@ Das Hotbar-Item beschreibt den Masterzustand als `Players: Visible` beziehungswe
 
 ### Visibility Settings UX (Phase 20B)
 
-`SettingsModule` besitzt die Spieler-UX und injiziert gezielt `IdentityModule`, `VisibilityModule` und `LobbyModule`; es implementiert weder eine zweite Policy noch eigene Persistence. Das vorhandene `SettingsMenu` bleibt ein 27-Slot-Menü und ergänzt nur den Einstieg `Player Visibility`. `VisibilitySettingsMenu` rendert in einem separaten 54-Slot-Inventar Feature-Items und direkt darunter Status-Panes für All Players, Friends, Staff, Added Users und Game Participants. Master-OFF heißt `FILTERED`, nicht „niemand sichtbar“. Friends, Staff und Added Users lassen sich auch bei aktivem Master vorbereiten. Game Participants bleibt sichtbar `Unavailable`, verändert den persistierten Wert nicht und wartet auf eine echte Activity-/Game-Anbindung.
+`SettingsModule` besitzt die Spieler-UX und injiziert gezielt `IdentityModule`, `VisibilityModule` und `LobbyModule`; es implementiert weder eine zweite Policy noch eigene Persistence. Seit Phase 21 bietet `SettingsMenu` eine 54-Slot-Übersicht mit getrennten Feature-/Status-Zeilen und der Kategorie `Player Visibility`. `VisibilitySettingsMenu` rendert in einem separaten 54-Slot-Inventar Feature-Items und direkt darunter Status-Panes für All Players, Friends, Staff, Added Users und Game Participants. Master-OFF heißt `FILTERED`, nicht „niemand sichtbar“. Friends, Staff und Added Users lassen sich auch bei aktivem Master vorbereiten. Game Participants bleibt sichtbar `Unavailable`, verändert den persistierten Wert nicht und wartet auf eine echte Activity-/Game-Anbindung.
 
 `VisiblePlayersMenu` verwaltet ausschließlich `PlayerVisibilitySettings.addedPlayers`: 45 Content-Slots, deterministische Sortierung nach bekanntem Namen und UUID, tatsächlicher Online-Status über `Server#getPlayer(UUID)` plus `isOnline()`, UUID-Fallback und eine untere Navigationszeile. `VisiblePlayersHolder` hält die serverseitige Slot→UUID-Zuordnung; Itemname und Lore werden nie zurückgeparst. Nur Rechtsklick entfernt. Refresh liest Settings, Identity und Online-Status neu, Seiten werden geklemmt und der Empty State behält den Add-Button. Dieser schließt das Inventar und sendet eine Adventure-Component mit `suggestCommand("/settings visibility add ")`; Chat-, Sign- oder Anvil-Capture existiert nicht.
 
 `/settings visibility` öffnet das Filtermenü. `/settings visibility add <player|uuid>` validiert bekannte Online- und Offline-Identitäten über `PlayerIdentityService`, lehnt unbekannte oder mehrdeutige Namen, Self und Duplikate kontrolliert ab und wendet einen erfolgreichen Save sofort über `VisibilityService#applyViewerPreference` an. `/settings visibility remove <player|uuid>` löst Namen ebenfalls über Identity auf; eine bereits gespeicherte unbekannte UUID darf ausdrücklich direkt entfernt werden. Tab Completion zeigt für Add geeignete Online-Spieler und für Remove nur Added Users, bei unbekannten oder mehrdeutigen Namen als UUID. Alle Playerdaten werden als literal Adventure-Text ausgegeben. Console bleibt ausgeschlossen und `vapeecore.settings.use` ist die einzige Permission.
 
-Beide Visibility-Menüs binden Owner, Holder und exakt eine Inventory-Instanz und führen zusätzlich pro Viewer eine Active-Inventory-Registry. Clicks einschließlich Bottom-Inventory-Transfer, Shift, Number Key, Double Click, Offhand, Collect, Drop und Creative sowie Drags werden zuerst gecancelt; nur definierte Aktionen auf dem aktuell gebundenen Inventar laufen weiter. Close, Quit und `SettingsModule#disable` entfernen aktive Referenzen beziehungsweise schließen eigene Menüs. Save-Fehler werden mit UUID geloggt, nutzen das Rollback des `PlayerSettingsService`, spielen keinen Success-Sound und bauen den aktuellen State kontrolliert neu auf.
+Alle drei Settings-Menüs binden Owner, Holder und exakt eine Inventory-Instanz und führen zusätzlich pro Viewer eine Active-Inventory-Registry. Clicks einschließlich Bottom-Inventory-Transfer, Shift, Number Key, Double Click, Offhand, Collect, Drop und Creative sowie Drags werden zuerst gecancelt; nur definierte Aktionen auf dem aktuell gebundenen Inventar laufen weiter. Close, Quit und `SettingsModule#disable` entfernen aktive Referenzen beziehungsweise schließen eigene Menüs. Save-Fehler werden mit UUID geloggt, nutzen das Rollback des `PlayerSettingsService`, spielen keinen Success-Sound und bauen den aktuellen State kontrolliert neu auf.
 
 `FriendService` und `SocialService` stellen kleine domain-neutrale Relationship-Listener bereit. Sie feuern ausschließlich nach erfolgreich persistiertem Accept/Auto-Accept/Remove beziehungsweise Ignore/Unignore. `VisibilityModule` registriert beide Listener beim Enable, ruft `refreshPair` auf und entfernt sie beim Disable; Friend und Social importieren keine Visibility- oder Bukkit-Klassen. Damit werden Friends-Filter und Ignore-Hard-Deny ohne Relog sofort in beiden asymmetrischen Richtungen aktualisiert. Pending/Denied/Canceled Friend Requests ändern keine Freundschaft und feuern deshalb keinen Refresh. Eine sofortige LuckPerms-Event-Anbindung bleibt außerhalb des Scopes: Der Staff-Marker wird bei jeder normalen Neuberechnung aktuell gelesen.
 
-`/profile [player|uuid]` bleibt unverändert; „Profile UX“ bezeichnet ausschließlich die persönlichen Visibility-Einstellungen. Phase 20B führt weder ein generisches GUI-Framework noch das vollständige Settings-Redesign ein. Chat Range, Game Auto-Join und produktive Game-Participant-Integration bleiben aufgeschoben.
+`/profile [player|uuid]` bleibt unverändert; „Profile UX“ bezeichnet ausschließlich die persönlichen Visibility-Einstellungen. Das Hauptmenü-Redesign wurde in Phase 21 ergänzt; ein generisches GUI-Framework entsteht dabei nicht. Chat Range, Game Auto-Join und produktive Game-Participant-Integration bleiben aufgeschoben.
+
+### Settings Completion & Redesign (Phase 21)
+
+`SettingsModule` besitzt Root-, Visibility- und Visible-Players-UX. `SettingsMenu` heißt weiterhin `Player Settings` und nutzt 54 Slots ohne Filler oder künstliche Features:
+
+| Feature | Icon-Slot | Status-Slot |
+| --- | --- | --- |
+| Scoreboard (`MAP`) | 10 | 19 |
+| Sounds (`NOTE_BLOCK`) | 12 | 21 |
+| Private Messages (`WRITABLE_BOOK`) | 14 | 23 |
+| Friend Requests (`PLAYER_HEAD`) | 16 | 25 |
+| Player Visibility (`SPYGLASS`) | 31 | 40 |
+
+Normale Booleans zeigen grün `Enabled` oder rot `Disabled`; Visibility zeigt grün `All Players` oder gelb `Filtered`. Das Visibility-Untermenü verwendet dieselben Modusfarben, während Game Participants unverändert grau `Unavailable` bleibt. Icon und Status der vier General-Einstellungen toggeln dieselbe Preference. Beide Visibility-Items öffnen ausschließlich das Untermenü. Close (`BARRIER`, 49) schließt; Refresh (`CLOCK`, 52) rendert den aktuellen Runtime-State ohne Mutation oder Sound.
+
+Das Root-Menü bindet Owner und Holder exakt an eine Inventory-Instanz und führt `Map<UUID, Inventory>` für aktive Ansichten. `isActive` verlangt zusätzlich die tatsächlich geöffnete Top-Inventory-Instanz. Der Listener cancelt jedes erkannte Root-Holder-Event vor Validierung, einschließlich gefälschter, ungebundener oder veralteter Inventare und Bottom-Transfers. Nur LEFT/RIGHT auf definierten Slots führt Aktionen aus. Drags werden vollständig gecancelt. Close entfernt nur die konkrete aktive Instanz; Quit vergisst die Viewer-UUID auch bei bereits gewechseltem View.
+
+Toggles und Refresh aktualisieren das bestehende Root-Inventar. `PlayerSettingsService` bleibt alleiniger State-/Persistence-Owner einschließlich Rollback. Nach erfolgreichem Scoreboard-Save folgt `PresentationService#updatePlayer`; andere General-Toggles ändern keine Presentation. Sound-Feedback prüft den gespeicherten aktuellen Wert: Ausschalten bleibt still, Einschalten kann Feedback geben. Bei Save-Failure folgt SEVERE mit UUID, kontrollierte Meldung und Rendering des zurückgerollten Zustands, ohne Presentation-Aktion oder Sound. Ein verschwundenes Profil schließt die Ansicht kontrolliert.
+
+Navigation: Root → Visibility → Manage Visible Players; Back folgt jeweils dem direkten Parent, Root hat keinen Back. Close öffnet keine andere Ansicht, Refresh bleibt in seiner Ansicht. Visibility-Toggles, Hotbar-Master-Synchronisierung, Added-User-Commands und Friend-/Ignore-Live-Refresh behalten ihre bestehenden Service-Boundaries. Einträge zeigen Namen als literal Components, Online grün, Offline grau, UUID und Rechtsklick-Geste.
+
+Beim Disable schließt SettingsModule alle drei eigenen getrackten Menütypen vor Listener-/Command-Cleanup und nullt anschließend Runtime-Referenzen. Fremde aktuell geöffnete Inventare bleiben erhalten. Settings hat weiterhin keinen ReloadParticipant, Scheduler, neuen Config-Key, neue Permission oder neuen Command. Chat Range, Game Auto-Join und andere Settings ohne Backend werden nicht angezeigt.
+
+Future GUI Audit Finding: Root/Visibility/Visible Players, Friend, Clan und Navigator wiederholen Teile von Item-Rendering, Holder-Binding, Active-Tracking und Event-Schutz. Shared GUI-Abstraktionen bleiben für den systematischen Audit in Phase 30C reserviert.
 
 ## Lobby player state
 
@@ -768,6 +792,9 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.visibility.FriendVisibilityRefreshHarness`
 - `dev.vapee.core.visibility.IgnoreVisibilityRefreshHarness`
 - `dev.vapee.core.settings.SettingsMenuHarness`
+- `dev.vapee.core.settings.SettingsMenuSecurityHarness`
+- `dev.vapee.core.settings.visibility.SettingsNavigationHarness`
+- `dev.vapee.core.settings.visibility.SettingsModuleLifecycleHarness`
 - `dev.vapee.core.settings.command.SettingsCommandHarness`
 - `dev.vapee.core.settings.visibility.VisibilitySettingsMenuHarness`
 - `dev.vapee.core.settings.visibility.VisiblePlayersMenuHarness`

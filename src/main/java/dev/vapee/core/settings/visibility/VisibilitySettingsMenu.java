@@ -113,23 +113,26 @@ public final class VisibilitySettingsMenu {
                         "Current: " + (visibility.isAllPlayersVisible() ? "ON" : "FILTERED"),
                         "Click to change."
                 )));
-        inventory.setItem(MASTER_STATUS_SLOT, status(
-                visibility.isAllPlayersVisible() ? "Enabled" : "Filtered",
-                visibility.isAllPlayersVisible()));
+        inventory.setItem(MASTER_STATUS_SLOT, item(
+                visibility.isAllPlayersVisible() ? Material.LIME_STAINED_GLASS_PANE
+                        : Material.YELLOW_STAINED_GLASS_PANE,
+                visibility.isAllPlayersVisible() ? "All Players" : "Filtered",
+                visibility.isAllPlayersVisible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
+                List.of("Click to change.")));
 
         inventory.setItem(FRIENDS_SLOT, filterItem(Material.PLAYER_HEAD, "Friends",
-                visibility.isShowFriends(), List.of("Show players who are your confirmed friends.")));
+                visibility.isShowFriends(), List.of("Show confirmed friends while visibility is filtered.")));
         inventory.setItem(FRIENDS_STATUS_SLOT, status(
                 visibility.isShowFriends() ? "Enabled" : "Disabled", visibility.isShowFriends()));
 
         inventory.setItem(STAFF_SLOT, filterItem(Material.GOLDEN_HELMET, "Staff Members",
-                visibility.isShowStaff(), List.of("Show players marked as server staff.")));
+                visibility.isShowStaff(), List.of("Show server staff while visibility is filtered.")));
         inventory.setItem(STAFF_STATUS_SLOT, status(
                 visibility.isShowStaff() ? "Enabled" : "Disabled", visibility.isShowStaff()));
 
         inventory.setItem(ADDED_USERS_SLOT, filterItem(Material.WRITABLE_BOOK, "Added Users",
                 visibility.isShowAddedUsers(), List.of(
-                        "Show players from your visible players list.",
+                        "Show players from your personal visible players list.",
                         "Configured users: " + visibility.getAddedPlayers().size()
                 )));
         inventory.setItem(ADDED_USERS_STATUS_SLOT, status(
@@ -137,7 +140,7 @@ public final class VisibilitySettingsMenu {
 
         inventory.setItem(GAME_PARTICIPANTS_SLOT, item(Material.NETHER_STAR, "Game Participants",
                 NamedTextColor.GRAY, List.of(
-                        "Available when activity/game integration is completed.",
+                        "Unavailable until game/activity integration is completed.",
                         "Current: UNAVAILABLE"
                 )));
         inventory.setItem(GAME_PARTICIPANTS_STATUS_SLOT, item(Material.GRAY_STAINED_GLASS_PANE,

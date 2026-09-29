@@ -81,6 +81,11 @@ public final class VisiblePlayersMenuHarness {
                         && lore(owner.open, 1).contains("Online")
                         && lore(owner.open, 1).contains("Right-click to remove."),
                 "entry renders head, actual online status and removal gesture");
+        check(VisibilityMenuFixture.visibleSpec(owner.open, 1).lore().getFirst().color()
+                        .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN)
+                        && VisibilityMenuFixture.visibleSpec(owner.open, 0).lore().getFirst().color()
+                        .equals(net.kyori.adventure.text.format.NamedTextColor.GRAY),
+                "online and offline entries use clear status colors");
 
         VisibilityMenuFixture pages = new VisibilityMenuFixture();
         var pageOwner = pages.player("PageOwner", true);

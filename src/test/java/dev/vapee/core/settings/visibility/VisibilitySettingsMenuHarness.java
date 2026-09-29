@@ -29,7 +29,10 @@ public final class VisibilitySettingsMenuHarness {
                 "master feature renders enabled state");
         check(material(inventory, VisibilitySettingsMenu.MASTER_STATUS_SLOT)
                         == Material.LIME_STAINED_GLASS_PANE
-                        && text(inventory, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("Enabled"),
+                        && text(inventory, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("All Players")
+                        && VisibilityMenuFixture.visibilitySpec(inventory,
+                        VisibilitySettingsMenu.MASTER_STATUS_SLOT).name().color()
+                        .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN),
                 "master status pane is enabled");
         check(text(inventory, VisibilitySettingsMenu.FRIENDS_SLOT).equals("Friends")
                         && text(inventory, VisibilitySettingsMenu.STAFF_SLOT).equals("Staff Members")
@@ -54,7 +57,12 @@ public final class VisibilitySettingsMenuHarness {
                         && fixture.applyCalls == 1 && fixture.hotbarCalls == 1,
                 "master toggle saves, applies visibility and refreshes hotbar");
         check(lore(owner.open, VisibilitySettingsMenu.MASTER_SLOT).contains("Current: FILTERED")
-                        && text(owner.open, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("Filtered"),
+                        && text(owner.open, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("Filtered")
+                        && material(owner.open, VisibilitySettingsMenu.MASTER_STATUS_SLOT)
+                        == Material.YELLOW_STAINED_GLASS_PANE
+                        && VisibilityMenuFixture.visibilitySpec(owner.open,
+                        VisibilitySettingsMenu.MASTER_STATUS_SLOT).name().color()
+                        .equals(net.kyori.adventure.text.format.NamedTextColor.YELLOW),
                 "master filtered state renders accurately");
         fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, ClickType.RIGHT);
         fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.STAFF_SLOT, ClickType.LEFT);
@@ -65,6 +73,14 @@ public final class VisibilitySettingsMenuHarness {
                 "friends, staff and added-user toggles save independently");
         check(fixture.applyCalls == 4 && fixture.hotbarCalls == 1,
                 "every toggle applies visibility while only master refreshes hotbar");
+        for (int feature : new int[]{9, 11, 13, 15, 17}) {
+            check(owner.open.getItem(feature) != null && owner.open.getItem(feature + 9) != null,
+                    "feature has status directly below at " + feature);
+        }
+        for (int status : new int[]{20, 22, 24}) {
+            check(material(owner.open, status) == Material.LIME_STAINED_GLASS_PANE
+                            && text(owner.open, status).equals("Enabled"), "enabled filter is green at " + status);
+        }
         int soundsBeforeUnavailable = owner.soundCalls;
         boolean gameBefore = fixture.settings.areLobbyGameParticipantsVisible(owner.id).orElseThrow();
         fixture.visibilityClick(owner, owner.open,

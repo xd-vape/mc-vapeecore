@@ -125,8 +125,9 @@ public final class FriendIntegrationHarness {
                     "privacy change does not destroy accepted friendship");
             check(friends.sendRequest(bob, charlie) == FriendResult.REQUESTS_DISABLED,
                     "disabled privacy blocks new request without persistence mutation");
-            check(SettingsMenu.FRIEND_REQUESTS_SLOT == 17 && SettingsMenu.INVENTORY_SIZE == 27,
-                    "friend request setting occupies slot 17 of existing settings GUI");
+            check(SettingsMenu.FRIEND_REQUESTS_SLOT == 16 && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT == 25
+                            && SettingsMenu.INVENTORY_SIZE == 54,
+                    "friend request setting has feature and status below in redesigned settings GUI");
             String menuSource = Files.readString(Path.of(
                     "src/main/java/dev/vapee/core/settings/SettingsMenu.java"));
             String listenerSource = Files.readString(Path.of(

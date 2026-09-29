@@ -1,255 +1,128 @@
 package dev.vapee.core.settings;
 
-import dev.vapee.core.message.MessageService;
-import dev.vapee.core.player.CorePlayer;
-import dev.vapee.core.player.PlayerService;
-import dev.vapee.core.player.repository.PlayerRepository;
-import dev.vapee.core.player.settings.PlayerSettingsService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
-import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
-import org.bukkit.event.inventory.InventoryAction;
-import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.InventoryView;
-import org.bukkit.inventory.ItemStack;
+import net.kyori.adventure.text.format.NamedTextColor;
 
-import java.lang.reflect.Proxy;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.logging.Level;
-import java.util.logging.Logger;
+
+import static dev.vapee.core.settings.SettingsMenuFixture.*;
 
 public final class SettingsMenuHarness {
-    private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
     private static int checks;
 
     public static void main(String[] args) throws Exception {
-        MemoryRepository repository = new MemoryRepository();
-        PlayerService players = new PlayerService(repository, logger());
-        PlayerSettingsService settings = new PlayerSettingsService(players);
-        MessageService messages = messages();
-        UUID ownerId = UUID.randomUUID();
-        players.loadPlayer(ownerId, "Owner");
-        TestPlayer owner = new TestPlayer(ownerId);
-        SettingsMenu menu = new SettingsMenu(settings, messages,
-                (holder, size, title) -> inventory(holder, size), SpecItem::new);
-        int[] presentationRefresh = {0};
-        int[] visibilityOpens = {0};
-        SettingsListener listener = new SettingsListener(menu, settings,
-                ignored -> presentationRefresh[0]++, ignored -> visibilityOpens[0]++,
-                ignored -> { },
-                messages, logger());
-
-        menu.open(owner.player);
-        Inventory inventory = owner.open;
-        check(inventory.getSize() == 27
-                        && ((SettingsInventoryHolder) inventory.getHolder()).getOwnerUniqueId().equals(ownerId),
-                "existing settings menu size and owner binding remain");
-        check(spec(inventory, SettingsMenu.VISIBILITY_SLOT).material() == Material.SPYGLASS
-                        && text(inventory, SettingsMenu.VISIBILITY_SLOT).equals("Player Visibility")
-                        && lore(inventory, SettingsMenu.VISIBILITY_SLOT)
-                        .contains("Manage which lobby players you can see."),
-                "main menu has minimal player visibility entry");
-        check(text(inventory, SettingsMenu.SCOREBOARD_SLOT).equals("Scoreboard")
-                        && text(inventory, SettingsMenu.SOUNDS_SLOT).equals("Sounds")
-                        && text(inventory, SettingsMenu.PRIVATE_MESSAGES_SLOT).equals("Private Messages")
-                        && text(inventory, SettingsMenu.FRIEND_REQUESTS_SLOT).equals("Friend Requests"),
-                "existing settings entries remain in their slots");
-
-        click(listener, owner, inventory, SettingsMenu.VISIBILITY_SLOT, ClickType.LEFT);
-        check(visibilityOpens[0] == 1, "visibility entry opens the dedicated visibility menu");
-        click(listener, owner, inventory, SettingsMenu.SCOREBOARD_SLOT, ClickType.LEFT);
-        check(!settings.isScoreboardEnabled(ownerId).orElseThrow() && presentationRefresh[0] == 1,
-                "scoreboard toggle still saves and refreshes presentation");
-        click(listener, owner, inventory, SettingsMenu.PRIVATE_MESSAGES_SLOT, ClickType.LEFT);
-        check(!settings.arePrivateMessagesEnabled(ownerId).orElseThrow(),
-                "private-message toggle still works");
-        click(listener, owner, inventory, SettingsMenu.FRIEND_REQUESTS_SLOT, ClickType.LEFT);
-        check(!settings.areFriendRequestsEnabled(ownerId).orElseThrow(),
-                "friend-request toggle still works");
-        click(listener, owner, inventory, SettingsMenu.SOUNDS_SLOT, ClickType.LEFT);
-        check(!settings.areSoundsEnabled(ownerId).orElseThrow(), "sounds toggle still works");
-        click(listener, owner, inventory, SettingsMenu.CLOSE_SLOT, ClickType.LEFT);
-        check(owner.closeCalls == 1, "close button remains functional");
-
-        menu.open(owner.player);
-        boolean before = settings.isScoreboardEnabled(ownerId).orElseThrow();
-        repository.failNext = true;
-        click(listener, owner, owner.open, SettingsMenu.SCOREBOARD_SLOT, ClickType.LEFT);
-        check(settings.isScoreboardEnabled(ownerId).orElseThrow() == before
-                        && plain(owner.received.getLast()).contains("could not be saved"),
-                "existing save failure remains controlled and rolled back");
+        design();
+        functions();
+        failures();
         System.out.println("SettingsMenuHarness passed " + checks + " checks.");
     }
 
-    private static InventoryClickEvent click(SettingsListener listener, TestPlayer player,
-                                             Inventory top, int rawSlot, ClickType click) {
-        InventoryAction action = click == ClickType.SHIFT_LEFT
-                ? InventoryAction.MOVE_TO_OTHER_INVENTORY : InventoryAction.PICKUP_ALL;
-        InventoryClickEvent event = new InventoryClickEvent(view(player, top),
-                InventoryType.SlotType.CONTAINER, rawSlot, click, action);
-        listener.onInventoryClick(event);
-        check(event.isCancelled(), "settings menu interaction is cancelled");
-        return event;
-    }
-
-    private static Inventory inventory(InventoryHolder holder, int size) {
-        ItemStack[] items = new ItemStack[size];
-        return proxy(Inventory.class, (method, arguments) -> switch (method) {
-            case "getHolder" -> holder;
-            case "getSize" -> size;
-            case "getItem" -> items[(int) arguments[0]];
-            case "setItem" -> {
-                items[(int) arguments[0]] = (ItemStack) arguments[1];
-                yield null;
-            }
-            case "getType" -> InventoryType.CHEST;
-            default -> DEFAULT;
-        });
-    }
-
-    private static InventoryView view(TestPlayer player, Inventory top) {
-        return proxy(InventoryView.class, (method, arguments) -> switch (method) {
-            case "getTopInventory" -> top;
-            case "getBottomInventory" -> player.bottom;
-            case "getPlayer" -> player.player;
-            case "getType" -> InventoryType.CHEST;
-            case "getInventory" -> (int) arguments[0] < top.getSize() ? top : player.bottom;
-            case "convertSlot" -> (int) arguments[0] < top.getSize()
-                    ? arguments[0] : (int) arguments[0] - top.getSize();
-            case "getSlotType" -> InventoryType.SlotType.CONTAINER;
-            case "countSlots" -> top.getSize() + player.bottom.getSize();
-            default -> DEFAULT;
-        });
-    }
-
-    private static SettingsMenu.ItemSpec spec(Inventory inventory, int slot) {
-        return ((SpecItem) inventory.getItem(slot)).spec;
-    }
-
-    private static String text(Inventory inventory, int slot) {
-        return plain(spec(inventory, slot).name());
-    }
-
-    private static String lore(Inventory inventory, int slot) {
-        return String.join("\n", spec(inventory, slot).lore().stream().map(PLAIN::serialize).toList());
-    }
-
-    private static String plain(Component component) {
-        return PLAIN.serialize(component);
-    }
-
-    private static MessageService messages() throws Exception {
-        var constructor = MessageService.class.getDeclaredConstructor(java.util.function.Supplier.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance((java.util.function.Supplier<String>) () -> "");
-    }
-
-    private static Logger logger() {
-        Logger logger = Logger.getAnonymousLogger();
-        logger.setLevel(Level.OFF);
-        return logger;
-    }
-
-    private static final class TestPlayer {
-        final UUID id;
-        final Inventory bottom = inventory(null, 36);
-        final List<Component> received = new ArrayList<>();
-        final Player player;
-        Inventory open;
-        int closeCalls;
-
-        TestPlayer(UUID id) {
-            this.id = id;
-            player = proxy(Player.class, (method, arguments) -> switch (method) {
-                case "getUniqueId" -> id;
-                case "isOnline", "hasPermission" -> true;
-                case "openInventory" -> {
-                    open = (Inventory) arguments[0];
-                    yield view(this, open);
-                }
-                case "getOpenInventory" -> view(this, open == null ? bottom : open);
-                case "closeInventory" -> {
-                    closeCalls++;
-                    open = bottom;
-                    yield null;
-                }
-                case "sendMessage" -> {
-                    if (arguments != null) for (Object argument : arguments) {
-                        if (argument instanceof Component component) received.add(component);
-                    }
-                    yield null;
-                }
-                case "playSound" -> null;
-                default -> DEFAULT;
-            });
+    private static void design() throws Exception {
+        var f = new SettingsMenuFixture();
+        var p = f.player("Owner");
+        f.menu.open(p.player);
+        Inventory top = p.open;
+        check(top.getSize() == 54, "root uses 54 slots");
+        Map<Integer, Material> features = Map.of(10, Material.MAP, 12, Material.NOTE_BLOCK,
+                14, Material.WRITABLE_BOOK, 16, Material.PLAYER_HEAD, 31, Material.SPYGLASS);
+        for (var entry : features.entrySet()) {
+            int slot = entry.getKey();
+            check(spec(top, slot).material() == entry.getValue(), "correct feature icon at " + slot);
+            check(spec(top, slot + 9).material() == Material.LIME_STAINED_GLASS_PANE
+                            && spec(top, slot + 9).name().color().equals(NamedTextColor.GREEN),
+                    "green status immediately below feature " + slot);
         }
+        check(text(top, 10).equals("Scoreboard") && text(top, 12).equals("Sounds")
+                        && text(top, 14).equals("Private Messages") && text(top, 16).equals("Friend Requests"),
+                "all four real settings retain clear labels");
+        check(text(top, 31).equals("Player Visibility") && text(top, 40).equals("All Players"),
+                "visibility card has dedicated current-mode status");
+        check(spec(top, 49).material() == Material.BARRIER && text(top, 49).equals("Close")
+                        && spec(top, 52).material() == Material.CLOCK && text(top, 52).equals("Refresh"),
+                "consistent close and refresh controls");
+        int populated = 0;
+        for (int slot = 0; slot < 54; slot++) if (top.getItem(slot) != null) populated++;
+        check(populated == 12 && top.getItem(4) == null, "only functional items; no filler or fake settings");
+        f.settings.setLobbyPlayersVisible(p.id, false);
+        f.settings.setScoreboardEnabled(p.id, false);
+        f.menu.refresh(p.player, top);
+        check(text(top, 40).equals("Filtered") && spec(top, 40).material() == Material.YELLOW_STAINED_GLASS_PANE
+                        && spec(top, 40).name().color().equals(NamedTextColor.YELLOW),
+                "filtered mode is yellow rather than disabled");
+        check(text(top, 19).equals("Disabled") && spec(top, 19).material() == Material.RED_STAINED_GLASS_PANE
+                        && spec(top, 19).name().color().equals(NamedTextColor.RED),
+                "disabled setting is red");
     }
 
-    private static final class SpecItem extends ItemStack {
-        final SettingsMenu.ItemSpec spec;
-        SpecItem(SettingsMenu.ItemSpec spec) {
-            super();
-            this.spec = spec;
+    private static void functions() throws Exception {
+        var f = new SettingsMenuFixture();
+        var p = f.player("Owner");
+        f.menu.open(p.player);
+        Inventory top = p.open;
+        int baseline = f.repository.saves;
+        int[] icons = {10, 12, 14, 16};
+        int[] panes = {19, 21, 23, 25};
+        for (int i = 0; i < icons.length; i++) {
+            check(f.click(p, top, icons[i], ClickType.LEFT).isCancelled(), "left click is protected");
+            check(text(top, panes[i]).equals("Disabled"), "icon toggles and refreshes status");
+            check(f.click(p, top, panes[i], ClickType.RIGHT).isCancelled(), "right click is protected");
+            check(text(top, panes[i]).equals("Enabled"), "status toggles same setting");
         }
+        check(f.repository.saves == baseline + 8, "all toggles persist immediately");
+        check(f.presentationCalls == 2, "only successful scoreboard toggles update presentation");
+        check(f.soundCalls == 7, "sound disable is silent, sound enable gives feedback");
+        check(p.open == top && p.opens == 1, "toggles rerender existing inventory without reopen");
+        f.settings.setLobbyPlayersVisible(p.id, false);
+        baseline = f.repository.saves;
+        f.click(p, top, 52, ClickType.LEFT);
+        check(p.open == top && text(top, 40).equals("Filtered") && f.repository.saves == baseline
+                        && f.soundCalls == 7 && f.presentationCalls == 2,
+                "refresh reads live state without mutation, presentation action or sound");
+        f.click(p, top, 31, ClickType.LEFT);
+        f.click(p, top, 40, ClickType.RIGHT);
+        check(f.visibilityCalls == 2 && !f.settings.areLobbyPlayersVisible(p.id).orElseThrow()
+                        && f.repository.saves == baseline, "both visibility items only open category");
+        f.click(p, top, 49, ClickType.RIGHT);
+        check(p.open == p.bottom && p.closes == 1 && f.visibilityCalls == 2 && f.soundCalls == 7,
+                "close only closes and is silent");
     }
 
-    private static final class MemoryRepository implements PlayerRepository {
-        final Map<UUID, CorePlayer> data = new HashMap<>();
-        boolean failNext;
-        @Override public Optional<CorePlayer> findByUniqueId(UUID id) { return Optional.ofNullable(data.get(id)); }
-        @Override public void save(CorePlayer player) {
-            if (failNext) {
-                failNext = false;
-                throw new IllegalStateException("simulated persistence failure");
-            }
-            data.put(player.getUniqueId(), player);
+    private static void failures() throws Exception {
+        var f = new SettingsMenuFixture();
+        var p = f.player("Owner");
+        f.menu.open(p.player);
+        Inventory top = p.open;
+        for (int slot : new int[]{10, 12, 14, 16}) {
+            int baseline = f.repository.saves;
+            f.repository.failNext = true;
+            f.click(p, top, slot, ClickType.LEFT);
+            check(text(top, slot + 9).equals("Enabled") && f.repository.saves == baseline,
+                    "failed toggle restores actual runtime state at " + slot);
+            check(f.presentationCalls == 0 && f.soundCalls == 0 && p.open == top,
+                    "failed save does not apply, sound or reopen");
+            check(plain(p.received.getLast()).contains("could not be saved")
+                            && f.logs.getLast().getLevel() == Level.SEVERE
+                            && f.logs.getLast().getMessage().contains(p.id.toString()),
+                    "failure produces UUID-tagged severe log and controlled message");
         }
-        @Override public boolean exists(UUID id) { return data.containsKey(id); }
+        f.players.unloadPlayer(p.id);
+        f.click(p, top, 19, ClickType.LEFT);
+        check(p.open == p.bottom && plain(p.received.getLast()).contains("profile is not available"),
+                "unavailable profile closes menu without exception");
+        check(!f.menu.isActive(p.player, top, (SettingsInventoryHolder) top.getHolder()),
+                "unavailable profile invalidates active inventory");
+        f.menu.open(p.player);
+        check(p.open == p.bottom && plain(p.received.getLast()).contains("profile is not available"),
+                "unavailable open remains controlled");
+        var refresh = f.player("RefreshMissing");
+        f.menu.open(refresh.player);
+        f.players.unloadPlayer(refresh.id);
+        f.click(refresh, refresh.open, 52, ClickType.LEFT);
+        check(refresh.open == refresh.bottom, "refresh closes if profile disappeared");
     }
-
-    private static final Object DEFAULT = new Object();
-
-    @SuppressWarnings("unchecked")
-    private static <T> T proxy(Class<T> type, ProxyAction action) {
-        return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (instance, method, args) -> {
-            if (method.getDeclaringClass() == Object.class) {
-                return switch (method.getName()) {
-                    case "hashCode" -> System.identityHashCode(instance);
-                    case "equals" -> instance == args[0];
-                    case "toString" -> type.getSimpleName() + "HarnessProxy";
-                    default -> null;
-                };
-            }
-            Object result = action.invoke(method.getName(), args == null ? new Object[0] : args);
-            return result == DEFAULT ? defaultValue(method.getReturnType()) : result;
-        });
-    }
-
-    private static Object defaultValue(Class<?> type) {
-        if (!type.isPrimitive()) return null;
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0F;
-        if (type == double.class) return 0D;
-        return null;
-    }
-
-    @FunctionalInterface
-    private interface ProxyAction { Object invoke(String method, Object[] arguments); }
 
     private static void check(boolean condition, String message) {
         checks++;
