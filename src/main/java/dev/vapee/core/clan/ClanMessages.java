@@ -2,6 +2,8 @@ package dev.vapee.core.clan;
 
 import dev.vapee.core.message.MessageService;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 
@@ -71,10 +73,19 @@ public final class ClanMessages {
         if (player != null && player.isOnline()) messages.send(player, notice);
     }
 
-    public void notifyInvite(UUID recipient, String owner, String tag) {
+    public void notifyInvite(UUID recipient, String owner, String clanName, String tag) {
         notifyOnline(recipient, Component.text(owner, NamedTextColor.WHITE)
                 .append(Component.text(" invited you to clan ", NamedTextColor.GREEN))
-                .append(Component.text(tag + ".", NamedTextColor.WHITE)));
+                .append(Component.text(clanName, NamedTextColor.GOLD))
+                .append(Component.text(" [", NamedTextColor.GRAY))
+                .append(Component.text(tag, NamedTextColor.AQUA))
+                .append(Component.text("].", NamedTextColor.GRAY))
+                .append(Component.newline())
+                .append(inviteButton("Accept", "/clan accept " + tag, NamedTextColor.GREEN,
+                        "Click to accept this clan invite."))
+                .append(Component.space())
+                .append(inviteButton("Deny", "/clan deny " + tag, NamedTextColor.RED,
+                        "Click to deny this clan invite.")));
     }
 
     public void notifyAccept(UUID owner, String playerName) {
@@ -90,5 +101,11 @@ public final class ClanMessages {
     public void notifyTransfer(UUID target, String tag) {
         notifyOnline(target, Component.text("You are now the owner of clan ", NamedTextColor.GREEN)
                 .append(Component.text(tag + ".", NamedTextColor.WHITE)));
+    }
+
+    private Component inviteButton(String label, String command, NamedTextColor color, String hover) {
+        return Component.text("[" + label + "]", color)
+                .clickEvent(ClickEvent.suggestCommand(command))
+                .hoverEvent(HoverEvent.showText(Component.text(hover, NamedTextColor.GRAY)));
     }
 }
