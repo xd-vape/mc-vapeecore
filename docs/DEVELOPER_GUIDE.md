@@ -30,7 +30,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Lobby hotbar items | `dev.vapee.core.lobby.item.LobbyItemService` |
 | Warp Navigator item material/name/lore | `LobbyItemService` |
 | Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
-| Player visibility | `LobbyVisibilityService` |
+| Player visibility policy/runtime | `dev.vapee.core.visibility.VisibilityModule`, `VisibilityPolicy`, `VisibilityService` |
+| Persistent visibility preferences | `PlayerVisibilitySettings`, `PlayerSettingsService`, `FilePlayerRepository` |
 | Settings menu | `SettingsMenu` und `SettingsListener` |
 | Warps | `dev.vapee.core.lobby.warp` |
 | Warp persistence | Live: `plugins/VapeeCore/warps.yml`, Code: `WarpConfig` |
@@ -120,19 +121,20 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 11. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
 12. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
 13. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-14. **Chat** – globaler Chat und lesende Rank-Placeholder.
-15. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-16. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-17. **Settings** – Settings-Inventar und `/settings`.
-18. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-19. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-20. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-21. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-22. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-23. **Warp** – dynamische Warp-Persistence und Admin-Command.
-24. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+14. **Visibility** – zentrale Lobby-Policy, Paper-Show/Hide-Anwendung und Cleanup eigener Hide-Zustände.
+15. **Chat** – globaler Chat und lesende Rank-Placeholder.
+16. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+17. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+18. **Settings** – Settings-Inventar und `/settings`.
+19. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+20. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+21. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+22. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+23. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+24. **Warp** – dynamische Warp-Persistence und Admin-Command.
+25. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Identity → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Identity → Economy → Social → Player → Rank → Permission. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -163,6 +165,10 @@ Player + Quest
   ↑
 DailyQuest
 
+Player + Social + Friend + Lobby
+  ↑
+Visibility
+
 Lobby + Activity
   ↑
 Utility
@@ -175,12 +181,12 @@ Seat + Activity + WorldDisplay + Lobby
   ↑
 Blackjack
 
-Lobby + Player + Settings + Warp
+Lobby + Player + Settings + Warp + Visibility
   ↑
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `VisibilityModule` konsumiert Player, Social, Friend und Lobby, aber weder SettingsModule noch Activity; die spätere Game-Teilnehmer-Anbindung liegt hinter einem kleinen Predicate. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessage bezieht Player und Social. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
 ## Player Identity & Profile Foundation (Phase 17C)
 
@@ -345,6 +351,41 @@ Presentation besitzt vollständig `<server>`, `<name>`, `<rank_name>`, `<prefix>
 Das Default-Scoreboard zeigt Coins, den freundlichen Rank mit `<rank>` in seiner Rank-Farbe und Playtime im kompakten Label/Wert-Layout. Chat und Tablist verwenden standardmäßig `<rank_name>` für den rankfarbigen Spielernamen. `<name>` bleibt der normale, nicht automatisch rankgefärbte Display Name; `<rank_id>` ist die technische Primary Group und `<group>` deren Compatibility-Alias. Prefix und Suffix bleiben für eigene Formate verfügbar.
 
 Neue Resource-Defaults überschreiben weder `plugins/VapeeCore/chat.yml` noch `plugins/VapeeCore/presentation.yml`. Ein vorhandenes `<group>` funktioniert weiterhin. Für Rank-Farben auf bestehenden Servern müssen Administratoren `chat.yml` auf `format: "<rank_name><dark_gray> » </dark_gray><white><message></white>"` und `presentation.yml` unter `tablist` auf `name-format: "<rank_name>"` umstellen; optionale Prefix-/Suffix-Varianten sind möglich. Danach aktiviert `/core reload` die Änderung.
+
+## Visibility & privacy foundation (Phase 20A)
+
+`VisibilityModule` ist der einzige Owner der Visibility-Policy, der Paper-Show/Hide-Anwendung und der von VapeeCore gesetzten Hide-Zustände. Es startet nach Lobby und vor Chat, konsumiert `PlayerModule`, `SocialModule`, `FriendModule` und `LobbyModule` und ist kein `ReloadParticipant`. `LobbyExperienceModule` erzeugt keinen zweiten Visibility-Service: Seine Listener beziehen `visibilityModule.getVisibilityService()` und liefern nur Join-, Quit-, World-, Respawn- und Hotbar-Ereignisse. Globales World-Visibility, Commands und ein periodischer Refresh-Task existieren nicht.
+
+`PlayerSettings` bündelt die Visibility-Werte in `PlayerVisibilitySettings`; die Compatibility-Methoden `isLobbyPlayersVisible()` und `setLobbyPlayersVisible(...)` delegieren auf den Masterwert. Das Modell enthält nur Booleans und UUIDs, keine Bukkit-Player oder Namen:
+
+| Player-YAML-Key | Domainfeld | Default |
+|---|---|---:|
+| `settings.lobby-players-visible` | `allPlayersVisible` | `true` |
+| `settings.visibility.show-friends` | `showFriends` | `false` |
+| `settings.visibility.show-staff` | `showStaff` | `false` |
+| `settings.visibility.show-added-users` | `showAddedUsers` | `false` |
+| `settings.visibility.show-game-participants` | `showGameParticipants` | `false` |
+| `settings.visibility.added-players` | `Set<UUID> addedPlayers` | leer |
+
+Alte Dateien ohne `settings.visibility` behalten deshalb ihr bisheriges Verhalten. Optionale ungültige Booleans oder eine ungültige Visibility-Section erzeugen eine Warnung und verwenden den sicheren Default, statt den Login zu verwerfen. `added-players` wird als deterministisch lexikografisch sortierte UUID-String-Liste geschrieben. Beim Laden werden ungültige und nichtkanonische UUID-Strings, Nicht-Strings und die eigene UUID gewarnt und ignoriert; Duplikate werden zusammengeführt. Unbekannte, aber syntaktisch gültige UUIDs bleiben erlaubt, da eine spätere Eingabegrenze Identitäten prüfen wird. Lesezugriff auf die Collection liefert eine unveränderliche Kopie.
+
+`PlayerSettingsService` stellt Reads und sofort persistierende Mutationen für Master, Friends, Staff, Added Users und Game Participants sowie `getLobbyAddedVisiblePlayers`, `isLobbyAddedVisiblePlayer`, `addLobbyVisiblePlayer` und `removeLobbyVisiblePlayer` bereit. Normale Added-User-Zustände werden über `AddedVisiblePlayerResult` (`SUCCESS`, `OWNER_NOT_LOADED`, `CANNOT_ADD_SELF`, `ALREADY_ADDED`, `NOT_ADDED`) ausgedrückt. Die Domain prüft weder Identity Storage noch Online-Status des Targets. Jede erfolgreiche Mutation speichert den gesamten geladenen Player sofort; schlägt der Save fehl, werden Boolean oder Set exakt auf den vorherigen Runtime-Zustand zurückgerollt.
+
+`VisibilityPolicy#shouldShow(viewer, target, targetIsStaff)` ist die einzige Entscheidungsstelle. Ihre Priorität ist:
+
+1. Selbst bleibt sichtbar.
+2. `SocialService#isKnownIgnoring` in einer der beiden Richtungen ist ein harter Deny für beide Sicht-Richtungen.
+3. Der aktive Master zeigt alle sonst zulässigen Lobby-Spieler.
+4. Im gefilterten Modus reicht eine aktivierte positive Regel: echte `FriendRelation.FRIENDS`, aktueller Staff-Marker, UUID in `addedPlayers` oder gemeinsamer Game-Teilnehmer.
+5. Ohne Treffer bleibt das Target verborgen.
+
+Ein- und ausgehende Friend Requests zählen ausdrücklich nicht als Freundschaft; `FriendService` bleibt die Source of Truth. Staff wird ausschließlich über die aktuelle Online-Permission `vapeecore.visibility.staff` erkannt, nie über Primary-Group- oder Rangnamen. Dieser Node ist nur ein Klassifizierungsmarker und gewährt keine Command- oder Admin-Fähigkeit. Die Game-Regel ist als injizierbares `BiPredicate<UUID, UUID>` testbar; Production verwendet in 20A bewusst `false`, damit keine falsche Activity-Abhängigkeit entsteht.
+
+`VisibilityService` wendet die Policy nur für Online-Viewer und -Targets in der Lobby-Welt an. `synchronizePlayer` aktualisiert die neue Person als Viewer und anschließend alle vorhandenen Lobby-Viewer in Gegenrichtung; die Präferenzen dürfen deshalb asymmetrisch sein. `applyViewerPreference` berechnet nach dem Master-Hotbar-Toggle alle relevanten Targets des Viewers neu. Sichtbarkeit nutzt ausschließlich `viewer.hidePlayer(plugin, target)` und `viewer.showPlayer(plugin, target)`. Der Service merkt nur die von dieser Plugin-Instanz versteckten Paare. `restorePlayer` gibt beim Lobby-Austritt oder Quit alle eigenen Paare mit dieser Person frei; `restoreAll` läuft beim Disable des VisibilityModule und setzt die Runtime-Referenz anschließend auch bei einzelnen Restore-Fehlern zurück. Fremde Plugin-Zustände werden nicht verwaltet.
+
+Das Hotbar-Item beschreibt den Masterzustand als `Players: Visible` beziehungsweise `Players: Filtered`. Rechtsklick toggelt nur den bestehenden Master, speichert ihn, wendet die Viewer-Präferenz unmittelbar an, aktualisiert das Item und behält den bestehenden 10-Tick-Cooldown sowie das optionale UI-Soundverhalten. Das Phase-20A-Settings-Menü erhält absichtlich noch keine Filter- oder Manage-Users-Oberfläche.
+
+Phase 20B muss die Friends-/Staff-/Added-/Game-Filter-UX und die Identity-validierte Added-Users-Verwaltung ergänzen. Sobald der Friend-Filter spielerzugänglich ist, müssen Friend accept/add/remove-Änderungen die betroffenen Visibility-Paare unmittelbar neu berechnen; Phase 20A führt dafür bewusst noch keine cross-module Notification-Infrastruktur ein. Eine sofortige LuckPerms-Event-Anbindung ist ebenfalls nicht enthalten: Der Staff-Marker wird bei jeder normalen Neuberechnung aktuell gelesen.
 
 ## Lobby player state
 
@@ -706,12 +747,18 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`
 - `dev.vapee.core.onlinereward.OnlineRewardLifecycleHarness`
 - `dev.vapee.core.player.repository.PlayerRewardPersistenceHarness`
+- `dev.vapee.core.player.repository.PlayerVisibilityPersistenceHarness`
+- `dev.vapee.core.player.settings.PlayerVisibilitySettingsHarness`
+- `dev.vapee.core.player.settings.PlayerSettingsServiceHarness`
+- `dev.vapee.core.visibility.VisibilityPolicyHarness`
+- `dev.vapee.core.visibility.VisibilityServiceHarness`
+- `dev.vapee.core.visibility.VisibilityModuleHarness`
 - `dev.vapee.core.quest.QuestDefinitionHarness`
 - `dev.vapee.core.quest.QuestServiceHarness`
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
 - `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 24 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 25 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

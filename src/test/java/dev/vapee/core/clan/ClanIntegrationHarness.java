@@ -64,7 +64,7 @@ public final class ClanIntegrationHarness {
             int clan = core.indexOf("moduleManager.register(clanModule)");
             int reward = core.indexOf("moduleManager.register(rewardModule)");
             check(friend >= 0 && friend < clan && clan < reward, "Clan registers after Friend before Reward");
-            check(core.split("moduleManager.register\\(", -1).length - 1 == 24, "24 modules registered");
+            check(core.split("moduleManager.register\\(", -1).length - 1 == 25, "25 modules registered");
             check(core.contains("presentationModule, dailyQuestModule")
                     && !core.contains("presentationModule, clanModule"), "six reload participants unchanged");
             String plugin = Files.readString(Path.of("src/main/resources/plugin.yml")).replace("\r\n", "\n");

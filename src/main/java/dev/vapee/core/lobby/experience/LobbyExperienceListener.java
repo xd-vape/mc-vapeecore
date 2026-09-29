@@ -3,6 +3,7 @@ package dev.vapee.core.lobby.experience;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.message.LobbyMessageService;
 import dev.vapee.core.player.PlayerService;
+import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -20,7 +21,7 @@ public final class LobbyExperienceListener implements Listener {
     private final JavaPlugin plugin;
     private final LobbyService lobbyService;
     private final PlayerService playerService;
-    private final LobbyVisibilityService visibilityService;
+    private final VisibilityService visibilityService;
     private final LobbyMessageService lobbyMessageService;
 
     private boolean active = true;
@@ -29,7 +30,7 @@ public final class LobbyExperienceListener implements Listener {
             JavaPlugin plugin,
             LobbyService lobbyService,
             PlayerService playerService,
-            LobbyVisibilityService visibilityService,
+            VisibilityService visibilityService,
             LobbyMessageService lobbyMessageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");

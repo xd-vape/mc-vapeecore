@@ -4,6 +4,7 @@ import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.settings.PlayerSettings;
+import dev.vapee.core.player.settings.PlayerVisibilitySettings;
 import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestProgress;
 import dev.vapee.core.quest.PlayerQuestState;
@@ -145,6 +146,13 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
             configuration.set("settings.friend-requests", player.getSettings().isFriendRequestsEnabled());
             configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
+            PlayerVisibilitySettings visibility = player.getSettings().getVisibility();
+            configuration.set("settings.visibility.show-friends", visibility.isShowFriends());
+            configuration.set("settings.visibility.show-staff", visibility.isShowStaff());
+            configuration.set("settings.visibility.show-added-users", visibility.isShowAddedUsers());
+            configuration.set("settings.visibility.show-game-participants", visibility.isShowGameParticipants());
+            configuration.set("settings.visibility.added-players", visibility.getAddedPlayers().stream()
+                    .map(UUID::toString).sorted().toList());
             configuration.set("economy.coins", player.getWallet().getCoins());
             player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
                     ticks -> configuration.set("rewards.online.processed-playtime-ticks", ticks)
@@ -303,7 +311,54 @@ public final class FilePlayerRepository implements PlayerRepository {
                 "settings.lobby-players-visible",
                 settings.isLobbyPlayersVisible()
         ));
+        readVisibilitySettings(uniqueId, playerFile, configuration, settings.getVisibility());
         return settings;
+    }
+
+    private void readVisibilitySettings(UUID owner, Path file, YamlConfiguration configuration,
+                                        PlayerVisibilitySettings visibility) {
+        String prefix = "settings.visibility";
+        if (!configuration.contains(prefix)) return;
+        if (!configuration.isConfigurationSection(prefix)) {
+            logInvalidSetting(owner, file, prefix, "expected a YAML section");
+            return;
+        }
+        visibility.setShowFriends(readBooleanSetting(owner, file, configuration,
+                prefix + ".show-friends", false));
+        visibility.setShowStaff(readBooleanSetting(owner, file, configuration,
+                prefix + ".show-staff", false));
+        visibility.setShowAddedUsers(readBooleanSetting(owner, file, configuration,
+                prefix + ".show-added-users", false));
+        visibility.setShowGameParticipants(readBooleanSetting(owner, file, configuration,
+                prefix + ".show-game-participants", false));
+        String addedKey = prefix + ".added-players";
+        if (!configuration.contains(addedKey)) return;
+        if (!configuration.isList(addedKey)) {
+            logInvalidSetting(owner, file, addedKey, "expected a list of UUID strings");
+            return;
+        }
+        List<?> entries = configuration.getList(addedKey);
+        if (entries == null) return;
+        for (Object entry : entries) {
+            if (!(entry instanceof String text)) {
+                logInvalidSetting(owner, file, addedKey, "expected a UUID string entry");
+                continue;
+            }
+            try {
+                UUID target = UUID.fromString(text);
+                if (!target.toString().equalsIgnoreCase(text)) {
+                    logInvalidSetting(owner, file, addedKey, "non-canonical UUID entry");
+                    continue;
+                }
+                if (target.equals(owner)) {
+                    logInvalidSetting(owner, file, addedKey, "own UUID is not allowed");
+                    continue;
+                }
+                visibility.addPlayer(owner, target); // Repeated UUIDs are harmlessly deduplicated.
+            } catch (IllegalArgumentException exception) {
+                logInvalidSetting(owner, file, addedKey, "invalid UUID entry");
+            }
+        }
     }
 
     private CoinWallet readWallet(Path playerFile, YamlConfiguration configuration) {

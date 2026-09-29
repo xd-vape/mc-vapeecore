@@ -80,8 +80,8 @@ public final class QuestLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-17A order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 24,
-                "VapeeCore registers exactly twenty-four modules");
+        check(count(coreSource, "moduleManager.register(") == 25,
+                "VapeeCore registers exactly twenty-five modules");
         check(coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("questModule = new QuestModule")
                         && coreSource.indexOf("questModule = new QuestModule")

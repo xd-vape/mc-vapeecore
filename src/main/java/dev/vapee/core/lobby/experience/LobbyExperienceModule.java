@@ -15,6 +15,8 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;
 import dev.vapee.core.settings.SettingsModule;
+import dev.vapee.core.visibility.VisibilityModule;
+import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,9 +31,9 @@ public final class LobbyExperienceModule implements CoreModule {
     private final PlayerModule playerModule;
     private final SettingsModule settingsModule;
     private final WarpModule warpModule;
+    private final VisibilityModule visibilityModule;
     private final MessageService messageService;
 
-    private LobbyVisibilityService visibilityService;
     private NavigatorMenu navigatorMenu;
     private LobbyExperienceListener experienceListener;
     private LobbyItemListener itemListener;
@@ -43,6 +45,7 @@ public final class LobbyExperienceModule implements CoreModule {
             PlayerModule playerModule,
             SettingsModule settingsModule,
             WarpModule warpModule,
+            VisibilityModule visibilityModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -50,6 +53,7 @@ public final class LobbyExperienceModule implements CoreModule {
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.settingsModule = Objects.requireNonNull(settingsModule, "settingsModule");
         this.warpModule = Objects.requireNonNull(warpModule, "warpModule");
+        this.visibilityModule = Objects.requireNonNull(visibilityModule, "visibilityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -68,11 +72,7 @@ public final class LobbyExperienceModule implements CoreModule {
         SettingsMenu newSettingsMenu = settingsModule.getSettingsMenu();
         WarpService newWarpService = warpModule.getWarpService();
 
-        LobbyVisibilityService newVisibilityService = new LobbyVisibilityService(
-                plugin,
-                newLobbyService,
-                newPlayerSettingsService
-        );
+        VisibilityService newVisibilityService = visibilityModule.getVisibilityService();
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
                 plugin,
@@ -113,11 +113,10 @@ public final class LobbyExperienceModule implements CoreModule {
             HandlerList.unregisterAll(newNavigatorListener);
             HandlerList.unregisterAll(newItemListener);
             HandlerList.unregisterAll(newExperienceListener);
-            cleanupRuntime(newNavigatorMenu, newVisibilityService);
+            cleanupRuntime(newNavigatorMenu);
             throw exception;
         }
 
-        visibilityService = newVisibilityService;
         navigatorMenu = newNavigatorMenu;
         experienceListener = newExperienceListener;
         itemListener = newItemListener;
@@ -137,31 +136,20 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorListener != null) {
             HandlerList.unregisterAll(navigatorListener);
         }
-        cleanupRuntime(navigatorMenu, visibilityService);
+        cleanupRuntime(navigatorMenu);
 
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;
         navigatorMenu = null;
-        visibilityService = null;
     }
 
-    private void cleanupRuntime(
-            NavigatorMenu activeNavigatorMenu,
-            LobbyVisibilityService activeVisibilityService
-    ) {
+    private void cleanupRuntime(NavigatorMenu activeNavigatorMenu) {
         if (activeNavigatorMenu != null) {
             try {
                 activeNavigatorMenu.closeOpenInventories();
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.WARNING, "Could not close all navigator inventories.", exception);
-            }
-        }
-        if (activeVisibilityService != null) {
-            try {
-                activeVisibilityService.restoreAll();
-            } catch (RuntimeException exception) {
-                plugin.getLogger().log(Level.WARNING, "Could not fully restore lobby visibility.", exception);
             }
         }
     }

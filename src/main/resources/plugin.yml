@@ -263,6 +263,9 @@ permissions:
   vapeecore.clan.use:
     description: Allows using the clan system
     default: true
+  vapeecore.visibility.staff:
+    description: Marks a player as staff for visibility filtering; grants no admin actions
+    default: op
   vapeecore.economy.admin:
     description: Allows managing online player coin balances
     default: op

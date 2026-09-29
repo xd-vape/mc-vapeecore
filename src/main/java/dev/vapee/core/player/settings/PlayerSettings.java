@@ -5,26 +5,24 @@ public final class PlayerSettings {
     private static final boolean DEFAULT_SCOREBOARD_ENABLED = true;
     private static final boolean DEFAULT_SOUNDS_ENABLED = true;
     private static final boolean DEFAULT_PRIVATE_MESSAGES_ENABLED = true;
-    private static final boolean DEFAULT_LOBBY_PLAYERS_VISIBLE = true;
     private static final boolean DEFAULT_FRIEND_REQUESTS_ENABLED = true;
 
     private boolean scoreboardEnabled;
     private boolean soundsEnabled;
     private boolean privateMessagesEnabled;
-    private boolean lobbyPlayersVisible;
+    private final PlayerVisibilitySettings visibility;
     private boolean friendRequestsEnabled;
 
     private PlayerSettings(
             boolean scoreboardEnabled,
             boolean soundsEnabled,
             boolean privateMessagesEnabled,
-            boolean lobbyPlayersVisible,
             boolean friendRequestsEnabled
     ) {
         this.scoreboardEnabled = scoreboardEnabled;
         this.soundsEnabled = soundsEnabled;
         this.privateMessagesEnabled = privateMessagesEnabled;
-        this.lobbyPlayersVisible = lobbyPlayersVisible;
+        this.visibility = PlayerVisibilitySettings.defaults();
         this.friendRequestsEnabled = friendRequestsEnabled;
     }
 
@@ -33,7 +31,6 @@ public final class PlayerSettings {
                 DEFAULT_SCOREBOARD_ENABLED,
                 DEFAULT_SOUNDS_ENABLED,
                 DEFAULT_PRIVATE_MESSAGES_ENABLED,
-                DEFAULT_LOBBY_PLAYERS_VISIBLE,
                 DEFAULT_FRIEND_REQUESTS_ENABLED
         );
     }
@@ -63,12 +60,14 @@ public final class PlayerSettings {
     }
 
     public boolean isLobbyPlayersVisible() {
-        return lobbyPlayersVisible;
+        return visibility.isAllPlayersVisible();
     }
 
     public void setLobbyPlayersVisible(boolean lobbyPlayersVisible) {
-        this.lobbyPlayersVisible = lobbyPlayersVisible;
+        visibility.setAllPlayersVisible(lobbyPlayersVisible);
     }
+
+    public PlayerVisibilitySettings getVisibility() { return visibility; }
 
     public boolean isFriendRequestsEnabled() {
         return friendRequestsEnabled;
