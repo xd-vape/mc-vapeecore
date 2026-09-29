@@ -23,6 +23,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.settings.use` | `true` | `/settings` | Eigenes Settings-Menü. |
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
+| `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |
 | `vapeecore.rank.view` | `true` | `/rank [player]` | Eigenen oder einen Online-Rank anzeigen. |
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
@@ -73,6 +74,7 @@ Die Matrix ist ein bewusst konservativer Ausgangspunkt. Elternvererbung sollte i
 - `vapeecore.settings.use`
 - `vapeecore.social.ignore`
 - `vapeecore.friend.use`
+- `vapeecore.clan.use`
 - `vapeecore.rank.view`
 - `vapeecore.ranks.view`
 - `vapeecore.profile.view`

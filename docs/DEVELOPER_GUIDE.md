@@ -53,6 +53,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Known-Player-Name/UUID-Lookup | `PlayerService`, `FilePlayerRepository` und `PlayerIdentityService` |
 | `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
+| `/clan`, Clan-Regeln und zentrale Persistence | `dev.vapee.core.clan`, `clans.yml` |
 | Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
 | Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Slot 17) |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
@@ -89,7 +90,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 
 | File | Owner | Purpose | `/core reload`? | Runtime mutable? | Defaults |
 |---|---|---|---:|---|---|
-| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track`, Online-Reward-Regeln und -Nachricht, `friends.limits` | Ja | Durch Reload | `src/main/resources/config.yml` |
+| `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track`, Online-Reward-Regeln und -Nachricht, `friends.limits`, `clans.limits` | Ja | Durch Reload | `src/main/resources/config.yml` |
 | `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
@@ -98,6 +99,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 | `friends.yml` | `FriendModule` / `FileFriendRepository` | UUID-basierte Freundschaften und gerichtete Anfragen, `schema-version: 1` | Nein | Ja, atomar über `FriendService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
+| `clans.yml` | `ClanModule` / `FileClanRepository` | UUID-basierte Clans, Mitglieder und Einladungen, `schema-version: 1` | Nein | Ja, atomar über `ClanService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
 
 Die sechs Reload-Teilnehmer sind exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml` und `daily-quests.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward, OnlineReward und die generische Quest Foundation sind selbst keine Reload-Teilnehmer. Reward und Quest besitzen keine eigene Config- oder Datendatei; DailyQuest besitzt die Katalog-Datei. Der Reload wird zweiphasig vorbereitet und angewendet. `DailyQuestModule` tauscht beim Apply Config und Registry aus und stellt beim Rollback beide vorherigen Snapshots wieder her; Player-Assignments werden erst im nächsten normalen Sync berührt. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
@@ -112,24 +114,25 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Identity** – Known-Player-Lookup, immutable Profile und `/profile`.
 7. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend` und Friends-GUI.
-8. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
-9. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
-10. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
-11. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
-12. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-13. **Chat** – globaler Chat und lesende Rank-Placeholder.
-14. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-15. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-16. **Settings** – Settings-Inventar und `/settings`.
-17. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-18. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-19. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-20. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-21. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-22. **Warp** – dynamische Warp-Persistence und Admin-Command.
-23. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
+8. **Clan** – Clans, Einladungen, `/clan` und Clan-GUI.
+9. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
+10. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
+11. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
+12. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
+13. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+14. **Chat** – globaler Chat und lesende Rank-Placeholder.
+15. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+16. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+17. **Settings** – Settings-Inventar und `/settings`.
+18. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+19. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+20. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+21. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+22. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+23. **Warp** – dynamische Warp-Persistence und Admin-Command.
+24. **LobbyExperience** – Visibility, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Friend → Identity → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Friend und Identity deregistrieren ihre Commands; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Identity → Economy → Social → Player → Rank → Permission. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -181,7 +184,7 @@ LobbyExperience
 
 ## Player Identity & Profile Foundation (Phase 17C)
 
-`IdentityModule` hängt nur von `JavaPlugin`, `PlayerModule`, `RankModule`, `EconomyModule` und `MessageService` ab. Es steht unmittelbar nach Economy und vor Friend, besitzt weder Listener noch Task noch eigene Config/Persistence und ist keiner der sechs Reload-Teilnehmer. Beim Shutdown werden Command-Executor und Tab-Completer entfernt und Service-Referenzen freigegeben. Friends greift nun auf `PlayerIdentityService` zu; spätere Clans sollen ebenfalls keinen eigenen Name-Resolver oder Player-YAML-Scan bauen.
+`IdentityModule` hängt nur von `JavaPlugin`, `PlayerModule`, `RankModule`, `EconomyModule` und `MessageService` ab. Es steht unmittelbar nach Economy und vor Friend, besitzt weder Listener noch Task noch eigene Config/Persistence und ist keiner der sechs Reload-Teilnehmer. Beim Shutdown werden Command-Executor und Tab-Completer entfernt und Service-Referenzen freigegeben. Friends und Clans greifen auf `PlayerIdentityService` zu und bauen keinen eigenen Name-Resolver oder Player-YAML-Scan.
 
 `PlayerIdentity(UUID, name, firstJoin, lastJoin)` ist ein validierter immutable Snapshot ohne `CorePlayer`- oder Bukkit-Referenz. `PlayerIdentityService#findById(UUID)`, `findByName(String)` und `resolve(String)` geben bekannte Spieler als Snapshot zurück; Namensauflösung unterscheidet `FOUND`, `NOT_FOUND` und `AMBIGUOUS`. UUID-Eingaben müssen bereits in VapeeCore bekannt sein. `PlayerProfile` ergänzt `online`, `coins`, optionalen `RankInfo` und optionale Playtime-Ticks. `PlayerProfileService#getProfile(UUID)` und `resolveProfile(String)` kombinieren ausschließlich bestehende Quellen, ohne Player zu laden, Coins oder Settings zu mutieren oder LuckPerms-User nachzuladen.
 
@@ -210,6 +213,18 @@ Die Policy prüft `SocialService#isKnownIgnoring` in beiden Richtungen, dann `Pl
 `FriendMenuHolder` speichert Besitzer-UUID, View, Page und die serverseitige Content-Slot→Target-UUID-Zuordnung und bindet genau eine Inventory-Instanz. Der Listener cancelt zunächst jeden Click/Drag eines FriendMenu-Holders, auch in Bottom Inventory oder bei gefälschtem Holder. Eine Aktion erfordert zusätzlich passenden Viewer, exakt gebundenes Inventory und Registrierung als aktuell geöffnetes Menü; alte oder nachgebildete Inventare bleiben inert. Weder Titel noch Item-Name, Lore, SkullMeta oder NBT sind Sicherheits- oder Target-Quelle. Bei Close/Quit wird der aktive Verweis nur für genau dieses Inventar entfernt, beim Modul-Disable werden noch offene Friends-Inventare geschlossen.
 
 Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. Eingehend bedeutet Linksklick Accept und Rechtsklick Deny, ausgehend bedeutet Links- oder Rechtsklick Cancel. Bei jedem Klick prüft der `FriendService` die Relation erneut; verschwundene Requests/Freundschaften erhalten eine kontrollierte Meldung und die Ansicht wird neu aufgebaut. Nach erfolgreichem Accept wird der online befindliche Sender wie beim Text-Command benachrichtigt. Persistenz-/Runtime-Fehler werden mit UUID-Kontext geloggt, die GUI wird geschlossen und der Spieler erhält nur eine kurze Fehlermeldung. Der Add-Button schließt die GUI und sendet eine Adventure-Component mit `suggestCommand("/friend add ")`; er startet kein Chat-, Sign- oder Anvil-Capture. Es gibt keinen Tick-Refresh, keine zweite Privacy-Einstellung und keine neue Permission.
+
+## Clan Integration und GUI (Phase 19B)
+
+`ClanModule` startet direkt nach Friend und vor Reward. Es besitzt `ClanService`, `FileClanRepository`, `/clan` (Alias `/clans`), die drei Clan-Menüansichten und genau einen GUI-Listener. Bei Enable werden alle Bestandteile vor Veröffentlichung der Runtime-Referenzen aufgebaut; ein partieller Fehler entfernt Listener und Command-Handler. Disable schließt eigene offene Inventare, deregistriert Listener und Handler und leert Referenzen. Es gibt weder Scheduler noch einen zusätzlichen Reload-Teilnehmer. Die Clan Foundation (`Clan`, `ClanMember`, `ClanInvite`, `ClanSnapshot`, `ClanService`) bleibt Bukkit-arm und ist Source of Truth; das UI liest und mutiert ausschließlich über den Service.
+
+`plugins/VapeeCore/clans.yml` ist die einzige Clan-Datendatei. Eine fehlende Datei lädt als leerer Snapshot und wird nicht voreilig geschrieben. Der Repository-Validator prüft `schema-version: 1` und alle Domain-Invarianten. Mutationen speichern vor dem In-Memory-Tausch über eine temporäre Datei; Fehler lassen den alten Zustand intakt und werden mit Spieler-UUID geloggt, nicht im Chat als Stacktrace gezeigt. `ConfigService` liefert `clans.limits` als immutable View mit Defaults 25 Mitglieder, 25 ausgehende, 10 eingehende Einladungen, Namenslänge 3–24 und Taglänge 2–8. Ungültige Werte warnen und fallen auf sichere Defaults zurück. `ClanService` bezieht den Supplier `configService::getClanLimits`; nach erfolgreichem `/core reload` gelten neue Limits für künftige Mutationen, vorhandene Daten werden nicht gelöscht.
+
+`/clan` ist Player-only und prüft `vapeecore.clan.use` (Default `true`). `/clan help` verwendet den gemeinsamen Help-Renderer. `create <tag> <name...>` und `rename <name...>` erhalten mehrteilige Namen. `info`, `accept` und `deny` lösen exakten Clan-Tag oder kanonische Clan-UUID auf. `invite`, `cancel`, `kick` und `transfer` nutzen `PlayerIdentityService#resolve` für bekannte Namen/UUIDs; unbekannte oder mehrdeutige Namen werden kontrolliert abgelehnt. Ein bereits bekannter Offline-Spieler darf eingeladen werden; es gibt weder `OfflinePlayer`- oder Netzwerk-/Mojang-Lookup noch eine Offline-Benachrichtigungsqueue. `ClanMessages` teilt Result-Mapping und unmittelbare Online-Notifications zwischen Command und GUI und setzt User-Namen ausschließlich als literale Adventure-Components ein. `disband` erfordert das ausdrückliche Argument `confirm`.
+
+`ClanMenu` zeigt 54 Slots mit 45 Content-Slots pro Seite und Views `OVERVIEW`, `MEMBERS`, `INVITES`. Clanlose Spieler sehen Create und eingehende Einladungen; Create schließt die GUI und schlägt `/clan create TAG Clan Name` per Click-Event vor. Die Übersicht zeigt Name, Tag, Mitgliedszahl, Owner und eigene Rolle. Mitglieder werden mit Owner zuerst, dann nach bekanntem Namen und UUID sortiert; fehlende Identity-Namen erscheinen als UUID. Online ist nur `Server#getPlayer(UUID)` plus `isOnline()`. Der Owner sieht ausgehende Einladungen; Mitglieder ohne Owner-Rolle erhalten keine Owner-Verwaltung. Eingehende Einladungen werden links angenommen, rechts abgelehnt; ausgehende Einladungen nur rechts abgebrochen. Mitglieder können nur mit Shift + Rechtsklick gekickt oder Shift + Linksklick zum Owner gemacht werden. GUI-Disband bietet nur mit Shift + Rechtsklick einen Vorschlag für `/clan disband confirm`, keine direkte Löschung.
+
+`ClanMenuHolder` trägt Besitzer-UUID, View, Page und serverseitige Slot→UUID-Ziele; er bindet genau eine Inventarinstanz. Der Listener cancelt jeden Click und Drag einschließlich Bottom Inventory, Number-Key, Collect und Drop zunächst pauschal. Eine fachliche Aktion erfordert zusätzlich passenden Viewer, aktive Inventarinstanz, exakte Holder-Bindung und einen explizit erlaubten Klicktyp. Item-Name, Lore, NBT und Titel sind nie Target-Quelle. Vor jeder Mutation liest der Service die aktuelle Mitgliedschaft/Owner-Rolle und Einladungen erneut; verschwundene Ziele liefern kontrollierte Resultate und die Seite wird mit Page-Clamp neu aufgebaut. Close/Quit entfernen nur den jeweils aktiven Eintrag, Disable schließt alle offenen Clan-Inventare. Kein Tick-Refresh und kein globales GUI-Framework. Clan-Tag-Presentation in Chat, Tablist, Nametag oder Scoreboard ist ausdrücklich eine spätere Phase; `Presentation` und `presentation.yml` bleiben unverändert.
 
 ## Reward Foundation
 
@@ -696,7 +711,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
 - `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 23 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 24 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

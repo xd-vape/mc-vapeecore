@@ -42,12 +42,12 @@ public final class DailyQuestLifecycleHarness {
                 "DailyQuest owns no extra quit-save listener");
 
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
-        check(count(core, "moduleManager.register(") == 23
+        check(count(core, "moduleManager.register(") == 24
                         && core.indexOf("moduleManager.register(questModule)")
                         < core.indexOf("moduleManager.register(dailyQuestModule)")
                         && core.indexOf("moduleManager.register(dailyQuestModule)")
                         < core.indexOf("moduleManager.register(lobbyModule)"),
-                "23 modules register DailyQuest directly after Quest");
+                "24 modules register DailyQuest directly after Quest");
         check(core.contains("presentationModule, dailyQuestModule)"),
                 "DailyQuest is the sixth and last coordinated reload participant");
         String module = Files.readString(Path.of(
