@@ -32,6 +32,10 @@ public final class SettingsInventoryHolder implements InventoryHolder {
         this.inventory = validatedInventory;
     }
 
+    boolean isBoundTo(Inventory candidate) {
+        return inventory != null && inventory == candidate;
+    }
+
     @Override
     public @NotNull Inventory getInventory() {
         return Objects.requireNonNull(inventory, "Settings inventory is not initialized");
