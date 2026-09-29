@@ -18,6 +18,7 @@ import org.bukkit.inventory.Inventory;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,7 +26,9 @@ public final class SettingsListener implements Listener {
 
     private final SettingsMenu settingsMenu;
     private final PlayerSettingsService playerSettingsService;
-    private final PresentationService presentationService;
+    private final Consumer<Player> presentationRefresh;
+    private final Consumer<Player> visibilityMenuOpener;
+    private final Consumer<Player> soundFeedback;
     private final MessageService messageService;
     private final Logger logger;
 
@@ -33,12 +36,31 @@ public final class SettingsListener implements Listener {
             SettingsMenu settingsMenu,
             PlayerSettingsService playerSettingsService,
             PresentationService presentationService,
+            Consumer<Player> visibilityMenuOpener,
+            MessageService messageService,
+            Logger logger
+    ) {
+        this(settingsMenu, playerSettingsService,
+                Objects.requireNonNull(presentationService, "presentationService")::updatePlayer,
+                visibilityMenuOpener,
+                player -> playFeedbackSound(player, playerSettingsService, logger),
+                messageService, logger);
+    }
+
+    SettingsListener(
+            SettingsMenu settingsMenu,
+            PlayerSettingsService playerSettingsService,
+            Consumer<Player> presentationRefresh,
+            Consumer<Player> visibilityMenuOpener,
+            Consumer<Player> soundFeedback,
             MessageService messageService,
             Logger logger
     ) {
         this.settingsMenu = Objects.requireNonNull(settingsMenu, "settingsMenu");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
-        this.presentationService = Objects.requireNonNull(presentationService, "presentationService");
+        this.presentationRefresh = Objects.requireNonNull(presentationRefresh, "presentationRefresh");
+        this.visibilityMenuOpener = Objects.requireNonNull(visibilityMenuOpener, "visibilityMenuOpener");
+        this.soundFeedback = Objects.requireNonNull(soundFeedback, "soundFeedback");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
@@ -67,6 +89,10 @@ public final class SettingsListener implements Listener {
         int slot = event.getRawSlot();
         if (slot == SettingsMenu.CLOSE_SLOT) {
             player.closeInventory();
+            return;
+        }
+        if (slot == SettingsMenu.VISIBILITY_SLOT) {
+            visibilityMenuOpener.accept(player);
             return;
         }
         if (slot != SettingsMenu.SCOREBOARD_SLOT
@@ -140,15 +166,13 @@ public final class SettingsListener implements Listener {
             return;
         }
         if (slot == SettingsMenu.SCOREBOARD_SLOT) {
-            presentationService.updatePlayer(player);
+            presentationRefresh.accept(player);
         }
         if (!refreshOrClose(player, inventory)) {
             return;
         }
 
-        if (playerSettingsService.areSoundsEnabled(uniqueId).orElse(false)) {
-            playFeedbackSound(player);
-        }
+        if (playerSettingsService.areSoundsEnabled(uniqueId).orElse(false)) soundFeedback.accept(player);
     }
 
     private boolean refreshOrClose(Player player, Inventory inventory) {
@@ -165,7 +189,8 @@ public final class SettingsListener implements Listener {
         messageService.send(player, "<red>Your player profile is not available.</red>");
     }
 
-    private void playFeedbackSound(Player player) {
+    private static void playFeedbackSound(Player player, PlayerSettingsService settings, Logger logger) {
+        if (!settings.areSoundsEnabled(player.getUniqueId()).orElse(false)) return;
         try {
             player.playSound(
                     player.getLocation(),

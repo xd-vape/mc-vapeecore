@@ -20,7 +20,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | Permission | Default | Command/Funktion | Hinweis |
 |---|---:|---|---|
 | `vapeecore.message.use` | `true` | `/msg`, `/reply`, `/r` | Private Online-Nachrichten. |
-| `vapeecore.settings.use` | `true` | `/settings` | Eigenes Settings-Menü. |
+| `vapeecore.settings.use` | `true` | `/settings`, `/settings visibility …` | Eigenes Settings-Menü, Visibility-Filter und Added-Users-Liste verwalten. |
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
 | `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |
