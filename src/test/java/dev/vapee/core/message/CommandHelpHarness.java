@@ -162,16 +162,16 @@ public final class CommandHelpHarness {
                 "core help shows all permitted administration and utility commands");
 
         CommandHelpPage coins = page(CoinsCommand.class, "HELP_PAGE");
-        Capture normalCoins = capture(Set.of());
+        Capture normalCoins = capture(Set.of("vapeecore.economy.coins"));
         new CommandHelpRenderer(normalCoins.messageService()).send(normalCoins.sender(), coins);
         check(normalCoins.singleText().contains("/coins") && !normalCoins.singleText().contains("/coins add"),
                 "coins help hides mutations from a normal player");
-        Capture adminCoins = capture(Set.of("vapeecore.economy.admin"));
+        Capture adminCoins = capture(Set.of("vapeecore.economy.coins", "vapeecore.economy.admin"));
         new CommandHelpRenderer(adminCoins.messageService()).send(adminCoins.sender(), coins);
-        check(adminCoins.singleText().contains("/coins get <player>")
-                        && adminCoins.singleText().contains("/coins add <player> <amount>")
-                        && adminCoins.singleText().contains("/coins remove <player> <amount>")
-                        && adminCoins.singleText().contains("/coins set <player> <amount>"),
+        check(adminCoins.singleText().contains("/coins get <player|uuid>")
+                        && adminCoins.singleText().contains("/coins add <player|uuid> <amount>")
+                        && adminCoins.singleText().contains("/coins remove <player|uuid> <amount>")
+                        && adminCoins.singleText().contains("/coins set <player|uuid> <amount>"),
                 "coins help shows all mutations to an administrator");
     }
 

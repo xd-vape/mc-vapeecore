@@ -27,6 +27,8 @@ public final class EconomyServiceHarness {
         testOverflowAndValidation();
         testImmediateRollback();
         testSetAndRemoveSemantics();
+        testReadsAndBoundaries();
+        testAllRollbackOperations();
         System.out.println("EconomyServiceHarness passed " + checks + " checks.");
     }
 
@@ -91,6 +93,66 @@ public final class EconomyServiceHarness {
                         && fixture.balance(playerId) == 480L
                         && fixture.repository.saveAttempts(playerId) == 2,
                 "insufficient remove neither mutates nor saves");
+    }
+
+    private static void testReadsAndBoundaries() {
+        Fixture f = new Fixture();
+        UUID id = f.load(100L);
+        UUID unknown = UUID.randomUUID();
+        check(f.economy.getCoins(id).orElseThrow() == 100L, "loaded read");
+        check(f.economy.getCoins(unknown).isEmpty(), "unloaded read empty");
+        check(f.economy.getKnownCoins(id).orElseThrow() == 100L, "known loaded read");
+        check(f.economy.getKnownCoins(unknown).isEmpty(), "unknown known read empty");
+        check(f.economy.hasCoins(id, 100L).orElseThrow(), "has exact balance");
+        check(!f.economy.hasCoins(id, 101L).orElseThrow(), "has insufficient false");
+        check(f.economy.hasCoins(unknown, 0L).isEmpty(), "unloaded has empty");
+        expectIllegalArgument(() -> f.economy.hasCoins(id, -1L), "negative has rejected");
+        expectIllegalArgument(() -> f.economy.setCoins(id, -1L), "negative set rejected");
+        for (long invalid : new long[]{0L, -1L}) {
+            expectIllegalArgument(() -> f.economy.addCoins(id, invalid), "invalid immediate add");
+            expectIllegalArgument(() -> f.economy.removeCoins(id, invalid), "invalid remove");
+        }
+        check(f.repository.saveAttempts(id) == 0 && f.balance(id) == 100L,
+                "validation has no mutation or save");
+        check(f.economy.setCoins(id, 0L) == EconomyResult.SUCCESS && f.balance(id) == 0L
+                && f.repository.saveAttempts(id) == 1, "zero set saves exactly once");
+        check(f.economy.setCoins(id, 0L) == EconomyResult.SUCCESS
+                && f.repository.saveAttempts(id) == 2, "identical set retains immediate save semantics");
+        check(f.economy.setCoins(id, Long.MAX_VALUE) == EconomyResult.SUCCESS
+                && f.repository.persistedBalance(id) == Long.MAX_VALUE
+                && f.repository.saveAttempts(id) == 3, "max long set durable");
+        check(f.economy.addCoins(id, 1L) == EconomyResult.BALANCE_OVERFLOW
+                && f.balance(id) == Long.MAX_VALUE && f.repository.saveAttempts(id) == 3,
+                "immediate overflow neither mutates nor saves");
+        f.players.unloadPlayer(id);
+        check(f.economy.getCoins(id).isEmpty() && !f.players.isLoaded(id), "unload removes runtime balance");
+        check(f.economy.getKnownCoins(id).orElseThrow() == Long.MAX_VALUE && !f.players.isLoaded(id),
+                "offline known read does not load player");
+        check(f.economy.addCoins(id, 1L) == EconomyResult.PLAYER_NOT_LOADED
+                && f.economy.removeCoins(id, 1L) == EconomyResult.PLAYER_NOT_LOADED
+                && f.economy.setCoins(id, 0L) == EconomyResult.PLAYER_NOT_LOADED
+                && f.economy.addCoinsDeferred(id, 1L) == EconomyResult.PLAYER_NOT_LOADED,
+                "all writes remain loaded only");
+        check(CoinWallet.empty().getCoins() == 0L, "new wallet starts zero");
+        expectIllegalArgument(() -> CoinWallet.of(-1L), "wallet construction invariant");
+        expectIllegalArgument(() -> CoinWallet.empty().setCoins(-1L), "wallet setter invariant");
+    }
+
+    private static void testAllRollbackOperations() {
+        for (String action : new String[]{"ADD", "REMOVE", "SET"}) {
+            Fixture f = new Fixture();
+            UUID id = f.load(100L);
+            f.repository.fail(id);
+            expectRuntime(() -> {
+                switch (action) {
+                    case "ADD" -> f.economy.addCoins(id, 10L);
+                    case "REMOVE" -> f.economy.removeCoins(id, 10L);
+                    case "SET" -> f.economy.setCoins(id, 10L);
+                }
+            }, action + " save failure propagates");
+            check(f.balance(id) == 100L && f.repository.persistedBalance(id) == 100L
+                    && f.repository.saveAttempts(id) == 1, action + " runtime/durable rollback and one save attempt");
+        }
     }
 
     private static void expectIllegalArgument(Runnable action, String message) {

@@ -22,7 +22,7 @@ commands:
     usage: /setspawn
     permission: vapeecore.lobby.setspawn
   coins:
-    description: View and manage coin balances
+    description: View known coin balances and manage online wallets
     usage: /coins help
     permission: vapeecore.economy.coins
   profile:
@@ -267,8 +267,10 @@ permissions:
     description: Marks a player as staff for visibility filtering; grants no admin actions
     default: op
   vapeecore.economy.admin:
-    description: Allows managing online player coin balances
+    description: View known player balances and manage loaded online balances
     default: op
+    children:
+      vapeecore.economy.coins: true
   vapeecore.message.use:
     description: Allows using private messages
     default: true

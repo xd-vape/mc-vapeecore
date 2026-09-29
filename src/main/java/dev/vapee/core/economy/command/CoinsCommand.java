@@ -7,119 +7,129 @@ import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.economy.EconomyResult;
 import dev.vapee.core.economy.EconomyService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.player.PlayerService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.OptionalLong;
+import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class CoinsCommand implements TabExecutor {
 
+    private static final String BASE_PERMISSION = "vapeecore.economy.coins";
     private static final String ADMIN_PERMISSION = "vapeecore.economy.admin";
-    private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
-            "Coins",
-            List.of(
-                    new CommandHelpSection("Player", List.of(
-                            new CommandHelpEntry("/coins", "Shows your current coin balance.")
-                    )),
-                    new CommandHelpSection("Administration", List.of(
-                            new CommandHelpEntry("/coins get <player>", "Shows an online player's balance.",
-                                    ADMIN_PERMISSION),
-                            new CommandHelpEntry("/coins add <player> <amount>", "Adds coins to an online player.",
-                                    ADMIN_PERMISSION),
-                            new CommandHelpEntry("/coins remove <player> <amount>",
-                                    "Removes coins from an online player.", ADMIN_PERMISSION),
-                            new CommandHelpEntry("/coins set <player> <amount>", "Sets an online player's balance.",
-                                    ADMIN_PERMISSION)
-                    ))
-            )
-    );
+    private static final List<String> ADMIN_ACTIONS = List.of("get", "add", "remove", "set");
+    private static final CommandHelpPage HELP_PAGE = new CommandHelpPage("Coins", List.of(
+            new CommandHelpSection("Player", List.of(
+                    new CommandHelpEntry("/coins", "Shows your current coin balance.", BASE_PERMISSION)
+            )),
+            new CommandHelpSection("Administration", List.of(
+                    new CommandHelpEntry("/coins get <player|uuid>",
+                            "Shows a known online or offline player's balance.", ADMIN_PERMISSION),
+                    new CommandHelpEntry("/coins add <player|uuid> <amount>",
+                            "Adds coins; the target must be online.", ADMIN_PERMISSION),
+                    new CommandHelpEntry("/coins remove <player|uuid> <amount>",
+                            "Removes coins; the target must be online.", ADMIN_PERMISSION),
+                    new CommandHelpEntry("/coins set <player|uuid> <amount>",
+                            "Sets a balance; the target must be online.", ADMIN_PERMISSION)
+            ))
+    ));
 
-    private final JavaPlugin plugin;
+    private final Server server;
+    private final Logger logger;
     private final EconomyService economyService;
+    private final PlayerService playerService;
     private final MessageService messageService;
     private final CommandHelpRenderer helpRenderer;
 
-    public CoinsCommand(
-            JavaPlugin plugin,
-            EconomyService economyService,
-            MessageService messageService,
-            CommandHelpRenderer helpRenderer
-    ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+    public CoinsCommand(JavaPlugin plugin, EconomyService economyService, PlayerService playerService,
+                        MessageService messageService, CommandHelpRenderer helpRenderer) {
+        this(Objects.requireNonNull(plugin, "plugin").getServer(), plugin.getLogger(),
+                economyService, playerService, messageService, helpRenderer);
+    }
+
+    CoinsCommand(Server server, Logger logger, EconomyService economyService, PlayerService playerService,
+                 MessageService messageService, CommandHelpRenderer helpRenderer) {
+        this.server = Objects.requireNonNull(server, "server");
+        this.logger = Objects.requireNonNull(logger, "logger");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
+        this.playerService = Objects.requireNonNull(playerService, "playerService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
     }
 
     @Override
-    public boolean onCommand(
-            @NotNull CommandSender sender,
-            @NotNull Command command,
-            @NotNull String label,
-            @NotNull String[] args
-    ) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
+                             @NotNull String label, @NotNull String[] args) {
+        if (!sender.hasPermission(BASE_PERMISSION)) {
+            sendDenied(sender);
+            return true;
+        }
         if (args.length == 0) {
             sendOwnBalance(sender);
             return true;
         }
-        if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
-            helpRenderer.send(sender, HELP_PAGE);
+        String action = args[0].toLowerCase(Locale.ROOT);
+        if (action.equals("help")) {
+            if (args.length == 1) helpRenderer.send(sender, HELP_PAGE);
+            else sendUsage(sender, null, "/coins help");
+            return true;
+        }
+        if (!ADMIN_ACTIONS.contains(action)) {
+            messageService.send(sender, Component.text("Unknown coins command: ", NamedTextColor.RED)
+                    .append(Component.text(args[0], NamedTextColor.WHITE))
+                    .append(Component.newline())
+                    .append(Component.text("Use /coins help to view available commands.", NamedTextColor.YELLOW)));
             return true;
         }
         if (!sender.hasPermission(ADMIN_PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to use this command.</red>");
+            sendDenied(sender);
             return true;
         }
-
-        switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "get" -> handleGet(sender, args);
-            case "add" -> handleMutation(sender, args, Mutation.ADD);
-            case "remove" -> handleMutation(sender, args, Mutation.REMOVE);
-            case "set" -> handleMutation(sender, args, Mutation.SET);
-            default -> sendUnknown(sender, args[0]);
-        }
+        if (action.equals("get")) handleGet(sender, args);
+        else handleMutation(sender, args, Mutation.valueOf(action.toUpperCase(Locale.ROOT)));
         return true;
     }
 
     @Override
-    public @Nullable List<String> onTabComplete(
-            @NotNull CommandSender sender,
-            @NotNull Command command,
-            @NotNull String alias,
-            @NotNull String[] args
-    ) {
-        if (args.length == 1) {
-            return rootSuggestions(args[0], sender.hasPermission(ADMIN_PERMISSION));
-        }
-        if (args.length == 2
-                && sender.hasPermission(ADMIN_PERMISSION)
-                && List.of("get", "add", "remove", "set").contains(args[0].toLowerCase(Locale.ROOT))) {
-            return matches(
-                    plugin.getServer().getOnlinePlayers().stream().map(Player::getName).toList(),
-                    args[1]
-            );
+    public @NotNull List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
+                                               @NotNull String alias, @NotNull String[] args) {
+        if (!sender.hasPermission(BASE_PERMISSION)) return List.of();
+        if (args.length == 1) return rootSuggestions(args[0], sender.hasPermission(ADMIN_PERMISSION));
+        if (args.length == 2 && sender.hasPermission(ADMIN_PERMISSION)
+                && ADMIN_ACTIONS.contains(args[0].toLowerCase(Locale.ROOT))) {
+            // Only indexed name lookups: never read offline snapshots or scan storage for completion.
+            return matches(server.getOnlinePlayers().stream().filter(Player::isOnline)
+                    .map(this::safeArgument).distinct().toList(), args[1]);
         }
         return List.of();
     }
 
     static List<String> rootSuggestions(String input, boolean admin) {
         List<String> values = new ArrayList<>(List.of("help"));
-        if (admin) {
-            values.addAll(List.of("get", "add", "remove", "set"));
-        }
+        if (admin) values.addAll(ADMIN_ACTIONS);
         return matches(values, input);
+    }
+
+    private String safeArgument(Player player) {
+        Set<UUID> ids = playerService.findKnownIdsByName(player.getName());
+        return ids.size() == 1 && ids.contains(player.getUniqueId())
+                ? player.getName() : player.getUniqueId().toString();
     }
 
     private void sendOwnBalance(CommandSender sender) {
@@ -127,191 +137,207 @@ public final class CoinsCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can view their own coin balance.</red>");
             return;
         }
-
         OptionalLong balance = economyService.getCoins(player.getUniqueId());
         if (balance.isEmpty()) {
-            sendPlayerNotLoaded(sender, player);
+            sendPlayerNotLoaded(sender, player.getName());
             return;
         }
-        messageService.send(player, labeledValue("Coins: ", format(balance.getAsLong())));
+        messageService.send(sender, Component.text("Coins: ", NamedTextColor.GRAY)
+                .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
     }
 
     private void handleGet(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, "/coins get <player>");
+            sendUsage(sender, args.length == 1 ? "Missing player." : null, "/coins get <player|uuid>");
             return;
         }
+        Target target = resolve(sender, args[1]);
+        if (target == null) return;
+        try {
+            OptionalLong balance = economyService.getKnownCoins(target.id());
+            if (balance.isEmpty()) {
+                sendUnknownTarget(sender);
+                return;
+            }
+            messageService.send(sender, Component.text(target.name() + "'s coins: ", NamedTextColor.GRAY)
+                    .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
+        } catch (RuntimeException exception) {
+            logReadFailure(sender, target.id().toString(), exception);
+        }
+    }
 
-        Player target = findOnlinePlayer(sender, args[1]);
-        if (target == null) {
-            return;
+    private Target resolve(CommandSender sender, String input) {
+        try {
+            UUID id = parseUuid(input);
+            if (id == null) {
+                Set<UUID> ids = playerService.findKnownIdsByName(input);
+                if (ids.size() > 1) {
+                    messageService.send(sender,
+                            "<red>That name is ambiguous. Use the player's UUID.</red>");
+                    return null;
+                }
+                if (ids.isEmpty()) {
+                    sendUnknownTarget(sender);
+                    return null;
+                }
+                id = ids.iterator().next();
+            }
+            Target target = playerService.findKnownPlayer(id)
+                    .map(player -> new Target(player.getUniqueId(), player.getName())).orElse(null);
+            if (target == null) sendUnknownTarget(sender);
+            return target;
+        } catch (RuntimeException exception) {
+            logReadFailure(sender, input, exception);
+            return null;
         }
+    }
 
-        OptionalLong balance = economyService.getCoins(target.getUniqueId());
-        if (balance.isEmpty()) {
-            sendPlayerNotLoaded(sender, target);
-            return;
+    private static UUID parseUuid(String input) {
+        try {
+            UUID id = UUID.fromString(input);
+            return id.toString().equalsIgnoreCase(input) ? id : null;
+        } catch (IllegalArgumentException exception) {
+            return null;
         }
-        messageService.send(sender, Component.text(target.getName() + "'s coins: ", NamedTextColor.GRAY)
-                .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
     }
 
     private void handleMutation(CommandSender sender, String[] args, Mutation mutation) {
         if (args.length != 3) {
-            sendInvalidUsage(sender, "/coins " + mutation.name().toLowerCase(Locale.ROOT)
-                    + " <player> <amount>");
+            String missing = args.length == 1 ? "Missing player and amount."
+                    : args.length == 2 ? "Missing amount." : null;
+            sendUsage(sender, missing, "/coins " + mutation.name().toLowerCase(Locale.ROOT)
+                    + " <player|uuid> <amount>");
             return;
         }
-
-        Player target = findOnlinePlayer(sender, args[1]);
-        if (target == null) {
+        Target target = resolve(sender, args[1]);
+        if (target == null) return;
+        Player online = server.getPlayer(target.id());
+        if (online == null || !online.isOnline()) {
+            messageService.send(sender, Component.text(target.name(), NamedTextColor.WHITE)
+                    .append(Component.text(
+                            " is known, but coin changes currently require the player to be online.",
+                            NamedTextColor.RED)));
             return;
         }
-
+        OptionalLong previous = economyService.getCoins(target.id());
+        if (!playerService.isLoaded(target.id()) || previous.isEmpty()) {
+            sendPlayerNotLoaded(sender, target.name());
+            return;
+        }
         Long amount = parseAmount(sender, args[2], mutation == Mutation.SET);
-        if (amount == null) {
-            return;
-        }
+        if (amount == null) return;
 
         EconomyResult result;
         try {
             result = switch (mutation) {
-                case ADD -> economyService.addCoins(target.getUniqueId(), amount);
-                case REMOVE -> economyService.removeCoins(target.getUniqueId(), amount);
-                case SET -> economyService.setCoins(target.getUniqueId(), amount);
+                case ADD -> economyService.addCoins(target.id(), amount);
+                case REMOVE -> economyService.removeCoins(target.id(), amount);
+                case SET -> economyService.setCoins(target.id(), amount);
             };
         } catch (RuntimeException exception) {
-            plugin.getLogger().log(
-                    Level.SEVERE,
-                    "Could not persist a coin balance change for " + target.getUniqueId()
-                            + " requested by " + sender.getName() + ".",
-                    exception
-            );
-            messageService.send(sender, "<red>The coin balance could not be saved. Check the server log.</red>");
+            logger.log(Level.SEVERE, "Could not persist coin admin mutation [actor=" + actor(sender)
+                    + ", target=" + target.id() + ", action=" + mutation + "]", exception);
+            messageService.send(sender, "<red>The coin balance could not be saved. Please try again.</red>");
             return;
         }
-
-        sendMutationResult(sender, target, amount, mutation, result);
-    }
-
-    private void sendMutationResult(
-            CommandSender sender,
-            Player target,
-            long amount,
-            Mutation mutation,
-            EconomyResult result
-    ) {
         switch (result) {
-            case SUCCESS -> sendMutationSuccess(sender, target, amount, mutation);
-            case PLAYER_NOT_LOADED -> sendPlayerNotLoaded(sender, target);
+            case SUCCESS -> {
+                long balance = economyService.getCoins(target.id()).orElseThrow();
+                logger.info("Coin admin mutation [actor=" + actor(sender) + ", target=" + target.id()
+                        + ", name=" + target.name() + ", action=" + mutation + ", amount=" + amount
+                        + ", previous=" + previous.getAsLong() + ", new=" + balance + "]");
+                sendMutationSuccess(sender, target, amount, mutation, balance);
+                Player recipient = server.getPlayer(target.id());
+                if (recipient != null && recipient.isOnline()
+                        && (!(sender instanceof Player player) || !player.getUniqueId().equals(target.id()))) {
+                    notifyTarget(recipient, amount, mutation, balance);
+                }
+            }
+            case PLAYER_NOT_LOADED -> sendPlayerNotLoaded(sender, target.name());
             case INSUFFICIENT_FUNDS -> messageService.send(sender,
-                    Component.text(target.getName(), NamedTextColor.WHITE)
+                    Component.text(target.name(), NamedTextColor.WHITE)
                             .append(Component.text(" does not have enough coins.", NamedTextColor.RED)));
             case BALANCE_OVERFLOW -> messageService.send(sender,
-                    "<red>The resulting coin balance would be too large.</red>"
-            );
+                    "<red>The resulting coin balance would be too large.</red>");
         }
     }
 
-    private void sendMutationSuccess(CommandSender sender, Player target, long amount, Mutation mutation) {
-        long newBalance = economyService.getCoins(target.getUniqueId()).orElseThrow();
-        Component message = switch (mutation) {
-            case ADD -> mutationMessage("Added ", amount, " coins to ", target.getName(), newBalance);
-            case REMOVE -> mutationMessage("Removed ", amount, " coins from ", target.getName(), newBalance);
-            case SET -> Component.text("Set ", NamedTextColor.GREEN)
-                    .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                    .append(Component.text("'s coin balance to ", NamedTextColor.GREEN))
-                    .append(Component.text(format(newBalance), NamedTextColor.WHITE))
-                    .append(Component.text(".", NamedTextColor.GREEN));
+    private void sendMutationSuccess(CommandSender sender, Target target, long amount,
+                                     Mutation mutation, long balance) {
+        String text = switch (mutation) {
+            case ADD -> "Added " + format(amount) + " coins to " + target.name()
+                    + ". New balance: " + format(balance) + ".";
+            case REMOVE -> "Removed " + format(amount) + " coins from " + target.name()
+                    + ". New balance: " + format(balance) + ".";
+            case SET -> "Set " + target.name() + "'s coin balance to " + format(balance) + ".";
         };
-        messageService.send(sender, message);
+        messageService.send(sender, Component.text(text, NamedTextColor.GREEN));
     }
 
-    private Player findOnlinePlayer(CommandSender sender, String name) {
-        Player target = plugin.getServer().getPlayerExact(name);
-        if (target == null) {
-            messageService.send(sender, "<red>The specified player is not online.</red>");
-        }
-        return target;
+    private void notifyTarget(Player target, long amount, Mutation mutation, long balance) {
+        String text = switch (mutation) {
+            case ADD -> "Your coin balance increased by " + format(amount)
+                    + ". New balance: " + format(balance) + ".";
+            case REMOVE -> format(amount) + " coins were removed from your balance. New balance: "
+                    + format(balance) + ".";
+            case SET -> "Your coin balance was set to " + format(balance) + ".";
+        };
+        messageService.send(target, Component.text(text, NamedTextColor.GREEN));
+    }
+
+    private static String actor(CommandSender sender) {
+        return sender instanceof ConsoleCommandSender ? "CONSOLE" : sender.getName();
     }
 
     private Long parseAmount(CommandSender sender, String input, boolean zeroAllowed) {
-        long amount;
         try {
-            amount = Long.parseLong(input);
+            if (!input.matches("[0-9]+")) throw new NumberFormatException();
+            long amount = Long.parseLong(input);
+            if (!zeroAllowed && amount == 0L) throw new NumberFormatException();
+            return amount;
         } catch (NumberFormatException exception) {
-            sendInvalidAmount(sender, zeroAllowed);
+            messageService.send(sender, Component.text("The amount must be "
+                    + (zeroAllowed ? "a non-negative" : "a positive") + " whole number.", NamedTextColor.RED));
             return null;
         }
-
-        if (amount < 0L || (!zeroAllowed && amount == 0L)) {
-            sendInvalidAmount(sender, zeroAllowed);
-            return null;
-        }
-        return amount;
     }
 
-    private void sendInvalidAmount(CommandSender sender, boolean zeroAllowed) {
-        String requirement = zeroAllowed ? "a non-negative" : "a positive";
-        messageService.send(sender, Component.text(
-                "The amount must be " + requirement + " whole number.", NamedTextColor.RED));
+    private void sendPlayerNotLoaded(CommandSender sender, String name) {
+        messageService.send(sender, Component.text("Player data for " + name + " is not loaded.", NamedTextColor.RED));
     }
 
-    private void sendPlayerNotLoaded(CommandSender sender, Player player) {
-        messageService.send(sender, Component.text("Player data for ", NamedTextColor.RED)
-                .append(Component.text(player.getName(), NamedTextColor.WHITE))
-                .append(Component.text(" is not loaded.", NamedTextColor.RED)));
+    private void sendUnknownTarget(CommandSender sender) {
+        messageService.send(sender, "<red>This player is not known to VapeeCore.</red>");
     }
 
-    private void sendUnknown(CommandSender sender, String subcommand) {
-        messageService.send(sender,
-                "<red>Unknown subcommand '<white><value></white>'.</red>\n"
-                        + "<yellow>Use:</yellow> <aqua>/coins help</aqua>",
-                net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.unparsed("value", subcommand)
-        );
+    private void logReadFailure(CommandSender sender, String target, RuntimeException exception) {
+        logger.log(Level.SEVERE, "Could not read coin target [actor=" + actor(sender)
+                + ", target=" + target + "]", exception);
+        messageService.send(sender, "<red>Player coin data could not be read. Please try again.</red>");
     }
 
-    private void sendInvalidUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, net.kyori.adventure.text.Component.text(
-                        "Invalid usage.", net.kyori.adventure.text.format.NamedTextColor.RED)
-                .append(net.kyori.adventure.text.Component.newline())
-                .append(net.kyori.adventure.text.Component.text(
-                        "Use: ", net.kyori.adventure.text.format.NamedTextColor.YELLOW))
-                .append(net.kyori.adventure.text.Component.text(
-                        syntax, net.kyori.adventure.text.format.NamedTextColor.AQUA))
-        );
+    private void sendDenied(CommandSender sender) {
+        messageService.send(sender, "<red>You do not have permission to use this command.</red>");
+    }
+
+    private void sendUsage(CommandSender sender, String error, String syntax) {
+        Component message = error == null ? Component.empty()
+                : Component.text(error, NamedTextColor.RED).append(Component.newline());
+        messageService.send(sender, message.append(Component.text("Usage: ", NamedTextColor.YELLOW))
+                .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private static List<String> matches(List<String> values, String prefix) {
         String normalized = prefix.toLowerCase(Locale.ROOT);
-        return values.stream()
-                .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(normalized))
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+        return values.stream().filter(value -> value.toLowerCase(Locale.ROOT).startsWith(normalized))
+                .sorted(String.CASE_INSENSITIVE_ORDER).toList();
     }
 
-    private String format(long coins) {
+    private static String format(long coins) {
         return String.format(Locale.US, "%,d", coins);
     }
 
-    private Component labeledValue(String label, String value) {
-        return Component.text(label, NamedTextColor.GRAY)
-                .append(Component.text(value, NamedTextColor.WHITE));
-    }
+    private record Target(UUID id, String name) { }
 
-    private Component mutationMessage(String action, long amount, String relation, String playerName, long balance) {
-        return Component.text(action, NamedTextColor.GREEN)
-                .append(Component.text(format(amount), NamedTextColor.WHITE))
-                .append(Component.text(relation, NamedTextColor.GREEN))
-                .append(Component.text(playerName, NamedTextColor.WHITE))
-                .append(Component.text(". New balance: ", NamedTextColor.GREEN))
-                .append(Component.text(format(balance), NamedTextColor.WHITE))
-                .append(Component.text(".", NamedTextColor.GREEN));
-    }
-
-    private enum Mutation {
-        ADD,
-        REMOVE,
-        SET
-    }
+    private enum Mutation { ADD, REMOVE, SET }
 }

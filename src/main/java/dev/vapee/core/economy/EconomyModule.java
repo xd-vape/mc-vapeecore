@@ -51,6 +51,7 @@ public final class EconomyModule implements CoreModule {
             CoinsCommand executor = new CoinsCommand(
                     plugin,
                     newEconomyService,
+                    playerService,
                     messageService,
                     commandHelpRenderer
             );
