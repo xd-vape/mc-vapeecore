@@ -54,6 +54,19 @@ public final class VisibilityService {
         }
     }
 
+    /** Re-evaluates both directions because viewer preferences are intentionally asymmetric. */
+    public void refreshPair(UUID first, UUID second) {
+        UUID checkedFirst = Objects.requireNonNull(first, "first");
+        UUID checkedSecond = Objects.requireNonNull(second, "second");
+        if (checkedFirst.equals(checkedSecond)) return;
+        Map<UUID, Player> online = onlineById();
+        Player firstPlayer = online.get(checkedFirst);
+        Player secondPlayer = online.get(checkedSecond);
+        if (firstPlayer == null || secondPlayer == null || !inLobby(firstPlayer) || !inLobby(secondPlayer)) return;
+        apply(firstPlayer, secondPlayer);
+        apply(secondPlayer, firstPlayer);
+    }
+
     public void restorePlayer(Player player) {
         Player checked = Objects.requireNonNull(player, "player");
         UUID id = checked.getUniqueId();

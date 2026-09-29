@@ -3,9 +3,11 @@ package dev.vapee.core.friend;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -19,6 +21,7 @@ public final class FriendService {
     private final Supplier<FriendLimits> limitsSupplier;
     private final FriendRequestPolicy requestPolicy;
     private final Clock clock;
+    private final Set<FriendRelationshipListener> relationshipListeners = new LinkedHashSet<>();
     private Map<FriendPair, Friendship> friendships;
     private Map<RequestKey, FriendRequest> requests;
 
@@ -87,6 +90,7 @@ public final class FriendService {
             HashMap<FriendPair, Friendship> nextFriendships = new HashMap<>(friendships);
             nextFriendships.put(pair, new Friendship(validatedSender, validatedRecipient, clock.instant()));
             persist(nextFriendships, nextRequests);
+            notifyRelationshipChanged(validatedSender, validatedRecipient);
             return FriendResult.AUTO_ACCEPTED;
         }
 
@@ -136,6 +140,7 @@ public final class FriendService {
         HashMap<FriendPair, Friendship> nextFriendships = new HashMap<>(friendships);
         nextFriendships.put(pair, new Friendship(validatedSender, validatedRecipient, clock.instant()));
         persist(nextFriendships, nextRequests);
+        notifyRelationshipChanged(validatedSender, validatedRecipient);
         return FriendResult.SUCCESS;
     }
 
@@ -187,6 +192,7 @@ public final class FriendService {
         HashMap<FriendPair, Friendship> nextFriendships = new HashMap<>(friendships);
         nextFriendships.remove(pair);
         persist(nextFriendships, requests);
+        notifyRelationshipChanged(validatedPlayer, validatedFriend);
         return FriendResult.SUCCESS;
     }
 
@@ -257,6 +263,20 @@ public final class FriendService {
 
     public FriendLimits getLimits() {
         return Objects.requireNonNull(limitsSupplier.get(), "friend limits");
+    }
+
+    public void addRelationshipListener(FriendRelationshipListener listener) {
+        relationshipListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    public void removeRelationshipListener(FriendRelationshipListener listener) {
+        relationshipListeners.remove(Objects.requireNonNull(listener, "listener"));
+    }
+
+    private void notifyRelationshipChanged(UUID first, UUID second) {
+        for (FriendRelationshipListener listener : List.copyOf(relationshipListeners)) {
+            listener.onFriendRelationshipChanged(first, second);
+        }
     }
 
     private FriendResult evaluatePolicy(UUID sender, UUID recipient) {

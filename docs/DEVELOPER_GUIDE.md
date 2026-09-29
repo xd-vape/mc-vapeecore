@@ -32,7 +32,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
 | Player visibility policy/runtime | `dev.vapee.core.visibility.VisibilityModule`, `VisibilityPolicy`, `VisibilityService` |
 | Persistent visibility preferences | `PlayerVisibilitySettings`, `PlayerSettingsService`, `FilePlayerRepository` |
-| Settings menu | `SettingsMenu` und `SettingsListener` |
+| Settings menu und Visibility UX | `SettingsMenu`, `dev.vapee.core.settings.visibility`, `SettingsCommand` |
 | Warps | `dev.vapee.core.lobby.warp` |
 | Warp persistence | Live: `plugins/VapeeCore/warps.yml`, Code: `WarpConfig` |
 | Blackjack rules | `dev.vapee.core.activity.blackjack` |
@@ -352,7 +352,7 @@ Das Default-Scoreboard zeigt Coins, den freundlichen Rank mit `<rank>` in seiner
 
 Neue Resource-Defaults überschreiben weder `plugins/VapeeCore/chat.yml` noch `plugins/VapeeCore/presentation.yml`. Ein vorhandenes `<group>` funktioniert weiterhin. Für Rank-Farben auf bestehenden Servern müssen Administratoren `chat.yml` auf `format: "<rank_name><dark_gray> » </dark_gray><white><message></white>"` und `presentation.yml` unter `tablist` auf `name-format: "<rank_name>"` umstellen; optionale Prefix-/Suffix-Varianten sind möglich. Danach aktiviert `/core reload` die Änderung.
 
-## Visibility & privacy foundation (Phase 20A)
+## Visibility foundation und Profile UX (Phase 20A/20B)
 
 `VisibilityModule` ist der einzige Owner der Visibility-Policy, der Paper-Show/Hide-Anwendung und der von VapeeCore gesetzten Hide-Zustände. Es startet nach Lobby und vor Chat, konsumiert `PlayerModule`, `SocialModule`, `FriendModule` und `LobbyModule` und ist kein `ReloadParticipant`. `LobbyExperienceModule` erzeugt keinen zweiten Visibility-Service: Seine Listener beziehen `visibilityModule.getVisibilityService()` und liefern nur Join-, Quit-, World-, Respawn- und Hotbar-Ereignisse. Globales World-Visibility, Commands und ein periodischer Refresh-Task existieren nicht.
 
@@ -381,11 +381,23 @@ Alte Dateien ohne `settings.visibility` behalten deshalb ihr bisheriges Verhalte
 
 Ein- und ausgehende Friend Requests zählen ausdrücklich nicht als Freundschaft; `FriendService` bleibt die Source of Truth. Staff wird ausschließlich über die aktuelle Online-Permission `vapeecore.visibility.staff` erkannt, nie über Primary-Group- oder Rangnamen. Dieser Node ist nur ein Klassifizierungsmarker und gewährt keine Command- oder Admin-Fähigkeit. Die Game-Regel ist als injizierbares `BiPredicate<UUID, UUID>` testbar; Production verwendet in 20A bewusst `false`, damit keine falsche Activity-Abhängigkeit entsteht.
 
-`VisibilityService` wendet die Policy nur für Online-Viewer und -Targets in der Lobby-Welt an. `synchronizePlayer` aktualisiert die neue Person als Viewer und anschließend alle vorhandenen Lobby-Viewer in Gegenrichtung; die Präferenzen dürfen deshalb asymmetrisch sein. `applyViewerPreference` berechnet nach dem Master-Hotbar-Toggle alle relevanten Targets des Viewers neu. Sichtbarkeit nutzt ausschließlich `viewer.hidePlayer(plugin, target)` und `viewer.showPlayer(plugin, target)`. Der Service merkt nur die von dieser Plugin-Instanz versteckten Paare. `restorePlayer` gibt beim Lobby-Austritt oder Quit alle eigenen Paare mit dieser Person frei; `restoreAll` läuft beim Disable des VisibilityModule und setzt die Runtime-Referenz anschließend auch bei einzelnen Restore-Fehlern zurück. Fremde Plugin-Zustände werden nicht verwaltet.
+`VisibilityService` wendet die Policy nur für Online-Viewer und -Targets in der Lobby-Welt an. `synchronizePlayer` aktualisiert die neue Person als Viewer und anschließend alle vorhandenen Lobby-Viewer in Gegenrichtung; die Präferenzen dürfen deshalb asymmetrisch sein. `applyViewerPreference` berechnet nach einer persönlichen Setting-Mutation alle relevanten Targets des Viewers neu. `refreshPair(first, second)` löst beide Online-Spieler auf und bewertet ausschließlich in der Lobby beide Richtungen neu. Sichtbarkeit nutzt ausschließlich `viewer.hidePlayer(plugin, target)` und `viewer.showPlayer(plugin, target)`. Der Service merkt nur die von dieser Plugin-Instanz versteckten Paare. `restorePlayer` gibt beim Lobby-Austritt oder Quit alle eigenen Paare mit dieser Person frei; `restoreAll` läuft beim Disable des VisibilityModule und setzt die Runtime-Referenz anschließend auch bei einzelnen Restore-Fehlern zurück. Fremde Plugin-Zustände werden nicht verwaltet.
 
-Das Hotbar-Item beschreibt den Masterzustand als `Players: Visible` beziehungsweise `Players: Filtered`. Rechtsklick toggelt nur den bestehenden Master, speichert ihn, wendet die Viewer-Präferenz unmittelbar an, aktualisiert das Item und behält den bestehenden 10-Tick-Cooldown sowie das optionale UI-Soundverhalten. Das Phase-20A-Settings-Menü erhält absichtlich noch keine Filter- oder Manage-Users-Oberfläche.
+Das Hotbar-Item beschreibt den Masterzustand als `Players: Visible` beziehungsweise `Players: Filtered`. Rechtsklick toggelt den bestehenden Master, speichert ihn, wendet die Viewer-Präferenz unmittelbar an, aktualisiert das Item und behält den bestehenden 10-Tick-Cooldown sowie das optionale UI-Soundverhalten. Der Master im Visibility-Menü mutiert denselben Wert und ruft danach ebenfalls `LobbyItemService#refreshVisibilityItem` auf.
 
-Phase 20B muss die Friends-/Staff-/Added-/Game-Filter-UX und die Identity-validierte Added-Users-Verwaltung ergänzen. Sobald der Friend-Filter spielerzugänglich ist, müssen Friend accept/add/remove-Änderungen die betroffenen Visibility-Paare unmittelbar neu berechnen; Phase 20A führt dafür bewusst noch keine cross-module Notification-Infrastruktur ein. Eine sofortige LuckPerms-Event-Anbindung ist ebenfalls nicht enthalten: Der Staff-Marker wird bei jeder normalen Neuberechnung aktuell gelesen.
+### Visibility Settings UX (Phase 20B)
+
+`SettingsModule` besitzt die Spieler-UX und injiziert gezielt `IdentityModule`, `VisibilityModule` und `LobbyModule`; es implementiert weder eine zweite Policy noch eigene Persistence. Das vorhandene `SettingsMenu` bleibt ein 27-Slot-Menü und ergänzt nur den Einstieg `Player Visibility`. `VisibilitySettingsMenu` rendert in einem separaten 54-Slot-Inventar Feature-Items und direkt darunter Status-Panes für All Players, Friends, Staff, Added Users und Game Participants. Master-OFF heißt `FILTERED`, nicht „niemand sichtbar“. Friends, Staff und Added Users lassen sich auch bei aktivem Master vorbereiten. Game Participants bleibt sichtbar `Unavailable`, verändert den persistierten Wert nicht und wartet auf eine echte Activity-/Game-Anbindung.
+
+`VisiblePlayersMenu` verwaltet ausschließlich `PlayerVisibilitySettings.addedPlayers`: 45 Content-Slots, deterministische Sortierung nach bekanntem Namen und UUID, tatsächlicher Online-Status über `Server#getPlayer(UUID)` plus `isOnline()`, UUID-Fallback und eine untere Navigationszeile. `VisiblePlayersHolder` hält die serverseitige Slot→UUID-Zuordnung; Itemname und Lore werden nie zurückgeparst. Nur Rechtsklick entfernt. Refresh liest Settings, Identity und Online-Status neu, Seiten werden geklemmt und der Empty State behält den Add-Button. Dieser schließt das Inventar und sendet eine Adventure-Component mit `suggestCommand("/settings visibility add ")`; Chat-, Sign- oder Anvil-Capture existiert nicht.
+
+`/settings visibility` öffnet das Filtermenü. `/settings visibility add <player|uuid>` validiert bekannte Online- und Offline-Identitäten über `PlayerIdentityService`, lehnt unbekannte oder mehrdeutige Namen, Self und Duplikate kontrolliert ab und wendet einen erfolgreichen Save sofort über `VisibilityService#applyViewerPreference` an. `/settings visibility remove <player|uuid>` löst Namen ebenfalls über Identity auf; eine bereits gespeicherte unbekannte UUID darf ausdrücklich direkt entfernt werden. Tab Completion zeigt für Add geeignete Online-Spieler und für Remove nur Added Users, bei unbekannten oder mehrdeutigen Namen als UUID. Alle Playerdaten werden als literal Adventure-Text ausgegeben. Console bleibt ausgeschlossen und `vapeecore.settings.use` ist die einzige Permission.
+
+Beide Visibility-Menüs binden Owner, Holder und exakt eine Inventory-Instanz und führen zusätzlich pro Viewer eine Active-Inventory-Registry. Clicks einschließlich Bottom-Inventory-Transfer, Shift, Number Key, Double Click, Offhand, Collect, Drop und Creative sowie Drags werden zuerst gecancelt; nur definierte Aktionen auf dem aktuell gebundenen Inventar laufen weiter. Close, Quit und `SettingsModule#disable` entfernen aktive Referenzen beziehungsweise schließen eigene Menüs. Save-Fehler werden mit UUID geloggt, nutzen das Rollback des `PlayerSettingsService`, spielen keinen Success-Sound und bauen den aktuellen State kontrolliert neu auf.
+
+`FriendService` und `SocialService` stellen kleine domain-neutrale Relationship-Listener bereit. Sie feuern ausschließlich nach erfolgreich persistiertem Accept/Auto-Accept/Remove beziehungsweise Ignore/Unignore. `VisibilityModule` registriert beide Listener beim Enable, ruft `refreshPair` auf und entfernt sie beim Disable; Friend und Social importieren keine Visibility- oder Bukkit-Klassen. Damit werden Friends-Filter und Ignore-Hard-Deny ohne Relog sofort in beiden asymmetrischen Richtungen aktualisiert. Pending/Denied/Canceled Friend Requests ändern keine Freundschaft und feuern deshalb keinen Refresh. Eine sofortige LuckPerms-Event-Anbindung bleibt außerhalb des Scopes: Der Staff-Marker wird bei jeder normalen Neuberechnung aktuell gelesen.
+
+`/profile [player|uuid]` bleibt unverändert; „Profile UX“ bezeichnet ausschließlich die persönlichen Visibility-Einstellungen. Phase 20B führt weder ein generisches GUI-Framework noch das vollständige Settings-Redesign ein. Chat Range, Game Auto-Join und produktive Game-Participant-Integration bleiben aufgeschoben.
 
 ## Lobby player state
 
@@ -642,7 +654,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/enderchest [player]` | Echtes Enderchest öffnen | `EnderChestCommand` | `vapeecore.utility.enderchest`, fremde Targets: `.enderchest.others` |
 | `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
-| `/settings` | Settings-Menü öffnen | `SettingsCommand` | `vapeecore.settings.use` |
+| `/settings`, `/settings visibility [add|remove …]` | Settings-/Visibility-Menüs öffnen und Added Users verwalten | `SettingsCommand`, `VisibilitySettingsMenu`, `VisiblePlayersMenu` | `vapeecore.settings.use` |
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
@@ -654,7 +666,7 @@ Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vape
 
 ## Command UX Standard
 
-Einfache Commands wie `/spawn`, `/settings`, `/build` oder `/ignorelist` zeigen bei falscher Eingabe nur einen kurzen, kontrollierten Hinweis mit `Invalid usage.` und der exakten Syntax. Komplexe Commands mit mehreren Aktionen besitzen dagegen eine strukturierte `CommandHelpPage` mit logisch benannten `CommandHelpSection`s und je einer `CommandHelpEntry` pro sichtbarer Syntaxzeile. Die gemeinsamen immutable Modelle und der reine Presentation-Renderer liegen unter `dev.vapee.core.command.help`; Parsing, Permission-Gates und Service-Aufrufe bleiben in der jeweiligen dünnen Command-Klasse.
+Einfache Commands wie `/spawn`, `/build` oder `/ignorelist` zeigen bei falscher Eingabe nur einen kurzen, kontrollierten Hinweis mit `Invalid usage.` und der exakten Syntax. `/settings visibility add|remove` nennt stattdessen direkt die konkrete Syntax des betroffenen Subcommands. Komplexe Commands mit mehreren Aktionen besitzen eine strukturierte `CommandHelpPage` mit logisch benannten `CommandHelpSection`s und je einer `CommandHelpEntry` pro sichtbarer Syntaxzeile. Die gemeinsamen immutable Modelle und der reine Presentation-Renderer liegen unter `dev.vapee.core.command.help`; Parsing, Permission-Gates und Service-Aufrufe bleiben in der jeweiligen dünnen Command-Klasse.
 
 Der Renderer filtert Einträge ausschließlich über die am Entry hinterlegte Bukkit-Permission und unterdrückt danach leere Sections. Eine Help Page wird als ein mehrzeiliger Adventure-`Component` gesendet, damit der globale Prefix exakt einmal erscheint. Syntax wird immer über `Component.text` erzeugt: Platzhalter wie `<id>`, `<player>` oder `<amount>` bleiben sichtbarer Plain Text und werden nie als MiniMessage-Tags ausgewertet. Klickbare Syntax verwendet ausschließlich `ClickEvent.suggestCommand`; administrative Aktionen dürfen niemals durch einen Help-Klick ausgeführt werden.
 
@@ -753,6 +765,13 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.visibility.VisibilityPolicyHarness`
 - `dev.vapee.core.visibility.VisibilityServiceHarness`
 - `dev.vapee.core.visibility.VisibilityModuleHarness`
+- `dev.vapee.core.visibility.FriendVisibilityRefreshHarness`
+- `dev.vapee.core.visibility.IgnoreVisibilityRefreshHarness`
+- `dev.vapee.core.settings.SettingsMenuHarness`
+- `dev.vapee.core.settings.command.SettingsCommandHarness`
+- `dev.vapee.core.settings.visibility.VisibilitySettingsMenuHarness`
+- `dev.vapee.core.settings.visibility.VisiblePlayersMenuHarness`
+- `dev.vapee.core.settings.visibility.VisibilityMenuSecurityHarness`
 - `dev.vapee.core.quest.QuestDefinitionHarness`
 - `dev.vapee.core.quest.QuestServiceHarness`
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`

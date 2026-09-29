@@ -24,7 +24,8 @@ public final class VisibilityModuleHarness {
 
         String module = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/visibility/VisibilityModule.java"));
-        check(module.contains("new VisibilityService(") && module.contains("service = new VisibilityService"),
+        check(module.contains("VisibilityService newService = new VisibilityService(")
+                        && module.contains("service = newService"),
                 "enable creates and publishes service");
         check(module.contains("service.restoreAll()") && module.contains("service = null"),
                 "disable restores state and clears runtime reference");
@@ -32,6 +33,28 @@ public final class VisibilityModuleHarness {
                 "Visibility has no reload participant or scheduler");
         check(module.contains("(UUID viewer, UUID target) -> false"),
                 "production game-participant provider is explicit false boundary");
+        check(module.contains("friendService.addRelationshipListener(newFriendListener)")
+                        && module.contains("socialService.addRelationshipListener(newIgnoreListener)")
+                        && module.contains("activeService.refreshPair(first, second)"),
+                "Visibility owns friend and ignore live-refresh subscriptions");
+        check(module.contains("subscribedFriends.removeRelationshipListener(friendRelationshipListener)")
+                        && module.contains("subscribedSocial.removeRelationshipListener(ignoreRelationshipListener)"),
+                "Visibility removes both relationship listeners during disable");
+
+        String settings = Files.readString(Path.of(
+                "src/main/java/dev/vapee/core/settings/SettingsModule.java"));
+        check(settings.contains("IdentityModule identityModule")
+                        && settings.contains("VisibilityModule visibilityModule")
+                        && settings.contains("LobbyModule lobbyModule"),
+                "Settings visibility UX uses explicit module dependencies");
+        check(settings.contains("new VisibilitySettingsMenu(")
+                        && settings.contains("new VisiblePlayersMenu(")
+                        && settings.contains("new SettingsCommand(plugin"),
+                "Settings owns visibility menus and command UX");
+        check(settings.contains("closeVisibilityMenus()")
+                        && settings.contains("HandlerList.unregisterAll(newVisibilitySettingsListener)")
+                        && settings.contains("HandlerList.unregisterAll(newVisiblePlayersListener)"),
+                "Settings failure and disable paths clean visibility GUI lifecycle");
 
         String experience = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/lobby/experience/LobbyExperienceModule.java"));

@@ -1,10 +1,14 @@
 package dev.vapee.core.visibility;
 
 import dev.vapee.core.friend.FriendModule;
+import dev.vapee.core.friend.FriendRelationshipListener;
+import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.social.SocialModule;
+import dev.vapee.core.social.IgnoreRelationshipListener;
+import dev.vapee.core.social.SocialService;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
@@ -18,6 +22,10 @@ public final class VisibilityModule implements CoreModule {
     private final FriendModule friends;
     private final LobbyModule lobby;
     private VisibilityService service;
+    private FriendService subscribedFriends;
+    private SocialService subscribedSocial;
+    private FriendRelationshipListener friendRelationshipListener;
+    private IgnoreRelationshipListener ignoreRelationshipListener;
 
     public VisibilityModule(JavaPlugin plugin, PlayerModule players, SocialModule social,
                             FriendModule friends, LobbyModule lobby) {
@@ -31,15 +39,34 @@ public final class VisibilityModule implements CoreModule {
     @Override public String getName() { return "Visibility"; }
 
     @Override public void enable() {
+        FriendService friendService = friends.getFriendService();
+        SocialService socialService = social.getSocialService();
         VisibilityPolicy policy = new VisibilityPolicy(players.getPlayerSettingsService(),
-                social.getSocialService(), friends.getFriendService(),
+                socialService, friendService,
                 (UUID viewer, UUID target) -> false); // Activity/game integration is deferred.
-        service = new VisibilityService(plugin, lobby.getLobbyService(), policy);
+        VisibilityService newService = new VisibilityService(plugin, lobby.getLobbyService(), policy);
+        FriendRelationshipListener newFriendListener = (first, second) -> refreshPairSafely(
+                newService, first, second, "friendship");
+        IgnoreRelationshipListener newIgnoreListener = (first, second) -> refreshPairSafely(
+                newService, first, second, "ignore");
+        friendService.addRelationshipListener(newFriendListener);
+        socialService.addRelationshipListener(newIgnoreListener);
+        service = newService;
+        subscribedFriends = friendService;
+        subscribedSocial = socialService;
+        friendRelationshipListener = newFriendListener;
+        ignoreRelationshipListener = newIgnoreListener;
         plugin.getLogger().info("Visibility module enabled (lobby-only).");
     }
 
     @Override public void disable() {
         try {
+            if (subscribedFriends != null && friendRelationshipListener != null) {
+                subscribedFriends.removeRelationshipListener(friendRelationshipListener);
+            }
+            if (subscribedSocial != null && ignoreRelationshipListener != null) {
+                subscribedSocial.removeRelationshipListener(ignoreRelationshipListener);
+            }
             if (service != null) {
                 try {
                     service.restoreAll();
@@ -49,7 +76,21 @@ public final class VisibilityModule implements CoreModule {
                 }
             }
         } finally {
+            ignoreRelationshipListener = null;
+            friendRelationshipListener = null;
+            subscribedSocial = null;
+            subscribedFriends = null;
             service = null;
+        }
+    }
+
+    private void refreshPairSafely(VisibilityService activeService, UUID first, UUID second, String relation) {
+        try {
+            activeService.refreshPair(first, second);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING,
+                    "Could not refresh lobby visibility after " + relation + " change for "
+                            + first + " and " + second + ".", exception);
         }
     }
 

@@ -53,7 +53,7 @@ commands:
     permission: vapeecore.message.use
   settings:
     description: Opens your player settings
-    usage: /settings
+    usage: /settings [visibility ...]
     permission: vapeecore.settings.use
   ignore:
     description: Ignore an online player

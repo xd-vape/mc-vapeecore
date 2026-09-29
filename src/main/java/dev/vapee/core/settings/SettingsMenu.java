@@ -21,6 +21,7 @@ import java.util.UUID;
 public final class SettingsMenu {
 
     public static final int INVENTORY_SIZE = 27;
+    public static final int VISIBILITY_SLOT = 4;
     public static final int SCOREBOARD_SLOT = 11;
     public static final int SOUNDS_SLOT = 13;
     public static final int PRIVATE_MESSAGES_SLOT = 15;
@@ -29,18 +30,29 @@ public final class SettingsMenu {
 
     private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
 
-    private final JavaPlugin plugin;
     private final PlayerSettingsService playerSettingsService;
     private final MessageService messageService;
+    private final InventoryFactory inventoryFactory;
+    private final ItemRenderer itemRenderer;
 
     public SettingsMenu(
             JavaPlugin plugin,
             PlayerSettingsService playerSettingsService,
             MessageService messageService
     ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        Objects.requireNonNull(plugin, "plugin");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.inventoryFactory = (holder, size, title) -> plugin.getServer().createInventory(holder, size, title);
+        this.itemRenderer = SettingsMenu::renderItem;
+    }
+
+    SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
+                 InventoryFactory inventoryFactory, ItemRenderer itemRenderer) {
+        this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
+        this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
+        this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
     }
 
     public void open(Player player) {
@@ -52,7 +64,7 @@ public final class SettingsMenu {
         }
 
         SettingsInventoryHolder holder = new SettingsInventoryHolder(uniqueId);
-        Inventory inventory = plugin.getServer().createInventory(holder, INVENTORY_SIZE, TITLE);
+        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, TITLE);
         holder.bindInventory(inventory);
         if (!refresh(validatedPlayer, inventory)) {
             messageService.send(validatedPlayer, "<red>Your player profile is not available.</red>");
@@ -76,6 +88,7 @@ public final class SettingsMenu {
         }
 
         PlayerSettings settings = optionalSettings.get();
+        validatedInventory.setItem(VISIBILITY_SLOT, createVisibilityItem());
         validatedInventory.setItem(
                 SCOREBOARD_SLOT,
                 createToggleItem(
@@ -129,10 +142,6 @@ public final class SettingsMenu {
             List<String> description,
             boolean enabled
     ) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(uiText(name, NamedTextColor.AQUA));
-
         List<Component> lore = new java.util.ArrayList<>();
         for (String line : description) {
             lore.add(uiText(line, NamedTextColor.GRAY));
@@ -146,20 +155,57 @@ public final class SettingsMenu {
                 enabled ? "Click to disable." : "Click to enable.",
                 NamedTextColor.YELLOW
         ));
-        meta.lore(List.copyOf(lore));
-        item.setItemMeta(meta);
-        return item;
+        return itemRenderer.render(new ItemSpec(material, uiText(name, NamedTextColor.AQUA), List.copyOf(lore)));
+    }
+
+    private ItemStack createVisibilityItem() {
+        return itemRenderer.render(new ItemSpec(
+                Material.SPYGLASS,
+                uiText("Player Visibility", NamedTextColor.AQUA),
+                List.of(
+                        uiText("Manage which lobby players you can see.", NamedTextColor.GRAY),
+                        Component.empty(),
+                        uiText("Click to open.", NamedTextColor.YELLOW)
+                )
+        ));
     }
 
     private ItemStack createCloseItem() {
-        ItemStack item = new ItemStack(Material.BARRIER);
+        return itemRenderer.render(new ItemSpec(
+                Material.BARRIER,
+                uiText("Close", NamedTextColor.RED),
+                List.of()
+        ));
+    }
+
+    private static Component uiText(String text, NamedTextColor color) {
+        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private static ItemStack renderItem(ItemSpec spec) {
+        ItemStack item = new ItemStack(spec.material());
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(uiText("Close", NamedTextColor.RED));
+        meta.displayName(spec.name());
+        meta.lore(spec.lore());
         item.setItemMeta(meta);
         return item;
     }
 
-    private Component uiText(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
+    record ItemSpec(Material material, Component name, List<Component> lore) {
+        ItemSpec {
+            Objects.requireNonNull(material, "material");
+            Objects.requireNonNull(name, "name");
+            lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
+        }
+    }
+
+    @FunctionalInterface
+    interface InventoryFactory {
+        Inventory create(SettingsInventoryHolder holder, int size, Component title);
+    }
+
+    @FunctionalInterface
+    interface ItemRenderer {
+        ItemStack render(ItemSpec spec);
     }
 }

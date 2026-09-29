@@ -117,6 +117,9 @@ public final class VapeeCore extends JavaPlugin {
                 this,
                 playerModule,
                 presentationModule,
+                identityModule,
+                visibilityModule,
+                lobbyModule,
                 messageService
         );
         activityModule = new ActivityModule(this, playerModule);

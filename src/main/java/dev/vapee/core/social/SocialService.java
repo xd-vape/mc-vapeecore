@@ -4,6 +4,8 @@ import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 
 import java.util.Objects;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -17,6 +19,7 @@ public final class SocialService {
     private final PlayerService playerService;
     private final Logger logger;
     private final ConcurrentMap<UUID, Set<UUID>> ignoreSnapshots = new ConcurrentHashMap<>();
+    private final Set<IgnoreRelationshipListener> relationshipListeners = new LinkedHashSet<>();
 
     public SocialService(PlayerService playerService, Logger logger) {
         this.playerService = Objects.requireNonNull(playerService, "playerService");
@@ -48,6 +51,7 @@ public final class SocialService {
         }
 
         publishSnapshot(ownerPlayer);
+        notifyRelationshipChanged(validatedOwner, validatedTarget);
         return IgnoreResult.SUCCESS;
     }
 
@@ -76,6 +80,7 @@ public final class SocialService {
         }
 
         publishSnapshot(ownerPlayer);
+        notifyRelationshipChanged(validatedOwner, validatedTarget);
         return IgnoreResult.SUCCESS;
     }
 
@@ -129,6 +134,20 @@ public final class SocialService {
 
     public void clearSnapshots() {
         ignoreSnapshots.clear();
+    }
+
+    public void addRelationshipListener(IgnoreRelationshipListener listener) {
+        relationshipListeners.add(Objects.requireNonNull(listener, "listener"));
+    }
+
+    public void removeRelationshipListener(IgnoreRelationshipListener listener) {
+        relationshipListeners.remove(Objects.requireNonNull(listener, "listener"));
+    }
+
+    private void notifyRelationshipChanged(UUID owner, UUID target) {
+        for (IgnoreRelationshipListener listener : List.copyOf(relationshipListeners)) {
+            listener.onIgnoreRelationshipChanged(owner, target);
+        }
     }
 
     private void publishSnapshot(CorePlayer player) {
