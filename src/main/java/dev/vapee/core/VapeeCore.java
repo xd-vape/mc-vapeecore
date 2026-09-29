@@ -31,6 +31,7 @@ import dev.vapee.core.settings.SettingsModule;
 import dev.vapee.core.seat.SeatModule;
 import dev.vapee.core.social.SocialModule;
 import dev.vapee.core.utility.UtilityModule;
+import dev.vapee.core.visibility.VisibilityModule;
 import dev.vapee.core.worlddisplay.WorldDisplayModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -57,6 +58,7 @@ public final class VapeeCore extends JavaPlugin {
     private QuestModule questModule;
     private DailyQuestModule dailyQuestModule;
     private LobbyModule lobbyModule;
+    private VisibilityModule visibilityModule;
     private ChatModule chatModule;
     private PrivateMessageModule privateMessageModule;
     private PresentationModule presentationModule;
@@ -98,6 +100,7 @@ public final class VapeeCore extends JavaPlugin {
         questModule = new QuestModule(this, playerModule, rewardModule);
         dailyQuestModule = new DailyQuestModule(this, playerModule, questModule);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
+        visibilityModule = new VisibilityModule(this, playerModule, socialModule, friendModule, lobbyModule);
         chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
         privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
         presentationModule = new PresentationModule(
@@ -141,6 +144,7 @@ public final class VapeeCore extends JavaPlugin {
                 playerModule,
                 settingsModule,
                 warpModule,
+                visibilityModule,
                 messageService
         );
         moduleManager.register(permissionModule);
@@ -156,6 +160,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(questModule);
         moduleManager.register(dailyQuestModule);
         moduleManager.register(lobbyModule);
+        moduleManager.register(visibilityModule);
         moduleManager.register(chatModule);
         moduleManager.register(privateMessageModule);
         moduleManager.register(presentationModule);

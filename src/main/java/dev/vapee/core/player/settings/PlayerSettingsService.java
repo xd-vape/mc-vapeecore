@@ -5,6 +5,7 @@ import dev.vapee.core.player.PlayerService;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -35,6 +36,31 @@ public final class PlayerSettingsService {
 
     public Optional<Boolean> areLobbyPlayersVisible(UUID uniqueId) {
         return getSettings(uniqueId).map(PlayerSettings::isLobbyPlayersVisible);
+    }
+
+    public Optional<Boolean> areLobbyFriendsVisible(UUID uniqueId) {
+        return getSettings(uniqueId).map(settings -> settings.getVisibility().isShowFriends());
+    }
+
+    public Optional<Boolean> areLobbyStaffVisible(UUID uniqueId) {
+        return getSettings(uniqueId).map(settings -> settings.getVisibility().isShowStaff());
+    }
+
+    public Optional<Boolean> areLobbyAddedUsersVisible(UUID uniqueId) {
+        return getSettings(uniqueId).map(settings -> settings.getVisibility().isShowAddedUsers());
+    }
+
+    public Optional<Boolean> areLobbyGameParticipantsVisible(UUID uniqueId) {
+        return getSettings(uniqueId).map(settings -> settings.getVisibility().isShowGameParticipants());
+    }
+
+    public Optional<Set<UUID>> getLobbyAddedVisiblePlayers(UUID uniqueId) {
+        return getSettings(uniqueId).map(settings -> settings.getVisibility().getAddedPlayers());
+    }
+
+    public Optional<Boolean> isLobbyAddedVisiblePlayer(UUID owner, UUID target) {
+        UUID checkedTarget = Objects.requireNonNull(target, "target");
+        return getSettings(owner).map(settings -> settings.getVisibility().includesAddedPlayer(checkedTarget));
     }
 
     public Optional<Boolean> areFriendRequestsEnabled(UUID uniqueId) {
@@ -80,6 +106,60 @@ public final class PlayerSettingsService {
                 PlayerSettings::isLobbyPlayersVisible,
                 PlayerSettings::setLobbyPlayersVisible
         );
+    }
+
+    public boolean setLobbyFriendsVisible(UUID uniqueId, boolean visible) {
+        return updateSettings(uniqueId, visible, settings -> settings.getVisibility().isShowFriends(),
+                (settings, value) -> settings.getVisibility().setShowFriends(value));
+    }
+
+    public boolean setLobbyStaffVisible(UUID uniqueId, boolean visible) {
+        return updateSettings(uniqueId, visible, settings -> settings.getVisibility().isShowStaff(),
+                (settings, value) -> settings.getVisibility().setShowStaff(value));
+    }
+
+    public boolean setLobbyAddedUsersVisible(UUID uniqueId, boolean visible) {
+        return updateSettings(uniqueId, visible, settings -> settings.getVisibility().isShowAddedUsers(),
+                (settings, value) -> settings.getVisibility().setShowAddedUsers(value));
+    }
+
+    public boolean setLobbyGameParticipantsVisible(UUID uniqueId, boolean visible) {
+        return updateSettings(uniqueId, visible, settings -> settings.getVisibility().isShowGameParticipants(),
+                (settings, value) -> settings.getVisibility().setShowGameParticipants(value));
+    }
+
+    public AddedVisiblePlayerResult addLobbyVisiblePlayer(UUID owner, UUID target) {
+        UUID checkedOwner = Objects.requireNonNull(owner, "owner");
+        UUID checkedTarget = Objects.requireNonNull(target, "target");
+        Optional<PlayerSettings> found = getSettings(checkedOwner);
+        if (found.isEmpty()) return AddedVisiblePlayerResult.OWNER_NOT_LOADED;
+        PlayerVisibilitySettings visibility = found.get().getVisibility();
+        AddedVisiblePlayerResult result = visibility.addPlayer(checkedOwner, checkedTarget);
+        if (result != AddedVisiblePlayerResult.SUCCESS) return result;
+        try {
+            playerService.savePlayer(checkedOwner);
+        } catch (RuntimeException exception) {
+            visibility.removePlayer(checkedTarget);
+            throw exception;
+        }
+        return result;
+    }
+
+    public AddedVisiblePlayerResult removeLobbyVisiblePlayer(UUID owner, UUID target) {
+        UUID checkedOwner = Objects.requireNonNull(owner, "owner");
+        UUID checkedTarget = Objects.requireNonNull(target, "target");
+        Optional<PlayerSettings> found = getSettings(checkedOwner);
+        if (found.isEmpty()) return AddedVisiblePlayerResult.OWNER_NOT_LOADED;
+        PlayerVisibilitySettings visibility = found.get().getVisibility();
+        AddedVisiblePlayerResult result = visibility.removePlayer(checkedTarget);
+        if (result != AddedVisiblePlayerResult.SUCCESS) return result;
+        try {
+            playerService.savePlayer(checkedOwner);
+        } catch (RuntimeException exception) {
+            visibility.addPlayer(checkedOwner, checkedTarget);
+            throw exception;
+        }
+        return result;
     }
 
     public boolean setFriendRequestsEnabled(UUID uniqueId, boolean enabled) {

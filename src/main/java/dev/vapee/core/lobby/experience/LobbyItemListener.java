@@ -7,6 +7,7 @@ import dev.vapee.core.lobby.item.LobbyItemType;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;
+import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
@@ -40,7 +41,7 @@ public final class LobbyItemListener implements Listener {
     private final JavaPlugin plugin;
     private final LobbyService lobbyService;
     private final LobbyItemService lobbyItemService;
-    private final LobbyVisibilityService visibilityService;
+    private final VisibilityService visibilityService;
     private final PlayerSettingsService playerSettingsService;
     private final NavigatorMenu navigatorMenu;
     private final SettingsMenu settingsMenu;
@@ -52,7 +53,7 @@ public final class LobbyItemListener implements Listener {
             JavaPlugin plugin,
             LobbyService lobbyService,
             LobbyItemService lobbyItemService,
-            LobbyVisibilityService visibilityService,
+            VisibilityService visibilityService,
             PlayerSettingsService playerSettingsService,
             NavigatorMenu navigatorMenu,
             SettingsMenu settingsMenu,

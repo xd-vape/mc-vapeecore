@@ -142,11 +142,11 @@ public final class LobbyItemService {
         boolean visible = playerSettingsService.areLobbyPlayersVisible(player.getUniqueId()).orElse(true);
         return createItem(
                 visible ? Material.LIME_DYE : Material.GRAY_DYE,
-                visible ? "Players: Visible" : "Players: Hidden",
+                visible ? "Players: Visible" : "Players: Filtered",
                 visible ? NamedTextColor.GREEN : NamedTextColor.GRAY,
                 List.of(visible
-                        ? "Right-click to hide lobby players."
-                        : "Right-click to show lobby players."),
+                        ? "Right-click to use your visibility filters."
+                        : "Right-click to show all lobby players."),
                 LobbyItemType.VISIBILITY
         );
     }

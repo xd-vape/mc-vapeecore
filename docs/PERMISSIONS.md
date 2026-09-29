@@ -24,6 +24,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
 | `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |
+| `vapeecore.visibility.staff` | `op` | Visibility-Klassifizierungsmarker | Markiert das Online-Target ausschließlich für den Staff-Visibility-Filter. Keine Command-Permission und keine Admin-Fähigkeit. |
 | `vapeecore.rank.view` | `true` | `/rank [player]` | Eigenen oder einen Online-Rank anzeigen. |
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
@@ -93,6 +94,7 @@ Alles aus der gewünschten Player-Basis, zusätzlich:
 - `vapeecore.utility.fly`
 - `vapeecore.utility.speed`
 - `vapeecore.utility.gamemode`
+- `vapeecore.visibility.staff`
 - optional `vapeecore.utility.teleport`
 
 Keine `.others`- oder Bypass-Rechte.
@@ -107,6 +109,7 @@ Alles aus der gewünschten Player-Basis, zusätzlich:
 - `vapeecore.utility.heal`
 - `vapeecore.utility.feed`
 - `vapeecore.utility.ping.others`
+- `vapeecore.visibility.staff`
 - optional `vapeecore.utility.invsee`
 
 Nicht empfohlen: `teleport.others`, `teleport.bypass`, `vapeecore.economy.admin` oder `vapeecore.admin`.
@@ -138,12 +141,13 @@ Alles von Moderator, zusätzlich:
 - `vapeecore.lobby.setspawn`
 - `vapeecore.warp.admin`
 - `vapeecore.blackjack.admin`
+- `vapeecore.visibility.staff`
 
 `vapeecore.admin` bleibt optional, wenn `/core reload` Owner-only sein soll.
 
 ### Owner
 
-Alles von Admin, zusätzlich `vapeecore.admin` und nur die tatsächlich benötigten externen Paper-/Bukkit-Rechte. Kein blindes `*` nötig.
+Alles von Admin einschließlich `vapeecore.visibility.staff`, zusätzlich `vapeecore.admin` und nur die tatsächlich benötigten externen Paper-/Bukkit-Rechte. Kein blindes `*` nötig.
 
 ## Bukkit-/Vanilla-Lockdown
 
