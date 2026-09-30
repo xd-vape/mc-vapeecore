@@ -34,6 +34,20 @@ public final class ModerationComponents {
                 .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE));
     }
 
+    public static Component muteNotice(ModerationRecord record) {
+        return Component.text("You are muted.", NamedTextColor.RED)
+                .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE))
+                .append(Component.newline()).append(Component.text("Expires: "
+                        + record.expiresAt().map(ModerationComponents::time).orElse("Permanent"), NamedTextColor.GRAY));
+    }
+
+    public static Component unmuteNotice(ModerationRecord record) {
+        Component result = Component.text("Your mute has been removed.", NamedTextColor.GREEN);
+        var reason = record.revocation().flatMap(ModerationRevocation::reason);
+        return reason.isEmpty() ? result : result.append(Component.newline())
+                .append(Component.text("Reason: " + reason.get(), NamedTextColor.WHITE));
+    }
+
     public static String status(ModerationRecord record, Instant now) {
         if (!record.action().supportsActiveState()) return "Recorded";
         if (record.revocation().isPresent()) return "Revoked";

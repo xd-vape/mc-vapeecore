@@ -28,7 +28,7 @@ public final class ModerationTestSupport {
     public static final String ATTACK = "<click:run_command:'/op @s'>click</click>";
 
     public static class Time extends Clock {
-        public Instant now = NOW;
+        public volatile Instant now = NOW;
         public ZoneId getZone() { return ZoneOffset.UTC; }
         public Clock withZone(ZoneId zone) { return this; }
         public Instant instant() { return now; }
@@ -58,6 +58,7 @@ public final class ModerationTestSupport {
         public final PlayerIdentityService identities;
         public final MessageService messages;
         public final ModerationService service;
+        public final ModerationMuteProjection projection = new ModerationMuteProjection(clock);
         public final Sender console;
         public final Sender staff;
         public final Sender target;
@@ -89,7 +90,7 @@ public final class ModerationTestSupport {
             var constructor = MessageService.class.getDeclaredConstructor(Supplier.class);
             constructor.setAccessible(true);
             messages = constructor.newInstance((Supplier<String>) () -> "");
-            service = new ModerationService(repository, clock, () -> new UUID(0, ++recordId));
+            service = new ModerationService(repository, clock, () -> new UUID(0, ++recordId), projection::publish);
             console = new Sender(ConsoleCommandSender.class, null, "Console", events);
             staff = new Sender(Player.class, STAFF, "Staff", events);
             target = new Sender(Player.class, TARGET, "Alex", events);
@@ -120,6 +121,7 @@ public final class ModerationTestSupport {
         public final List<Component> kicks = new ArrayList<>();
         public boolean allowAll = true, isOnline = true, failKick, failNotification;
         public Runnable beforeKick = () -> { };
+        public Runnable beforeNotification = () -> { };
         public Sender(Class<?> type, UUID id, String name, List<String> events) {
             this.id = id;
             sender = (CommandSender) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (proxy, method, args) -> {
@@ -129,6 +131,7 @@ public final class ModerationTestSupport {
                     case "getName" -> name;
                     case "isOnline" -> isOnline;
                     case "sendMessage" -> {
+                        beforeNotification.run();
                         if (failNotification) throw new IllegalStateException("injected notification failure");
                         for (Object arg : args) if (arg instanceof Component c) output.add(c);
                         events.add("message:" + name); yield null;

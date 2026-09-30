@@ -42,17 +42,19 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
 
-## Moderation (Phase 25A)
+## Moderation (Phase 25B)
 
 | Permission | Default | Command | Scope |
 |---|---:|---|---|
+| `vapeecore.moderation.mute` | `op` | `/mute <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline; Chat und ausgehende PM gesperrt, Empfangen bleibt erlaubt. |
+| `vapeecore.moderation.unmute` | `op` | `/unmute <player\|uuid> [reason...]` | Aktiven Mute widerrufen; nach Save sofortige Freigabe. |
 | `vapeecore.moderation.warn` | `op` | `/warn <player\|uuid> <reason...>` | Known online/offline, gespeicherte Warnung; online Benachrichtigung nach Save. |
 | `vapeecore.moderation.ban` | `op` | `/ban <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline, temporär/permanent; Login-Sperre und Online-Disconnect nach Save. |
 | `vapeecore.moderation.unban` | `op` | `/unban <player\|uuid> [reason...]` | Widerruft ausschließlich einen aktuell aktiven Ban. |
 | `vapeecore.moderation.kick` | `op` | `/kick <player\|uuid> <reason...>` | Known online; Record vor tatsächlichem Disconnect. |
 | `vapeecore.moderation.history` | `op` | `/history <player\|uuid> [page]` | Known online/offline, read-only; fünf Records pro Seite. |
 
-Alle fünf Nodes werden direkt im Executor und in der Completion geprüft. Keine Children, kein `vapeecore.moderation.*`-Parent und keine automatische Ban→Unban- oder History→Mutation-Berechtigung. Player und Console sind erlaubt; andere Sender werden kontrolliert abgelehnt. Self-Warn/Ban/Unban/Kick ist gesperrt; eigene History mit Permission erlaubt. Keine Rangnamen-/Weight-/Prefix-/Track-basierte Target-Hierarchie: gezielte Permission-Vergabe bleibt bis Phase 26 „Permissions & Rank Hardening“ die administrative Trust Boundary. Mute-Permissions und Enforcement folgen erst in Phase 25B.
+Alle sieben Nodes werden direkt im Executor und in der Completion geprüft. Keine Children, kein `vapeecore.moderation.*`-Parent und keine automatische Ban→Unban- oder History→Mutation-Berechtigung. Player und Console sind erlaubt; andere Sender werden kontrolliert abgelehnt. Self-Mute/Unmute/Warn/Ban/Unban/Kick ist gesperrt; eigene History mit Permission erlaubt. Keine Rangnamen-/Weight-/Prefix-/Track-basierte Target-Hierarchie: gezielte Permission-Vergabe bleibt bis Phase 26 „Permissions & Rank Hardening“ die administrative Trust Boundary. Mute und Unmute gewähren einander keine Rechte. Kein Mute-Bypass, keine Rang-/OP-Ausnahme für Kommunikation. Fremde Vanilla-Commands und externe Kommunikation liegen außerhalb des Enforcement-Scope.
 
 ## Staff Utilities
 
@@ -128,6 +130,8 @@ Keine `.others`- oder Bypass-Rechte.
 
 Alles aus der gewünschten Player-Basis, zusätzlich:
 
+- `vapeecore.moderation.mute`
+- `vapeecore.moderation.unmute`
 - `vapeecore.moderation.warn`
 - `vapeecore.moderation.kick`
 - `vapeecore.moderation.history`

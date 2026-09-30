@@ -1,6 +1,9 @@
 package dev.vapee.core.privatemessage;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.moderation.ModerationTestSupport;
+import dev.vapee.core.moderation.ModerationActor;
+import dev.vapee.core.moderation.ModerationRepositoryException;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.PlayerRepository;
@@ -50,10 +53,15 @@ public final class PrivateMessageSocialHarness {
         fixture.testCommandUsageAndCompletion();
         fixture.testMessageCommandBoundaries();
         fixture.testSocialCommandBoundaries();
+        new Fixture().testMutePolicy();
         System.out.println("PrivateMessageSocialHarness passed " + checks + " checks.");
     }
 
     private static final class Fixture {
+
+        private final ModerationTestSupport.Fixture moderation = new ModerationTestSupport.Fixture();
+        private int renders;
+        private Fixture() throws Exception { }
 
         private final MemoryRepository repository = new MemoryRepository();
         private final PlayerService players = new PlayerService(repository, logger());
@@ -67,16 +75,77 @@ public final class PrivateMessageSocialHarness {
                 server,
                 settings,
                 social,
-                MiniMessage.miniMessage()::deserialize,
+                (template, placeholders) -> { renders++; return MiniMessage.miniMessage().deserialize(template, placeholders); },
                 logger(),
                 Path.of("private-messages.yml"),
                 new PrivateMessageConfig.State(
                         true,
                         PrivateMessageConfig.DEFAULT_OUTGOING_FORMAT,
                         PrivateMessageConfig.DEFAULT_INCOMING_FORMAT
-                )
+                ), moderation.projection::isMuted
         );
         private final MessageService messages = messageService();
+
+        private void testMutePolicy() {
+            var actor = ModerationActor.console();
+            check(privateMessages.send(alice.player(), bob.player(), "start") == PrivateMessageResult.SUCCESS, "create pre-mute conversation");
+            alice.clear(); bob.clear(); int priorRenders = renders;
+            moderation.repository.fail = true;
+            try { moderation.service.issueMute(alice.id(), actor, "failed", Optional.empty()); throw new AssertionError("failed mute accepted"); }
+            catch (ModerationRepositoryException expected) { checks++; }
+            check(privateMessages.send(alice.player(), bob.player(), "still allowed") == PrivateMessageResult.SUCCESS, "failed mute PM allowed");
+            moderation.repository.fail = false;
+            moderation.service.issueMute(alice.id(), actor, "mute", Optional.empty());
+            alice.clear(); bob.clear(); priorRenders = renders;
+            check(privateMessages.send(alice.player(), bob.player(), "blocked") == PrivateMessageResult.SENDER_MUTED, "muted sender PM rejected");
+            check(privateMessages.reply(alice.player(), "blocked reply") == PrivateMessageResult.SENDER_MUTED, "muted reply rejected");
+            check(renders == priorRenders && alice.received.isEmpty() && bob.received.isEmpty(), "no render/delivery on mute");
+            var message = new MessageCommand(server, privateMessages, messages, logger());
+            var reply = new ReplyCommand(privateMessages, messages, logger());
+            assertCommand(message, alice, "msg", "You cannot send private messages while muted.", "Bob", "blocked");
+            assertCommand(reply, alice, "reply", "You cannot send private messages while muted.", "blocked");
+            assertCommand(reply, alice, "r", "You cannot send private messages while muted.", "blocked");
+            check(bob.received.isEmpty() && renders == priorRenders, "all command paths no recipient/render");
+            check(privateMessages.send(bob.player(), alice.player(), "receive") == PrivateMessageResult.SUCCESS, "muted recipient allowed");
+            settings.setPrivateMessagesEnabled(alice.id(), false);
+            check(privateMessages.send(bob.player(), alice.player(), "settings") == PrivateMessageResult.RECIPIENT_DISABLED,
+                    "muted recipient settings still authoritative");
+            settings.setPrivateMessagesEnabled(alice.id(), true);
+            social.ignore(alice.id(), bob.id());
+            check(privateMessages.send(bob.player(), alice.player(), "ignored") == PrivateMessageResult.RECIPIENT_IGNORES_SENDER, "recipient ignore still authoritative");
+            social.unignore(alice.id(), bob.id());
+            var previous = privateMessages.getState();
+            privateMessages.applyState(new PrivateMessageService.RuntimeState(false, previous.outgoingFormat(), previous.incomingFormat()));
+            check(privateMessages.send(alice.player(), bob.player(), "disabled") == PrivateMessageResult.FEATURE_DISABLED, "feature priority before mute");
+            privateMessages.applyState(previous);
+            check(privateMessages.reply(alice.player(), "reloaded") == PrivateMessageResult.SENDER_MUTED, "reload retains final mute predicate");
+            check(privateMessages.send(alice.player(), alice.player(), "self") == PrivateMessageResult.SENDER_MUTED, "mute before self guard");
+            players.unloadPlayer(alice.id());
+            check(privateMessages.reply(alice.player(), "unloaded") == PrivateMessageResult.SENDER_NOT_LOADED, "loaded sender before mute");
+            players.loadPlayer(alice.id(), alice.name());
+            online.remove(bob.id());
+            check(privateMessages.reply(alice.player(), "offline partner") == PrivateMessageResult.SENDER_MUTED, "mute before partner cleanup");
+            moderation.repository.fail = true;
+            try { moderation.service.revokeMute(alice.id(), actor, Optional.empty()); throw new AssertionError("failed revoke accepted"); }
+            catch (ModerationRepositoryException expected) { checks++; }
+            check(privateMessages.reply(alice.player(), "still muted") == PrivateMessageResult.SENDER_MUTED, "failed unmute PM blocked");
+            moderation.repository.fail = false;
+            moderation.service.revokeMute(alice.id(), actor, Optional.empty()); online.put(bob.id(), bob);
+            check(privateMessages.reply(alice.player(), "restored") == PrivateMessageResult.SUCCESS, "unmute immediate, original partner retained");
+            privateMessages.clearConversations();
+            moderation.service.issueMute(alice.id(), actor, "no partner", Optional.of(ModerationTestSupport.NOW.plusSeconds(1)));
+            check(privateMessages.reply(alice.player(), "no partner") == PrivateMessageResult.SENDER_MUTED, "mute before no conversation");
+            moderation.clock.now = ModerationTestSupport.NOW.plusSeconds(1);
+            check(privateMessages.reply(alice.player(), "expired") == PrivateMessageResult.NO_REPLY_TARGET, "expiry restores original reply semantics");
+            check(privateMessages.send(alice.player(), bob.player(), "expired send") == PrivateMessageResult.SUCCESS, "expiry immediate PM allowed");
+            int moderationSaves = moderation.repository.saves;
+            privateMessages.send(alice.player(), bob.player(), "read only enforcement");
+            check(moderation.repository.saves == moderationSaves, "communication checks never create moderation records");
+            var legacy = new PrivateMessageService(server, settings, social, MiniMessage.miniMessage()::deserialize, logger(),
+                    Path.of("legacy.yml"), new PrivateMessageConfig.State(true, previous.outgoingFormat(), previous.incomingFormat()));
+            moderation.service.issueMute(alice.id(), actor, "legacy", Optional.empty());
+            check(legacy.send(alice.player(), bob.player(), "legacy") == PrivateMessageResult.SUCCESS, "old constructor compatible no mute policy");
+        }
 
         private void testPrivateMessageAndReply() {
             check(privateMessages.send(alice.player(), bob.player(), "<red>Hello</red>")

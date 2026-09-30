@@ -18,8 +18,47 @@ public final class ModerationServiceHarness {
         operations();
         temporaryBan();
         queriesAndValidation();
+        publication();
         for (int mutation = 0; mutation < 6; mutation++) failure(mutation);
         System.out.println("ModerationServiceHarness passed " + checks + " checks.");
+    }
+
+    private static void publication() {
+        var repo = new MemoryRepository(); var clock = new MutableClock();
+        var projection = new ModerationMuteProjection(clock);
+        int[] publications = {0}; long[] ids = {0};
+        var service = new ModerationService(repo, clock, () -> id(++ids[0]), committed -> {
+            check(repo.committed && repo.persisted.equals(committed), "save callback marked committed before publication");
+            projection.publish(committed); publications[0]++;
+        });
+        check(publications[0] == 1 && repo.saves == 0, "initial validated publication, no save");
+        repo.onSave = candidate -> check(!projection.isMuted(TARGET), "old projection visible during mute save");
+        service.issueMute(TARGET, CONSOLE, "mute", Optional.empty());
+        check(projection.isMuted(TARGET) && publications[0] == 2, "published before successful mute return");
+        repo.onSave = candidate -> { };
+        service.issueMute(TARGET, CONSOLE, "duplicate", Optional.empty());
+        check(publications[0] == 2 && repo.saves == 1, "noop no publication/save");
+        repo.fail = true;
+        try { service.revokeMute(TARGET, CONSOLE, Optional.empty()); throw new AssertionError("failed revoke accepted"); }
+        catch (ModerationRepositoryException expected) { checks++; }
+        check(publications[0] == 2 && projection.isMuted(TARGET) && service.isMuted(TARGET), "failed revoke preserves both views");
+        repo.fail = false;
+        service.revokeMute(TARGET, CONSOLE, Optional.empty());
+        check(publications[0] == 3 && !projection.isMuted(TARGET), "successful revoke published");
+        service.revokeMute(TARGET, CONSOLE, Optional.empty());
+        check(publications[0] == 3, "revoke noop not published");
+        repo.fail = true;
+        try { service.issueMute(TARGET, CONSOLE, "failure", Optional.empty()); throw new AssertionError("failed mute accepted"); }
+        catch (ModerationRepositoryException expected) { checks++; }
+        check(publications[0] == 3 && !projection.isMuted(TARGET) && !service.isMuted(TARGET), "failed mute preserves both views");
+        repo.fail = false;
+        service.issueWarning(TARGET, CONSOLE, "warning"); service.recordKick(TARGET, CONSOLE, "kick");
+        service.issueBan(TARGET, CONSOLE, "ban", Optional.empty()); service.revokeBan(TARGET, CONSOLE, Optional.empty());
+        check(publications[0] == 7 && !projection.isMuted(TARGET), "all successful mutations publish, only mutes enforced");
+        service.issueMute(TARGET, CONSOLE, "loaded", Optional.empty());
+        var restarted = new ModerationMuteProjection(clock);
+        new ModerationService(repo, clock, () -> id(999), restarted::publish);
+        check(restarted.isMuted(TARGET), "initial loaded publication active before hooks");
     }
 
     private static void temporaryBan() {
@@ -174,13 +213,16 @@ public final class ModerationServiceHarness {
         ModerationSnapshot persisted = ModerationSnapshot.empty();
         int loads, saves;
         boolean fail;
+        boolean committed = true;
         java.util.function.Consumer<ModerationSnapshot> onSave = candidate -> { };
         public ModerationSnapshot initialize() { loads++; return persisted; }
         public void save(ModerationSnapshot value) {
+            committed = false;
             saves++;
             onSave.accept(value);
             if (fail) throw new ModerationRepositoryException("injected save failure");
             persisted = value;
+            committed = true;
         }
     }
     private static final class MutableClock extends Clock {

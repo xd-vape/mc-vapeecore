@@ -8,19 +8,28 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 
 /** Main-thread-owned API. Async consumers must return to the server thread before any access. */
 public final class ModerationService {
     private final ModerationRepository repository;
     private final Clock clock;
     private final Supplier<UUID> idSupplier;
+    private final Consumer<ModerationSnapshot> committedPublisher;
     private ModerationSnapshot state;
 
     public ModerationService(ModerationRepository repository, Clock clock, Supplier<UUID> idSupplier) {
+        this(repository, clock, idSupplier, snapshot -> { });
+    }
+
+    ModerationService(ModerationRepository repository, Clock clock, Supplier<UUID> idSupplier,
+                      Consumer<ModerationSnapshot> committedPublisher) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.idSupplier = Objects.requireNonNull(idSupplier, "idSupplier");
+        this.committedPublisher = Objects.requireNonNull(committedPublisher, "committedPublisher");
         state = new ModerationSnapshot(Objects.requireNonNull(repository.initialize(), "initial snapshot").records());
+        committedPublisher.accept(state);
     }
 
     public ModerationResult issueWarning(UUID target, ModerationActor actor, String reason) {
@@ -112,6 +121,7 @@ public final class ModerationService {
 
     private void persist(ModerationSnapshot next) {
         repository.save(next);
+        committedPublisher.accept(next);
         state = next;
     }
 }

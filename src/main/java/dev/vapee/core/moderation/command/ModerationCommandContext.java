@@ -46,10 +46,10 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                 .orElse("Console");
     }
 
-    List<String> targets(CommandSender sender, boolean history, boolean bans, String prefix) {
+    List<String> targets(CommandSender sender, boolean history, ModerationAction activeAction, String prefix) {
         var now = clock.instant();
-        var ids = bans ? service.getAllRecords().stream()
-                .filter(record -> record.action() == ModerationAction.BAN && record.isActiveAt(now))
+        var ids = activeAction != null ? service.getAllRecords().stream()
+                .filter(record -> record.action() == activeAction && record.isActiveAt(now))
                 .map(ModerationRecord::targetId).distinct().toList()
                 : onlinePlayers.get().stream().filter(Player::isOnline).map(Player::getUniqueId).distinct().toList();
         return ids.stream().filter(id -> history || !(sender instanceof Player player) || !id.equals(player.getUniqueId()))
@@ -92,6 +92,18 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
         } catch (RuntimeException exception) {
             failure(ban ? "BAN_DISCONNECT" : "KICK_DISCONNECT", actor, target.uniqueId().toString(), exception);
             send(sender, (ban ? "Ban" : "Kick record") + " was saved, but the online player could not be disconnected.");
+        }
+    }
+
+    void notifyMute(CommandSender sender, ModerationActor actor, PlayerIdentity target,
+                    ModerationRecord record, boolean removed) {
+        try {
+            Player player = online(target.uniqueId());
+            if (player != null) messages.send(player, removed ? ModerationComponents.unmuteNotice(record)
+                    : ModerationComponents.muteNotice(record));
+        } catch (RuntimeException exception) {
+            failure(removed ? "UNMUTE_NOTIFY" : "MUTE_NOTIFY", actor, target.uniqueId().toString(), exception);
+            send(sender, (removed ? "Unmute" : "Mute") + " was saved, but the online player could not be notified.");
         }
     }
 }

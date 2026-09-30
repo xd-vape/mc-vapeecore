@@ -5,6 +5,7 @@ import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.reload.ReloadParticipant;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.event.Listener;
 import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.message.MessageService;
 
@@ -127,8 +128,8 @@ public final class ModerationLifecycleHarness {
         String module = Files.readString(Path.of("src/main/java/dev/vapee/core/moderation/ModerationModule.java"));
         check(module.contains("resolve(\"moderation.yml\")") && module.contains("plugin.getLogger()")
                 && module.contains("Clock.systemUTC()") && module.contains("UUID::randomUUID"), "runtime file, logger, clock and UUID sources");
-        check(module.contains("getCommand(") && module.contains("registerEvents(") && !module.contains("runTask")
-                && !module.contains(".save("), "actual module owns command/listener but no task or shutdown save");
+        check(module.contains("getCommand(") && module.contains("registerEvents(") && module.contains("runTask(plugin, task)")
+                && !module.contains(".save(") && !module.contains("runTaskTimer"), "one-shot feedback only, no shutdown save/poller");
         check(module.contains("command.setExecutor(null)") && module.contains("command.setTabCompleter(null)")
                 && module.contains("HandlerList.unregisterAll(listener)"), "real Bukkit hook cleanup");
         check(!Files.exists(Path.of("src/main/resources/moderation.yml")), "runtime data not a bundled resource");
@@ -136,12 +137,12 @@ public final class ModerationLifecycleHarness {
             StringBuilder production = new StringBuilder();
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) production.append(Files.readString(path));
             for (String forbidden : List.of("dev.vapee.core.player", "dev.vapee.core.chat",
-                    "dev.vapee.core.privatemessage", "AsyncPlayerPreLoginEvent", "AsyncChatEvent", "Bukkit.getBanList",
-                    "getBanList(", "getOfflinePlayer(", "runTask", "MiniMessage", "ReloadParticipant")) {
+                    "dev.vapee.core.privatemessage", "AsyncPlayerPreLoginEvent", "Bukkit.getBanList",
+                    "getBanList(", "getOfflinePlayer(", "runTaskTimer", "MiniMessage", "ReloadParticipant")) {
                 check(!production.toString().contains(forbidden), "no forbidden moderation dependency/feature: " + forbidden);
             }
         }
-        for (String domain : List.of("ModerationService", "ModerationRecord", "ModerationActor", "ModerationSnapshot", "FileModerationRepository")) {
+        for (String domain : List.of("ModerationService", "ModerationRecord", "ModerationActor", "ModerationSnapshot", "FileModerationRepository", "ModerationMuteProjection")) {
             String source = Files.readString(Path.of("src/main/java/dev/vapee/core/moderation/" + domain + ".java"));
             check(!source.contains("org.bukkit") && !source.contains("dev.vapee.core.identity"), "domain stays Bukkit/identity-free " + domain);
         }
@@ -158,22 +159,29 @@ public final class ModerationLifecycleHarness {
         ModerationModule module = new ModerationModule(() -> fixture.repository, fixture.clock, UUID::randomUUID, fixture::context, hooks);
         int initialLoads = fixture.repository.loads;
         module.enable();
-        check(hooks.names.equals(List.of("warn", "ban", "unban", "kick", "history")), "five commands in owned lifecycle");
-        check(hooks.executors.size() == 5 && hooks.completers.equals(hooks.executors), "same executor/completer installed");
-        check(hooks.listener != null, "login listener registered");
+        check(hooks.names.equals(List.of("warn", "ban", "unban", "kick", "history", "mute", "unmute")), "seven commands in owned lifecycle");
+        check(hooks.executors.size() == 7 && hooks.completers.equals(hooks.executors), "same executor/completer installed");
+        check(hooks.listeners.size() == 2, "login and chat listeners registered");
         check(module.getModerationService() != null && fixture.repository.loads == initialLoads + 1, "service published after successful hooks");
+        var oldProjection = module.getMuteProjection();
+        module.getModerationService().issueMute(ModerationTestSupport.TARGET, ModerationActor.console(), "Restart mute", Optional.empty());
+        check(oldProjection.isMuted(ModerationTestSupport.TARGET), "successful mute immediately published");
         module.disable(); disabled(module);
-        check(hooks.executors.isEmpty() && hooks.completers.isEmpty() && hooks.listener == null, "disable clears all command/listener hooks");
-        check(fixture.repository.saves == 0, "disable no persistence");
-        for (int boundary = 1; boundary <= 6; boundary++) {
+        check(!oldProjection.isMuted(ModerationTestSupport.TARGET), "disabled projection cleared");
+        check(hooks.executors.isEmpty() && hooks.completers.isEmpty() && hooks.listeners.isEmpty(), "disable clears all command/listener hooks");
+        check(fixture.repository.saves == 1, "disable no extra persistence");
+        module.enable();
+        check(module.getMuteProjection().isMuted(ModerationTestSupport.TARGET), "restart loaded mute immediately active");
+        module.disable();
+        for (int boundary = 1; boundary <= 9; boundary++) {
             TestHooks failing = new TestHooks(); failing.failAt = boundary;
             ModerationModule broken = new ModerationModule(() -> fixture.repository, fixture.clock, UUID::randomUUID, fixture::context, failing);
             try { broken.enable(); throw new AssertionError("partial hook failure accepted"); }
             catch (IllegalStateException expected) { checks++; }
             disabled(broken);
-            check(failing.executors.isEmpty() && failing.completers.isEmpty() && failing.listener == null,
+            check(failing.executors.isEmpty() && failing.completers.isEmpty() && failing.listeners.isEmpty(),
                     "cleanup every partial enable boundary " + boundary);
-            check(fixture.repository.saves == 0, "partial failure never writes " + boundary);
+            check(fixture.repository.saves == 1, "partial failure never writes " + boundary);
             failing.failAt = 0;
             broken.enable(); check(broken.getModerationService() != null, "retry after hook cleanup " + boundary);
             broken.disable(); disabled(broken);
@@ -183,19 +191,19 @@ public final class ModerationLifecycleHarness {
     private static final class TestHooks implements ModerationModule.Hooks {
         final List<String> names = new ArrayList<>();
         final java.util.Map<String, TabExecutor> executors = new java.util.LinkedHashMap<>(), completers = new java.util.LinkedHashMap<>();
-        ModerationLoginListener listener;
+        final List<Listener> listeners = new ArrayList<>();
         int failAt, calls;
         public void install(String name, TabExecutor executor) {
             names.add(name); executors.put(name, executor);
             if (++calls == failAt) throw new IllegalStateException("injected setter failure");
             completers.put(name, executor);
         }
-        public void register(ModerationLoginListener listener) {
-            this.listener = listener;
+        public void register(Listener listener) {
+            listeners.add(listener);
             if (++calls == failAt) throw new IllegalStateException("injected listener registration failure");
         }
         public void clearCommands() { executors.clear(); completers.clear(); calls = 0; }
-        public void unregister(ModerationLoginListener listener) { this.listener = null; }
+        public void unregister(Listener listener) { listeners.remove(listener); }
     }
 
     private static CoreModule tracker(String name, List<String> events) {
@@ -216,6 +224,9 @@ public final class ModerationLifecycleHarness {
         boolean failed = false;
         try { module.getModerationService(); } catch (IllegalStateException expected) { failed = true; }
         check(failed, "disabled/failed module exposes no service");
+        failed = false;
+        try { module.getMuteProjection(); } catch (IllegalStateException expected) { failed = true; }
+        check(failed, "disabled/failed module exposes no projection");
     }
     private static Logger logger() {
         Logger logger = Logger.getLogger("ModerationLifecycleHarness-" + UUID.randomUUID());

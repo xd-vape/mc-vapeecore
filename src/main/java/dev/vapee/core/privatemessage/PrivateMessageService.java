@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -31,6 +32,7 @@ public final class PrivateMessageService {
     private final Path configFile;
     private final MiniMessage strictMiniMessage;
     private final Map<UUID, UUID> lastConversationPartners = new HashMap<>();
+    private final Predicate<UUID> senderMuted;
 
     private volatile RuntimeState state;
 
@@ -42,6 +44,12 @@ public final class PrivateMessageService {
             Logger logger,
             PrivateMessageConfig privateMessageConfig
     ) {
+        this(server, playerSettingsService, socialService, messageService, logger, privateMessageConfig, id -> false);
+    }
+
+    public PrivateMessageService(Server server, PlayerSettingsService playerSettingsService,
+                                SocialService socialService, MessageService messageService, Logger logger,
+                                PrivateMessageConfig privateMessageConfig, Predicate<UUID> senderMuted) {
         this(
                 server,
                 playerSettingsService,
@@ -49,7 +57,7 @@ public final class PrivateMessageService {
                 Objects.requireNonNull(messageService, "messageService")::deserialize,
                 logger,
                 Objects.requireNonNull(privateMessageConfig, "privateMessageConfig").getConfigFile(),
-                privateMessageConfig.getState()
+                privateMessageConfig.getState(), senderMuted
         );
     }
 
@@ -62,12 +70,20 @@ public final class PrivateMessageService {
             Path configFile,
             PrivateMessageConfig.State initialConfigState
     ) {
+        this(server, playerSettingsService, socialService, templateDeserializer, logger, configFile,
+                initialConfigState, id -> false);
+    }
+
+    PrivateMessageService(Server server, PlayerSettingsService playerSettingsService, SocialService socialService,
+                          TemplateDeserializer templateDeserializer, Logger logger, Path configFile,
+                          PrivateMessageConfig.State initialConfigState, Predicate<UUID> senderMuted) {
         this.server = Objects.requireNonNull(server, "server");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.socialService = Objects.requireNonNull(socialService, "socialService");
         this.templateDeserializer = Objects.requireNonNull(templateDeserializer, "templateDeserializer");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.configFile = Objects.requireNonNull(configFile, "configFile");
+        this.senderMuted = Objects.requireNonNull(senderMuted, "senderMuted");
         this.strictMiniMessage = MiniMessage.builder().strict(true).build();
         this.state = prepareState(initialConfigState);
     }
@@ -84,11 +100,12 @@ public final class PrivateMessageService {
 
         UUID senderUniqueId = validatedSender.getUniqueId();
         UUID recipientUniqueId = validatedRecipient.getUniqueId();
-        if (senderUniqueId.equals(recipientUniqueId)) {
-            return PrivateMessageResult.CANNOT_MESSAGE_SELF;
-        }
         if (playerSettingsService.getSettings(senderUniqueId).isEmpty()) {
             return PrivateMessageResult.SENDER_NOT_LOADED;
+        }
+        if (senderMuted.test(senderUniqueId)) return PrivateMessageResult.SENDER_MUTED;
+        if (senderUniqueId.equals(recipientUniqueId)) {
+            return PrivateMessageResult.CANNOT_MESSAGE_SELF;
         }
         if (!validatedRecipient.isOnline()) {
             return PrivateMessageResult.TARGET_OFFLINE;
@@ -136,6 +153,8 @@ public final class PrivateMessageService {
         }
 
         UUID senderUniqueId = validatedSender.getUniqueId();
+        if (playerSettingsService.getSettings(senderUniqueId).isEmpty()) return PrivateMessageResult.SENDER_NOT_LOADED;
+        if (senderMuted.test(senderUniqueId)) return PrivateMessageResult.SENDER_MUTED;
         UUID targetUniqueId = lastConversationPartners.get(senderUniqueId);
         if (targetUniqueId == null) {
             return PrivateMessageResult.NO_REPLY_TARGET;

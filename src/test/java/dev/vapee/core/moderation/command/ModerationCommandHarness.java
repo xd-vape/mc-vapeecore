@@ -15,7 +15,7 @@ import java.util.*;
 public final class ModerationCommandHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); descriptor();
+        guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
     }
 
@@ -24,11 +24,12 @@ public final class ModerationCommandHarness {
             case "warn" -> new WarnCommand(f.context); case "ban" -> new BanCommand(f.context);
             case "unban" -> new UnbanCommand(f.context); case "kick" -> new KickCommand(f.context);
             case "history" -> new HistoryCommand(f.context); default -> throw new AssertionError(name);
+            case "mute" -> new MuteCommand(f.context); case "unmute" -> new UnmuteCommand(f.context);
         };
     }
     private static String[] arguments(String name, String target) {
         return switch (name) {
-            case "ban" -> new String[]{target, "7d", ATTACK};
+            case "ban", "mute" -> new String[]{target, "7d", ATTACK};
             case "warn", "kick" -> new String[]{target, ATTACK};
             default -> new String[]{target};
         };
@@ -40,7 +41,7 @@ public final class ModerationCommandHarness {
     }
 
     private static void guards() throws Exception {
-        for (String name : List.of("warn", "ban", "unban", "kick", "history")) {
+        for (String name : List.of("warn", "ban", "unban", "kick", "history", "mute", "unmute")) {
             Fixture f = new Fixture(); TabExecutor c = command(f, name);
             f.staff.allowAll = false;
             run(c, f.staff, "permission", arguments(name, "Alex"));
@@ -57,21 +58,22 @@ public final class ModerationCommandHarness {
             run(c, f.console, "Missing player", new String[0]);
             check(f.repository.saves == 0, "bad syntax no save " + name);
         }
-        for (String name : List.of("warn", "ban", "kick")) {
+        for (String name : List.of("warn", "ban", "kick", "mute")) {
             Fixture f = new Fixture(); TabExecutor c = command(f, name);
-            run(c, f.console, name.equals("ban") ? "Missing duration and reason" : "Missing reason", "Alex");
-            if (name.equals("ban")) run(c, f.console, "Missing reason", "Alex", "7d");
-            run(c, f.console, "Missing reason", name.equals("ban") ? new String[]{"Alex", "7d", "  "} : new String[]{"Alex", "  "});
+            boolean timed = name.equals("ban") || name.equals("mute");
+            run(c, f.console, timed ? "Missing duration and reason" : "Missing reason", "Alex");
+            if (timed) run(c, f.console, "Missing reason", "Alex", "7d");
+            run(c, f.console, "Missing reason", timed ? new String[]{"Alex", "7d", "  "} : new String[]{"Alex", "  "});
             check(f.repository.saves == 0, "missing reason has no mutation " + name);
             for (String bad : List.of("x".repeat(257), "bad\nreason", "bad\u2028reason", "bad\u0000reason")) {
-                run(c, f.console, "Invalid reason", name.equals("ban") ? new String[]{"Alex", "7d", bad} : new String[]{"Alex", bad});
+                run(c, f.console, "Invalid reason", timed ? new String[]{"Alex", "7d", bad} : new String[]{"Alex", bad});
                 check(f.repository.saves == 0 && f.info() == 0 && f.severe() == 0, "invalid reason normal rejection " + name);
             }
         }
     }
 
     private static void targets() throws Exception {
-        for (String name : List.of("warn", "ban", "unban", "kick", "history")) {
+        for (String name : List.of("warn", "ban", "unban", "kick", "history", "mute", "unmute")) {
             Fixture f = new Fixture(); TabExecutor c = command(f, name);
             for (String unknown : List.of("Missing", UUID.randomUUID().toString(), "@a", "Ale")) {
                 run(c, f.console, "not known", arguments(name, unknown));
@@ -300,20 +302,99 @@ public final class ModerationCommandHarness {
         check(f.playerWrites == 0, "no completion player mutation");
     }
 
+    private static void mutes() throws Exception {
+        for (String duration : List.of("permanent", "perm", "30s", "10m", "2h", "7d", "2w")) {
+            Fixture timed = new Fixture();
+            run(new MuteCommand(timed.context), timed.console, "Muted", "Alex", duration, "duration coverage");
+            check(timed.service.getActiveMute(TARGET).orElseThrow().expiresAt().equals(
+                    ModerationDurationParser.parse(duration).expiresAt(NOW)), "exact command duration " + duration);
+        }
+        for (String revokeReason : List.of("", "  ", ATTACK)) {
+            Fixture revoked = new Fixture();
+            revoked.service.issueMute(TARGET, ModerationActor.console(), "original", Optional.empty());
+            run(new UnmuteCommand(revoked.context), revoked.staff, "Unmuted", "Alex", revokeReason);
+            var record = revoked.service.getHistory(TARGET).getFirst();
+            check(record.revocation().orElseThrow().actor().equals(ModerationActor.player(STAFF)), "player unmute actor");
+            check(record.revocation().orElseThrow().reason().equals(revokeReason.isBlank() ? Optional.empty() : Optional.of(ATTACK)),
+                    "optional blank/literal revoke reason semantics");
+            check(revoked.target.output.stream().allMatch(ModerationTestSupport::noEvents), "unmute literal notice");
+        }
+        for (String target : List.of("aLeX", TARGET.toString(), "Offline", OFFLINE.toString())) {
+            for (String duration : List.of("7d", "PERM")) {
+                Fixture f = new Fixture();
+                var mute = new MuteCommand(f.context); var unmute = new UnmuteCommand(f.context);
+                f.repository.beforeSave = () -> check(!f.projection.isMuted(TARGET) && f.info() == 0
+                        && f.target.output.isEmpty(), "save before mute publication/audit/notification");
+                f.target.beforeNotification = () -> check(f.projection.isMuted(TARGET) && f.info() == 1,
+                        "published and audited before online notification");
+                run(mute, f.console, "Muted", target, duration, ATTACK);
+                var record = f.service.getAllRecords().getFirst();
+                check(record.action() == ModerationAction.MUTE && f.projection.isMuted(record.targetId()), "actual mute committed");
+                check(f.repository.saves == 1 && f.info() == 1 && f.playerWrites == 0 && f.target.kicks.isEmpty(), "mute only fact/notification");
+                check(f.console.output.stream().allMatch(ModerationTestSupport::noEvents), "mute literal feedback");
+                if (record.targetId().equals(TARGET)) {
+                    check(f.target.text().contains(ATTACK) && f.target.text().contains(duration.equals("7d") ? "UTC" : "Permanent"), "literal timed/permanent notice");
+                    check(f.target.output.stream().allMatch(ModerationTestSupport::noEvents), "mute notice no events");
+                } else check(f.target.output.isEmpty(), "offline no notification");
+                f.repository.beforeSave = () -> { }; f.target.beforeNotification = () -> { };
+                run(mute, f.console, "already muted", target, "1h", "duplicate");
+                check(f.repository.saves == 1 && f.info() == 1, "duplicate mute no save/audit");
+                check(unmute.onTabComplete(f.console.sender, null, "unmute", new String[]{""}).contains(record.targetId().equals(TARGET) ? "Alex" : "Offline"), "unmute includes committed offline/online target");
+                run(unmute, f.console, "Unmuted", target, ATTACK);
+                check(!f.projection.isMuted(record.targetId()) && f.repository.saves == 2 && f.info() == 2, "unmute immediate publication");
+                if (record.targetId().equals(TARGET)) check(f.target.text().contains("Your mute has been removed.") && f.target.text().contains(ATTACK), "literal optional revocation notice");
+                run(unmute, f.console, "not currently muted", target);
+                check(f.repository.saves == 2 && f.info() == 2, "unmute noop");
+                check(unmute.onTabComplete(f.console.sender, null, "unmute", new String[]{""}).isEmpty(), "revoked no completion");
+            }
+        }
+        Fixture f = new Fixture(); var mute = new MuteCommand(f.context); var unmute = new UnmuteCommand(f.context);
+        for (String invalid : List.of("0m", "-1h", "1.5h", "10", "999999999999999999w")) {
+            run(mute, f.console, "Invalid duration", "Alex", invalid, "reason");
+            check(f.repository.saves == 0 && f.info() == 0, "bad duration no mutation");
+        }
+        check(mute.onTabComplete(f.console.sender, null, "mute", new String[]{"Alex", "P"}).equals(List.of("permanent")), "mute duration prefix");
+        check(mute.onTabComplete(f.console.sender, null, "mute", new String[]{"Alex", ""}).size() == 10, "mute durations");
+        f.repository.fail = true;
+        run(mute, f.console, "could not be saved", "Alex", "1h", "reason");
+        check(!f.projection.isMuted(TARGET) && f.info() == 0 && f.target.output.isEmpty(), "failed mute no effect/audit/notification");
+        f.repository.fail = false; f.target.failNotification = true;
+        run(mute, f.console, "Mute was saved, but", "Alex", "1h", ATTACK);
+        check(f.projection.isMuted(TARGET) && f.info() == 1 && f.severe() == 2, "notification failure retains mute");
+        f.repository.fail = true;
+        run(unmute, f.console, "could not be saved", "Alex");
+        check(f.projection.isMuted(TARGET) && f.info() == 1, "failed unmute retains enforcement");
+        f.repository.fail = false;
+        run(unmute, f.console, "Unmute was saved, but", "Alex");
+        check(!f.projection.isMuted(TARGET) && f.info() == 2 && f.severe() == 4, "unmute notify failure keeps revoke");
+        f.target.failNotification = false;
+        run(mute, f.staff, "Muted", "Offline", "1s", "temporary");
+        check(f.service.getHistory(OFFLINE).getFirst().actor().equals(ModerationActor.player(STAFF)), "player actor");
+        f.clock.now = NOW.plusSeconds(1);
+        check(unmute.onTabComplete(f.console.sender, null, "unmute", new String[]{""}).isEmpty(), "expiry completion read only");
+        run(unmute, f.console, "not currently muted", "Offline");
+        run(mute, f.console, "Muted", "Offline", "permanent", "renew");
+        f.addKnown(new UUID(0, 92), "Offline");
+        check(unmute.onTabComplete(f.console.sender, null, "unmute", new String[]{""}).equals(List.of(OFFLINE.toString())), "ambiguous active mute UUID completion");
+        f.service.issueMute(STAFF, ModerationActor.console(), "self", Optional.empty());
+        check(!unmute.onTabComplete(f.staff.sender, null, "unmute", new String[]{""}).contains("Staff"), "unmute self completion excluded");
+    }
+
     private static void descriptor() throws Exception {
         var yaml = (Map<?, ?>) new Yaml().load(Files.readString(Path.of("src/main/resources/plugin.yml")));
         var commands = (Map<?, ?>) yaml.get("commands"); var permissions = (Map<?, ?>) yaml.get("permissions");
-        check(commands.size() == 34, "34 plugin root commands");
+        check(commands.size() == 36, "36 plugin root commands");
         Map<String, String> syntax = Map.of("warn", "<player|uuid> <reason...>", "ban", "<player|uuid> <duration|permanent> <reason...>",
-                "unban", "<player|uuid> [reason...]", "kick", "<player|uuid> <reason...>", "history", "<player|uuid> [page]");
+                "unban", "<player|uuid> [reason...]", "kick", "<player|uuid> <reason...>", "history", "<player|uuid> [page]",
+                "mute", "<player|uuid> <duration|permanent> <reason...>", "unmute", "<player|uuid> [reason...]");
         for (String name : syntax.keySet()) {
             var entry = (Map<?, ?>) commands.get(name); var permission = (Map<?, ?>) permissions.get("vapeecore.moderation." + name);
             check(entry.get("usage").equals("/" + name + " " + syntax.get(name)) && entry.get("permission").equals("vapeecore.moderation." + name), "descriptor syntax/permission " + name);
             check(entry.containsKey("description") && !entry.containsKey("aliases"), "description/no alias " + name);
             check(permission.get("default").equals("op") && !permission.containsKey("children"), "op independent permission " + name);
         }
-        check(!permissions.containsKey("vapeecore.moderation.*") && permissions.keySet().stream().filter(k -> k.toString().startsWith("vapeecore.moderation.")).count() == 5, "five nodes/no wildcard");
-        for (String absent : List.of("mute", "unmute", "moderation", "mod", "punish", "freeze")) check(!commands.containsKey(absent), "no out-of-scope command " + absent);
+        check(!permissions.containsKey("vapeecore.moderation.*") && permissions.keySet().stream().filter(k -> k.toString().startsWith("vapeecore.moderation.")).count() == 7, "seven nodes/no wildcard");
+        for (String absent : List.of("moderation", "mod", "punish", "freeze")) check(!commands.containsKey(absent), "no out-of-scope command " + absent);
     }
     private static void check(boolean condition, String label) { if (!condition) throw new AssertionError(label); checks++; }
 }
