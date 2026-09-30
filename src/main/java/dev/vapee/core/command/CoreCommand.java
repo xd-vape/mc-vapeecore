@@ -25,6 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class CoreCommand implements TabExecutor {
 
@@ -36,13 +40,20 @@ public final class CoreCommand implements TabExecutor {
                     new CommandHelpSection("General", List.of(
                             new CommandHelpEntry("/core", "Shows the current VapeeCore status.", null,
                                     "Alias of /vapeecore."),
+                            new CommandHelpEntry("/core help", "Shows this permission-filtered command overview."),
                             new CommandHelpEntry("/core version", "Shows plugin, Paper and Java versions."),
+                            new CommandHelpEntry("/profile [player|uuid]", "Shows a known player's profile.",
+                                    "vapeecore.profile.view"),
                             new CommandHelpEntry("/rank [player]", "Shows an online player's server rank.",
                                     "vapeecore.rank.view"),
                             new CommandHelpEntry("/ranks", "Shows the public server rank progression.",
                                     "vapeecore.ranks.view")
                     )),
                     new CommandHelpSection("Social", List.of(
+                            new CommandHelpEntry("/friend help", "Shows friend requests and management commands.",
+                                    "vapeecore.friend.use", "Alias: /friends"),
+                            new CommandHelpEntry("/clan help", "Shows clan and invitation commands.",
+                                    "vapeecore.clan.use", "Alias: /clans"),
                             new CommandHelpEntry("/msg <player> <message>", "Sends a private message.",
                                     "vapeecore.message.use"),
                             new CommandHelpEntry("/reply <message>", "Replies to the last conversation.",
@@ -54,10 +65,12 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/ignorelist", "Lists ignored players.",
                                     "vapeecore.social.ignore")
                     )),
-                    new CommandHelpSection("Lobby", List.of(
+                    new CommandHelpSection("Lobby & Settings", List.of(
                             new CommandHelpEntry("/spawn", "Teleports you to the lobby spawn.",
                                     "vapeecore.lobby.spawn"),
                             new CommandHelpEntry("/settings", "Opens your player settings.",
+                                    "vapeecore.settings.use"),
+                            new CommandHelpEntry("/settings visibility", "Opens visibility settings and player management.",
                                     "vapeecore.settings.use")
                     )),
                     new CommandHelpSection("Economy", List.of(
@@ -82,7 +95,15 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/heal [player]", "Restores health.",
                                     "vapeecore.utility.heal"),
                             new CommandHelpEntry("/feed [player]", "Restores hunger.",
-                                    "vapeecore.utility.feed")
+                                    "vapeecore.utility.feed"),
+                            new CommandHelpEntry("/ping [player]", "Shows measured latency in milliseconds.",
+                                    "vapeecore.utility.ping"),
+                            new CommandHelpEntry("/clear [player]", "Clears a safe player inventory.",
+                                    "vapeecore.utility.clear"),
+                            new CommandHelpEntry("/invsee <player>", "Opens a read-only inventory snapshot.",
+                                    "vapeecore.utility.invsee"),
+                            new CommandHelpEntry("/enderchest [player]", "Opens an online player's ender chest.",
+                                    "vapeecore.utility.enderchest")
                     )),
                     new CommandHelpSection("Administration", List.of(
                             new CommandHelpEntry("/core reload", "Reloads all coordinated configurations.",
@@ -98,14 +119,11 @@ public final class CoreCommand implements TabExecutor {
             "Click a command to insert it into chat."
     );
 
-    private final VapeeCore plugin;
-    private final ConfigService configService;
     private final MessageService messageService;
-    private final ModuleManager moduleManager;
-    private final PlayerService playerService;
-    private final LuckPermsService luckPermsService;
-    private final ReloadService reloadService;
     private final CommandHelpRenderer helpRenderer;
+    private final Supplier<RuntimeInfo> runtimeInfo;
+    private final Function<UUID, Optional<String>> primaryGroup;
+    private final Supplier<ReloadResult> reload;
 
     public CoreCommand(
             VapeeCore plugin,
@@ -117,14 +135,31 @@ public final class CoreCommand implements TabExecutor {
             ReloadService reloadService,
             CommandHelpRenderer helpRenderer
     ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.configService = Objects.requireNonNull(configService, "configService");
+        this(messageService, helpRenderer, runtimeInfoSupplier(plugin, configService, moduleManager, playerService),
+                Objects.requireNonNull(luckPermsService, "luckPermsService")::getPrimaryGroup,
+                Objects.requireNonNull(reloadService, "reloadService")::reload);
+    }
+
+    CoreCommand(MessageService messageService, CommandHelpRenderer helpRenderer,
+                Supplier<RuntimeInfo> runtimeInfo, Function<UUID, Optional<String>> primaryGroup,
+                Supplier<ReloadResult> reload) {
         this.messageService = Objects.requireNonNull(messageService, "messageService");
-        this.moduleManager = Objects.requireNonNull(moduleManager, "moduleManager");
-        this.playerService = Objects.requireNonNull(playerService, "playerService");
-        this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
-        this.reloadService = Objects.requireNonNull(reloadService, "reloadService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
+        this.runtimeInfo = Objects.requireNonNull(runtimeInfo, "runtimeInfo");
+        this.primaryGroup = Objects.requireNonNull(primaryGroup, "primaryGroup");
+        this.reload = Objects.requireNonNull(reload, "reload");
+    }
+
+    private static Supplier<RuntimeInfo> runtimeInfoSupplier(VapeeCore plugin, ConfigService configService,
+                                                            ModuleManager moduleManager, PlayerService players) {
+        Objects.requireNonNull(plugin, "plugin");
+        Objects.requireNonNull(configService, "configService");
+        Objects.requireNonNull(moduleManager, "moduleManager");
+        Objects.requireNonNull(players, "players");
+        return () -> new RuntimeInfo(plugin.getPluginMeta().getName(), plugin.getPluginMeta().getVersion(),
+                plugin.getServer().getVersion(), plugin.getServer().getBukkitVersion(),
+                System.getProperty("java.version"), moduleManager.getEnabledModules().size(),
+                players.getLoadedPlayers().size(), configService.isDebugEnabled());
     }
 
     @Override
@@ -140,7 +175,9 @@ public final class CoreCommand implements TabExecutor {
         }
 
         if (args.length > 1) {
-            sendInvalidUsage(sender);
+            String action = args[0].toLowerCase(Locale.ROOT);
+            sendInvalidUsage(sender, List.of("help", "version", "reload").contains(action)
+                    ? "/core " + action : "/core help");
             return true;
         }
 
@@ -197,33 +234,35 @@ public final class CoreCommand implements TabExecutor {
     }
 
     private void sendOverview(CommandSender sender) {
-        messageService.send(sender, labeledValue("Plugin: ", plugin.getPluginMeta().getName(), NamedTextColor.AQUA));
-        messageService.send(sender, labeledValue("Version: ", plugin.getPluginMeta().getVersion(), NamedTextColor.WHITE));
-        messageService.send(sender, labeledValue("Server: ", plugin.getServer().getVersion(), NamedTextColor.WHITE));
+        RuntimeInfo info = runtimeInfo.get();
+        messageService.send(sender, labeledValue("Plugin: ", info.pluginName(), NamedTextColor.AQUA));
+        messageService.send(sender, labeledValue("Version: ", info.pluginVersion(), NamedTextColor.WHITE));
+        messageService.send(sender, labeledValue("Server: ", info.serverVersion(), NamedTextColor.WHITE));
         messageService.send(sender, "<gray>Status:</gray> <green>Running</green>");
         messageService.send(sender, labeledValue("Active Modules: ",
-                Integer.toString(moduleManager.getEnabledModules().size()), NamedTextColor.WHITE));
+                Integer.toString(info.modules()), NamedTextColor.WHITE));
         messageService.send(sender, labeledValue("Loaded Players: ",
-                Integer.toString(playerService.getLoadedPlayers().size()), NamedTextColor.WHITE));
+                Integer.toString(info.loadedPlayers()), NamedTextColor.WHITE));
         messageService.send(sender, "<gray>LuckPerms:</gray> <green>Connected</green>");
         if (sender instanceof Player player) {
-            luckPermsService.getPrimaryGroup(player.getUniqueId()).ifPresent(primaryGroup ->
+            primaryGroup.apply(player.getUniqueId()).ifPresent(primaryGroup ->
                     messageService.send(sender, labeledValue("Primary Group: ", primaryGroup, NamedTextColor.WHITE))
             );
         }
-        boolean debug = configService.isDebugEnabled();
+        boolean debug = info.debug();
         messageService.send(sender, labeledValue("Debug: ", debug ? "Enabled" : "Disabled",
                 debug ? NamedTextColor.GREEN : NamedTextColor.RED));
     }
 
     private void sendVersion(CommandSender sender) {
+        RuntimeInfo info = runtimeInfo.get();
         messageService.send(sender, labeledValue(
-                "VapeeCore version: ", plugin.getPluginMeta().getVersion(), NamedTextColor.WHITE));
+                "VapeeCore version: ", info.pluginVersion(), NamedTextColor.WHITE));
         messageService.send(sender, labeledValue("Paper/Bukkit version: ",
-                plugin.getServer().getVersion() + " / " + plugin.getServer().getBukkitVersion(),
+                info.serverVersion() + " / " + info.bukkitVersion(),
                 NamedTextColor.WHITE));
         messageService.send(sender, labeledValue(
-                "Java version: ", System.getProperty("java.version"), NamedTextColor.WHITE));
+                "Java version: ", info.javaVersion(), NamedTextColor.WHITE));
     }
 
     private void reloadConfig(CommandSender sender) {
@@ -232,7 +271,7 @@ public final class CoreCommand implements TabExecutor {
             return;
         }
 
-        ReloadResult result = reloadService.reload();
+        ReloadResult result = reload.get();
         switch (result.status()) {
             case SUCCESS -> messageService.send(
                     sender,
@@ -265,11 +304,11 @@ public final class CoreCommand implements TabExecutor {
         }
     }
 
-    private void sendInvalidUsage(CommandSender sender) {
+    private void sendInvalidUsage(CommandSender sender, String syntax) {
         messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
                 .append(Component.newline())
                 .append(Component.text("Use: ", NamedTextColor.YELLOW))
-                .append(Component.text("/core <help|version|reload>", NamedTextColor.AQUA)));
+                .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private Component labeledValue(String label, String value, NamedTextColor valueColor) {
@@ -282,4 +321,7 @@ public final class CoreCommand implements TabExecutor {
                 .append(Component.text(component, NamedTextColor.WHITE))
                 .append(Component.text(after, NamedTextColor.RED));
     }
+
+    record RuntimeInfo(String pluginName, String pluginVersion, String serverVersion, String bukkitVersion,
+                       String javaVersion, int modules, int loadedPlayers, boolean debug) { }
 }

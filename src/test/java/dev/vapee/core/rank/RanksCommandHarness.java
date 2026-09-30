@@ -72,6 +72,12 @@ public final class RanksCommandHarness {
         command.onCommand(console, null, "ranks", new String[]{"extra"});
         check(fixture.last().contains("Use: /ranks"),
                 "/ranks rejects arguments with concise usage");
+        fixture.permitted = false;
+        command.onCommand(player, null, "ranks", new String[0]);
+        check(fixture.last().contains("permission"), "player executor permission enforced");
+        command.onCommand(console, null, "ranks", new String[0]);
+        check(fixture.last().contains("permission"), "console executor permission enforced");
+        check(command.onTabComplete(player, null, "ranks", new String[]{""}).isEmpty(), "ranks completion always empty");
 
         System.out.println("RanksCommandHarness passed " + checks + " checks.");
     }
@@ -97,6 +103,7 @@ public final class RanksCommandHarness {
         private final RankService rankService = new RankService(() -> "ranks", this);
         private final MessageService messageService = messages();
         private List<String> trackGroups = List.of("default", "vip", "premium");
+        private boolean permitted = true;
 
         private Player player(String name, String groupId) {
             UUID uniqueId = UUID.randomUUID();
@@ -130,7 +137,7 @@ public final class RanksCommandHarness {
         ) {
             if (name.equals("getName")) return senderName;
             if (name.equals("getUniqueId")) return uniqueId;
-            if (name.equals("hasPermission")) return true;
+            if (name.equals("hasPermission")) return permitted;
             if (name.equals("sendMessage") && arguments != null) {
                 for (Object argument : arguments) {
                     if (argument instanceof Component component) {

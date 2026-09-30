@@ -3,6 +3,7 @@ package dev.vapee.core.social.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.IgnoreResult;
 import dev.vapee.core.social.SocialService;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Server;
@@ -21,6 +22,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class IgnoreCommand implements TabExecutor {
+
+    public static final String PERMISSION = "vapeecore.social.ignore";
 
     private final Server server;
     private final SocialService socialService;
@@ -50,12 +53,16 @@ public final class IgnoreCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can manage ignored players.</red>");
             return true;
         }
+        if (!sender.hasPermission(PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            return true;
+        }
         if (args.length != 1) {
             sendUsage(player);
             return true;
         }
 
-        Player target = server.getPlayerExact(args[0]);
+        Player target = new OnlinePlayerResolver(server::getOnlinePlayers).resolveExact(args[0]);
         if (target == null) {
             messageService.send(player, "<red>That player is not online.</red>");
             return true;
@@ -77,14 +84,14 @@ public final class IgnoreCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (!(sender instanceof Player player) || args.length != 1) {
+        if (!(sender instanceof Player player) || !sender.hasPermission(PERMISSION) || args.length != 1) {
             return List.of();
         }
 
         String prefix = args[0].toLowerCase(Locale.ROOT);
         List<String> matches = new ArrayList<>();
         for (Player candidate : server.getOnlinePlayers()) {
-            if (candidate.getUniqueId().equals(player.getUniqueId())
+            if (!candidate.isOnline() || candidate.getUniqueId().equals(player.getUniqueId())
                     || socialService.isIgnoring(player.getUniqueId(), candidate.getUniqueId())) {
                 continue;
             }

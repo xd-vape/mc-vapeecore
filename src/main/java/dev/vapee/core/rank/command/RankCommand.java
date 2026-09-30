@@ -50,6 +50,10 @@ public final class RankCommand implements TabExecutor {
             @NotNull String label,
             @NotNull String[] args
     ) {
+        if (!sender.hasPermission(PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to view ranks.</red>");
+            return true;
+        }
         if (args.length > 1) {
             sendUsage(sender);
             return true;
@@ -66,7 +70,7 @@ public final class RankCommand implements TabExecutor {
             target = player;
         } else {
             target = onlinePlayerLookup.apply(args[0]);
-            if (target == null) {
+            if (target == null || !target.isOnline()) {
                 messageService.send(sender, "<red>That player is not online.</red>");
                 return true;
             }
@@ -94,6 +98,7 @@ public final class RankCommand implements TabExecutor {
 
         String prefix = args[0].toLowerCase(Locale.ROOT);
         return onlinePlayers.get().stream()
+                .filter(Player::isOnline)
                 .map(Player::getName)
                 .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
                 .sorted(String.CASE_INSENSITIVE_ORDER)

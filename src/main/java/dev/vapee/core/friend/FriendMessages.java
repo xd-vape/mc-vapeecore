@@ -1,7 +1,11 @@
 package dev.vapee.core.friend;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.identity.PlayerIdentity;
+import dev.vapee.core.identity.PlayerIdentityService;
+import dev.vapee.core.identity.PlayerLookupStatus;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 
@@ -14,10 +18,17 @@ public final class FriendMessages {
 
     private final MessageService messages;
     private final Function<UUID, Player> onlinePlayer;
+    private final Function<UUID, String> commandArgument;
 
     public FriendMessages(MessageService messages, Function<UUID, Player> onlinePlayer) {
+        this(messages, onlinePlayer, UUID::toString);
+    }
+
+    public FriendMessages(MessageService messages, Function<UUID, Player> onlinePlayer,
+                          Function<UUID, String> commandArgument) {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
+        this.commandArgument = Objects.requireNonNull(commandArgument, "commandArgument");
     }
 
     public void report(Player actor, String action, UUID targetId, String targetName, FriendResult result) {
@@ -37,7 +48,12 @@ public final class FriendMessages {
             messages.send(actor, Component.text(prefix, NamedTextColor.GREEN)
                     .append(Component.text(targetName, NamedTextColor.WHITE)));
             if (action.equals("add")) {
-                notifyOnline(targetId, actor.getName(), " sent you a friend request.");
+                Player target = onlinePlayer.apply(targetId);
+                if (target != null && target.isOnline()) {
+                    messages.send(target, Component.text(actor.getName(), NamedTextColor.WHITE)
+                            .append(Component.text(" sent you a friend request. ", NamedTextColor.GREEN))
+                            .append(requestActions(commandArgument.apply(actor.getUniqueId()))));
+                }
             } else if (action.equals("accept")) {
                 notifyOnline(targetId, actor.getName(), " accepted your friend request.");
             }
@@ -63,6 +79,25 @@ public final class FriendMessages {
             default -> throw new IllegalStateException("Unexpected friend result: " + result);
         };
         messages.send(actor, Component.text(message, NamedTextColor.RED));
+    }
+
+    public static String commandArgument(PlayerIdentityService identities, UUID id) {
+        String name = identities.findById(id).map(PlayerIdentity::name).orElse(null);
+        if (name == null || !name.matches("\\S+")) return id.toString();
+        var lookup = identities.resolve(name);
+        return lookup.status() == PlayerLookupStatus.FOUND
+                && lookup.identity().map(PlayerIdentity::uniqueId).filter(id::equals).isPresent()
+                ? name : id.toString();
+    }
+
+    public static Component requestActions(String argument) {
+        return actionButton("accept", argument).append(Component.space()).append(actionButton("deny", argument));
+    }
+
+    public static Component actionButton(String action, String argument) {
+        String label = Character.toUpperCase(action.charAt(0)) + action.substring(1);
+        return Component.text("[" + label + "]", action.equals("accept") ? NamedTextColor.GREEN : NamedTextColor.RED)
+                .clickEvent(ClickEvent.suggestCommand("/friend " + action + " " + argument));
     }
 
     private void notifyOnline(UUID targetId, String actorName, String suffix) {

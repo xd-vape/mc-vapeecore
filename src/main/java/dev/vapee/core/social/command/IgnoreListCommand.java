@@ -38,6 +38,10 @@ public final class IgnoreListCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can view ignored players.</red>");
             return true;
         }
+        if (!sender.hasPermission(IgnoreCommand.PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            return true;
+        }
         if (args.length != 0) {
             messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
                     .append(Component.newline())
@@ -61,6 +65,10 @@ public final class IgnoreListCommand implements TabExecutor {
         unknownEntries.sort(Comparator.comparing(UUID::toString));
 
         int size = knownEntries.size() + unknownEntries.size();
+        if (size == 0) {
+            messageService.send(player, "<yellow>You are not ignoring any players.</yellow>");
+            return true;
+        }
         Component output = Component.text("Ignored players (", NamedTextColor.GRAY)
                 .append(Component.text(size, NamedTextColor.WHITE))
                 .append(Component.text("):", NamedTextColor.GRAY));

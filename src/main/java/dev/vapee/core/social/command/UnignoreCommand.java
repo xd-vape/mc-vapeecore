@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -46,19 +45,27 @@ public final class UnignoreCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can manage ignored players.</red>");
             return true;
         }
+        if (!sender.hasPermission(IgnoreCommand.PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            return true;
+        }
         if (args.length != 1) {
             sendUsage(player);
             return true;
         }
 
-        Optional<ResolvedTarget> target = resolveTarget(player.getUniqueId(), args[0]);
-        if (target.isEmpty()) {
-            messageService.send(player, "<red>That player is not ignored.</red>");
-            return true;
-        }
-
         try {
-            sendResult(player, target.get(), socialService.unignore(player.getUniqueId(), target.get().uniqueId()));
+            List<ResolvedTarget> targets = resolveTargets(player.getUniqueId(), args[0]);
+            if (targets.isEmpty()) {
+                messageService.send(player, "<red>That player is not ignored.</red>");
+                return true;
+            }
+            if (targets.size() > 1) {
+                messageService.send(player, "<yellow>That name is ambiguous. Use the player's UUID.</yellow>");
+                return true;
+            }
+            ResolvedTarget target = targets.getFirst();
+            sendResult(player, target, socialService.unignore(player.getUniqueId(), target.uniqueId()));
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not persist an unignore for " + player.getUniqueId() + ".", exception);
             messageService.send(player, "<red>Your ignore list could not be saved. Check the server log.</red>");
@@ -73,30 +80,35 @@ public final class UnignoreCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (!(sender instanceof Player player) || args.length != 1) {
+        if (!(sender instanceof Player player) || !sender.hasPermission(IgnoreCommand.PERMISSION)
+                || args.length != 1) {
             return List.of();
         }
 
         String prefix = args[0].toLowerCase(Locale.ROOT);
-        List<String> matches = new ArrayList<>();
-        for (UUID ignoredPlayer : socialService.getIgnoredPlayers(player.getUniqueId())) {
-            socialService.findKnownPlayerName(ignoredPlayer)
-                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
-                    .ifPresent(matches::add);
-        }
-        matches.sort(String.CASE_INSENSITIVE_ORDER);
-        return matches.stream().distinct().toList();
+        List<ResolvedTarget> entries = socialService.getIgnoredPlayers(player.getUniqueId()).stream()
+                .map(id -> new ResolvedTarget(id, socialService.findKnownPlayerName(id).orElse(id.toString())))
+                .toList();
+        return entries.stream().map(entry -> {
+                    boolean unique = entries.stream().filter(other -> other.displayName()
+                            .equalsIgnoreCase(entry.displayName())).count() == 1;
+                    return unique && entry.displayName().matches("\\S+")
+                            ? entry.displayName() : entry.uniqueId().toString();
+                })
+                .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix))
+                .distinct().sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(Comparator.naturalOrder()))
+                .toList();
     }
 
-    private Optional<ResolvedTarget> resolveTarget(UUID owner, String input) {
+    private List<ResolvedTarget> resolveTargets(UUID owner, String input) {
         Set<UUID> ignoredPlayers = socialService.getIgnoredPlayers(owner);
         try {
             UUID uniqueId = UUID.fromString(input);
-            if (ignoredPlayers.contains(uniqueId)) {
-                return Optional.of(new ResolvedTarget(
+            if (uniqueId.toString().equalsIgnoreCase(input)) {
+                return ignoredPlayers.contains(uniqueId) ? List.of(new ResolvedTarget(
                         uniqueId,
                         socialService.findKnownPlayerName(uniqueId).orElse(uniqueId.toString())
-                ));
+                )) : List.of();
             }
         } catch (IllegalArgumentException ignored) {
             // The argument may be an exact persisted player name instead.
@@ -108,7 +120,7 @@ public final class UnignoreCommand implements TabExecutor {
                         .map(name -> new ResolvedTarget(uniqueId, name)))
                 .flatMap(Optional::stream)
                 .filter(candidate -> candidate.displayName().equalsIgnoreCase(input))
-                .findFirst();
+                .toList();
     }
 
     private void sendResult(Player player, ResolvedTarget target, IgnoreResult result) {

@@ -62,7 +62,8 @@ public final class FriendModule implements CoreModule {
         FriendService service = new FriendService(repository,
                 configService::getFriendLimits, policy, Clock.systemUTC());
         FriendMenu menu = new FriendMenu(plugin, service, identityModule.getIdentityService(), messageService);
-        FriendMessages feedback = new FriendMessages(messageService, plugin.getServer()::getPlayer);
+        FriendMessages feedback = new FriendMessages(messageService, plugin.getServer()::getPlayer,
+                id -> FriendMessages.commandArgument(identityModule.getIdentityService(), id));
         FriendMenuListener listener = new FriendMenuListener(menu, service, feedback,
                 messageService, plugin.getLogger());
         PluginCommand command = Objects.requireNonNull(plugin.getCommand("friend"),

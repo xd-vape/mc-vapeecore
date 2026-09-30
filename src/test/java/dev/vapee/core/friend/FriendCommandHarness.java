@@ -7,6 +7,7 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.FilePlayerRepository;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
@@ -36,6 +37,7 @@ public final class FriendCommandHarness {
     public static void main(String[] args) throws Exception {
         Path directory = Files.createTempDirectory("vapeecore-friend-command-");
         try {
+            completionUx(new Fixture(directory.resolve("completion-ux")));
             Fixture fixture = new Fixture(directory);
             Player alice = fixture.player("Alice", true, true);
             Player bob = fixture.player("Bob", true, true);
@@ -61,7 +63,7 @@ public final class FriendCommandHarness {
             check(fixture.last().contains("/friend add") && fixture.last().contains("/friend requests"),
                     "help uses common renderer with all operations");
             run(command, alice, "add");
-            check(fixture.last().contains("/friend help"), "invalid usage is controlled");
+            check(fixture.last().contains("/friend add <player|uuid>"), "invalid usage is controlled");
             run(command, alice, "add", "Unknown");
             check(fixture.last().contains("not known"), "unknown name is rejected");
             run(command, alice, "add", UUID.randomUUID().toString());
@@ -193,6 +195,136 @@ public final class FriendCommandHarness {
         System.out.println("FriendCommandHarness passed " + checks + " checks.");
     }
 
+    private static void completionUx(Fixture f) throws Exception {
+        Player actor = f.player("UxActor", true, true);
+        Player recipient = f.player("UxRecipient", true, true);
+        Player twin = f.player("TwinUx", true, true);
+        f.player("twinux", false, true);
+        Player unsafe = f.player("<click:run_command:'/op @s'>x</click>", true, true);
+        FriendCommand c = f.command();
+        int[] callbacks = {0};
+        f.friends.addRelationshipListener((first, second) -> callbacks[0]++);
+        for (String action : List.of("accept", "deny", "cancel", "remove")) {
+            run(c, actor, action);
+            check(f.last().equals(action.equals("remove") ? "You do not have any friends yet."
+                    : action.equals("cancel") ? "You have no pending outgoing friend requests."
+                    : "You have no pending friend requests."), "action-specific empty " + action);
+        }
+        for (String action : List.of("add", "accept", "deny", "cancel", "remove", "list", "requests", "help")) {
+            run(c, actor, action, "one", "extra");
+            check(f.last().equals("Usage: /friend " + action
+                    + (List.of("list", "requests", "help").contains(action) ? "" : " <player|uuid>")),
+                    "concrete extra-argument usage " + action);
+        }
+        run(c, actor, "ADD");
+        check(f.all(actor.getUniqueId()).contains("Missing player.")
+                && f.last().contains("/friend add <player|uuid>"), "add missing player explains syntax");
+        String attack = "<click:run_command:'/op @s'>x</click>";
+        run(c, actor, attack);
+        check(f.last().contains("Unknown friend command: " + attack)
+                && f.last().contains("Use /friend help to view available commands.")
+                && clicks(f.lastComponent()).isEmpty(), "unknown literal input creates no click event");
+        check(c.onTabComplete(actor, null, "friends", new String[]{"add", ""})
+                .contains(twin.getUniqueId().toString()), "ambiguous online add completion uses UUID");
+        run(c, twin, "add", "UxRecipient");
+        check(hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend accept " + twin.getUniqueId())
+                && hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend deny " + twin.getUniqueId()),
+                "ambiguous actor notification has UUID accept and deny");
+        run(c, actor, "add", "UxRecipient");
+        check(hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend accept UxActor")
+                && callbacks[0] == 0, "notification uses unique actor name without relationship callback");
+        for (String action : List.of("accept", "deny")) {
+            f.messages.get(recipient.getUniqueId()).clear();
+            run(c, recipient, action);
+            check(f.all(recipient.getUniqueId()).contains("UxActor")
+                    && f.all(recipient.getUniqueId()).contains("TwinUx")
+                    && hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend accept UxActor")
+                    && hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend deny " + twin.getUniqueId()),
+                    action + " without target lists multiple actual incoming choices");
+            check(f.messages.get(recipient.getUniqueId()).stream().flatMap(m -> clicks(m).stream())
+                    .allMatch(click -> click.action() == ClickEvent.Action.SUGGEST_COMMAND), "choices never run commands");
+        }
+        run(c, actor, "cancel");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend cancel UxRecipient"), "outgoing cancel choice");
+        check(c.onTabComplete(recipient, null, "friends", new String[]{"deny", ""})
+                .contains(twin.getUniqueId().toString()), "incoming ambiguity completion safe");
+        run(c, recipient, "accept", "UxActor");
+        check(callbacks[0] == 1, "accept preserves live relationship callback");
+        run(c, actor, "remove");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend remove UxRecipient"), "remove lists actual friends");
+        run(c, actor, "remove", "UxRecipient");
+        check(callbacks[0] == 2, "remove preserves callback");
+        run(c, recipient, "add", "UxActor");
+        run(c, actor, "add", "UxRecipient");
+        check(callbacks[0] == 3, "auto-accept preserves callback");
+        run(c, actor, "remove", "UxRecipient");
+        run(c, actor, "add", unsafe.getUniqueId().toString());
+        check(f.all(unsafe.getUniqueId()).contains("UxActor")
+                && clicks(f.messages.get(unsafe.getUniqueId()).getLast()).stream()
+                .allMatch(click -> click.action() == ClickEvent.Action.SUGGEST_COMMAND), "unsafe-looking identity notification safe");
+        run(c, actor, "cancel");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend cancel " + unsafe.getUniqueId()),
+                "whitespace identity cannot inject command arguments");
+        run(c, actor, "cancel", unsafe.getUniqueId().toString());
+        run(c, recipient, "deny", twin.getUniqueId().toString());
+        f.messages.get(recipient.getUniqueId()).clear();
+        run(c, unsafe, "add", "UxRecipient");
+        check(f.all(recipient.getUniqueId()).contains(attack + " sent you a friend request.")
+                && hasSuggestion(f.messages.get(recipient.getUniqueId()), "/friend accept " + unsafe.getUniqueId())
+                && clicks(f.messages.get(recipient.getUniqueId()).getLast()).stream()
+                .allMatch(click -> click.action() == ClickEvent.Action.SUGGEST_COMMAND),
+                "literal attacker actor notification uses safe UUID suggest actions");
+        run(c, recipient, "deny", unsafe.getUniqueId().toString());
+        Player uuidNamed = f.player(actor.getUniqueId().toString(), true, true);
+        check(FriendMessages.commandArgument(f.identities, uuidNamed.getUniqueId()).equals(uuidNamed.getUniqueId().toString()),
+                "name that resolves to another UUID never becomes a wrong-target suggestion");
+
+        UUID missing = UUID.randomUUID();
+        MemoryRepository r = new MemoryRepository();
+        r.snapshot = new FriendSnapshot(List.of(new Friendship(actor.getUniqueId(), missing, Instant.EPOCH)), List.of());
+        FriendService stale = new FriendService(r, FriendLimits.defaults(), FriendRequestPolicy.allowAll(), Clock.systemUTC());
+        FriendCommand staleCommand = f.command(stale);
+        run(staleCommand, actor, "remove");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend remove " + missing)
+                && staleCommand.onTabComplete(actor, null, "friends", new String[]{"remove", ""})
+                .equals(List.of(missing.toString())), "unknown stored identity receives UUID choice and completion");
+        run(staleCommand, actor, "remove", missing.toString());
+        check(stale.getFriends(actor.getUniqueId()).isEmpty(), "unknown relation UUID suggestion remains executable");
+        UUID missingOutgoing = UUID.randomUUID();
+        MemoryRepository pendingRepository = new MemoryRepository();
+        pendingRepository.snapshot = new FriendSnapshot(List.of(), List.of(
+                new FriendRequest(missing, actor.getUniqueId(), Instant.EPOCH),
+                new FriendRequest(actor.getUniqueId(), missingOutgoing, Instant.EPOCH)));
+        FriendService pending = new FriendService(pendingRepository, FriendLimits.defaults(), FriendRequestPolicy.allowAll(), Clock.systemUTC());
+        FriendCommand pendingCommand = f.command(pending);
+        run(pendingCommand, actor, "accept");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend accept " + missing)
+                && hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend deny " + missing),
+                "pending unknown identities have executable UUID accept and deny choices");
+        run(pendingCommand, actor, "cancel");
+        check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend cancel " + missingOutgoing),
+                "outgoing unknown identity has an executable UUID cancel choice");
+        run(pendingCommand, actor, "deny", missing.toString());
+        run(pendingCommand, actor, "cancel", missingOutgoing.toString());
+        check(pending.getIncomingRequests(actor.getUniqueId()).isEmpty()
+                && pending.getOutgoingRequests(actor.getUniqueId()).isEmpty(), "unknown relation UUID actions preserve service semantics");
+        Player denied = f.player("UxDenied", true, false);
+        c.onCommand(denied, null, "friends", new String[]{"accept"});
+        check(f.all(denied.getUniqueId()).contains("permission")
+                && c.onTabComplete(denied, null, "friends", new String[]{"accept", ""}).isEmpty(), "alias denied without target leak");
+    }
+
+    private static List<ClickEvent> clicks(Component c) {
+        List<ClickEvent> result = new ArrayList<>();
+        if (c.clickEvent() != null) result.add(c.clickEvent());
+        c.children().forEach(child -> result.addAll(clicks(child)));
+        return result;
+    }
+    private static boolean hasSuggestion(List<Component> messages, String command) {
+        return messages.stream().flatMap(m -> clicks(m).stream()).anyMatch(click ->
+                click.action() == ClickEvent.Action.SUGGEST_COMMAND && click.value().equals(command));
+    }
+
     private static void run(FriendCommand command, CommandSender sender, String... args) {
         activeFixture.currentSender = sender instanceof Player player ? player.getUniqueId() : null;
         command.onCommand(sender, null, "friend", args);
@@ -239,7 +371,7 @@ public final class FriendCommandHarness {
         private Player player(String name, boolean isOnline, boolean permitted) throws Exception {
             UUID id = UUID.randomUUID();
             Files.writeString(directory.resolve("players").resolve(id + ".yml"),
-                    "name: '" + name + "'\nfirst-join: 0\nlast-join: 0\n");
+                    "name: '" + name.replace("'", "''") + "'\nfirst-join: 0\nlast-join: 0\n");
             // The repository owns its runtime name index, rebuilt here only while arranging the fixture.
             players.initialize();
             messages.put(id, new ArrayList<>());
