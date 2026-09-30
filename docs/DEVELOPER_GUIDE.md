@@ -55,8 +55,11 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
 | `/clan`, Clan-Regeln und zentrale Persistence | `dev.vapee.core.clan`, `clans.yml` |
-| Moderationshistorie, aktive Mute-/Ban-Abfragen und Widerruf | `dev.vapee.core.moderation.ModerationService`; keine Commands oder Enforcement |
+| Moderationshistorie, aktive Mute-/Ban-Abfragen und Widerruf | `dev.vapee.core.moderation.ModerationService`; Domain ohne Bukkit-/Identity-Abhängigkeiten |
 | Moderation Persistence und Schema | `FileModerationRepository`, `plugins/VapeeCore/moderation.yml` |
+| Moderation Commands, Identity/Actor/Permission-Gates | `moderation.command`, `ModerationCommandContext` |
+| Ban-Dauer und UTC-/History-/Disconnect-Components | `ModerationDurationParser`, `ModerationComponents` |
+| Login-Ban-Enforcement vor Player-Join | `ModerationLoginListener`, synchroner `PlayerLoginEvent` |
 | Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
 | Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Feature 16, Status 25) |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
@@ -117,7 +120,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Identity** – Known-Player-Lookup, immutable Profile und `/profile`.
-7. **Moderation** – immutable Historie, aktive Mute-/Ban-Abfragen und separate Persistence; keine Commands oder Enforcement.
+7. **Moderation** – immutable Historie, separate Persistence, `/warn`, `/ban`, `/unban`, `/kick`, `/history` und synchroner Ban-Login-Listener.
 8. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend` und Friends-GUI.
 9. **Clan** – Clans, Einladungen, `/clan` und Clan-GUI.
 10. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
@@ -138,7 +141,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 25. **Warp** – dynamische Warp-Persistence und Admin-Command.
 26. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Moderation → Identity → Economy → Social → Player → Rank → Permission. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Moderation gibt nur seinen Service frei und schreibt nicht erneut. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Moderation → Identity → Economy → Social → Player → Rank → Permission. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Moderation deregistriert seine fünf Command-Hooks und den Login-Listener, gibt Service-Referenzen frei und schreibt nicht erneut. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -206,7 +209,7 @@ Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonis
 
 ## Moderation Foundation (Phase 24)
 
-Ownership: `ModerationModule` hängt öffentlich ausschließlich von `JavaPlugin` ab und steht zwischen Identity und Friend. Beim Enable baut es Repository und Service lokal auf und veröffentlicht den Service erst nach vollständig validiertem Load. Ein beschädigtes Dokument lässt das Enable scheitern; `ModuleManager` rollt bereits gestartete Module rückwärts zurück, Friend und spätere Module starten nicht. Disable entfernt die Service-Referenz, ohne einen zusätzlichen Save. Der Getter wirft bei deaktiviertem oder fehlgeschlagenem Modul. Ein lokaler package-private Factory-/Clock-/UUID-Seam ermöglicht Tests des tatsächlichen Modul-Lifecycles, ohne eine Bukkit-Instanz zu erfinden.
+Ownership seit Phase 25A: `ModerationModule` hängt von `JavaPlugin`, `IdentityModule` und `MessageService` ab und steht weiterhin zwischen Identity und Friend. Beim Enable lädt es Repository/Service lokal, installiert fünf Executor-/Completer-Paare und den synchronen Login-Listener und veröffentlicht erst danach seine Service-Referenz. Beschädigte Daten lassen Enable scheitern; partielle Hook-Fehler werden lokal bereinigt, bevor `ModuleManager` Vorgänger rückwärts stoppt. Disable deregistriert alle eigenen Hooks, nullt Runtime-Referenzen und speichert nicht erneut. Domain, Schema und Copy-on-write bleiben aus Phase 24 unverändert; lokale Factory-/Clock-/UUID-/Hook-Seams testen den tatsächlichen Lifecycle.
 
 Domain und Service enthalten keine Bukkit-Player, Identity-, PlayerService-, Economy-, Rank-, Chat- oder PM-Abhängigkeiten. `ModerationService` besitzt genau einen `ModerationSnapshot` als Wahrheit; keine getrennten active/history Maps, Dirty-Queue oder zweite Persistence. Die gesamte API ist Main-Thread-owned, einschließlich Reads: spätere Async-Consumer müssen zuerst auf den Serverthread zurückkehren oder eine ausdrücklich entworfene immutable Projektion verwenden. Diese Foundation veröffentlicht keine Async-Projektion oder Events.
 
@@ -216,7 +219,7 @@ Domain und Service enthalten keine Bukkit-Player, Identity-, PlayerService-, Eco
 
 `ModerationRevocation(actor, revokedAt, Optional<String> reason)` erhält den ursprünglichen Record; `revokedAt >= createdAt`. Nur MUTE/BAN erlauben Widerruf. `withRevocation` erzeugt einen neuen Record mit derselben ID und unveränderten Originalfeldern, niemals einen zweiten History-Eintrag, und lehnt einen zweiten Widerruf ab. `isActiveAt(t)` gilt ausschließlich für MUTE/BAN bei `createdAt <= t`, vollständig fehlendem Widerruf und entweder fehlendem Ablauf oder `t < expiresAt`. Genau am Ablauf ist inactive. Future-created Records sind vorher inactive. Ein bereits widerrufener Record ist auch bei einer Abfrage vor `revokedAt` inactive: dies ist eine aktuelle Aktivzustandsregel, keine historische Rekonstruktion. Ablauf erzeugt keine Writes, Tasks oder Löschungen.
 
-API: `issueWarning`, `recordKick`, `issueMute`, `issueBan`, `revokeMute`, `revokeBan`, `getActiveMute`, `getActiveBan`, `isMuted`, `isBanned`, `getHistory`, `getRecord`, `getAllRecords`. Targets sind UUIDs ohne Known-/Online-Player-Gate; Eingabeauflösung gehört erst zum späteren Command-Adapter. Jede Mutation verwendet genau einen Zeitpunkt aus dem injizierten `Clock`; Runtime ist `Clock.systemUTC()`. Issue-IDs kommen aus einem `Supplier<UUID>`, Runtime `UUID::randomUUID`. Tests injizieren beide Quellen. Nullwerte und ID-Kollisionen scheitern ohne Save.
+API: `issueWarning`, `recordKick`, `issueMute`, `issueBan`, `revokeMute`, `revokeBan`, `getActiveMute`, `getActiveBan`, `isMuted`, `isBanned`, `getHistory`, `getRecord`, `getAllRecords`. Targets sind UUIDs ohne Known-/Online-Player-Gate; Eingabeauflösung gehört zum separaten Phase-25A-Command-Adapter. Jede Mutation verwendet genau einen Zeitpunkt aus dem injizierten `Clock`; Runtime ist `Clock.systemUTC()`. Issue-IDs kommen aus einem `Supplier<UUID>`, Runtime `UUID::randomUUID`. Tests injizieren beide Quellen. Nullwerte und ID-Kollisionen scheitern ohne Save.
 
 `ModerationResult`: SUCCESS enthält den erfolgreich gespeicherten neuen oder widerrufenen Record. ALREADY_MUTED, ALREADY_BANNED, NOT_MUTED und NOT_BANNED enthalten konsequent keinen Record und erzeugen keinen Save. Ein zweiter aktuell aktiver Mute/Ban wird abgewiesen; beide Typen dürfen gleichzeitig aktiv sein. Nach Ablauf oder Widerruf ist Reissue erlaubt, die alten Fakten bleiben erhalten. Revoke sucht ausschließlich aktuell aktive Fakten: absent, expired oder revoked liefert NOT_*. Falls geladene Fakten zeitlich überlappen, wählen Active-Abfragen deterministisch den neuesten aktiven Record, dann die kleinste lexikografische UUID; die Foundation verwirft keine gültige History wegen eines solchen Overlaps.
 
@@ -254,9 +257,23 @@ Zeitformat bewusst verlustfrei: `created-at`, present `expires-at` und `revoked-
 
 Save schreibt deterministische LinkedHashMaps in Snapshot-Reihenfolge in eine UTF-8-Sibling-Tempdatei, schließt den Writer und versucht `ATOMIC_MOVE` mit `REPLACE_EXISTING`. Nur `AtomicMoveNotSupportedException` führt zum kontrollierten Replace-Fallback. Andere I/O-/Runtime-Fehler propagieren als `ModerationRepositoryException` mit Dateikontext. Fehlgeschlagenes Replace vor dem Move lässt die alte Datei lesbar und unverändert; Temp-Cleanup läuft best-effort und loggt Cleanup-Probleme über den injizierten Logger. Das Fallback verspricht keine Atomicität bei hartem JVM-/OS-Abbruch; mehrere externe Writer werden nicht koordiniert. Der Service ist der einzige Runtime-Writer, die Datei daher nie während laufender Mutationen manuell bearbeiten.
 
-### Phase-25-Grenze
+### Phase 25A – Moderation Commands und Ban-Enforcement
 
-Noch keine `/warn`, Moderations-`/kick`, `/mute`, `/unmute`, `/ban`, `/unban`, `/history` oder `/freeze`; keine Permissions, Staff Notes, Evidence, IPs, Scope, Dauerparser, GUI, Scheduler, Auto-Eskalation oder Moderation-Events. Kein Join-/Ban-Enforcement und kein Chat-/PM-Mute-Enforcement. Bestehende Chat-, PM-, Player- und Identity-Module bleiben unverändert. Spätere Adapter müssen Permission/Target-Auflösung, Player-Feedback und Enforcement getrennt ergänzen und die Main-Thread-Grenze respektieren. Der gespeicherte Kick allein trennt keinen Spieler vom Server. Die vier Moderation-Harnesses prüfen Domain, alle Service-Operationen, COW-Fehler, strikte Persistence und den tatsächlichen Modul-/Rollback-Lifecycle; das vollständige Ergebnis steht in `docs/MODERATION_FOUNDATION.md`.
+Phase 25A ergänzt ausschließlich `/warn <player|uuid> <reason...>`, `/ban <player|uuid> <duration|permanent> <reason...>`, `/unban <player|uuid> [reason...]`, `/kick <player|uuid> <reason...>` und `/history <player|uuid> [page]`. Owner bleibt ModerationModule; Module Count 26, Reload Count 6. Kein neuer Root-Dispatcher, GUI, Config-Key, Schemafeld oder Bukkit-Banlist-Abgleich. Vollständige Verifikation: `docs/MODERATION_TOOLS.md`.
+
+Alle fünf Commands prüfen ihre unabhängige `vapeecore.moderation.<command>`-Permission zusätzlich zu `plugin.yml`; Defaults sind `op`, ohne Aliases, Children oder Wildcard. `CoreCommand` zeigt die neue Moderation-Section permission-gefiltert. Player wird zu `ModerationActor.player(UUID)`, Console zu `ModerationActor.console()`; andere Sender werden nicht still als Console auditiert. Alle Targets gehen zuerst durch `PlayerIdentityService.resolve`: Known name/UUID, online und offline, eindeutiger vollständiger Name, kein Phantom-UUID-/OfflinePlayer-/Netzwerk-Lookup. Self-Warn/Ban/Unban/Kick ist gesperrt; Self-History mit Permission erlaubt.
+
+`ModerationDurationParser` akzeptiert case-insensitive `permanent`, `perm` oder genau eine positive dezimale Ganzzahl plus `s/m/h/d/w`. Keine Whitespace-Toleranz, Vorzeichen, Dezimalwerte, Exponenten, Combined-, Monats- oder Jahresdauer. `Math.multiplyExact` sowie Instant-Addition lehnen Overflow kontrolliert ab. Command und Service teilen denselben injizierten UTC-Clock. Feedback zeigt normalisierte kurze Dauer, Ban-Screen und History absolute UTC-Zeit. Für Extremwerte der vollständigen Instant-Domain gibt es einen kanonischen UTC-Fallback statt eines Renderingfehlers.
+
+Warn/Ban/Unban/Kick mutieren nur über ModerationService. Save → State-Swap → INFO-Audit (Actor, Target UUID/Name, Action, vollständige Record-ID und Expiry) → Feedback → externe Aktion. Warn benachrichtigt nur online, niemals als Offline-Queue. Ban verwendet denselben Ban-Screen für Online-Disconnect und Login. Kick validiert echte Online-Präsenz vor `recordKick`, erzeugt offline keinen Record und nutzt einen eigenen Kick-Screen. ALREADY_BANNED/NOT_BANNED sind normale No-ops, ohne Save, Success-Audit oder erneuten Kick. Repositoryfehler erhalten SEVERE mit Actor/Target/Action und kontrollierte Senderausgabe; weder Notification noch Disconnect. Eine nachträgliche Notification-/Disconnect-Ausnahme erhält SEVERE und die ausdrücklich gespeicherte, aber extern fehlgeschlagene Aktion als Feedback; persistierte Fakten werden nicht zurückgerollt oder erneut angelegt.
+
+`ModerationLoginListener` läuft bei `PlayerLoginEvent` mit HIGHEST auf dem synchronen Serverthread und fragt ausschließlich `getActiveBan(UUID)` ab. Active permanent/temporary → KICK_BANNED mit Adventure-Component; exakt am Ablauf, danach oder widerrufen → kein eigener Deny. Kein Join-/CorePlayer-Load nötig; kein Save, Expiry-Cleanup oder History-Rewrite. Kein AsyncPlayerPreLoginEvent oder AsyncChatEvent-Servicezugriff. Unerwarteter Queryfehler wird mit UUID als SEVERE geloggt, erfindet keinen Ban und hebt andere Rejections nicht auf. Paper 1.21.11 markiert diesen gewünschten kompatiblen Event bereits deprecated; die spätere API-Modernisierung muss die Main-Thread-Grenze ausdrücklich bewahren.
+
+History übernimmt Service-Reihenfolge, hat fünf Records pro Seite und validiert positive ganze Seiten overflow-sicher. Empty State und nicht vorhandene Seiten sind konkret benannt. Jeder Eintrag zeigt Action, UTC-Erstellung, Actor (Known name/Console/UUID-Fallback), literal Reason und Recorded/Active/Expired/Revoked/Inactive; BAN/MUTE zusätzlich Expiry/Permanent, Widerruf zusätzlich Actor/Zeit/optionalen Reason. Die vollständige Record-ID steht im Hover. Previous/Next verwenden ausschließlich SUGGEST_COMMAND mit Target-UUID. Namen/Reasons sind stets Component.text, keine MiniMessage-Auswertung. Completion zeigt primär Online-Targets; Unban leitet aktive Target-UUIDs aus dem vorhandenen Snapshot ab. Eindeutige bekannte Namen, sonst UUID, deterministische Prefix-Filter; Self bei Mutation ausgeschlossen. Nur gezielte Identity-Lookups, kein Verzeichnis-/globaler Known-Player-Scan.
+
+Future Moderation Finding (Phase 26): Noch keine Staff-Target-Hierarchie, insbesondere keine Auswertung von Group Names, Weight, Prefix oder Track Position. Permission Assignment bleibt die primäre administrative Trust Boundary.
+
+Future 25B Boundary: `issueMute/revokeMute/isMuted` bleiben unveränderte Foundation-APIs. `/mute` und `/unmute` sowie Chat-/PM-Enforcement existieren noch nicht. Public Chat ist async; 25B braucht eine gezielt entworfene immutable/threadsichere Mute-Projektion, deren Publikation erst nach erfolgreichem Save erfolgt. Kein Async-Zugriff auf die aktuelle main-thread-owned Service-API. PM bleibt bis dahin vollständig unverändert. Historische Berichte `COMMAND_AUDIT.md` und `MODERATION_FOUNDATION.md` werden nicht umgeschrieben; FORMATTING bleibt unverändert.
 
 ## Friends Foundation und Integration (Phase 18A.1/18A.2)
 
@@ -767,6 +784,11 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/ranks` | Öffentliche LuckPerms-Track-Reihenfolge anzeigen | `RanksCommand` | `vapeecore.ranks.view` (Default `true`) |
 | `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
+| `/warn <player\|uuid> <reason...>` | Known online/offline warnen | `WarnCommand` | `vapeecore.moderation.warn` |
+| `/ban <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline bannen; Login sperren | `BanCommand`, `ModerationLoginListener` | `vapeecore.moderation.ban` |
+| `/unban <player\|uuid> [reason...]` | Aktiven Ban widerrufen | `UnbanCommand` | `vapeecore.moderation.unban` |
+| `/kick <player\|uuid> <reason...>` | Online-Kick nach Record-Save | `KickCommand` | `vapeecore.moderation.kick` |
+| `/history <player\|uuid> [page]` | Read-only Moderationshistorie | `HistoryCommand` | `vapeecore.moderation.history` |
 
 Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
 
@@ -870,6 +892,9 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.moderation.ModerationServiceHarness`
 - `dev.vapee.core.moderation.ModerationPersistenceHarness`
 - `dev.vapee.core.moderation.ModerationLifecycleHarness`
+- `dev.vapee.core.moderation.command.ModerationDurationHarness`
+- `dev.vapee.core.moderation.command.ModerationCommandHarness`
+- `dev.vapee.core.moderation.ModerationBanEnforcementHarness`
 - `dev.vapee.core.friend.FriendPersistenceHarness`
 - `dev.vapee.core.friend.FriendServiceHarness`
 - `dev.vapee.core.friend.FriendDomainHarness`

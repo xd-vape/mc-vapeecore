@@ -42,6 +42,18 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
 
+## Moderation (Phase 25A)
+
+| Permission | Default | Command | Scope |
+|---|---:|---|---|
+| `vapeecore.moderation.warn` | `op` | `/warn <player\|uuid> <reason...>` | Known online/offline, gespeicherte Warnung; online Benachrichtigung nach Save. |
+| `vapeecore.moderation.ban` | `op` | `/ban <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline, temporär/permanent; Login-Sperre und Online-Disconnect nach Save. |
+| `vapeecore.moderation.unban` | `op` | `/unban <player\|uuid> [reason...]` | Widerruft ausschließlich einen aktuell aktiven Ban. |
+| `vapeecore.moderation.kick` | `op` | `/kick <player\|uuid> <reason...>` | Known online; Record vor tatsächlichem Disconnect. |
+| `vapeecore.moderation.history` | `op` | `/history <player\|uuid> [page]` | Known online/offline, read-only; fünf Records pro Seite. |
+
+Alle fünf Nodes werden direkt im Executor und in der Completion geprüft. Keine Children, kein `vapeecore.moderation.*`-Parent und keine automatische Ban→Unban- oder History→Mutation-Berechtigung. Player und Console sind erlaubt; andere Sender werden kontrolliert abgelehnt. Self-Warn/Ban/Unban/Kick ist gesperrt; eigene History mit Permission erlaubt. Keine Rangnamen-/Weight-/Prefix-/Track-basierte Target-Hierarchie: gezielte Permission-Vergabe bleibt bis Phase 26 „Permissions & Rank Hardening“ die administrative Trust Boundary. Mute-Permissions und Enforcement folgen erst in Phase 25B.
+
 ## Staff Utilities
 
 Self- und Others-Rechte werden im Command-Code getrennt geprüft. Eine Basispermission erlaubt niemals die Mutation eines anderen Spielers. Die in `plugin.yml` deklarierten `.others`-Nodes besitzen bei Commands mit Self-Form die jeweilige Basispermission als Child, damit ein Staff-Mitglied mit dem stärkeren Recht auch die Self-Form verwenden und den Bukkit-Command-Gate passieren kann.
@@ -116,6 +128,9 @@ Keine `.others`- oder Bypass-Rechte.
 
 Alles aus der gewünschten Player-Basis, zusätzlich:
 
+- `vapeecore.moderation.warn`
+- `vapeecore.moderation.kick`
+- `vapeecore.moderation.history`
 - `vapeecore.utility.fly`
 - `vapeecore.utility.teleport`
 - `vapeecore.utility.teleport.here`
@@ -131,6 +146,8 @@ Nicht empfohlen: `teleport.others`, `teleport.bypass`, `vapeecore.economy.admin`
 
 Alles von Moderator, zusätzlich:
 
+- `vapeecore.moderation.ban`
+- `vapeecore.moderation.unban`
 - `vapeecore.utility.build`
 - `vapeecore.utility.fly.others`
 - `vapeecore.utility.speed`
