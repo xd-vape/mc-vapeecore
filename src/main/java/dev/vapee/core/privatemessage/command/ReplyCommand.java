@@ -95,6 +95,7 @@ public final class ReplyCommand implements TabExecutor {
             }
             case FEATURE_DISABLED -> messageService.send(player, "<red>Private messages are currently disabled.</red>");
             case SENDER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
+            case SENDER_MUTED -> messageService.send(player, "<red>You cannot send private messages while muted.</red>");
             case RECIPIENT_NOT_LOADED -> messageService.send(player, "<red>That player's profile is not available.</red>");
             case RECIPIENT_DISABLED -> messageService.send(player, "<red>That player is not accepting private messages.</red>");
             case SENDER_IGNORES_RECIPIENT -> messageService.send(player, "<red>You are ignoring that player.</red>");

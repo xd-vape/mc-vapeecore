@@ -1,6 +1,7 @@
 package dev.vapee.core.privatemessage;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.moderation.ModerationModule;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.settings.PlayerSettingsService;
@@ -23,6 +24,7 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
     private final PlayerModule playerModule;
     private final SocialModule socialModule;
     private final MessageService messageService;
+    private final ModerationModule moderationModule;
 
     private PrivateMessageConfig privateMessageConfig;
     private PrivateMessageService privateMessageService;
@@ -34,12 +36,14 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
             JavaPlugin plugin,
             PlayerModule playerModule,
             SocialModule socialModule,
-            MessageService messageService
+            MessageService messageService,
+            ModerationModule moderationModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.socialModule = Objects.requireNonNull(socialModule, "socialModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        this.moderationModule = Objects.requireNonNull(moderationModule, "moderationModule");
     }
 
     @Override
@@ -59,7 +63,8 @@ public final class PrivateMessageModule implements CoreModule, ReloadParticipant
                 socialService,
                 messageService,
                 plugin.getLogger(),
-                newConfig
+                newConfig,
+                moderationModule.getMuteProjection()::isMuted
         );
         PrivateMessageListener newListener = new PrivateMessageListener(newService);
         PluginCommand newMessageCommand = requireCommand("msg");

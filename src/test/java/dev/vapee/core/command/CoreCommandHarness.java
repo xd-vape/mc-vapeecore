@@ -73,6 +73,13 @@ public final class CoreCommandHarness {
         run(command, player, "core", "/ban <player|uuid> <duration|permanent> <reason...>", "help");
         check(!player.text().contains("/warn") && !player.text().contains("/history") && !player.text().contains("/unban"), "ban-only grants no other staff help");
         player.permissions.remove("vapeecore.moderation.ban");
+        for (String node : List.of("mute", "unmute")) {
+            player.permissions.add("vapeecore.moderation." + node);
+            run(command, player, "core", "/" + node + " <player|uuid>", "help");
+            check(!player.text().contains("/" + (node.equals("mute") ? "unmute" : "mute"))
+                    && !player.text().contains("/ban") && !player.text().contains("/warn"), "independent help " + node);
+            player.permissions.remove("vapeecore.moderation." + node);
+        }
         player.permissions.addAll(Set.of("vapeecore.profile.view", "vapeecore.friend.use", "vapeecore.clan.use",
                 "vapeecore.message.use", "vapeecore.social.ignore", "vapeecore.lobby.spawn", "vapeecore.settings.use",
                 "vapeecore.rank.view", "vapeecore.ranks.view", "vapeecore.economy.coins"));
@@ -91,7 +98,8 @@ public final class CoreCommandHarness {
                 "/unban <player|uuid> [reason...]", "/kick <player|uuid> <reason...>", "/history <player|uuid> [page]")) {
             check(console.text().contains(syntax), "admin overview includes " + syntax);
         }
-        check(!console.text().contains("/mute") && !console.text().contains("/unmute"), "no 25B help prematurely");
+        check(console.text().contains("/mute <player|uuid> <duration|permanent> <reason...>")
+                && console.text().contains("/unmute <player|uuid> [reason...]"), "25B help included");
         check(command.onTabComplete(console.sender, null, "core", new String[]{"R"}).equals(List.of("reload")),
                 "admin completion filters case-insensitively");
         String[] expected = {"reloaded successfully", "No changes were applied", "previous runtime configuration was restored",

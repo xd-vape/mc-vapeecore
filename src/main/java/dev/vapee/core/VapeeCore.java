@@ -105,7 +105,7 @@ public final class VapeeCore extends JavaPlugin {
         lobbyModule = new LobbyModule(this, playerModule, messageService);
         visibilityModule = new VisibilityModule(this, playerModule, socialModule, friendModule, lobbyModule);
         chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
-        privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService);
+        privateMessageModule = new PrivateMessageModule(this, playerModule, socialModule, messageService, moderationModule);
         presentationModule = new PresentationModule(
                 this,
                 configService,

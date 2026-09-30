@@ -8,6 +8,14 @@ depend:
   - LuckPerms
 
 commands:
+  mute:
+    description: Mute a known player's chat and outgoing private messages
+    usage: /mute <player|uuid> <duration|permanent> <reason...>
+    permission: vapeecore.moderation.mute
+  unmute:
+    description: Revoke an active VapeeCore mute
+    usage: /unmute <player|uuid> [reason...]
+    permission: vapeecore.moderation.unmute
   warn:
     description: Record a warning for a known player
     usage: /warn <player|uuid> <reason...>
@@ -157,6 +165,12 @@ commands:
     permission: vapeecore.ranks.view
 
 permissions:
+  vapeecore.moderation.mute:
+    description: Allows muting known players
+    default: op
+  vapeecore.moderation.unmute:
+    description: Allows revoking active mutes
+    default: op
   vapeecore.moderation.warn:
     description: Allows warning known players
     default: op

@@ -106,6 +106,8 @@ public final class CoreCommand implements TabExecutor {
                                     "vapeecore.utility.enderchest")
                     )),
                     new CommandHelpSection("Moderation", List.of(
+                            new CommandHelpEntry("/mute <player|uuid> <duration|permanent> <reason...>", "Mutes a known player's chat and outgoing private messages.", "vapeecore.moderation.mute"),
+                            new CommandHelpEntry("/unmute <player|uuid> [reason...]", "Revokes an active mute.", "vapeecore.moderation.unmute"),
                             new CommandHelpEntry("/warn <player|uuid> <reason...>", "Records a warning for a known player.",
                                     "vapeecore.moderation.warn"),
                             new CommandHelpEntry("/ban <player|uuid> <duration|permanent> <reason...>", "Bans a known player temporarily or permanently.",

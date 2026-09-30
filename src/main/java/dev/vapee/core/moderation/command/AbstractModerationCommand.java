@@ -83,8 +83,13 @@ abstract class AbstractModerationCommand implements TabExecutor {
             return null;
         }
         if (result.status() != ModerationStatus.SUCCESS) {
-            context.send(sender, result.status() == ModerationStatus.ALREADY_BANNED
-                    ? "That player is already banned." : "That player is not currently banned.");
+            context.send(sender, switch (result.status()) {
+                case ALREADY_BANNED -> "That player is already banned.";
+                case NOT_BANNED -> "That player is not currently banned.";
+                case ALREADY_MUTED -> "That player is already muted.";
+                case NOT_MUTED -> "That player is not currently muted.";
+                default -> throw new IllegalStateException("Unexpected moderation status: " + result.status());
+            });
             return null;
         }
         ModerationRecord record = result.record().orElseThrow();
@@ -101,7 +106,8 @@ abstract class AbstractModerationCommand implements TabExecutor {
     @Override public final List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission("vapeecore.moderation." + name) || actor(sender) == null) return List.of();
         try {
-            if (args.length == 1) return context.targets(sender, name.equals("history"), name.equals("unban"), args[0]);
+            if (args.length == 1) return context.targets(sender, name.equals("history"),
+                    name.equals("unban") ? ModerationAction.BAN : name.equals("unmute") ? ModerationAction.MUTE : null, args[0]);
             return complete(args);
         } catch (RuntimeException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_COMPLETION", actor(sender), "completion", exception);
