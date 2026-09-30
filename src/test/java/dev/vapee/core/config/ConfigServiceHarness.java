@@ -25,6 +25,7 @@ public final class ConfigServiceHarness {
         logger.setUseParentHandlers(false);
         logger.addHandler(handler);
         try {
+            hierarchy(configFile, handler, logger);
             Files.writeString(configFile, "server:\n  name: Test\n");
             ConfigService service = new ConfigService(configFile, logger);
             service.load();
@@ -205,6 +206,51 @@ public final class ConfigServiceHarness {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static void hierarchy(Path file, CapturingHandler handler, Logger logger) throws IOException {
+        Files.writeString(file, "server:\n  name: Legacy\n");
+        var service = new ConfigService(file, logger);
+        service.load();
+        check(service.getStaffHierarchyConfig().equals(dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults()),
+                "missing staff hierarchy uses safe defaults");
+        String custom = "staff:\n  hierarchy:\n    protected-groups: [helper, ' ADMIN ', OWNER]\n";
+        Files.writeString(file, custom);
+        service.load();
+        check(service.getStaffHierarchyConfig().protectedGroups().equals(List.of("helper", "admin", "owner")),
+                "configured custom order normalized");
+        var previous = service.getStaffHierarchyConfig();
+        Files.writeString(file, "staff:\n  hierarchy:\n    protected-groups: [owner, admin]\n");
+        var plan = service.prepareReload();
+        check(service.getStaffHierarchyConfig() == previous, "prepare hierarchy has no mutation");
+        plan.apply();
+        check(service.getStaffHierarchyConfig().protectedGroups().equals(List.of("owner", "admin")), "apply hierarchy atomically");
+        plan.rollback();
+        check(service.getStaffHierarchyConfig() == previous, "rollback restores exact prior immutable snapshot");
+        for (String invalid : List.of("[]", "admin", "42", "[admin, ADMIN]", "[admin, null]",
+                "null", "['']", "['   ']", "['ad min']", "['admin\\n']")) {
+            String source = "staff:\n  hierarchy:\n    protected-groups: " + invalid + "\n";
+            // Use double quotes for YAML escape so the control-character case is actually a newline.
+            if (invalid.equals("['admin\\n']")) source = "staff:\n  hierarchy:\n    protected-groups: [\"admin\\n\"]\n";
+            Files.writeString(file, source);
+            handler.messages.clear();
+            service.load();
+            check(service.getStaffHierarchyConfig().equals(dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults()),
+                    "invalid hierarchy safely falls back " + invalid);
+            check(handler.messages.stream().anyMatch(message -> message.contains("staff.hierarchy.protected-groups")),
+                    "invalid hierarchy warns " + invalid);
+            check(Files.readString(file).equals(source), "invalid hierarchy never rewrites file " + invalid);
+        }
+        for (String source : List.of("staff: null\n", "staff: 42\n", "staff:\n  hierarchy: null\n", "staff:\n  hierarchy: []\n")) {
+            Files.writeString(file, source); handler.messages.clear(); service.load();
+            check(service.getStaffHierarchyConfig().equals(dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults())
+                    && !handler.messages.isEmpty(), "invalid hierarchy parent safe fallback/warning");
+        }
+        Files.writeString(file, "staff:\n  hierarchy:\n    protected-groups: []\n");
+        var invalidPlan = service.prepareReload();
+        invalidPlan.apply();
+        check(service.getStaffHierarchyConfig().equals(dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults()),
+                "invalid reload never disables protection");
     }
 
     private static final class CapturingHandler extends Handler {

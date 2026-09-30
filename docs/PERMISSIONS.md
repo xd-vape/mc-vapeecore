@@ -1,6 +1,6 @@
 # VapeeCore Permissions
 
-Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permission-Nodes. Die Rangnamen in den Empfehlungen sind Beispiele für LuckPerms-Gruppen; VapeeCore kennt oder prüft keine Rangnamen. `default: op` ist nur der Bukkit/Paper-Default und kein Ersatz für eine gezielte LuckPerms-Konfiguration.
+Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permission-Nodes. Die Rangnamen in den Empfehlungen sind Beispiele für LuckPerms-Gruppen. Feature-Fähigkeiten bleiben Permission-basiert; seit Phase 26A wertet ausschließlich die separate Moderations-Target-Hierarchie explizit konfigurierte primäre Group-IDs aus. `default: op` ist nur der Bukkit/Paper-Default und kein Ersatz für eine gezielte LuckPerms-Konfiguration.
 
 ## Allgemein, Lobby und Economy
 
@@ -42,7 +42,7 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 | `vapeecore.ranks.view` | `true` | `/ranks` | Öffentlichen LuckPerms-Track anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
 
-## Moderation (Phase 25B)
+## Moderation (Phase 26A)
 
 | Permission | Default | Command | Scope |
 |---|---:|---|---|
@@ -54,7 +54,35 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 | `vapeecore.moderation.kick` | `op` | `/kick <player\|uuid> <reason...>` | Known online; Record vor tatsächlichem Disconnect. |
 | `vapeecore.moderation.history` | `op` | `/history <player\|uuid> [page]` | Known online/offline, read-only; fünf Records pro Seite. |
 
-Alle sieben Nodes werden direkt im Executor und in der Completion geprüft. Keine Children, kein `vapeecore.moderation.*`-Parent und keine automatische Ban→Unban- oder History→Mutation-Berechtigung. Player und Console sind erlaubt; andere Sender werden kontrolliert abgelehnt. Self-Mute/Unmute/Warn/Ban/Unban/Kick ist gesperrt; eigene History mit Permission erlaubt. Keine Rangnamen-/Weight-/Prefix-/Track-basierte Target-Hierarchie: gezielte Permission-Vergabe bleibt bis Phase 26 „Permissions & Rank Hardening“ die administrative Trust Boundary. Mute und Unmute gewähren einander keine Rechte. Kein Mute-Bypass, keine Rang-/OP-Ausnahme für Kommunikation. Fremde Vanilla-Commands und externe Kommunikation liegen außerhalb des Enforcement-Scope.
+Alle sieben Nodes werden direkt im Executor und in der Completion geprüft. Keine Children, kein `vapeecore.moderation.*`-Parent und keine automatische Ban→Unban- oder History→Mutation-Berechtigung. Player und Console sind erlaubt; andere Sender werden kontrolliert abgelehnt. Self-Mute/Unmute/Warn/Ban/Unban/Kick ist gesperrt; eigene History mit Permission erlaubt. Zusätzlich gilt die unten beschriebene explizite Staff-Target-Hierarchie. Gezielte Permission-Vergabe bleibt erforderlich; Weight, Prefix und öffentlicher Rank-Track sind keine Autorisierungsquellen. Mute und Unmute gewähren einander keine Rechte. Kein Mute-Bypass, keine Rang-/OP-Ausnahme für Kommunikation. Fremde Vanilla-Commands und externe Kommunikation liegen außerhalb des Enforcement-Scope.
+
+## Staff-Target-Hierarchie (26A)
+
+```yaml
+staff:
+  hierarchy:
+    protected-groups:
+      - builder
+      - moderator
+      - admin
+      - owner
+```
+
+Die Reihenfolge ist LOW→HIGH und sicherheitsrelevant. Fehlende Legacy-Keys verwenden dieselben vier Defaults; ungültige Typen, null, leere/blanke IDs, Whitespace/Controls, leere Listen oder case-insensitive Duplikate warnen und verwenden die vollständigen Defaults. IDs werden getrimmt und mit `Locale.ROOT` normalisiert. `/core reload` tauscht den unveränderlichen Snapshot atomar und rollbackfähig; jede Entscheidung verwendet genau einen Snapshot für beide Levels.
+
+| Actor (mit Command-Permission) | Ziel | Ergebnis |
+|---|---|---|
+| Beliebige primäre Gruppe | Nicht in Schutzliste (z. B. default/vip/custom) | Erlaubt |
+| Nicht geschützter Actor, auch VIP/OP | Geschütztes Staff-Ziel | Verboten |
+| Geschützter Actor | Niedrigeres geschütztes Staff-Ziel | Erlaubt |
+| Geschützter Actor | Gleiches oder höheres Staff-Level | Verboten |
+| Console | Bekanntes Ziel | Hierarchie erlaubt; Permission bleibt Pflicht |
+
+Dies gilt für `warn/mute/unmute/ban/unban/kick/history`. Self-Mutationen sind vorher gesperrt; Self-History benötigt nur die History-Permission. Fehlende/fehlerhafte Gruppenauflösung bedeutet sicheren Abbruch; Gründe enthalten keine Gruppen-/Level-Details. Unbekannte Identitäten bleiben unbekannt. Offline-LuckPerms-Loads blockieren nicht; vor Fortsetzung werden Permission und ursprüngliche Online-Session erneut geprüft. Tab-Completion ist nur UX: unsichere Online-Targets werden verborgen, aktive Offline-Unban/Unmute-Kandidaten werden nicht massenhaft nachgeladen und bei Ausführung verbindlich geprüft.
+
+Nur die **primäre LuckPerms-Gruppe** ist Level-Quelle. Primär `admin` mit geerbtem `moderator` bleibt Admin; ein Mitglied mit primär `vip` wird nicht über geerbte Staff-Gruppen hochgestuft. Die LP-Primary-Group-Konfiguration ist daher eine Betreiberverantwortung. Weight, Prefix/Suffix, Display Name/Color, Rank-Track, maximale geerbte Gruppe und OP sind keine Hierarchie. Custom-Gruppen werden nur durch explizite Aufnahme geschützt. VapeeCore verändert weder LP-User noch Gruppen.
+
+Utility-/Teleport-/Inventory- und Economy-Target-Autorisierung sowie der endgültige Permission-/Inheritance-Audit gehören zu **26B**, nicht 26A. `plugin.yml` und seine OP-Defaults/Children bleiben in 26A unverändert.
 
 ## Staff Utilities
 
@@ -94,6 +122,18 @@ Utility-Targets werden ausschließlich über vollständige, case-insensitive Nam
 
 Die Matrix ist ein bewusst konservativer Ausgangspunkt. Elternvererbung sollte in LuckPerms abgebildet werden; es wird kein blindes `vapeecore.*` empfohlen.
 
+### Empfohlene LuckPerms-Eltern
+
+| Gruppe | Empfohlener Parent |
+|---|---|
+| vip | default |
+| builder | default |
+| moderator | default |
+| admin | moderator |
+| owner | admin |
+
+VIP darf nicht über Builder/Moderator Staff-Fähigkeiten erben. Builder ist eine getrennte Build-Rolle, nicht der Parent von Moderator. Diese Permission-Vererbung ist vom LOW→HIGH-Target-Schutz unabhängig. Primäre Gruppen müssen mit der tatsächlichen Rolle konsistent sein. Die Beispiele sind ausschließlich Betreiberempfehlungen; VapeeCore führt keine LP-Gruppen-/Parent-/Track-/Permission-Mutationen aus.
+
 ### User
 
 - `vapeecore.lobby.spawn`
@@ -124,7 +164,7 @@ Alles aus der gewünschten Player-Basis, zusätzlich:
 - `vapeecore.visibility.staff`
 - optional `vapeecore.utility.teleport`
 
-Keine `.others`- oder Bypass-Rechte.
+Keine `.others`-, Bypass- oder Moderationsrechte. Die primäre Gruppe `builder` ist in der Default-Hierarchie geschützt, ohne dadurch eine Fähigkeit zu erhalten.
 
 ### Moderator
 
@@ -181,7 +221,7 @@ Alles von Moderator, zusätzlich:
 
 ### Owner
 
-Alles von Admin einschließlich `vapeecore.visibility.staff`, zusätzlich `vapeecore.admin` und nur die tatsächlich benötigten externen Paper-/Bukkit-Rechte. Kein blindes `*` nötig.
+Alles von Admin einschließlich `vapeecore.visibility.staff`, zusätzlich `vapeecore.admin` und nur die tatsächlich benötigten externen Paper-/Bukkit-Rechte. Kein blindes `*` nötig. Die primäre Gruppe `owner` gewährt keinen globalen Bypass: Owner-Spieler dürfen andere Owner nicht moderieren oder deren History lesen.
 
 ## Bukkit-/Vanilla-Lockdown
 

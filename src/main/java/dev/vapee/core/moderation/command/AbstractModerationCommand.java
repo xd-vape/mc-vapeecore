@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /** Only the shared local permission/actor/identity/error boundary; no generic dispatcher. */
@@ -26,6 +27,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
     }
 
     @Override public final boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!context.active().getAsBoolean()) return true;
         if (!sender.hasPermission("vapeecore.moderation." + name)) {
             context.send(sender, "You do not have permission to use this command.");
             return true;
@@ -49,13 +51,66 @@ abstract class AbstractModerationCommand implements TabExecutor {
                 context.send(sender, "You cannot moderate yourself.");
                 return true;
             }
-            execute(sender, actor, target, args);
+            authorize(sender, actor, target, args.clone());
         } catch (RuntimeException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT), actor,
                     target == null ? args[0] : target.uniqueId().toString(), exception);
             context.send(sender, "The moderation operation could not be completed. Check the server log.");
         }
         return true;
+    }
+
+    private void authorize(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
+        if (sender instanceof ConsoleCommandSender
+                || (name.equals("history") && actor.playerId().filter(target.uniqueId()::equals).isPresent())) {
+            execute(sender, actor, target, args);
+            return;
+        }
+        Optional<String> loaded = context.hierarchy().getLoadedPrimaryGroup(target.uniqueId());
+        if (loaded.isPresent()) {
+            authorizedExecute(sender, actor, target, args, loaded);
+            return;
+        }
+        // The completion callback only submits immutable result data. All Bukkit/domain work is deferred.
+        context.hierarchy().loadPrimaryGroup(target.uniqueId()).whenComplete((group, failure) -> {
+            if (!context.active().getAsBoolean()) return;
+            try {
+                context.mainThread().accept(() -> resume(sender, actor, target, args, group, failure));
+            } catch (RuntimeException schedulingFailure) {
+                context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_HIERARCHY_SCHEDULE",
+                        actor, target.uniqueId().toString(), schedulingFailure);
+            }
+        });
+    }
+
+    private void resume(CommandSender sender, ModerationActor actor, PlayerIdentity target,
+                        String[] args, Optional<String> group, Throwable failure) {
+        if (!context.active().getAsBoolean()) return;
+        try {
+            Player player = (Player) sender;
+            // Require the original live session, not merely a reconnect with the same UUID.
+            if (!player.isOnline() || context.online(actor.playerId().orElseThrow()) != player) return;
+            if (!sender.hasPermission("vapeecore.moderation." + name)) {
+                context.send(sender, "You do not have permission to use this command.");
+                return;
+            }
+            if (failure != null) throw new IllegalStateException("LuckPerms primary group load failed", failure);
+            authorizedExecute(sender, actor, target, args, group);
+        } catch (RuntimeException exception) {
+            context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_HIERARCHY",
+                    actor, target.uniqueId().toString(), exception);
+            context.send(sender, "The moderation operation could not be completed. Check the server log.");
+        }
+    }
+
+    private void authorizedExecute(CommandSender sender, ModerationActor actor, PlayerIdentity target,
+                                   String[] args, Optional<String> targetGroup) {
+        switch (context.hierarchy().decide(actor.playerId().orElseThrow(), targetGroup)) {
+            case ALLOW -> execute(sender, actor, target, args);
+            case DENY_SAME_OR_HIGHER -> context.send(sender, "You cannot target a staff member at your level or above.");
+            case DENY_ACTOR_NOT_PROTECTED -> context.send(sender, "You cannot target a protected staff member.");
+            case UNAVAILABLE -> throw new IllegalStateException("Staff hierarchy primary group unavailable");
+        }
     }
 
     protected abstract boolean validArguments(CommandSender sender, String[] args);
@@ -104,6 +159,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
     }
 
     @Override public final List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!context.active().getAsBoolean()) return List.of();
         if (!sender.hasPermission("vapeecore.moderation." + name) || actor(sender) == null) return List.of();
         try {
             if (args.length == 1) return context.targets(sender, name.equals("history"),

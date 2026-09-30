@@ -16,6 +16,7 @@ public final class ModerationCommandHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
+        hierarchyMatrix(); hierarchyAsync(); hierarchyCompletion();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
     }
 
@@ -378,6 +379,183 @@ public final class ModerationCommandHarness {
         check(unmute.onTabComplete(f.console.sender, null, "unmute", new String[]{""}).equals(List.of(OFFLINE.toString())), "ambiguous active mute UUID completion");
         f.service.issueMute(STAFF, ModerationActor.console(), "self", Optional.empty());
         check(!unmute.onTabComplete(f.staff.sender, null, "unmute", new String[]{""}).contains("Staff"), "unmute self completion excluded");
+    }
+
+    private static final List<String> MODERATION = List.of("warn", "mute", "unmute", "ban", "unban", "kick", "history");
+
+    private static void seed(Fixture f, String name, UUID target) {
+        if (name.equals("unban")) f.service.issueBan(target, ModerationActor.console(), "seed", Optional.empty());
+        if (name.equals("unmute")) f.service.issueMute(target, ModerationActor.console(), "seed", Optional.empty());
+    }
+
+    private static void hierarchyMatrix() throws Exception {
+        var config = dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults();
+        for (String name : MODERATION) {
+            for (String actorGroup : List.of("default", "vip", "custom", "builder", "moderator", "admin", "owner")) {
+                for (String targetGroup : List.of("default", "vip", "custom", "builder", "moderator", "admin", "owner")) {
+                    Fixture f = new Fixture(); seed(f, name, TARGET);
+                    f.primaryGroups.put(STAFF, actorGroup); f.primaryGroups.put(TARGET, targetGroup);
+                    int before = f.repository.saves;
+                    var snapshot = f.repository.saved;
+                    check(command(f, name).onCommand(f.staff.sender, null, name, arguments(name, "Alex")), "matrix handled");
+                    boolean allow = config.level(targetGroup) < 0 || config.level(actorGroup) > config.level(targetGroup);
+                    String label = name + ": " + actorGroup + " -> " + targetGroup;
+                    check(f.groupLoadCalls == 0 && f.mainTasks.isEmpty(), "loaded matrix synchronous " + label);
+                    if (!allow) {
+                        check(f.repository.saves == before && f.repository.saved == snapshot && f.info() == 0,
+                                "deny no save/state/audit " + label);
+                        check(f.target.output.isEmpty() && f.target.kicks.isEmpty() && f.playerWrites == 0,
+                                "deny no notification/disconnect/player write " + label);
+                        check(f.staff.text().contains("cannot target") && !f.staff.text().contains(targetGroup),
+                                "controlled deny without group leak " + label);
+                    } else {
+                        check(f.repository.saves == before + (name.equals("history") ? 0 : 1), "allow expected writes " + label);
+                        check(f.info() == (name.equals("history") ? 0 : 1) && f.severe() == 0, "allow audit " + label);
+                        check(!f.staff.text().contains("cannot target"), "allowed feedback " + label);
+                    }
+                }
+            }
+            Fixture console = new Fixture(); seed(console, name, TARGET);
+            console.primaryGroups.clear();
+            int before = console.repository.saves;
+            command(console, name).onCommand(console.console.sender, null, name, arguments(name, "Alex"));
+            check(console.repository.saves == before + (name.equals("history") ? 0 : 1)
+                    && console.groupLoadCalls == 0 && console.severe() == 0, "console bypass no LP resolution " + name);
+
+            Fixture self = new Fixture();
+            self.primaryGroups.clear();
+            command(self, name).onCommand(self.staff.sender, null, name, arguments(name, "Staff"));
+            check(self.repository.saves == 0 && self.groupLoadCalls == 0
+                    && self.staff.text().contains(name.equals("history") ? "No moderation history" : "yourself"),
+                    "self priority before group lookup " + name);
+        }
+        Fixture f = new Fixture();
+        f.primaryGroups.put(STAFF, "ADMIN"); f.primaryGroups.put(TARGET, " Moderator ");
+        run(new WarnCommand(f.context), f.staff, "Warned", "Alex", "case");
+        check(f.repository.saves == 1, "case-insensitive integration");
+        f.hierarchyConfig.set(new dev.vapee.core.rank.staff.StaffHierarchyConfig(List.of("admin", "moderator")));
+        run(new WarnCommand(f.context), f.staff, "cannot target", "Alex", "reloaded");
+        check(f.repository.saves == 1, "reload changes next command without service replacement");
+        f.hierarchyConfig.set(config);
+        run(new WarnCommand(f.context), f.staff, "Warned", "Alex", "rollback");
+        check(f.repository.saves == 2, "rollback restores protection");
+    }
+
+    private static void hierarchyAsync() throws Exception {
+        Thread main = Thread.currentThread();
+        for (String name : MODERATION) {
+            for (String scenario : List.of("normal", "lower", "equal", "higher", "vip", "revoked", "logout",
+                    "reconnect", "demoted", "promoted", "failure", "empty", "invalid", "disabled", "reload")) {
+                Fixture f = new Fixture(); seed(f, name, TARGET);
+                f.primaryGroups.put(STAFF, "admin"); f.primaryGroups.remove(TARGET);
+                var future = new java.util.concurrent.CompletableFuture<Optional<String>>();
+                f.groupLoads.put(TARGET, future);
+                var asyncAccess = new java.util.concurrent.atomic.AtomicInteger();
+                Runnable guard = () -> {
+                    if (Thread.currentThread() != main) {
+                        asyncAccess.incrementAndGet(); throw new AssertionError("Bukkit accessed asynchronously");
+                    }
+                };
+                f.staff.beforeAccess = guard; f.target.beforeAccess = guard;
+                f.repository.beforeSave = guard;
+                int before = f.repository.saves;
+                var snapshot = f.repository.saved;
+                String[] input = arguments(name, "Alex");
+                command(f, name).onCommand(f.staff.sender, null, name, input);
+                check(f.groupLoadCalls == 1 && f.repository.saves == before && f.info() == 0
+                        && f.mainTasks.isEmpty(), "pending no mutation " + name + "/" + scenario);
+                // Caller-owned argument arrays must not alter a queued command.
+                input[0] = "Staff";
+                switch (scenario) {
+                    case "revoked" -> f.staff.allowAll = false;
+                    case "logout" -> f.staff.isOnline = false;
+                    case "reconnect" -> f.online.put(STAFF, new Sender(org.bukkit.entity.Player.class, STAFF, "Staff", f.events));
+                    case "demoted", "vip" -> f.primaryGroups.put(STAFF, "vip");
+                    case "promoted" -> f.primaryGroups.put(STAFF, "owner");
+                    case "disabled" -> f.active.set(false);
+                    case "reload" -> f.hierarchyConfig.set(new dev.vapee.core.rank.staff.StaffHierarchyConfig(List.of("admin", "moderator")));
+                    default -> { }
+                }
+                String targetGroup = switch (scenario) {
+                    case "normal" -> "default"; case "equal" -> "admin"; case "higher", "promoted" -> "owner";
+                    case "invalid" -> "admin\n"; default -> "moderator";
+                };
+                // A promoted actor must have strict advantage, not merely equality.
+                if (scenario.equals("promoted")) targetGroup = "admin";
+                final String resolved = targetGroup;
+                Thread worker = new Thread(() -> {
+                    if (scenario.equals("failure")) future.completeExceptionally(new IllegalStateException("injected LP failure"));
+                    else future.complete(scenario.equals("empty") ? Optional.empty() : Optional.of(resolved));
+                }, "lp-completion-worker");
+                worker.start(); worker.join();
+                check(asyncAccess.get() == 0 && f.repository.saves == before && f.info() == 0
+                        && f.target.output.isEmpty() && f.target.kicks.isEmpty(), "worker only schedules " + name + "/" + scenario);
+                check(f.mainTasks.size() == (scenario.equals("disabled") ? 0 : 1), "one main continuation " + scenario);
+                Runnable task;
+                while ((task = f.mainTasks.poll()) != null) task.run();
+                boolean allowed = List.of("normal", "lower", "promoted").contains(scenario);
+                check(f.repository.saves == before + (allowed && !name.equals("history") ? 1 : 0),
+                        "continued expected saves " + name + "/" + scenario);
+                if (!allowed) {
+                    check(f.repository.saved == snapshot && f.info() == 0 && f.target.output.isEmpty()
+                            && f.target.kicks.isEmpty(), "aborted continuation has no effects " + name + "/" + scenario);
+                }
+                if (List.of("failure", "empty", "invalid").contains(scenario)) {
+                    check(f.severe() == 1 && f.staff.text().contains("server log")
+                            && !f.staff.text().contains("injected") && !f.staff.text().contains("Exception"),
+                            "lookup failure contextual server log, safe player feedback " + name + "/" + scenario);
+                }
+                check(asyncAccess.get() == 0 && f.mainTasks.isEmpty(), "no async access or leaked tasks");
+            }
+        }
+        for (String name : MODERATION) for (String group : List.of("default", "owner")) {
+            Fixture f = new Fixture(); seed(f, name, OFFLINE); f.primaryGroups.remove(OFFLINE);
+            var future = new java.util.concurrent.CompletableFuture<Optional<String>>();
+            f.groupLoads.put(OFFLINE, future);
+            int before = f.repository.saves;
+            command(f, name).onCommand(f.staff.sender, null, name, arguments(name, "Offline"));
+            check(f.repository.saves == before && !future.isDone(), "offline waits without blocking " + name);
+            future.complete(Optional.of(group));
+            f.mainTasks.remove().run();
+            boolean mutation = group.equals("default") && !List.of("kick", "history").contains(name);
+            check(f.repository.saves == before + (mutation ? 1 : 0), "offline known target authorized " + name + "/" + group);
+            if (group.equals("owner")) check(f.staff.text().contains("cannot target"), "offline staff cannot be bypassed");
+        }
+        Fixture f = new Fixture(); f.primaryGroups.put(TARGET, " ");
+        run(new WarnCommand(f.context), f.staff, "server log", "Alex", "reason");
+        check(f.repository.saves == 0 && f.severe() == 1, "invalid loaded group fails closed");
+        f.primaryGroups.put(TARGET, "builder"); f.primaryGroups.remove(STAFF);
+        run(new WarnCommand(f.context), f.staff, "server log", "Alex", "reason");
+        check(f.repository.saves == 0 && f.severe() == 2, "unavailable actor protected target closed");
+    }
+
+    private static void hierarchyCompletion() throws Exception {
+        for (String name : MODERATION) {
+            Fixture f = new Fixture();
+            f.primaryGroups.put(STAFF, "admin"); f.primaryGroups.put(TARGET, "moderator");
+            seed(f, name, TARGET);
+            if (name.equals("unban")) f.service.issueBan(OFFLINE, ModerationActor.console(), "offline", Optional.empty());
+            if (name.equals("unmute")) f.service.issueMute(OFFLINE, ModerationActor.console(), "offline", Optional.empty());
+            var c = command(f, name);
+            check(c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Alex"), "lower online suggestion " + name);
+            for (String group : List.of("admin", "owner")) {
+                f.primaryGroups.put(TARGET, group);
+                check(!c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Alex"), "protected hidden " + name + "/" + group);
+            }
+            f.primaryGroups.remove(TARGET);
+            check(!c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Alex"), "unknown online group hidden " + name);
+            check(c.onTabComplete(f.console.sender, null, name, new String[]{""}).contains("Alex"), "console sees candidate " + name);
+            f.primaryGroups.put(TARGET, "builder"); f.primaryGroups.put(STAFF, "vip");
+            check(!c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Alex"), "vip actor hides protected target " + name);
+            f.primaryGroups.put(TARGET, "default");
+            check(c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Alex"), "normal target completion " + name);
+            if (List.of("unban", "unmute").contains(name)) {
+                f.primaryGroups.remove(OFFLINE);
+                check(c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Offline"), "offline active candidate retained");
+            }
+            check(f.groupLoadCalls == 0 && f.mainTasks.isEmpty(), "no N+1 offline or online LP completion loads " + name);
+            if (name.equals("history")) check(c.onTabComplete(f.staff.sender, null, name, new String[]{""}).contains("Staff"), "self history suggested");
+        }
     }
 
     private static void descriptor() throws Exception {

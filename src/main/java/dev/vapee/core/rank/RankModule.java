@@ -6,6 +6,7 @@ import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.rank.command.RankCommand;
 import dev.vapee.core.rank.command.RanksCommand;
+import dev.vapee.core.rank.staff.StaffHierarchyService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -20,6 +21,7 @@ public final class RankModule implements CoreModule {
     private final MessageService messageService;
 
     private RankService rankService;
+    private StaffHierarchyService staffHierarchyService;
     private PluginCommand rankCommand;
     private PluginCommand ranksCommand;
 
@@ -42,6 +44,8 @@ public final class RankModule implements CoreModule {
 
     @Override
     public void enable() {
+        StaffHierarchyService newStaffHierarchyService = new StaffHierarchyService(
+                configService::getStaffHierarchyConfig, permissionModule.getLuckPermsService());
         RankService newRankService = new RankService(
                 configService,
                 permissionModule.getLuckPermsService()
@@ -79,6 +83,7 @@ public final class RankModule implements CoreModule {
         }
 
         rankService = newRankService;
+        staffHierarchyService = newStaffHierarchyService;
         rankCommand = newRankCommand;
         ranksCommand = newRanksCommand;
         plugin.getLogger().info("Rank module enabled with LuckPerms as the source of truth.");
@@ -86,15 +91,23 @@ public final class RankModule implements CoreModule {
 
     @Override
     public void disable() {
-        clearCommand(rankCommand);
-        clearCommand(ranksCommand);
-        ranksCommand = null;
-        rankCommand = null;
-        rankService = null;
+        try {
+            clearCommand(rankCommand);
+            clearCommand(ranksCommand);
+        } finally {
+            ranksCommand = null;
+            rankCommand = null;
+            rankService = null;
+            staffHierarchyService = null;
+        }
     }
 
     public RankService getRankService() {
         return Objects.requireNonNull(rankService, "RankModule is not enabled");
+    }
+
+    public StaffHierarchyService getStaffHierarchyService() {
+        return Objects.requireNonNull(staffHierarchyService, "RankModule is not enabled");
     }
 
     private static void clearCommand(PluginCommand command) {

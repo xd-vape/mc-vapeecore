@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public final class LuckPermsService {
 
@@ -21,6 +22,23 @@ public final class LuckPermsService {
 
     public Optional<String> getPrimaryGroup(UUID uniqueId) {
         return getLoadedUser(uniqueId).map(User::getPrimaryGroup);
+    }
+
+    /** Read-only load; never waits on the caller thread or saves/mutates an LP user. */
+    public CompletableFuture<Optional<String>> loadPrimaryGroup(UUID uniqueId) {
+        Objects.requireNonNull(uniqueId, "uniqueId");
+        try {
+            var manager = luckPerms.getUserManager();
+            User loaded = manager.getUser(uniqueId);
+            if (loaded != null) return CompletableFuture.completedFuture(primaryGroup(loaded));
+            return manager.loadUser(uniqueId).thenApply(LuckPermsService::primaryGroup);
+        } catch (RuntimeException exception) {
+            return CompletableFuture.failedFuture(exception);
+        }
+    }
+
+    private static Optional<String> primaryGroup(User user) {
+        return Optional.ofNullable(user).map(User::getPrimaryGroup).filter(group -> !group.isBlank());
     }
 
     public Optional<String> getPrefix(UUID uniqueId) {

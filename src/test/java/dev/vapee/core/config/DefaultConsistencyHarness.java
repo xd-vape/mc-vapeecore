@@ -19,6 +19,9 @@ public final class DefaultConsistencyHarness {
     }
 
     public static void main(String[] args) throws Exception {
+        check(resource("config.yml").getStringList("staff.hierarchy.protected-groups")
+                        .equals(dev.vapee.core.rank.staff.StaffHierarchyConfig.defaults().protectedGroups()),
+                "staff hierarchy Java defaults match fresh-install resource LOW to HIGH");
         YamlConfiguration chat = resource("chat.yml");
         ChatConfig.State chatDefaults = defaults(ChatConfig.State.class);
         check(chatDefaults.enabled() == chat.getBoolean("enabled"),

@@ -5,6 +5,8 @@ import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.PlayerLookupStatus;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.*;
+import dev.vapee.core.rank.staff.StaffHierarchyService;
+import dev.vapee.core.rank.staff.StaffTargetDecision;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
@@ -18,6 +20,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,11 +29,19 @@ import java.util.logging.Logger;
 public record ModerationCommandContext(ModerationService service, PlayerIdentityService identities,
                                        MessageService messages, Function<UUID, Player> onlinePlayer,
                                        Supplier<? extends Collection<? extends Player>> onlinePlayers,
-                                       Clock clock, Logger logger) {
+                                       Clock clock, Logger logger, StaffHierarchyService hierarchy,
+                                       Consumer<Runnable> mainThread, BooleanSupplier active) {
     public ModerationCommandContext {
         Objects.requireNonNull(service); Objects.requireNonNull(identities); Objects.requireNonNull(messages);
         Objects.requireNonNull(onlinePlayer); Objects.requireNonNull(onlinePlayers);
         Objects.requireNonNull(clock); Objects.requireNonNull(logger);
+        Objects.requireNonNull(hierarchy); Objects.requireNonNull(mainThread); Objects.requireNonNull(active);
+    }
+
+    /** Per-enable lifecycle binding; old pending commands cannot survive disable/re-enable. */
+    public ModerationCommandContext withRuntime(Consumer<Runnable> scheduler, BooleanSupplier enabled) {
+        return new ModerationCommandContext(service, identities, messages, onlinePlayer, onlinePlayers,
+                clock, logger, hierarchy, scheduler, enabled);
     }
 
     public void send(CommandSender sender, String text) {
@@ -53,9 +65,18 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                 .map(ModerationRecord::targetId).distinct().toList()
                 : onlinePlayers.get().stream().filter(Player::isOnline).map(Player::getUniqueId).distinct().toList();
         return ids.stream().filter(id -> history || !(sender instanceof Player player) || !id.equals(player.getUniqueId()))
+                .filter(id -> suggestible(sender, id, history))
                 .map(id -> safeArgument(id)).distinct()
                 .filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT)))
                 .sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(Function.identity())).toList();
+    }
+
+    private boolean suggestible(CommandSender sender, UUID targetId, boolean history) {
+        if (!(sender instanceof Player actor)) return true;
+        if (history && targetId.equals(actor.getUniqueId())) return true;
+        // Keep committed offline unban/unmute candidates. Completion never initiates LP loads.
+        if (online(targetId) == null) return true;
+        return hierarchy.decideLoaded(actor.getUniqueId(), targetId) == StaffTargetDecision.ALLOW;
     }
 
     private String safeArgument(UUID id) {
