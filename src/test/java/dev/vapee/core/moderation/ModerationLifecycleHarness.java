@@ -4,6 +4,9 @@ import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.module.ModuleManager;
 import dev.vapee.core.reload.ReloadParticipant;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.command.TabExecutor;
+import dev.vapee.core.identity.IdentityModule;
+import dev.vapee.core.message.MessageService;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +30,7 @@ public final class ModerationLifecycleHarness {
         try {
             lifecycle(directory);
             startupRollback(directory);
+            hookLifecycle();
             wiring();
             System.out.println("ModerationLifecycleHarness passed " + checks + " checks.");
         } finally {
@@ -39,7 +43,7 @@ public final class ModerationLifecycleHarness {
     private static void lifecycle(Path directory) throws Exception {
         Path file = directory.resolve("moderation.yml");
         CounterRepository repository = new CounterRepository(new FileModerationRepository(file, logger()));
-        ModerationModule module = new ModerationModule(() -> repository, CLOCK, UUID::randomUUID);
+        ModerationModule module = module(() -> repository);
         check(module.getName().equals("Moderation"), "module name");
         disabled(module);
         module.disable();
@@ -73,8 +77,7 @@ public final class ModerationLifecycleHarness {
         Path file = directory.resolve("corrupt.yml");
         Files.writeString(file, "schema-version: 99\nrecords: []\n");
         byte[] before = Files.readAllBytes(file);
-        ModerationModule module = new ModerationModule(() -> new FileModerationRepository(file, logger()),
-                CLOCK, UUID::randomUUID);
+        ModerationModule module = module(() -> new FileModerationRepository(file, logger()));
         ModuleManager manager = new ModuleManager(logger());
         List<String> events = new ArrayList<>();
         manager.register(tracker("Permission", events));
@@ -103,8 +106,8 @@ public final class ModerationLifecycleHarness {
     private static void wiring() throws Exception {
         check(CoreModule.class.isAssignableFrom(ModerationModule.class)
                 && !ReloadParticipant.class.isAssignableFrom(ModerationModule.class), "one CoreModule, no reload participant");
-        check(List.of(ModerationModule.class.getConstructor(JavaPlugin.class).getParameterTypes())
-                .equals(List.of(JavaPlugin.class)), "public dependency only plugin");
+        check(List.of(ModerationModule.class.getConstructor(JavaPlugin.class, IdentityModule.class, MessageService.class).getParameterTypes())
+                .equals(List.of(JavaPlugin.class, IdentityModule.class, MessageService.class)), "explicit plugin/identity/message dependencies");
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expected = List.of("permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
                 "identityModule", "moderationModule", "friendModule", "clanModule", "rewardModule", "onlineRewardModule",
@@ -115,8 +118,8 @@ public final class ModerationLifecycleHarness {
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));
         check(actual.equals(expected), "exactly 26 registrations, Identity -> Moderation -> Friend");
-        check(core.indexOf("identityModule = new IdentityModule") < core.indexOf("moderationModule = new ModerationModule(this)")
-                && core.indexOf("moderationModule = new ModerationModule(this)") < core.indexOf("friendModule = new FriendModule"),
+        check(core.indexOf("identityModule = new IdentityModule") < core.indexOf("moderationModule = new ModerationModule(this, identityModule, messageService)")
+                && core.indexOf("moderationModule = new ModerationModule(this, identityModule, messageService)") < core.indexOf("friendModule = new FriendModule"),
                 "module constructed in intended dependency order");
         var reload = Pattern.compile("List\\.of\\(configService,\\s*lobbyModule,\\s*chatModule,\\s*privateMessageModule,\\s*"
                 + "presentationModule,\\s*dailyQuestModule\\)").matcher(core);
@@ -124,18 +127,75 @@ public final class ModerationLifecycleHarness {
         String module = Files.readString(Path.of("src/main/java/dev/vapee/core/moderation/ModerationModule.java"));
         check(module.contains("resolve(\"moderation.yml\")") && module.contains("plugin.getLogger()")
                 && module.contains("Clock.systemUTC()") && module.contains("UUID::randomUUID"), "runtime file, logger, clock and UUID sources");
-        check(!module.contains("getCommand(") && !module.contains("registerEvents(") && !module.contains("runTask")
-                && !module.contains(".save("), "actual module owns no command, listener, task or shutdown save");
+        check(module.contains("getCommand(") && module.contains("registerEvents(") && !module.contains("runTask")
+                && !module.contains(".save("), "actual module owns command/listener but no task or shutdown save");
+        check(module.contains("command.setExecutor(null)") && module.contains("command.setTabCompleter(null)")
+                && module.contains("HandlerList.unregisterAll(listener)"), "real Bukkit hook cleanup");
         check(!Files.exists(Path.of("src/main/resources/moderation.yml")), "runtime data not a bundled resource");
         try (var paths = Files.list(Path.of("src/main/java/dev/vapee/core/moderation"))) {
             StringBuilder production = new StringBuilder();
             for (Path path : paths.filter(p -> p.toString().endsWith(".java")).toList()) production.append(Files.readString(path));
-            for (String forbidden : List.of("dev.vapee.core.player", "dev.vapee.core.identity", "dev.vapee.core.chat",
-                    "dev.vapee.core.privatemessage", "org.bukkit.event", "org.bukkit.command", "Bukkit.getBanList",
+            for (String forbidden : List.of("dev.vapee.core.player", "dev.vapee.core.chat",
+                    "dev.vapee.core.privatemessage", "AsyncPlayerPreLoginEvent", "AsyncChatEvent", "Bukkit.getBanList",
                     "getBanList(", "getOfflinePlayer(", "runTask", "MiniMessage", "ReloadParticipant")) {
                 check(!production.toString().contains(forbidden), "no forbidden moderation dependency/feature: " + forbidden);
             }
         }
+        for (String domain : List.of("ModerationService", "ModerationRecord", "ModerationActor", "ModerationSnapshot", "FileModerationRepository")) {
+            String source = Files.readString(Path.of("src/main/java/dev/vapee/core/moderation/" + domain + ".java"));
+            check(!source.contains("org.bukkit") && !source.contains("dev.vapee.core.identity"), "domain stays Bukkit/identity-free " + domain);
+        }
+    }
+
+    private static ModerationModule module(java.util.function.Supplier<ModerationRepository> factory) throws Exception {
+        var fixture = new ModerationTestSupport.Fixture();
+        return new ModerationModule(factory, CLOCK, UUID::randomUUID, fixture::context, new TestHooks());
+    }
+
+    private static void hookLifecycle() throws Exception {
+        var fixture = new ModerationTestSupport.Fixture();
+        TestHooks hooks = new TestHooks();
+        ModerationModule module = new ModerationModule(() -> fixture.repository, fixture.clock, UUID::randomUUID, fixture::context, hooks);
+        int initialLoads = fixture.repository.loads;
+        module.enable();
+        check(hooks.names.equals(List.of("warn", "ban", "unban", "kick", "history")), "five commands in owned lifecycle");
+        check(hooks.executors.size() == 5 && hooks.completers.equals(hooks.executors), "same executor/completer installed");
+        check(hooks.listener != null, "login listener registered");
+        check(module.getModerationService() != null && fixture.repository.loads == initialLoads + 1, "service published after successful hooks");
+        module.disable(); disabled(module);
+        check(hooks.executors.isEmpty() && hooks.completers.isEmpty() && hooks.listener == null, "disable clears all command/listener hooks");
+        check(fixture.repository.saves == 0, "disable no persistence");
+        for (int boundary = 1; boundary <= 6; boundary++) {
+            TestHooks failing = new TestHooks(); failing.failAt = boundary;
+            ModerationModule broken = new ModerationModule(() -> fixture.repository, fixture.clock, UUID::randomUUID, fixture::context, failing);
+            try { broken.enable(); throw new AssertionError("partial hook failure accepted"); }
+            catch (IllegalStateException expected) { checks++; }
+            disabled(broken);
+            check(failing.executors.isEmpty() && failing.completers.isEmpty() && failing.listener == null,
+                    "cleanup every partial enable boundary " + boundary);
+            check(fixture.repository.saves == 0, "partial failure never writes " + boundary);
+            failing.failAt = 0;
+            broken.enable(); check(broken.getModerationService() != null, "retry after hook cleanup " + boundary);
+            broken.disable(); disabled(broken);
+        }
+    }
+
+    private static final class TestHooks implements ModerationModule.Hooks {
+        final List<String> names = new ArrayList<>();
+        final java.util.Map<String, TabExecutor> executors = new java.util.LinkedHashMap<>(), completers = new java.util.LinkedHashMap<>();
+        ModerationLoginListener listener;
+        int failAt, calls;
+        public void install(String name, TabExecutor executor) {
+            names.add(name); executors.put(name, executor);
+            if (++calls == failAt) throw new IllegalStateException("injected setter failure");
+            completers.put(name, executor);
+        }
+        public void register(ModerationLoginListener listener) {
+            this.listener = listener;
+            if (++calls == failAt) throw new IllegalStateException("injected listener registration failure");
+        }
+        public void clearCommands() { executors.clear(); completers.clear(); calls = 0; }
+        public void unregister(ModerationLoginListener listener) { this.listener = null; }
     }
 
     private static CoreModule tracker(String name, List<String> events) {

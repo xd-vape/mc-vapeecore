@@ -64,6 +64,15 @@ public final class CoreCommandHarness {
         run(command, player, "core", "Command Overview", "help");
         check(!player.text().contains("/profile") && !player.text().contains("/warp") && !player.text().contains("Administration"),
                 "overview omits unauthorized domains and empty sections");
+        check(!player.text().contains("Moderation") && !player.text().contains("/warn"), "unauthorized overview hides staff section");
+        player.permissions.add("vapeecore.moderation.warn");
+        run(command, player, "core", "Moderation", "help");
+        check(player.text().contains("/warn <player|uuid> <reason...>") && !player.text().contains("/ban")
+                && !player.text().contains("/history"), "warn-only independent permission filtering");
+        player.permissions.remove("vapeecore.moderation.warn"); player.permissions.add("vapeecore.moderation.ban");
+        run(command, player, "core", "/ban <player|uuid> <duration|permanent> <reason...>", "help");
+        check(!player.text().contains("/warn") && !player.text().contains("/history") && !player.text().contains("/unban"), "ban-only grants no other staff help");
+        player.permissions.remove("vapeecore.moderation.ban");
         player.permissions.addAll(Set.of("vapeecore.profile.view", "vapeecore.friend.use", "vapeecore.clan.use",
                 "vapeecore.message.use", "vapeecore.social.ignore", "vapeecore.lobby.spawn", "vapeecore.settings.use",
                 "vapeecore.rank.view", "vapeecore.ranks.view", "vapeecore.economy.coins"));
@@ -78,6 +87,11 @@ public final class CoreCommandHarness {
             check(console.text().contains(syntax), "admin overview contains " + syntax);
         }
         check(console.output.stream().allMatch(CoreCommandHarness::suggestionsOnly), "all help clicks only suggest commands");
+        for (String syntax : List.of("/warn <player|uuid> <reason...>", "/ban <player|uuid> <duration|permanent> <reason...>",
+                "/unban <player|uuid> [reason...]", "/kick <player|uuid> <reason...>", "/history <player|uuid> [page]")) {
+            check(console.text().contains(syntax), "admin overview includes " + syntax);
+        }
+        check(!console.text().contains("/mute") && !console.text().contains("/unmute"), "no 25B help prematurely");
         check(command.onTabComplete(console.sender, null, "core", new String[]{"R"}).equals(List.of("reload")),
                 "admin completion filters case-insensitively");
         String[] expected = {"reloaded successfully", "No changes were applied", "previous runtime configuration was restored",

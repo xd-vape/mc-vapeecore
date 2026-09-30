@@ -1,16 +1,22 @@
 # VapeeCore
 
-VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, persistente Social-/Ignore-, Friends- und Clan-Systeme mit fokussierten GUIs, eine Coin-Economy, eine zentrale Reward Foundation, kumulative Online-/Playtime-Rewards, eine generische Quest Foundation mit Daily-Cycle und konfigurierbarem Katalog, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche mit Player-Visibility-Verwaltung, sichere Staff-Utilities, ein leichtgewichtiges Activity-Fundament, Community-Sitze, native World Displays, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience, eine gefilterte Visibility-/Privacy-Foundation und eine lesende LuckPerms-Rank-Integration bereit. Der aktuelle Stand ist Phase 24 „Moderation Foundation“ mit separater UUID-basierter Moderationshistorie.
+VapeeCore ist das zentrale Basis-Plugin für einen Minecraft-Community-Server. Das Projekt ist als modularer Monolith aufgebaut und stellt aktuell eine zentrale Konfiguration, MiniMessage-/Adventure-Nachrichten, eine gemeinsame Command-Help-Präsentation, interne CoreModule, eine lokale Player Foundation, persistente Social-/Ignore-, Friends- und Clan-Systeme mit fokussierten GUIs, eine Coin-Economy, eine zentrale Reward Foundation, kumulative Online-/Playtime-Rewards, eine generische Quest Foundation mit Daily-Cycle und konfigurierbarem Katalog, globalen Chat, private Nachrichten, Player-Presentation, eine Ingame-Settings-Oberfläche mit Player-Visibility-Verwaltung, sichere Staff-Utilities, ein leichtgewichtiges Activity-Fundament, Community-Sitze, native World Displays, physisches Blackjack, ein generisches Warp-System, eine spielerfreundliche Lobby Experience, eine gefilterte Visibility-/Privacy-Foundation und eine lesende LuckPerms-Rank-Integration bereit. Der aktuelle Stand ist Phase 25A „Moderation Commands + Ban Enforcement“ auf der separaten UUID-basierten Moderationshistorie.
 
 ## Developer Documentation
 
 Die praktische Architektur-, Ownership-, Config-, Command- und Erweiterungsdokumentation liegt in [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md). Die vollständige kanonische Permission- und Rangübersicht liegt in [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
+## Phase 25A – Moderation Commands + Ban Enforcement
+
+`/warn`, `/ban`, `/unban`, `/kick` und `/history` sind für berechtigte Player und Console verfügbar. Bekannte Offline-Namen und UUIDs funktionieren für Warn/Ban/Unban/History; Kick verlangt echte Online-Präsenz. Ban-Dauer ist explizit: positive einzelne `s/m/h/d/w`-Einheit oder `permanent`/`perm`. Aktive Bans verhindern den synchronen Login; Online-Ban und Kick disconnecten erst nach erfolgreichem Save. Gründe bleiben literal, History hat fünf Records pro Seite und sichere UUID-basierte Suggest-Navigation. Self-Moderation ist gesperrt, Self-History mit Permission erlaubt. `/core help` enthält die unabhängig permission-gefilterte Moderation-Section; insgesamt 34 Root-Commands, weiterhin 26 Module und sechs Reload-Teilnehmer.
+
+Die fünf `vapeecore.moderation.<command>`-Permissions sind unabhängig und standardmäßig `op`; Empfehlungen stehen in PERMISSIONS. Noch keine Target-Ranghierarchie: Permission-Vergabe ist die administrative Trust Boundary bis Phase 26 „Permissions & Rank Hardening“. Mute/Unmute sowie Chat-/PM-Mute-Enforcement folgen ausschließlich in 25B mit expliziter Async-sicherer Projektion. `minecraft:ban`/`minecraft:kick` bleiben unveränderte Vanilla-Commands, keine Bukkit-Banlist-Synchronisierung. Bericht: [docs/MODERATION_TOOLS.md](docs/MODERATION_TOOLS.md).
+
 ## Phase 24 – Moderation Foundation
 
 `ModerationModule` besitzt die immutable Historie für `WARNING`, `MUTE`, `BAN` und `KICK` sowie den `ModerationService` und das separate `plugins/VapeeCore/moderation.yml` (Schema 1). Warning und Kick sind ausschließlich gespeicherte Ereignisse; Mute und Ban können permanent oder zeitlich begrenzt sein und widerrufen werden. Exakt am Ablaufzeitpunkt ist die Sanktion nicht mehr aktiv. Abgelaufene und widerrufene Einträge bleiben erhalten. Änderungen speichern einen vollständig validierten Snapshot vor dem Austausch des Servicezustands; Speicherfehler lassen den alten Zustand unverändert.
 
-Noch kein nutzbares Staff-Feature: keine Moderationsbefehle, Permissions, GUI, Join-/Ban-Durchsetzung, Chat-/PM-Mute-Durchsetzung oder Ablauf-Tasks. Keine Player-YAML-Änderung oder Bukkit-Banliste. Eine fehlende Datei bleibt bei Start, `/core reload` und Shutdown fehlend; erst die erste Service-Mutation schreibt sie. Moderation ist kein Reload-Teilnehmer. Aktuell: 26 Module und unverändert sechs Reload-Teilnehmer. Schema und Main-Thread-Grenze stehen im Developer Guide; Verifikation in [docs/MODERATION_FOUNDATION.md](docs/MODERATION_FOUNDATION.md). Commands und Enforcement können separat in Phase 25 folgen.
+Historischer Phase-24-Stand, vor Phase 25A: keine Moderationsbefehle, Permissions, GUI, Join-/Ban-Durchsetzung, Chat-/PM-Mute-Durchsetzung oder Ablauf-Tasks. Keine Player-YAML-Änderung oder Bukkit-Banliste. Eine fehlende Datei bleibt bei Start, `/core reload` und Shutdown fehlend; erst die erste Service-Mutation schreibt sie. Moderation ist kein Reload-Teilnehmer. Aktuell: 26 Module und unverändert sechs Reload-Teilnehmer. Schema und Main-Thread-Grenze stehen im Developer Guide; Verifikation in [docs/MODERATION_FOUNDATION.md](docs/MODERATION_FOUNDATION.md). Die Erweiterung folgt jetzt in Phase 25A; der Phase-24-Bericht bleibt historisch unverändert.
 
 ## Phase 23 – Core Commands Completion
 
@@ -55,7 +61,7 @@ Während `Start VapeeCore Dev Server` läuft, können Paper-Konsolenbefehle dire
 - `config`: zentraler Zugriff auf die Bukkit-Konfiguration
 - `economy`: internes Coin-Wallet, EconomyService und Coin-Commands
 - `identity`: immutable Identitäts-/Profilansichten, Known-Player-Lookup und `/profile`
-- `moderation`: immutable Moderationshistorie, aktive Mute-/Ban-Abfragen und separate atomare Persistence ohne Enforcement
+- `moderation`: immutable Moderationshistorie, separate atomare Persistence, fünf Staff-Commands und synchrones Ban-Login-Enforcement
 - `friend`: persistente UUID-basierte Freundschaften, Anfragen, `/friend` und die fokussierte Friends-GUI
 - `clan`: persistente UUID-basierte Clans, `/clan` und die geschützte Clan-GUI
 - `format`: gemeinsam genutztes Playtime-Format

@@ -105,6 +105,15 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/enderchest [player]", "Opens an online player's ender chest.",
                                     "vapeecore.utility.enderchest")
                     )),
+                    new CommandHelpSection("Moderation", List.of(
+                            new CommandHelpEntry("/warn <player|uuid> <reason...>", "Records a warning for a known player.",
+                                    "vapeecore.moderation.warn"),
+                            new CommandHelpEntry("/ban <player|uuid> <duration|permanent> <reason...>", "Bans a known player temporarily or permanently.",
+                                    "vapeecore.moderation.ban"),
+                            new CommandHelpEntry("/unban <player|uuid> [reason...]", "Revokes an active ban.", "vapeecore.moderation.unban"),
+                            new CommandHelpEntry("/kick <player|uuid> <reason...>", "Records a kick and disconnects an online player.", "vapeecore.moderation.kick"),
+                            new CommandHelpEntry("/history <player|uuid> [page]", "Shows a known player's moderation history.", "vapeecore.moderation.history")
+                    )),
                     new CommandHelpSection("Administration", List.of(
                             new CommandHelpEntry("/core reload", "Reloads all coordinated configurations.",
                                     ADMIN_PERMISSION),

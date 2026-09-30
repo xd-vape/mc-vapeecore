@@ -8,6 +8,26 @@ depend:
   - LuckPerms
 
 commands:
+  warn:
+    description: Record a warning for a known player
+    usage: /warn <player|uuid> <reason...>
+    permission: vapeecore.moderation.warn
+  ban:
+    description: Ban a known player temporarily or permanently
+    usage: /ban <player|uuid> <duration|permanent> <reason...>
+    permission: vapeecore.moderation.ban
+  unban:
+    description: Revoke an active VapeeCore ban
+    usage: /unban <player|uuid> [reason...]
+    permission: vapeecore.moderation.unban
+  kick:
+    description: Record a kick and disconnect an online player
+    usage: /kick <player|uuid> <reason...>
+    permission: vapeecore.moderation.kick
+  history:
+    description: Show moderation history for a known player
+    usage: /history <player|uuid> [page]
+    permission: vapeecore.moderation.history
   vapeecore:
     aliases:
       - core
@@ -137,6 +157,21 @@ commands:
     permission: vapeecore.ranks.view
 
 permissions:
+  vapeecore.moderation.warn:
+    description: Allows warning known players
+    default: op
+  vapeecore.moderation.ban:
+    description: Allows banning known players
+    default: op
+  vapeecore.moderation.unban:
+    description: Allows revoking active bans
+    default: op
+  vapeecore.moderation.kick:
+    description: Allows kicking online players
+    default: op
+  vapeecore.moderation.history:
+    description: Allows reading known players' moderation history
+    default: op
   vapeecore.admin:
     description: Administrative VapeeCore permission
     default: op
