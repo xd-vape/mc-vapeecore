@@ -232,6 +232,30 @@ Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. E
 
 `ClanMenuHolder` trägt Besitzer-UUID, View, Page und serverseitige Slot→UUID-Ziele; er bindet genau eine Inventarinstanz. Der Listener cancelt jeden Click und Drag einschließlich Bottom Inventory, Number-Key, Collect und Drop zunächst pauschal. Eine fachliche Aktion erfordert zusätzlich passenden Viewer, aktive Inventarinstanz, exakte Holder-Bindung und einen explizit erlaubten Klicktyp. Item-Name, Lore, NBT und Titel sind nie Target-Quelle. Vor jeder Mutation liest der Service die aktuelle Mitgliedschaft/Owner-Rolle und Einladungen erneut; verschwundene Ziele liefern kontrollierte Resultate und die Seite wird mit Page-Clamp neu aufgebaut. Close/Quit entfernen nur den jeweils aktiven Eintrag, Disable schließt alle offenen Clan-Inventare. Kein Tick-Refresh und kein globales GUI-Framework. Clan-Tag-Presentation in Chat, Tablist, Nametag oder Scoreboard ist ausdrücklich eine spätere Phase; `Presentation` und `presentation.yml` bleiben unverändert.
 
+## Economy Completion (Phase 22)
+
+`EconomyModule` bleibt Owner des EconomyService und der `/coins`-Command-Hooks. Es bezieht PlayerService aus PlayerModule und bleibt vor IdentityModule; keine Economy→Identity-/Presentation-Abhängigkeit, kein Scheduler oder ReloadParticipant. 25 Module und sechs Reload-Teilnehmer bleiben unverändert.
+
+`CoinWallet` hält eine nichtnegative ganze `long`-Balance, initial 0 Coins. `economy.coins` bleibt der unveränderte Player-YAML-Key; keine Migration, zusätzliche Economy-Datei, Cap oder Config. `getCoins/hasCoins` lesen nur geladene Player, `getKnownCoins` bevorzugt deren Runtime-Wallet und liest sonst bekannte gespeicherte Offline-Daten, ohne sie zu laden. Alle bestehenden APIs bleiben unverändert.
+
+`setCoins/addCoins/removeCoins` mutieren geladene Wallets und speichern sofort genau einmal. Bei Save-Exception wird exakt die vorherige Runtime-Balance wiederhergestellt und die Exception propagiert. Auch Set auf den gleichen Wert behält seinen Save. Set erlaubt null bis Long.MAX_VALUE; Add/Remove verlangen positive Werte. Math.addExact lehnt Add-Overflow ohne Mutation/Save ab; unzureichende Coins bei Remove ebenfalls.
+
+`addCoinsDeferred` mutiert ohne Save ausschließlich für RewardService. RewardService bleibt Owner des Dirty Tracking und Batch-Flush; Save-Fehler beim Reward-Flush behalten Runtime-Coins und Dirty-Marker für Retry, statt innerhalb Economy zurückzurollen. OnlineReward und Quest verwenden weiterhin diese Grenze. Präsentation übernimmt aktuelle Coins im normalen Update-Task; Offline-Profile verwenden weiter getKnownCoins.
+
+`CoinsCommand` besitzt einen kleinen privaten Resolver und Target-Record, kein Lookup-Framework. Kanonische UUIDs gehen an PlayerService.findKnownPlayer, sonst vollständige Namen an findKnownIdsByName. Die vorhandene PlayerService-Semantik bevorzugt aktuelle geladene Namen gegenüber dem persistenten Index. Null Treffer sind unknown, mehrere Treffer ambiguous und verlangen eine UUID; keine Teilnamen, OfflinePlayer-, Mojang- oder Netzwerk-Auflösung. GET verwendet getKnownCoins für bekannte Online-/Offline-Ziele. Add/Remove/Set prüfen Server.getPlayer(UUID) plus isOnline sowie geladenen Playerzustand; bekannt-offline und online-but-not-loaded liefern unterschiedliche kontrollierte Fehler. Kein künstliches Load oder Save eines Offline-Snapshots.
+
+Basispermission vapeecore.economy.coins wird für alle Command- und Completion-Pfade direkt geprüft, Adminpermission zusätzlich für get/add/remove/set. plugin.yml gibt Admin die Basispermission als Child. Der bestehende CommandHelpRenderer filtert Player-/Administration-Sections. Falsche Arity nennt die genaue Subcommand-Syntax, unbekannte Eingaben werden separat benannt. Amounts sind ausschließlich dezimale Ziffern als long: kein Vorzeichen, Komma, Bruch oder Exponent; Set erlaubt 0, Add/Remove nicht.
+
+Nach EconomyResult.SUCCESS und erfolgreichem Save protokolliert INFO Actor (Console eindeutig CONSOLE), Target UUID/Name, Action, Amount, Previous und New Balance. Erst dann folgen Adminfeedback und kurze Notification an den weiterhin online befindlichen Target; eigene Target-UUID erhält keine zweite Nachricht. Fehlgeschlagene Mutationen erzeugen keine Success-Notification/Audit; Persistenzfehler erhalten SEVERE mit Actor/Target/Action und kurze Meldung ohne Stacktrace im Chat. Dynamische Namen und unbekannte Command-Eingaben werden ausschließlich als literal Component.text ausgegeben.
+
+Completion zeigt permission-aware help/get/add/remove/set und primär Online-Targets. Ein aktueller Name wird nur vorgeschlagen, wenn der indexbasierte Lookup exakt diese UUID eindeutig liefert; andernfalls die UUID. Es gibt keinen Storage-Scan und keine Offline-Snapshot-Reads pro Completion. Bekannte Offline-GET-Ziele können trotzdem manuell eingegeben werden.
+
+Future Economy Finding: Player-to-player transfers require a transaction boundary covering two wallets before /pay should be implemented.
+
+Future Persistence Finding: Offline admin wallet mutations should only be introduced after a safe offline known-player mutation API exists that cannot overwrite a concurrently loaded/stale CorePlayer.
+
+Tests: EconomyServiceHarness prüft Read-/Write-Grenzen, Invarianten, sofortiges/deferred Speichern und alle Rollbacks; CoinsCommandHarness prüft Permissions, Lookup, UX, Amounts, Notifications, Audit, Komponenten-Sicherheit und Completion. EconomyIntegrationHarness testet echte FilePlayerRepository-Roundtrips einschließlich Long.MAX_VALUE und unveränderter Begleitdaten sowie sourcebasierte Modul-Wiring-/Cleanup- und Permission-Prüfungen. Tatsächliches Module-Enable/Disable wird im Paper-Smoke geprüft, nicht durch einen erfundenen Standalone-JavaPlugin-Lifecycle.
+
 ## Reward Foundation
 
 `RewardService` besitzt ausschließlich die technische Frage, **wie** ein positiver Gameplay-Coin-Reward dem geladenen Player gutgeschrieben und effizient gespeichert wird. Das jeweilige Feature bleibt Owner der fachlichen Fragen, **wann** und **warum** der Reward entsteht. Es erzeugt einen `RewardGrant(UUID playerId, long coins, RewardSource source, String reason)` oder nutzt die gleichwertige Convenience-Methode. Quellen sind `PLAYTIME`, `QUEST`, `ACTIVITY`, `EVENT`, `ACHIEVEMENT`, `ADMIN` und `SYSTEM`; Resultate sind `SUCCESS`, `PLAYER_NOT_LOADED` oder `BALANCE_OVERFLOW` und enthalten bei Erfolg die resultierende Balance.
@@ -676,7 +700,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/clear [player]` | Sicheres Player-Inventar löschen | `ClearCommand` | `vapeecore.utility.clear`, fremde Targets: `.clear.others` |
 | `/invsee <player>` | Read-only Inventory-Snapshot öffnen | `InvseeCommand` | `vapeecore.utility.invsee`; `.invsee.modify` reserviert/inaktiv |
 | `/enderchest [player]` | Echtes Enderchest öffnen | `EnderChestCommand` | `vapeecore.utility.enderchest`, fremde Targets: `.enderchest.others` |
-| `/coins`, `/coins help`, `/coins …` | Eigene Coins anzeigen / permission-aware Hilfe / Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, Mutationen zusätzlich `vapeecore.economy.admin` |
+| `/coins`, `/coins help`, `/coins …` | Eigene Coins / Hilfe / bekannte Online-/Offline-Balances lesen, Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, get/add/remove/set zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings`, `/settings visibility [add|remove …]` | Settings-/Visibility-Menüs öffnen und Added Users verwalten | `SettingsCommand`, `VisibilitySettingsMenu`, `VisiblePlayersMenu` | `vapeecore.settings.use` |
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
@@ -768,6 +792,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.chat.ChatHarness`
 - `dev.vapee.core.config.ConfigServiceHarness`
 - `dev.vapee.core.economy.EconomyServiceHarness`
+- `dev.vapee.core.economy.command.CoinsCommandHarness`
+- `dev.vapee.core.economy.EconomyIntegrationHarness`
 - `dev.vapee.core.identity.IdentityHarness`
 - `dev.vapee.core.identity.ProfileHarness`
 - `dev.vapee.core.friend.FriendPersistenceHarness`

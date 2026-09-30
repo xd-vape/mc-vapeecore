@@ -11,9 +11,22 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |
 | `vapeecore.economy.coins` | `true` | `/coins` | Eigene Coin-Balance anzeigen. |
-| `vapeecore.economy.admin` | `op` | `/coins get\|add\|remove\|set` | Verändert Wallets geladener Online-Spieler. |
+| `vapeecore.economy.admin` | `op` | `/coins get\|add\|remove\|set` | Liest bekannte Online-/Offline-Wallets; verändert nur geladene Online-Wallets. Child: `vapeecore.economy.coins`. |
 | `vapeecore.blackjack.admin` | `op` | `/blackjack …` | Verändert Blackjack-Tische und deren Konfiguration. |
 | `vapeecore.warp.admin` | `op` | `/warp …` | Verändert persistente Warp-Ziele. |
+
+### Economy Commands (Phase 22)
+
+Alle `/coins`-Formen prüfen explizit `vapeecore.economy.coins`; `get/add/remove/set` zusätzlich `vapeecore.economy.admin`. Das Admin-Child gewährt den Basiszugang, nicht umgekehrt.
+
+- `/coins`: eigene Balance, Player-only.
+- `/coins help`: permission-aware Hilfe.
+- `/coins get <player|uuid>`: bekannte Online- oder Offline-Balance lesen.
+- `/coins add <player|uuid> <amount>`: positive ganze Coins hinzufügen.
+- `/coins remove <player|uuid> <amount>`: positive ganze Coins entfernen.
+- `/coins set <player|uuid> <amount>`: nichtnegative ganze Balance setzen.
+
+Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen verlangen echte Online-Präsenz und geladene Playerdaten. Vollständige bekannte Namen sind case-insensitive; mehrdeutige Namen verlangen eine UUID, unbekannte Ziele bleiben unbekannt. Completion zeigt primär Online-Targets (bei Mehrdeutigkeit UUID), begrenzt aber nicht manuelles Offline-GET. Es gibt weder Offline-Mutationen noch Player-Transfers oder `/pay`.
 
 ## Community, Settings, Rank und Profile
 
