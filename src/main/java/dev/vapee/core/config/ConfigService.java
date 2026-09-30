@@ -2,6 +2,7 @@ package dev.vapee.core.config;
 
 import dev.vapee.core.clan.ClanLimits;
 import dev.vapee.core.friend.FriendLimits;
+import dev.vapee.core.rank.staff.StaffHierarchyConfig;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import dev.vapee.core.onlinereward.OnlineRewardConfig;
@@ -94,6 +95,8 @@ public final class ConfigService implements ReloadParticipant {
         return state.clanLimits();
     }
 
+    public StaffHierarchyConfig getStaffHierarchyConfig() { return state.staffHierarchyConfig(); }
+
     private CoreConfigState readState() {
         YamlConfiguration configuration = loadConfiguration();
         return new CoreConfigState(
@@ -103,7 +106,8 @@ public final class ConfigService implements ReloadParticipant {
                 readNonBlankString(configuration, "ranks.track", DEFAULT_RANK_TRACK),
                 readOnlineRewardConfig(configuration),
                 readFriendLimits(configuration),
-                readClanLimits(configuration)
+                readClanLimits(configuration),
+                readStaffHierarchy(configuration)
         );
     }
 
@@ -115,6 +119,29 @@ public final class ConfigService implements ReloadParticipant {
                 readPositiveInt(configuration, "friends.limits.max-outgoing-requests",
                         FriendLimits.DEFAULT_MAX_OUTGOING_REQUESTS)
         );
+    }
+
+    private StaffHierarchyConfig readStaffHierarchy(YamlConfiguration configuration) {
+        String path = "staff.hierarchy.protected-groups";
+        Object value = configuration.get(path);
+        if (value == null && !configuration.contains(path)) {
+            if ((configuration.contains("staff") && !configuration.isConfigurationSection("staff"))
+                    || (configuration.contains("staff.hierarchy") && !configuration.isConfigurationSection("staff.hierarchy"))) {
+                warnInvalidValue(path, "a non-empty ordered group list", StaffHierarchyConfig.DEFAULT_GROUPS);
+            }
+            return StaffHierarchyConfig.defaults();
+        }
+        try {
+            if (!(value instanceof java.util.List<?> groups)
+                    || groups.stream().anyMatch(group -> !(group instanceof String))) {
+                throw new IllegalArgumentException("group list expected");
+            }
+            return new StaffHierarchyConfig(groups.stream().map(String.class::cast).toList());
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            warnInvalidValue(path, "a non-empty ordered list of unique non-blank group IDs without controls or whitespace",
+                    StaffHierarchyConfig.DEFAULT_GROUPS);
+            return StaffHierarchyConfig.defaults();
+        }
     }
 
     private ClanLimits readClanLimits(YamlConfiguration configuration) {
@@ -195,10 +222,32 @@ public final class ConfigService implements ReloadParticipant {
 
         YamlConfiguration configuration = new YamlConfiguration();
         try {
-            configuration.load(configFile.toFile());
+            String source = Files.readString(configFile);
+            configuration.loadFromString(source);
+            retainExplicitStaffNull(configuration, source);
             return configuration;
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalStateException("Could not load configuration at " + configFile + ".", exception);
+        }
+    }
+
+    private static void retainExplicitStaffNull(YamlConfiguration configuration, String source) {
+        // Bukkit removes explicit YAML nulls. Preserve only this security setting's distinction
+        // between a missing legacy key and an explicitly invalid null (including null parents).
+        org.yaml.snakeyaml.nodes.Node node = new org.yaml.snakeyaml.Yaml().compose(new java.io.StringReader(source));
+        String path = "";
+        for (String key : java.util.List.of("staff", "hierarchy", "protected-groups")) {
+            if (!(node instanceof org.yaml.snakeyaml.nodes.MappingNode mapping)) return;
+            node = mapping.getValue().stream()
+                    .filter(tuple -> tuple.getKeyNode() instanceof org.yaml.snakeyaml.nodes.ScalarNode scalar
+                            && scalar.getValue().equals(key))
+                    .map(org.yaml.snakeyaml.nodes.NodeTuple::getValueNode).findFirst().orElse(null);
+            if (node == null) return;
+            path = path.isEmpty() ? key : path + "." + key;
+            if (node.getTag().equals(org.yaml.snakeyaml.nodes.Tag.NULL)) {
+                configuration.set(path, false); // Non-list sentinel triggers the usual warning/default path.
+                return;
+            }
         }
     }
 
@@ -308,7 +357,8 @@ public final class ConfigService implements ReloadParticipant {
             String rankTrack,
             OnlineRewardConfig onlineRewardConfig,
             FriendLimits friendLimits,
-            ClanLimits clanLimits
+            ClanLimits clanLimits,
+            StaffHierarchyConfig staffHierarchyConfig
     ) {
 
         private CoreConfigState {
@@ -318,6 +368,7 @@ public final class ConfigService implements ReloadParticipant {
             Objects.requireNonNull(onlineRewardConfig, "onlineRewardConfig");
             Objects.requireNonNull(friendLimits, "friendLimits");
             Objects.requireNonNull(clanLimits, "clanLimits");
+            Objects.requireNonNull(staffHierarchyConfig, "staffHierarchyConfig");
         }
 
         private static CoreConfigState defaults() {
@@ -328,7 +379,8 @@ public final class ConfigService implements ReloadParticipant {
                     DEFAULT_RANK_TRACK,
                     OnlineRewardConfig.defaults(),
                     FriendLimits.defaults(),
-                    ClanLimits.defaults()
+                    ClanLimits.defaults(),
+                    StaffHierarchyConfig.defaults()
             );
         }
     }

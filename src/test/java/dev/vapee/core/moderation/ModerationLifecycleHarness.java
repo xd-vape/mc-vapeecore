@@ -8,6 +8,7 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.event.Listener;
 import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.rank.RankModule;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +33,7 @@ public final class ModerationLifecycleHarness {
             lifecycle(directory);
             startupRollback(directory);
             hookLifecycle();
+            pendingCommands();
             wiring();
             System.out.println("ModerationLifecycleHarness passed " + checks + " checks.");
         } finally {
@@ -107,8 +109,8 @@ public final class ModerationLifecycleHarness {
     private static void wiring() throws Exception {
         check(CoreModule.class.isAssignableFrom(ModerationModule.class)
                 && !ReloadParticipant.class.isAssignableFrom(ModerationModule.class), "one CoreModule, no reload participant");
-        check(List.of(ModerationModule.class.getConstructor(JavaPlugin.class, IdentityModule.class, MessageService.class).getParameterTypes())
-                .equals(List.of(JavaPlugin.class, IdentityModule.class, MessageService.class)), "explicit plugin/identity/message dependencies");
+        check(List.of(ModerationModule.class.getConstructor(JavaPlugin.class, IdentityModule.class, RankModule.class, MessageService.class).getParameterTypes())
+                .equals(List.of(JavaPlugin.class, IdentityModule.class, RankModule.class, MessageService.class)), "explicit plugin/identity/rank/message dependencies");
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expected = List.of("permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
                 "identityModule", "moderationModule", "friendModule", "clanModule", "rewardModule", "onlineRewardModule",
@@ -119,8 +121,8 @@ public final class ModerationLifecycleHarness {
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));
         check(actual.equals(expected), "exactly 26 registrations, Identity -> Moderation -> Friend");
-        check(core.indexOf("identityModule = new IdentityModule") < core.indexOf("moderationModule = new ModerationModule(this, identityModule, messageService)")
-                && core.indexOf("moderationModule = new ModerationModule(this, identityModule, messageService)") < core.indexOf("friendModule = new FriendModule"),
+        check(core.indexOf("identityModule = new IdentityModule") < core.indexOf("moderationModule = new ModerationModule(this, identityModule, rankModule, messageService)")
+                && core.indexOf("moderationModule = new ModerationModule(this, identityModule, rankModule, messageService)") < core.indexOf("friendModule = new FriendModule"),
                 "module constructed in intended dependency order");
         var reload = Pattern.compile("List\\.of\\(configService,\\s*lobbyModule,\\s*chatModule,\\s*privateMessageModule,\\s*"
                 + "presentationModule,\\s*dailyQuestModule\\)").matcher(core);
@@ -185,6 +187,38 @@ public final class ModerationLifecycleHarness {
             failing.failAt = 0;
             broken.enable(); check(broken.getModerationService() != null, "retry after hook cleanup " + boundary);
             broken.disable(); disabled(broken);
+        }
+    }
+
+    private static void pendingCommands() throws Exception {
+        for (boolean completeBeforeDisable : List.of(false, true)) {
+            var fixture = new ModerationTestSupport.Fixture();
+            fixture.primaryGroups.remove(ModerationTestSupport.OFFLINE);
+            var future = new java.util.concurrent.CompletableFuture<Optional<String>>();
+            fixture.groupLoads.put(ModerationTestSupport.OFFLINE, future);
+            var hooks = new TestHooks();
+            var module = new ModerationModule(() -> fixture.repository, fixture.clock, UUID::randomUUID,
+                    fixture::context, hooks, fixture.mainTasks::add);
+            module.enable();
+            var oldExecutor = hooks.executors.get("warn");
+            oldExecutor.onCommand(fixture.staff.sender, null, "warn", new String[]{"Offline", "pending"});
+            check(fixture.groupLoadCalls == 1 && fixture.repository.saves == 0, "module-owned pending resolution");
+            if (completeBeforeDisable) {
+                future.complete(Optional.of("default"));
+                check(fixture.mainTasks.size() == 1, "module queues main continuation");
+            }
+            module.disable();
+            module.enable();
+            if (!completeBeforeDisable) future.complete(Optional.of("default"));
+            Runnable task;
+            while ((task = fixture.mainTasks.poll()) != null) task.run();
+            check(fixture.repository.saves == 0 && fixture.staff.output.isEmpty() && fixture.info() == 0,
+                    "old pending/queued command cancelled across disable and re-enable");
+            oldExecutor.onCommand(fixture.staff.sender, null, "warn", new String[]{"Alex", "obsolete"});
+            check(fixture.repository.saves == 0, "obsolete executor cannot use replacement module state");
+            hooks.executors.get("warn").onCommand(fixture.staff.sender, null, "warn", new String[]{"Alex", "current"});
+            check(fixture.repository.saves == 1, "new enable generation operates normally");
+            module.disable();
         }
     }
 

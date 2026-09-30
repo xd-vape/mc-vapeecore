@@ -4,6 +4,7 @@ import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.command.ModerationCommandContext;
+import dev.vapee.core.rank.staff.*;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.PlayerRepository;
@@ -55,6 +56,18 @@ public final class ModerationTestSupport {
         public final Logger logger = Logger.getLogger("ModerationTest-" + UUID.randomUUID());
         public final Map<UUID, CorePlayer> known = new HashMap<>();
         public final Map<UUID, Sender> online = new HashMap<>();
+        public final Map<UUID, String> primaryGroups = new HashMap<>();
+        public final Map<UUID, java.util.concurrent.CompletableFuture<Optional<String>>> groupLoads = new HashMap<>();
+        public final java.util.Queue<Runnable> mainTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        public final java.util.concurrent.atomic.AtomicReference<StaffHierarchyConfig> hierarchyConfig =
+                new java.util.concurrent.atomic.AtomicReference<>(StaffHierarchyConfig.defaults());
+        public final java.util.concurrent.atomic.AtomicBoolean active = new java.util.concurrent.atomic.AtomicBoolean(true);
+        public int groupLoadCalls;
+        public final StaffHierarchyService hierarchy = new StaffHierarchyService(hierarchyConfig::get,
+                id -> Optional.ofNullable(primaryGroups.get(id)), id -> {
+                    groupLoadCalls++;
+                    return groupLoads.getOrDefault(id, java.util.concurrent.CompletableFuture.completedFuture(Optional.empty()));
+                });
         public final PlayerIdentityService identities;
         public final MessageService messages;
         public final ModerationService service;
@@ -96,16 +109,19 @@ public final class ModerationTestSupport {
             target = new Sender(Player.class, TARGET, "Alex", events);
             addKnown(STAFF, "Staff"); addKnown(TARGET, "Alex"); addKnown(OFFLINE, "Offline");
             online.put(STAFF, staff); online.put(TARGET, target);
+            primaryGroups.put(STAFF, "moderator");
             context = context(service);
         }
 
         public ModerationCommandContext context(ModerationService service) {
             return new ModerationCommandContext(service, identities, messages,
                     id -> online.containsKey(id) ? (Player) online.get(id).sender : null,
-                    () -> online.values().stream().map(s -> (Player) s.sender).toList(), clock, logger);
+                    () -> online.values().stream().map(s -> (Player) s.sender).toList(), clock, logger,
+                    hierarchy, mainTasks::add, active::get);
         }
 
         public void addKnown(UUID id, String name) {
+            primaryGroups.put(id, "default");
             known.put(id, new CorePlayer(id, name, NOW, NOW, PlayerSettings.defaults(), CoinWallet.empty(), PlayerSocial.empty()));
         }
 
@@ -122,9 +138,11 @@ public final class ModerationTestSupport {
         public boolean allowAll = true, isOnline = true, failKick, failNotification;
         public Runnable beforeKick = () -> { };
         public Runnable beforeNotification = () -> { };
+        public Runnable beforeAccess = () -> { };
         public Sender(Class<?> type, UUID id, String name, List<String> events) {
             this.id = id;
             sender = (CommandSender) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (proxy, method, args) -> {
+                beforeAccess.run();
                 return switch (method.getName()) {
                     case "hasPermission" -> allowAll || permissions.contains(args[0]);
                     case "getUniqueId" -> id;

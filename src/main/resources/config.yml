@@ -7,6 +7,15 @@ messages:
 ranks:
   track: "ranks"
 
+# Explicit moderation protection, LOW to HIGH. Independent of the public rank track.
+staff:
+  hierarchy:
+    protected-groups:
+      - builder
+      - moderator
+      - admin
+      - owner
+
 friends:
   limits:
     max-friends: 100

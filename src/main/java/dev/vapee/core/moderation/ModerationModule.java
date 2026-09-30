@@ -2,6 +2,7 @@ package dev.vapee.core.moderation;
 
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.identity.IdentityModule;
+import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.command.*;
 import org.bukkit.command.PluginCommand;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Owns main-thread service, committed mute projection, seven commands and two listeners. No reload/poller. */
 public final class ModerationModule implements CoreModule {
@@ -31,17 +33,21 @@ public final class ModerationModule implements CoreModule {
     private ModerationLoginListener listener;
     private ModerationMuteProjection projection;
     private ModerationMuteChatListener chatListener;
+    private AtomicBoolean commandActive;
 
-    public ModerationModule(JavaPlugin plugin, IdentityModule identityModule, MessageService messages) {
+    public ModerationModule(JavaPlugin plugin, IdentityModule identityModule, RankModule rankModule, MessageService messages) {
         Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(identityModule, "identityModule");
+        Objects.requireNonNull(rankModule, "rankModule");
         Objects.requireNonNull(messages, "messages");
         repositoryFactory = () -> new FileModerationRepository(
                 plugin.getDataFolder().toPath().resolve("moderation.yml"), plugin.getLogger());
         clock = Clock.systemUTC();
         idSupplier = UUID::randomUUID;
         contextFactory = loaded -> new ModerationCommandContext(loaded, identityModule.getIdentityService(), messages,
-                plugin.getServer()::getPlayer, plugin.getServer()::getOnlinePlayers, clock, plugin.getLogger());
+                plugin.getServer()::getPlayer, plugin.getServer()::getOnlinePlayers, clock, plugin.getLogger(),
+                rankModule.getStaffHierarchyService(), task -> plugin.getServer().getScheduler().runTask(plugin, task),
+                () -> false);
         hooks = new BukkitHooks(plugin);
         feedbackScheduler = task -> plugin.getServer().getScheduler().runTask(plugin, task);
     }
@@ -68,12 +74,13 @@ public final class ModerationModule implements CoreModule {
     @Override public void enable() {
         if (service != null) throw new IllegalStateException("ModerationModule already enabled");
         ModerationMuteProjection nextProjection = new ModerationMuteProjection(clock);
+        AtomicBoolean nextActive = new AtomicBoolean(false);
         ModerationLoginListener newListener = null;
         ModerationMuteChatListener newChatListener = null;
         ModerationService loaded;
         try {
             loaded = new ModerationService(repositoryFactory.get(), clock, idSupplier, nextProjection::publish);
-            ModerationCommandContext context = contextFactory.apply(loaded);
+            ModerationCommandContext context = contextFactory.apply(loaded).withRuntime(feedbackScheduler, nextActive::get);
             newListener = new ModerationLoginListener(loaded, context.logger());
             newChatListener = new ModerationMuteChatListener(nextProjection, feedbackScheduler,
                     context.onlinePlayer(), context.messages(), context.logger());
@@ -96,13 +103,17 @@ public final class ModerationModule implements CoreModule {
         chatListener = newChatListener;
         projection = nextProjection;
         service = loaded; // Publish only once all hooks have been installed successfully.
+        commandActive = nextActive;
+        nextActive.set(true);
     }
 
     @Override public void disable() {
+        if (commandActive != null) commandActive.set(false);
         try { cleanup(listener, chatListener); }
         finally {
             if (projection != null) projection.clear();
             listener = null; chatListener = null; projection = null; service = null;
+            commandActive = null;
         }
     }
 
