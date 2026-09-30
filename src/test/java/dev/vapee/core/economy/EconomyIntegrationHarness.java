@@ -99,7 +99,7 @@ public final class EconomyIntegrationHarness {
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         check(core.indexOf("moduleManager.register(economyModule)") < core.indexOf("moduleManager.register(identityModule)"),
                 "economy still before identity");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 25, "25 modules unchanged");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 26, "26 modules including Moderation");
     }
 
     private static void check(boolean value, String message) {

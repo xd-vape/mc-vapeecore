@@ -35,8 +35,8 @@ public final class FriendLifecycleHarness {
                         && core.indexOf("moduleManager.register(friendModule)")
                         < core.indexOf("moduleManager.register(rewardModule)"),
                 "Friend starts after Identity and before Reward, so reverse shutdown is safe");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 25,
-                "exactly twenty-five modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 26,
+                "exactly twenty-six modules register");
         check(core.contains("presentationModule, dailyQuestModule)")
                         && !core.contains("List.of(configService, friendModule"),
                 "Friend does not join six reload participants");
