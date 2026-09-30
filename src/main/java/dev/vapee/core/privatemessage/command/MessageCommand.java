@@ -3,6 +3,7 @@ package dev.vapee.core.privatemessage.command;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.privatemessage.PrivateMessageResult;
 import dev.vapee.core.privatemessage.PrivateMessageService;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Server;
@@ -15,12 +16,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class MessageCommand implements TabExecutor {
+
+    public static final String PERMISSION = "vapeecore.message.use";
 
     private final Server server;
     private final PrivateMessageService privateMessageService;
@@ -50,6 +52,10 @@ public final class MessageCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can use private messages.</red>");
             return true;
         }
+        if (!sender.hasPermission(PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to use private messages.</red>");
+            return true;
+        }
         if (args.length < 2) {
             sendUsage(player);
             return true;
@@ -65,7 +71,7 @@ public final class MessageCommand implements TabExecutor {
             return true;
         }
 
-        Player recipient = server.getPlayerExact(args[0]);
+        Player recipient = new OnlinePlayerResolver(server::getOnlinePlayers).resolveExact(args[0]);
         if (recipient == null) {
             messageService.send(player, "<red>Player is not online.</red>");
             return true;
@@ -91,16 +97,10 @@ public final class MessageCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (!(sender instanceof Player player) || args.length != 1) {
+        if (!(sender instanceof Player player) || !sender.hasPermission(PERMISSION) || args.length != 1) {
             return List.of();
         }
-        String prefix = args[0].toLowerCase(Locale.ROOT);
-        return server.getOnlinePlayers().stream()
-                .filter(candidate -> !candidate.getUniqueId().equals(player.getUniqueId()))
-                .map(Player::getName)
-                .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+        return new OnlinePlayerResolver(server::getOnlinePlayers).suggest(args[0], player.getUniqueId());
     }
 
     private void sendUsage(Player player) {

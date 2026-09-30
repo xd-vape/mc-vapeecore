@@ -6,6 +6,7 @@ import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.rank.command.RankCommand;
 import dev.vapee.core.rank.command.RanksCommand;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -57,7 +58,7 @@ public final class RankModule implements CoreModule {
                 newRankService,
                 configService::getServerName,
                 messageService,
-                plugin.getServer()::getPlayerExact,
+                new OnlinePlayerResolver(plugin.getServer()::getOnlinePlayers)::resolveExact,
                 plugin.getServer()::getOnlinePlayers
         );
         RanksCommand ranksExecutor = new RanksCommand(

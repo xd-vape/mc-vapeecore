@@ -42,6 +42,10 @@ public final class RanksCommand implements TabExecutor {
             @NotNull String label,
             @NotNull String[] args
     ) {
+        if (!sender.hasPermission(PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to view ranks.</red>");
+            return true;
+        }
         if (args.length != 0) {
             messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
                     .append(Component.newline())

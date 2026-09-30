@@ -84,7 +84,7 @@ public final class FriendCommand implements TabExecutor {
         Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.openMenu = Objects.requireNonNull(openMenu, "openMenu");
-        this.feedback = new FriendMessages(messages, onlinePlayer);
+        this.feedback = new FriendMessages(messages, onlinePlayer, this::commandArgument);
     }
 
     @Override
@@ -103,42 +103,57 @@ public final class FriendCommand implements TabExecutor {
                 openMenu.accept(player);
                 return true;
             }
-            if (args.length == 1 && args[0].equalsIgnoreCase("help")) {
-                helpRenderer.send(sender, HELP);
-                return true;
-            }
             String action = args[0].toLowerCase(Locale.ROOT);
-            if (args.length == 1 && action.equals("list")) {
-                listFriends(player);
+            if (!SUBCOMMANDS.contains(action)) {
+                messages.send(sender, Component.text("Unknown friend command: ", NamedTextColor.RED)
+                        .append(Component.text(args[0], NamedTextColor.WHITE))
+                        .append(Component.newline())
+                        .append(Component.text("Use /friend help to view available commands.", NamedTextColor.YELLOW)));
                 return true;
             }
-            if (args.length == 1 && action.equals("requests")) {
-                listRequests(player);
+            if (List.of("help", "list", "requests").contains(action)) {
+                if (args.length != 1) usage(sender, "/friend " + action);
+                else if (action.equals("help")) helpRenderer.send(sender, HELP);
+                else if (action.equals("list")) listFriends(player);
+                else listRequests(player);
                 return true;
             }
-            if (args.length != 2 || !List.of("add", "accept", "deny", "cancel", "remove").contains(action)) {
-                send(sender, "Use: /friend help", NamedTextColor.YELLOW);
+            if (args.length == 1 && !action.equals("add")) {
+                choices(player, action);
                 return true;
             }
-            PlayerLookupResult lookup = identities.resolve(args[1]);
-            if (lookup.status() == PlayerLookupStatus.NOT_FOUND) {
-                send(sender, "This player is not known to VapeeCore.", NamedTextColor.RED);
+            if (args.length != 2) {
+                if (args.length == 1) send(sender, "Missing player.", NamedTextColor.YELLOW);
+                usage(sender, "/friend " + action + " <player|uuid>");
                 return true;
             }
-            if (lookup.status() == PlayerLookupStatus.AMBIGUOUS) {
-                send(sender, "That name is ambiguous; use the player's UUID.", NamedTextColor.YELLOW);
-                return true;
+            UUID targetId = existingTargetId(player.getUniqueId(), action, args[1]);
+            String targetName;
+            if (targetId != null) {
+                targetName = displayName(targetId);
+            } else {
+                PlayerLookupResult lookup = identities.resolve(args[1]);
+                if (lookup.status() == PlayerLookupStatus.NOT_FOUND) {
+                    send(sender, "This player is not known to VapeeCore.", NamedTextColor.RED);
+                    return true;
+                }
+                if (lookup.status() == PlayerLookupStatus.AMBIGUOUS) {
+                    send(sender, "That name is ambiguous; use the player's UUID.", NamedTextColor.YELLOW);
+                    return true;
+                }
+                PlayerIdentity target = lookup.identity().orElseThrow();
+                targetId = target.uniqueId();
+                targetName = target.name();
             }
-            PlayerIdentity target = lookup.identity().orElseThrow();
             FriendResult result = switch (action) {
-                case "add" -> friends.sendRequest(player.getUniqueId(), target.uniqueId());
-                case "accept" -> friends.acceptRequest(player.getUniqueId(), target.uniqueId());
-                case "deny" -> friends.denyRequest(player.getUniqueId(), target.uniqueId());
-                case "cancel" -> friends.cancelRequest(player.getUniqueId(), target.uniqueId());
-                case "remove" -> friends.removeFriend(player.getUniqueId(), target.uniqueId());
+                case "add" -> friends.sendRequest(player.getUniqueId(), targetId);
+                case "accept" -> friends.acceptRequest(player.getUniqueId(), targetId);
+                case "deny" -> friends.denyRequest(player.getUniqueId(), targetId);
+                case "cancel" -> friends.cancelRequest(player.getUniqueId(), targetId);
+                case "remove" -> friends.removeFriend(player.getUniqueId(), targetId);
                 default -> throw new IllegalStateException("Unexpected friend action");
             };
-            feedback.report(player, action, target.uniqueId(), target.name(), result);
+            feedback.report(player, action, targetId, targetName, result);
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process friend command for " + player.getUniqueId() + ".", exception);
             send(sender, "The friends data could not be updated. Check the server log.", NamedTextColor.RED);
@@ -162,20 +177,20 @@ public final class FriendCommand implements TabExecutor {
             UUID self = player.getUniqueId();
             List<String> names = switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "add" -> onlinePlayers.get().stream()
+                        .filter(Player::isOnline)
                         .filter(online -> !online.getUniqueId().equals(self))
                         .filter(online -> {
                             FriendRelation relation = friends.getRelation(self, online.getUniqueId());
                             return relation != FriendRelation.FRIENDS
                                     && relation != FriendRelation.OUTGOING_REQUEST;
                         })
-                        .map(Player::getName).toList();
+                        .map(online -> commandArgument(online.getUniqueId())).toList();
                 case "accept", "deny" -> friends.getIncomingRequests(self).stream()
-                        .map(FriendRequest::sender).map(this::knownName).flatMap(java.util.Optional::stream).toList();
+                        .map(FriendRequest::sender).map(this::commandArgument).toList();
                 case "cancel" -> friends.getOutgoingRequests(self).stream()
-                        .map(FriendRequest::recipient).map(this::knownName)
-                        .flatMap(java.util.Optional::stream).toList();
+                        .map(FriendRequest::recipient).map(this::commandArgument).toList();
                 case "remove" -> friends.getFriends(self).stream()
-                        .map(this::knownName).flatMap(java.util.Optional::stream).toList();
+                        .map(this::commandArgument).toList();
                 default -> List.of();
             };
             return matching(names, args[1]);
@@ -196,6 +211,54 @@ public final class FriendCommand implements TabExecutor {
             ids.stream().map(this::displayName).sorted(NAME_ORDER)
                     .forEach(name -> sendName(player, name));
         }
+    }
+
+    private List<UUID> choiceIds(UUID self, String action) {
+        return switch (action) {
+            case "accept", "deny" -> friends.getIncomingRequests(self).stream().map(FriendRequest::sender).toList();
+            case "cancel" -> friends.getOutgoingRequests(self).stream().map(FriendRequest::recipient).toList();
+            case "remove" -> friends.getFriends(self);
+            default -> List.of();
+        };
+    }
+
+    private UUID existingTargetId(UUID self, String action, String input) {
+        try {
+            UUID id = UUID.fromString(input);
+            return id.toString().equalsIgnoreCase(input) && choiceIds(self, action).contains(id) ? id : null;
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private void choices(Player player, String action) {
+        List<UUID> ids = choiceIds(player.getUniqueId(), action);
+        if (ids.isEmpty()) {
+            send(player, switch (action) {
+                case "accept", "deny" -> "You have no pending friend requests.";
+                case "cancel" -> "You have no pending outgoing friend requests.";
+                case "remove" -> "You do not have any friends yet.";
+                default -> throw new IllegalArgumentException("Unknown choice action");
+            }, NamedTextColor.YELLOW);
+            return;
+        }
+        send(player, action.equals("remove") ? "Your friends:" : action.equals("cancel")
+                ? "Outgoing friend requests:" : "Pending friend requests:", NamedTextColor.GOLD);
+        ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
+                .forEach(id -> messages.send(player, Component.text("• ", NamedTextColor.GRAY)
+                        .append(Component.text(displayName(id), NamedTextColor.WHITE)).append(Component.space())
+                        .append(action.equals("accept") || action.equals("deny")
+                                ? FriendMessages.requestActions(commandArgument(id))
+                                : FriendMessages.actionButton(action, commandArgument(id)))));
+    }
+
+    private String commandArgument(UUID id) {
+        return FriendMessages.commandArgument(identities, id);
+    }
+
+    private void usage(CommandSender sender, String syntax) {
+        messages.send(sender, Component.text("Usage: ", NamedTextColor.YELLOW)
+                .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private void listRequests(Player player) {

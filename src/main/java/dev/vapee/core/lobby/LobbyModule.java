@@ -80,7 +80,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         PluginCommand newSpawnCommand = requireCommand("spawn");
         PluginCommand newSetSpawnCommand = requireCommand("setspawn");
         SpawnCommand newSpawnExecutor = new SpawnCommand(newLobbyService, messageService);
-        SetSpawnCommand newSetSpawnExecutor = new SetSpawnCommand(newLobbyService, messageService);
+        SetSpawnCommand newSetSpawnExecutor = new SetSpawnCommand(newLobbyService, messageService, plugin.getLogger());
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newLobbyListener, plugin);

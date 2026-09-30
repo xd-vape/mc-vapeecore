@@ -120,10 +120,14 @@ public final class CommandHelpHarness {
         Capture player = capture(Set.of(
                 "vapeecore.message.use", "vapeecore.social.ignore", "vapeecore.lobby.spawn",
                 "vapeecore.settings.use", "vapeecore.economy.coins",
-                "vapeecore.rank.view", "vapeecore.ranks.view"
+                "vapeecore.rank.view", "vapeecore.ranks.view", "vapeecore.profile.view",
+                "vapeecore.friend.use", "vapeecore.clan.use"
         ));
         new CommandHelpRenderer(player.messageService()).send(player.sender(), core);
         String playerText = player.singleText();
+        check(playerText.contains("/profile [player|uuid]") && playerText.contains("/friend help")
+                        && playerText.contains("/clan help") && playerText.contains("/settings visibility"),
+                "phase 23 overview contains current profile, friends, clans and settings domains");
         check(playerText.contains("/spawn") && playerText.contains("/coins")
                         && playerText.contains("/rank [player]") && playerText.contains("/ranks"),
                 "core help shows permitted player and rank commands");
@@ -150,12 +154,16 @@ public final class CommandHelpHarness {
                 "vapeecore.admin", "vapeecore.lobby.setspawn", "vapeecore.utility.build",
                 "vapeecore.utility.fly", "vapeecore.utility.speed", "vapeecore.utility.gamemode",
                 "vapeecore.utility.teleport", "vapeecore.utility.teleport.here",
-                "vapeecore.utility.heal", "vapeecore.utility.feed",
+                "vapeecore.utility.heal", "vapeecore.utility.feed", "vapeecore.utility.ping",
+                "vapeecore.utility.clear", "vapeecore.utility.invsee", "vapeecore.utility.enderchest",
                 "vapeecore.warp.admin", "vapeecore.blackjack.admin",
                 "vapeecore.rank.view", "vapeecore.ranks.view"
         ));
         new CommandHelpRenderer(admin.messageService()).send(admin.sender(), core);
         String adminText = admin.singleText();
+        check(adminText.contains("/ping [player]") && adminText.contains("/clear [player]")
+                        && adminText.contains("/invsee <player>") && adminText.contains("/enderchest [player]"),
+                "phase 23 overview contains the four remaining inventory and latency utilities");
         check(adminText.contains("/core reload") && adminText.contains("/blackjack help")
                         && adminText.contains("/gamemode <mode> [player]")
                         && adminText.contains("Alias: /gm") && adminText.contains("/tphere <player>"),
@@ -317,6 +325,14 @@ public final class CommandHelpHarness {
         check(invokeSuggestions(BlackjackCommand.class, "setupSuggestions", "i")
                         .equals(List.of("info", "interaction")),
                 "blackjack setup i completes info and interaction");
+        Method tableIdAction = BlackjackCommand.class.getDeclaredMethod("acceptsExistingTableId", String.class);
+        tableIdAction.setAccessible(true);
+        for (String action : List.of("unknown", "help", "create", "list", "<red>unknown</red>")) {
+            check(!(boolean) tableIdAction.invoke(null, action), "blackjack exposes no table IDs for " + action);
+        }
+        for (String action : List.of("INFO", "seat", "removeseat", "preview", "enable", "disable", "delete")) {
+            check((boolean) tableIdAction.invoke(null, action), "blackjack completes existing IDs for " + action);
+        }
         check(invokeSuggestions(WarpCommand.class, "rootSuggestions", "i").equals(List.of("icon", "info")),
                 "warp i completes icon and info");
         check(invokeSuggestions(CoinsCommand.class, "rootSuggestions", "a", true).equals(List.of("add")),

@@ -205,9 +205,7 @@ public final class BlackjackCommand implements TabExecutor {
             return setupSuggestions(args[1]);
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("setup")
-                && !args[1].equalsIgnoreCase("help")
-                && !args[1].equalsIgnoreCase("create")
-                && !args[1].equalsIgnoreCase("list")) {
+                && acceptsExistingTableId(args[1])) {
             return matches(tableConfig.getDrafts().stream().map(BlackjackTableDraft::getId).toList(), args[2]);
         }
         if (args.length == 4 && args[0].equalsIgnoreCase("setup")
@@ -223,6 +221,11 @@ public final class BlackjackCommand implements TabExecutor {
 
     static List<String> setupSuggestions(String input) {
         return matches(SETUP_ACTIONS, input);
+    }
+
+    static boolean acceptsExistingTableId(String action) {
+        String normalized = action.toLowerCase(Locale.ROOT);
+        return ACTIONS.contains(normalized) && !normalized.equals("create") && !normalized.equals("list");
     }
 
     private void create(CommandSender sender, String[] args) {

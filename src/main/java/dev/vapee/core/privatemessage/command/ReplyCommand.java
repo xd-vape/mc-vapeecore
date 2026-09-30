@@ -44,6 +44,10 @@ public final class ReplyCommand implements TabExecutor {
             messageService.send(sender, "<red>Only players can use private messages.</red>");
             return true;
         }
+        if (!sender.hasPermission(MessageCommand.PERMISSION)) {
+            messageService.send(sender, "<red>You do not have permission to use private messages.</red>");
+            return true;
+        }
         if (args.length == 0) {
             sendUsage(player);
             return true;

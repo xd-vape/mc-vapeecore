@@ -3,6 +3,7 @@ package dev.vapee.core.rank;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.rank.command.RankCommand;
+import dev.vapee.core.utility.OnlinePlayerResolver;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -38,7 +39,7 @@ public final class RankCommandHarness {
                 fixture.rankService,
                 () -> "Vapee Community",
                 fixture.messageService,
-                fixture.players::get,
+                new OnlinePlayerResolver(fixture::onlinePlayers)::resolveExact,
                 fixture::onlinePlayers
         );
 
@@ -79,6 +80,22 @@ public final class RankCommandHarness {
                 "rank tab completion returns matching online players");
         check(command.onTabComplete(fixture.console(Set.of()), null, "rank", new String[]{""}).isEmpty(),
                 "rank tab completion respects permission");
+        command.onCommand(fixture.console(Set.of()), null, "rank", new String[]{"Other"});
+        check(fixture.last().contains("permission"), "executor denies console without permission");
+        Player denied = fixture.player("Denied", "vip", Set.of());
+        command.onCommand(denied, null, "rank", new String[0]);
+        check(fixture.last().contains("permission"), "executor denies player without permission");
+        command.onCommand(self, null, "rank", new String[]{"oThEr"});
+        check(fixture.last().contains("Player: Other"), "full case-insensitive name resolves");
+        command.onCommand(self, null, "rank", new String[]{"Oth"});
+        check(fixture.last().contains("not online"), "partial name never resolves");
+        fixture.players.remove("Other");
+        command.onCommand(self, null, "rank", new String[]{other.getUniqueId().toString()});
+        check(fixture.last().contains("not online"), "UUID not supported by rank");
+        Player unknown = fixture.player("UnknownRank", "default", Set.of(RankCommand.PERMISSION));
+        fixture.primaryGroups.remove(unknown.getUniqueId());
+        command.onCommand(unknown, null, "rank", new String[0]);
+        check(fixture.last().contains("currently unavailable"), "missing live rank controlled");
 
         System.out.println("RankCommandHarness passed " + checks + " checks.");
     }
@@ -142,6 +159,7 @@ public final class RankCommandHarness {
         ) {
             if (name.equals("getName")) return playerName;
             if (name.equals("getUniqueId")) return uniqueId;
+            if (name.equals("isOnline")) return true;
             if (name.equals("hasPermission") && arguments != null && arguments.length == 1) {
                 return permissions.contains(arguments[0]);
             }

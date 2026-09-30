@@ -720,7 +720,17 @@ Der Renderer filtert Einträge ausschließlich über die am Entry hinterlegte Bu
 
 Erwartete Benutzerfehler werden vollständig durch den Command behandelt und liefern `true`; `plugin.yml`-Usage bleibt nur ein kurzer technischer Fallback. Ein konkretes Subcommand mit falschen Argumenten zeigt seine genaue Syntax statt der gesamten Help Page. Unbekannte Subcommands benennen den unbekannten Wert sicher und verweisen auf das passende `help`. Success-Ausgaben nennen Aktion, Objekt und – wo hilfreich – das neue Ergebnis; Errors sind konkret, Warnungen beschreiben einen sicheren nächsten Schritt.
 
-Tab Completion ist case-insensitive, stabil sortiert, permission-aware und möglichst klein. Spielerargumente stammen nur aus aktuell online befindlichen Spielern, dynamische IDs aus dem bereits geladenen Servicezustand und Warp-Materialien nur aus tatsächlich darstellbaren Items. Keine Completion lädt Offline-Player. Frei beeinflussbare IDs, Namen, Display Names und andere dynamische Werte werden mit `Component.text`, `Placeholder.unparsed` oder `Placeholder.component` eingesetzt, niemals per String-Konkatenation in ein MiniMessage-Template.
+Tab Completion ist case-insensitive, stabil sortiert, permission-aware und möglichst klein. Online-Command-Targets stammen nur aus aktuell online befindlichen Spielern, relation-basierte Friend-/Unignore-Targets aus der eigenen Beziehung und bekannten Identity-Domain, dynamische IDs aus dem bereits geladenen Servicezustand und Warp-Materialien nur aus tatsächlich darstellbaren Items. Keine Completion lädt Bukkit-Offline-Player. Frei beeinflussbare IDs, Namen, Display Names und andere dynamische Werte werden mit `Component.text`, `Placeholder.unparsed` oder `Placeholder.component` eingesetzt, niemals per String-Konkatenation in ein MiniMessage-Template.
+
+### Phase 23: Command-Grenzen und Ownership
+
+Die vollständige Vorab-Auditmatrix und die gemessene Verifikation stehen in `docs/COMMAND_AUDIT.md`. `CoreCommand` besitzt Status-/Versionsausgabe, die zentrale Übersicht und die Delegation an den unveränderten Reload-Koordinator. Package-private, funktionale Konstruktor-Seams ermöglichen echte Executor-Tests ohne laufenden Server; sie ersetzen weder einen Domain-Service noch führen sie einen generischen Command-Dispatcher ein. Jede Feature-Command-Klasse bleibt Owner ihrer Permission-, Arity-, Sender- und Target-Prüfungen. `plugin.yml` ist Registrierungs- und Fallbackschicht; die Executor-Prüfung ist zusätzliche Defense in Depth.
+
+`OnlinePlayerResolver` ist ausschließlich für vollständige, case-insensitive, eindeutige aktuell online befindliche Spielernamen zuständig. Utilities, `/msg`, `/ignore` und `/rank` verwenden keine Offline-/Mojang-Auflösung, UUID-Argumente oder Selector. Known Player/UUID bleiben auf bestehende Friend-, Clan-, Profile-, Economy-, Unignore- und Settings-Visibility-Domains begrenzt. `/unignore` sucht nur in der eigenen Ignore-Liste; doppelte bekannte Namen werden abgelehnt und als UUIDs vorgeschlagen. IgnoreList zeigt bekannte Namen sortiert vor unbekannten UUIDs.
+
+Für Fly, Speed, Gamemode, Heal, Feed, Ping, Clear und Enderchest entscheidet die Ziel-UUID über Self/Other: ein expliziter eigener Name benötigt nur die Basispermission. Console verlangt bei Self/Other-Utilities ein explizites Target und die bestehende Others-Permission. Invsee/Enderchest brauchen immer einen Player als GUI-Viewer. `/tp` ist die absichtlich begrenzte Vanilla-Teilmenge aus Phase 18C: die explizite Source-Form verlangt weiterhin Others, auch wenn Source die eigene UUID ist. Koordinaten, lokale/relative Achsen, Worlds, Yaw/Pitch, Activity-Guards, Bypass und Cancellation bleiben unverändert; `/minecraft:tp` bleibt Vanilla. Invsee bleibt ein geschützter Read-only-Snapshot, `.modify` ist weiterhin inaktiv.
+
+`FriendCommand` rendert ohne Ziel für Accept/Deny eingehende Requests, für Cancel ausgehende Requests und für Remove tatsächliche Freunde; leere Zustände werden konkret benannt. `FriendMessages` besitzt die Request-Benachrichtigung inklusive literal Actor-Name und Suggest-Buttons. Ein Argument verwendet nur einen whitespace-freien, eindeutig auf dieselbe UUID auflösbaren bekannten Namen; andernfalls die UUID. Dadurch funktionieren auch alte Beziehungen ohne Identity-Eintrag. Buttons führen niemals sofort eine Aktion aus. Mutationen, Save-Rollback und Visibility-Callbacks bleiben ausschließlich im `FriendService`. `SetSpawnCommand` protokolliert Save-Fehler mit UUID und SEVERE ohne Rethrow oder Success-Ausgabe; `SpawnCommand` unterscheidet nicht konfiguriert, World unavailable und fehlgeschlagen/abgebrochen.
 
 ### Checkliste für einen neuen Command
 
@@ -781,6 +791,8 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.utility.command.UtilityCommandHarness`
 - `dev.vapee.core.utility.UtilityInventoryHarness`
 - `dev.vapee.core.message.CommandHelpHarness`
+- `dev.vapee.core.command.CoreCommandHarness`
+- `dev.vapee.core.lobby.command.LobbyCommandHarness`
 - `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
 - `dev.vapee.core.seat.SeatHarness`
 - `dev.vapee.core.worlddisplay.WorldDisplayHarness`

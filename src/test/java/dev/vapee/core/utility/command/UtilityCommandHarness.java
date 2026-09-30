@@ -7,6 +7,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.PlayerInventory;
@@ -38,6 +39,7 @@ public final class UtilityCommandHarness {
         testTeleportHere();
         testHealAndFeed();
         testPingClearAndEnderChest();
+        testExplicitSelfAndCommandBoundaries();
         System.out.println("UtilityCommandHarness passed " + checks + " checks.");
     }
 
@@ -501,6 +503,53 @@ public final class UtilityCommandHarness {
         enderChest.onCommand(self.player, null, "enderchest", new String[]{"Other"});
         check(fixture.last().equals("Player 'Other' is not online."),
                 "enderchest performs no offline-player lookup");
+    }
+
+    private static void testExplicitSelfAndCommandBoundaries() {
+        Fixture fixture = new Fixture();
+        MutablePlayer self = fixture.player("Self", GameMode.SURVIVAL, FlyCommand.PERMISSION, SpeedCommand.PERMISSION,
+                GameModeCommand.PERMISSION, HealCommand.PERMISSION, FeedCommand.PERMISSION, PingCommand.PERMISSION,
+                ClearCommand.PERMISSION, EnderChestCommand.PERMISSION);
+        List<TabExecutor> commands = List.of(
+                new FlyCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
+                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, fixture.messages),
+                new SpeedCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
+                        fixture.activityPlayers::contains, fixture.messages),
+                new GameModeCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
+                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, player -> false, fixture.messages),
+                new HealCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages),
+                new FeedCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages),
+                new PingCommand(fixture::lookup, fixture::onlinePlayers, fixture.messages),
+                new ClearCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
+                        fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages),
+                new EnderChestCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.messages));
+        List<String[]> explicitSelf = List.of(new String[]{"sElF"}, new String[]{"5", "sElF"},
+                new String[]{"survival", "sElF"}, new String[]{"sElF"}, new String[]{"sElF"},
+                new String[]{"sElF"}, new String[]{"sElF"}, new String[]{"sElF"});
+        List<String> expected = List.of("Flight enabled.", "Walk speed set to 5/10.", "Game mode changed to Survival.",
+                "Healed.", "Fed.", "Your ping:", "Inventory cleared.", "");
+        List<String> permissions = List.of(FlyCommand.PERMISSION, SpeedCommand.PERMISSION, GameModeCommand.PERMISSION,
+                HealCommand.PERMISSION, FeedCommand.PERMISSION, PingCommand.PERMISSION, ClearCommand.PERMISSION, EnderChestCommand.PERMISSION);
+        for (int i = 0; i < commands.size(); i++) {
+            TabExecutor command = commands.get(i);
+            String[] selfArgs = explicitSelf.get(i);
+            command.onCommand(self.player, null, "utility", selfArgs);
+            check(command instanceof EnderChestCommand ? self.openedInventory == self.enderChest : fixture.last().contains(expected.get(i)),
+                    command.getClass().getSimpleName() + " explicit same-UUID target needs only base permission; got " + fixture.last());
+            self.permissions.remove(permissions.get(i));
+            command.onCommand(self.player, null, "utility", selfArgs);
+            check(fixture.last().contains("permission"), command.getClass().getSimpleName() + " executor denies missing base permission");
+            check(command.onTabComplete(self.player, null, "utility", new String[]{""}).isEmpty(),
+                    command.getClass().getSimpleName() + " denied completion leaks no values");
+            self.permissions.add(permissions.get(i));
+            String[] extra = java.util.Arrays.copyOf(selfArgs, selfArgs.length + 1);
+            extra[extra.length - 1] = "extra";
+            command.onCommand(self.player, null, "utility", extra);
+            check(fixture.last().contains("Invalid usage."), command.getClass().getSimpleName() + " rejects extra arguments");
+            command.onCommand(fixture.console(Set.of(permissions.get(i))), null, "utility", selfArgs);
+            check(fixture.last().contains("permission") || fixture.last().contains("only be used by a player"),
+                    command.getClass().getSimpleName() + " console cannot use base permission as others permission");
+        }
     }
 
     private static boolean close(double actual, double expected) {
