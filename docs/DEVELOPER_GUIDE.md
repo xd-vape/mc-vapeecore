@@ -55,6 +55,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
 | `/clan`, Clan-Regeln und zentrale Persistence | `dev.vapee.core.clan`, `clans.yml` |
+| Moderationshistorie, aktive Mute-/Ban-Abfragen und Widerruf | `dev.vapee.core.moderation.ModerationService`; keine Commands oder Enforcement |
+| Moderation Persistence und Schema | `FileModerationRepository`, `plugins/VapeeCore/moderation.yml` |
 | Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
 | Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu` (Feature 16, Status 25) |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
@@ -101,6 +103,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 | `friends.yml` | `FriendModule` / `FileFriendRepository` | UUID-basierte Freundschaften und gerichtete Anfragen, `schema-version: 1` | Nein | Ja, atomar über `FriendService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
 | `clans.yml` | `ClanModule` / `FileClanRepository` | UUID-basierte Clans, Mitglieder und Einladungen, `schema-version: 1` | Nein | Ja, atomar über `ClanService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
+| `moderation.yml` | `ModerationModule` / `FileModerationRepository` | UUID-basierte Moderationshistorie, Schema 1 | Nein | Ja, atomar über `ModerationService` | Kein Resource-Default; fehlend bleibt bei Enable/Disable fehlend, erster erfolgreicher Save erzeugt die Datei |
 
 Die sechs Reload-Teilnehmer sind exakt `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml` und `daily-quests.yml`. `ranks.track` und `online-rewards` gehören zum vorhandenen `ConfigService`; Rank, Reward, OnlineReward und die generische Quest Foundation sind selbst keine Reload-Teilnehmer. Reward und Quest besitzen keine eigene Config- oder Datendatei; DailyQuest besitzt die Katalog-Datei. Der Reload wird zweiphasig vorbereitet und angewendet. `DailyQuestModule` tauscht beim Apply Config und Registry aus und stellt beim Rollback beide vorherigen Snapshots wieder her; Player-Assignments werden erst im nächsten normalen Sync berührt. `OnlineRewardService` liest die immutable Config-View bei jedem Processing neu. Bei Rollback setzt `LobbyModule` neben Config und Spawn auch die Gamemodes aller normalen Lobby-Spieler auf den vorherigen Wert zurück. BUILD-Spieler bleiben bis zum Build-Ende in `CREATIVE`.
 
@@ -114,27 +117,28 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 4. **Social** – Ignore-State und Commands.
 5. **Economy** – Coin-Wallet und `/coins`.
 6. **Identity** – Known-Player-Lookup, immutable Profile und `/profile`.
-7. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend` und Friends-GUI.
-8. **Clan** – Clans, Einladungen, `/clan` und Clan-GUI.
-9. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
-10. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
-11. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
-12. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
-13. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
-14. **Visibility** – zentrale Lobby-Policy, Paper-Show/Hide-Anwendung und Cleanup eigener Hide-Zustände.
-15. **Chat** – globaler Chat und lesende Rank-Placeholder.
-16. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-17. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
-18. **Settings** – Settings-Inventar und `/settings`.
-19. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
-20. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
-21. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
-22. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-23. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-24. **Warp** – dynamische Warp-Persistence und Admin-Command.
-25. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen und Navigator-UI.
+7. **Moderation** – immutable Historie, aktive Mute-/Ban-Abfragen und separate Persistence; keine Commands oder Enforcement.
+8. **Friend** – zentrale UUID-basierte Freundschaften und Anfragen, `/friend` und Friends-GUI.
+9. **Clan** – Clans, Einladungen, `/clan` und Clan-GUI.
+10. **Reward** – zentrale Gameplay-Reward-API und gebündelte Player-Persistence.
+11. **OnlineReward** – kumulative Minecraft-Spielzeit-Rewards und Player-Fortschritt.
+12. **Quest** – generische Definitionen, Assignments, Fortschritt, Completion und gebündelte Player-Persistence.
+13. **DailyQuest** – Daily-Katalog, Cycle-Berechnung, Auswahl, Assignment und Rotation.
+14. **Lobby** – Config, Spawn, Protection, Player-State, Items, Messages, `/spawn`, `/setspawn`.
+15. **Visibility** – zentrale Lobby-Policy, Paper-Show/Hide-Anwendung und Cleanup eigener Hide-Zustände.
+16. **Chat** – globaler Chat und lesende Rank-Placeholder.
+17. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
+18. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+19. **Settings** – Settings-Inventar und `/settings`.
+20. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
+21. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
+22. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
+23. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
+24. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
+25. **Warp** – dynamische Warp-Persistence und Admin-Command.
+26. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Identity → Economy → Social → Player → Rank → Permission. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Friend → Moderation → Identity → Economy → Social → Player → Rank → Permission. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Moderation gibt nur seinen Service frei und schreibt nicht erneut. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -200,9 +204,63 @@ Der Runtime-Name-Index gehört `FilePlayerRepository`: Beim Start werden kanonis
 
 `/profile` zeigt dem Spieler das eigene Profil; die Console muss `/profile <player|uuid>` angeben. Mit einem Ziel funktionieren Online-Name, bekannter Offline-Name und bekannte UUID. Unbekannte oder mehrdeutige Namen erhalten kontrollierte Meldungen, Lesefehler werden geloggt und nicht als Stacktrace in Chat ausgegeben. `vapeecore.profile.view` ist standardmäßig für alle erlaubt. Tab Completion zeigt nur Online-Namen, keine Liste aller bekannten Offline-Spieler. Spielernamen werden ausschließlich als `Component.text` ausgegeben, nie als MiniMessage ausgewertet. First/Last Join werden als `yyyy-MM-dd HH:mm` in der Server-Zeitzone gezeigt; Last Join ist kein Last Seen. Kein GUI und kein neues Hauptmenü.
 
+## Moderation Foundation (Phase 24)
+
+Ownership: `ModerationModule` hängt öffentlich ausschließlich von `JavaPlugin` ab und steht zwischen Identity und Friend. Beim Enable baut es Repository und Service lokal auf und veröffentlicht den Service erst nach vollständig validiertem Load. Ein beschädigtes Dokument lässt das Enable scheitern; `ModuleManager` rollt bereits gestartete Module rückwärts zurück, Friend und spätere Module starten nicht. Disable entfernt die Service-Referenz, ohne einen zusätzlichen Save. Der Getter wirft bei deaktiviertem oder fehlgeschlagenem Modul. Ein lokaler package-private Factory-/Clock-/UUID-Seam ermöglicht Tests des tatsächlichen Modul-Lifecycles, ohne eine Bukkit-Instanz zu erfinden.
+
+Domain und Service enthalten keine Bukkit-Player, Identity-, PlayerService-, Economy-, Rank-, Chat- oder PM-Abhängigkeiten. `ModerationService` besitzt genau einen `ModerationSnapshot` als Wahrheit; keine getrennten active/history Maps, Dirty-Queue oder zweite Persistence. Die gesamte API ist Main-Thread-owned, einschließlich Reads: spätere Async-Consumer müssen zuerst auf den Serverthread zurückkehren oder eine ausdrücklich entworfene immutable Projektion verwenden. Diese Foundation veröffentlicht keine Async-Projektion oder Events.
+
+`ModerationAction`: `WARNING` und `KICK` sind ausschließlich historische Ereignisse und dürfen weder Ablauf noch Widerruf haben. `MUTE` und `BAN` sind ohne Ablauf permanent; eine temporäre Sanktion verlangt `expiresAt > createdAt`. `ModerationActor(type, Optional<UUID> playerId)` erlaubt ausschließlich PLAYER mit UUID beziehungsweise CONSOLE ohne UUID. Namen und Bukkit-Objekte werden nicht gespeichert.
+
+`ModerationRecord(id, action, targetId, actor, reason, createdAt, Optional<Instant> expiresAt, Optional<ModerationRevocation> revocation)` ist immutable. Record-ID und Target-ID sind getrennte UUIDs; mehrere Records pro Target sind ausdrücklich erlaubt. Reasons werden mit `strip()` getrimmt, dürfen danach nicht leer sein und höchstens 256 Unicode-Codepoints enthalten. Steuerzeichen, Zeilenumbrüche einschließlich Unicode-Line-/Paragraph-Separator sowie ungültige Surrogates werden vor dem Trimmen abgewiesen. Unicode und etwa `<red>` oder `&a` bleiben normaler literal Text, ohne MiniMessage-Verarbeitung. Derselbe Validator gilt für den optionalen Widerrufsgrund: absent ist gültig, present-blank nicht.
+
+`ModerationRevocation(actor, revokedAt, Optional<String> reason)` erhält den ursprünglichen Record; `revokedAt >= createdAt`. Nur MUTE/BAN erlauben Widerruf. `withRevocation` erzeugt einen neuen Record mit derselben ID und unveränderten Originalfeldern, niemals einen zweiten History-Eintrag, und lehnt einen zweiten Widerruf ab. `isActiveAt(t)` gilt ausschließlich für MUTE/BAN bei `createdAt <= t`, vollständig fehlendem Widerruf und entweder fehlendem Ablauf oder `t < expiresAt`. Genau am Ablauf ist inactive. Future-created Records sind vorher inactive. Ein bereits widerrufener Record ist auch bei einer Abfrage vor `revokedAt` inactive: dies ist eine aktuelle Aktivzustandsregel, keine historische Rekonstruktion. Ablauf erzeugt keine Writes, Tasks oder Löschungen.
+
+API: `issueWarning`, `recordKick`, `issueMute`, `issueBan`, `revokeMute`, `revokeBan`, `getActiveMute`, `getActiveBan`, `isMuted`, `isBanned`, `getHistory`, `getRecord`, `getAllRecords`. Targets sind UUIDs ohne Known-/Online-Player-Gate; Eingabeauflösung gehört erst zum späteren Command-Adapter. Jede Mutation verwendet genau einen Zeitpunkt aus dem injizierten `Clock`; Runtime ist `Clock.systemUTC()`. Issue-IDs kommen aus einem `Supplier<UUID>`, Runtime `UUID::randomUUID`. Tests injizieren beide Quellen. Nullwerte und ID-Kollisionen scheitern ohne Save.
+
+`ModerationResult`: SUCCESS enthält den erfolgreich gespeicherten neuen oder widerrufenen Record. ALREADY_MUTED, ALREADY_BANNED, NOT_MUTED und NOT_BANNED enthalten konsequent keinen Record und erzeugen keinen Save. Ein zweiter aktuell aktiver Mute/Ban wird abgewiesen; beide Typen dürfen gleichzeitig aktiv sein. Nach Ablauf oder Widerruf ist Reissue erlaubt, die alten Fakten bleiben erhalten. Revoke sucht ausschließlich aktuell aktive Fakten: absent, expired oder revoked liefert NOT_*. Falls geladene Fakten zeitlich überlappen, wählen Active-Abfragen deterministisch den neuesten aktiven Record, dann die kleinste lexikografische UUID; die Foundation verwirft keine gültige History wegen eines solchen Overlaps.
+
+`ModerationSnapshot` prüft alle Nullwerte und doppelte Record-IDs und kopiert die Records immutable. Speicherreihenfolge ist `createdAt ASC`, dann kanonischer UUID-String ASC. History ist `createdAt DESC`, UUID-String ASC. Alle Listen sind immutable und alte Views bleiben bei späteren Änderungen unverändert. Copy-on-write: neuer Record beziehungsweise Ersatz eines widerrufenen Records → vollständiger validierter Kandidat → `repository.save(next)` → erst danach `state = next`. Jede Repository-Exception propagiert; alle sechs Mutationen behalten bei Fehler exakt denselben vorherigen Snapshot, History und Active-State. Kein verzögertes Save und kein Save bei Reads.
+
+### `moderation.yml`: vollständiges Schema 1
+
+Einzige Datei: `plugins/VapeeCore/moderation.yml`. Es gibt weder Resource-Default noch Player-YAML-Felder, Migration oder Bukkit-Banlisten-Synchronisierung. Missing file lädt leer und legt nicht einmal das Parent-Verzeichnis an; der erste erfolgreiche Save erstellt Parent und Datei. Eine tatsächlich vorhandene leere, beschädigte, falsch typisierte oder unbekannt versionierte Datei ist ein Fehler, kein Empty-State-Fallback. Start, `/core reload` und Shutdown schreiben eine fehlende Datei nicht.
+
+Alle unten gezeigten Keys sind Pflicht, auch nullable Keys. `records` ist eine Liste. Optionals werden als explizites YAML-null geschrieben. UUIDs sind kanonische Strings; beim Load ist Groß-/Kleinschreibung erlaubt. Enums müssen exakt geschrieben sein. Root erlaubt ausschließlich `schema-version` und `records`; Record, Actor, Revocation und Revocation-Actor haben ebenfalls exakt definierte Keys.
+
+```yaml
+schema-version: 1
+records:
+  - id: "00000000-0000-0000-0000-000000000001"
+    action: MUTE
+    target: "00000000-0000-0000-0000-000000000090"
+    actor:
+      type: PLAYER
+      player: "00000000-0000-0000-0000-000000000080"
+    reason: "Café 😀 <red>literal</red>"
+    created-at: "2026-09-30T12:00:00.123456789Z"
+    expires-at: "2026-09-30T13:00:00.123456789Z"
+    revocation:
+      actor:
+        type: CONSOLE
+        player: null
+      revoked-at: "2026-09-30T12:30:00Z"
+      reason: null
+```
+
+Zeitformat bewusst verlustfrei: `created-at`, present `expires-at` und `revoked-at` sind kanonische UTC-ISO-8601-Strings exakt wie `Instant.toString()`, validiert mit `Instant.parse()` und anschließendem Canonical-Vergleich. Anders als Epoch-Millis bleiben Nanosekunden und damit exakte Ablaufgrenzen sowie die volle Instant-Domain beim Roundtrip erhalten. Locale-Daten, Offsets statt Z, numerische Werte, Date-only, ungültige Kalendertage und nichtkanonische Strings werden abgewiesen. Dieses neue Schema ist kein Wechsel am Clan- oder Player-Schema.
+
+`FileModerationRepository` liest UTF-8 mit SnakeYAML `SafeConstructor` und `allowDuplicateKeys=false`. Eine kleine lokale SafeConstructor-Erweiterung lehnt außerdem YAML-Merge-Schlüssel ab, bevor SnakeYAML sie entfernen könnte. Unbekannte/missing Keys, falsche Typen, unsafe Tags, zusätzliche Dokumente, nichtkanonische UUIDs, unbekannte Enums, doppelte IDs und sämtliche Domain-/Zeitinvarianten lassen den Load mit Dateikontext scheitern; die Quelldatei bleibt byte-identisch. Es gibt kein Skip einzelner Sanktionen, Reparieren oder Überschreiben auf Load.
+
+Save schreibt deterministische LinkedHashMaps in Snapshot-Reihenfolge in eine UTF-8-Sibling-Tempdatei, schließt den Writer und versucht `ATOMIC_MOVE` mit `REPLACE_EXISTING`. Nur `AtomicMoveNotSupportedException` führt zum kontrollierten Replace-Fallback. Andere I/O-/Runtime-Fehler propagieren als `ModerationRepositoryException` mit Dateikontext. Fehlgeschlagenes Replace vor dem Move lässt die alte Datei lesbar und unverändert; Temp-Cleanup läuft best-effort und loggt Cleanup-Probleme über den injizierten Logger. Das Fallback verspricht keine Atomicität bei hartem JVM-/OS-Abbruch; mehrere externe Writer werden nicht koordiniert. Der Service ist der einzige Runtime-Writer, die Datei daher nie während laufender Mutationen manuell bearbeiten.
+
+### Phase-25-Grenze
+
+Noch keine `/warn`, Moderations-`/kick`, `/mute`, `/unmute`, `/ban`, `/unban`, `/history` oder `/freeze`; keine Permissions, Staff Notes, Evidence, IPs, Scope, Dauerparser, GUI, Scheduler, Auto-Eskalation oder Moderation-Events. Kein Join-/Ban-Enforcement und kein Chat-/PM-Mute-Enforcement. Bestehende Chat-, PM-, Player- und Identity-Module bleiben unverändert. Spätere Adapter müssen Permission/Target-Auflösung, Player-Feedback und Enforcement getrennt ergänzen und die Main-Thread-Grenze respektieren. Der gespeicherte Kick allein trennt keinen Spieler vom Server. Die vier Moderation-Harnesses prüfen Domain, alle Service-Operationen, COW-Fehler, strikte Persistence und den tatsächlichen Modul-/Rollback-Lifecycle; das vollständige Ergebnis steht in `docs/MODERATION_FOUNDATION.md`.
+
 ## Friends Foundation und Integration (Phase 18A.1/18A.2)
 
-`FriendModule` startet direkt nach Identity und vor Reward. Es injiziert Plugin, `ConfigService`, Player, Social, Identity, `MessageService` und den gemeinsamen Help-Renderer. Es besitzt `FriendService`, das zentrale `FileFriendRepository` für `plugins/VapeeCore/friends.yml`, den `/friend`-Command mit Alias `/friends` und seit Phase 18B genau einen GUI-Listener. Beim Disable schließt es offene eigene Inventare, meldet den Listener ab und entfernt Executor und Tab-Completer. Bei einem fehlgeschlagenen Enable werden teilweise registrierte Listener und Command-Handler ebenfalls entfernt. Es besitzt keinen Task oder weiteren Reload-Teilnehmer und hat keine Economy-, Rank-, Quest- oder Presentation-Abhängigkeit.
+`FriendModule` startet direkt nach Moderation und vor Clan/Reward. Es injiziert Plugin, `ConfigService`, Player, Social, Identity, `MessageService` und den gemeinsamen Help-Renderer. Es besitzt `FriendService`, das zentrale `FileFriendRepository` für `plugins/VapeeCore/friends.yml`, den `/friend`-Command mit Alias `/friends` und seit Phase 18B genau einen GUI-Listener. Beim Disable schließt es offene eigene Inventare, meldet den Listener ab und entfernt Executor und Tab-Completer. Bei einem fehlgeschlagenen Enable werden teilweise registrierte Listener und Command-Handler ebenfalls entfernt. Es besitzt keinen Task oder weiteren Reload-Teilnehmer und hat keine Economy-, Rank-, Quest- oder Presentation-Abhängigkeit.
 
 `friends.yml` ist die einzige Friends-Datendatei und enthält `schema-version: 1`, ungerichtete Freundschaften und gerichtete Anfragen mit UUIDs und Zeitpunkten. Eine fehlende Datei bedeutet einen leeren State; das erste erfolgreiche Speichern erzeugt sie. Der Repository-Start validiert den vollständigen Snapshot; beschädigte oder nicht unterstützte Daten lassen das Modul kontrolliert scheitern statt sie zu überschreiben. Mutationen schreiben zuerst einen neuen, validierten Snapshot per temporärer Datei und atomarem Move, mit Replace-Fallback falls das Dateisystem keinen atomaren Move unterstützt. Erst nach erfolgreichem Save tauscht `FriendService` den In-Memory-State aus; ein Fehler behält den vorherigen Zustand. Domain und Service speichern keine Bukkit-`Player`-Referenzen. Lese-APIs für Beziehung, Freunde, eingehende und ausgehende Anfragen bleiben unveränderliche Snapshots.
 
@@ -234,7 +292,7 @@ Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. E
 
 ## Economy Completion (Phase 22)
 
-`EconomyModule` bleibt Owner des EconomyService und der `/coins`-Command-Hooks. Es bezieht PlayerService aus PlayerModule und bleibt vor IdentityModule; keine Economy→Identity-/Presentation-Abhängigkeit, kein Scheduler oder ReloadParticipant. 25 Module und sechs Reload-Teilnehmer bleiben unverändert.
+`EconomyModule` bleibt Owner des EconomyService und der `/coins`-Command-Hooks. Es bezieht PlayerService aus PlayerModule und bleibt vor IdentityModule; keine Economy→Identity-/Presentation-Abhängigkeit, kein Scheduler oder ReloadParticipant. Seit Phase 24 insgesamt 26 Module und unverändert sechs Reload-Teilnehmer.
 
 `CoinWallet` hält eine nichtnegative ganze `long`-Balance, initial 0 Coins. `economy.coins` bleibt der unveränderte Player-YAML-Key; keine Migration, zusätzliche Economy-Datei, Cap oder Config. `getCoins/hasCoins` lesen nur geladene Player, `getKnownCoins` bevorzugt deren Runtime-Wallet und liest sonst bekannte gespeicherte Offline-Daten, ohne sie zu laden. Alle bestehenden APIs bleiben unverändert.
 
@@ -653,7 +711,7 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 
 ## Utility ownership und Lifecycle
 
-`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; Module Count und Reload Count betragen 23 beziehungsweise 6. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
+`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; Module Count und Reload Count betragen seit Phase 24 insgesamt 26 beziehungsweise 6. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
 
 `UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal, Feed, sicheres Inventory-Clear und das Öffnen echter Enderchests. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
 
@@ -808,6 +866,10 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.economy.EconomyIntegrationHarness`
 - `dev.vapee.core.identity.IdentityHarness`
 - `dev.vapee.core.identity.ProfileHarness`
+- `dev.vapee.core.moderation.ModerationDomainHarness`
+- `dev.vapee.core.moderation.ModerationServiceHarness`
+- `dev.vapee.core.moderation.ModerationPersistenceHarness`
+- `dev.vapee.core.moderation.ModerationLifecycleHarness`
 - `dev.vapee.core.friend.FriendPersistenceHarness`
 - `dev.vapee.core.friend.FriendServiceHarness`
 - `dev.vapee.core.friend.FriendDomainHarness`
@@ -842,7 +904,7 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
 - `dev.vapee.core.quest.QuestLifecycleHarness`
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 25 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 26 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

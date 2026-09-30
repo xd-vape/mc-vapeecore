@@ -16,8 +16,8 @@ public final class VisibilityModuleHarness {
         check(friend >= 0 && friend < clan, "Friend remains before Clan");
         check(lobby >= 0 && lobby < visibility && visibility < chat,
                 "Visibility registers after Lobby and before Chat");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 25,
-                "twenty-five modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 26,
+                "twenty-six modules register");
         check(core.contains("presentationModule, dailyQuestModule")
                 && !core.contains("visibilityModule, dailyQuestModule"),
                 "reload participant list remains six without Visibility");
