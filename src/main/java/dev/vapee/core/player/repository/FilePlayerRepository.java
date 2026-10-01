@@ -145,6 +145,8 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
             configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
             configuration.set("settings.friend-requests", player.getSettings().isFriendRequestsEnabled());
+            configuration.set("settings.friend-presence-notifications",
+                    player.getSettings().isFriendPresenceNotificationsEnabled());
             configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
             PlayerVisibilitySettings visibility = player.getSettings().getVisibility();
             configuration.set("settings.visibility.show-friends", visibility.isShowFriends());
@@ -303,6 +305,13 @@ public final class FilePlayerRepository implements PlayerRepository {
                 configuration,
                 "settings.friend-requests",
                 settings.isFriendRequestsEnabled()
+        ));
+        settings.setFriendPresenceNotificationsEnabled(readBooleanSetting(
+                uniqueId,
+                playerFile,
+                configuration,
+                "settings.friend-presence-notifications",
+                settings.isFriendPresenceNotificationsEnabled()
         ));
         settings.setLobbyPlayersVisible(readBooleanSetting(
                 uniqueId,

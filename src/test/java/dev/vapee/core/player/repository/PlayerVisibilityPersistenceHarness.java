@@ -37,6 +37,10 @@ public final class PlayerVisibilityPersistenceHarness {
         Path file = directory.resolve(owner + ".yml");
         Files.writeString(file, base("Legacy") + "settings:\n  lobby-players-visible: false\n");
         CorePlayer legacy = repository.findByUniqueId(owner).orElseThrow();
+        check(!legacy.getSettings().isFriendPresenceNotificationsEnabled(),
+                "legacy missing presence setting defaults to false");
+        check(!Files.readString(file).contains("friend-presence-notifications"),
+                "legacy read does not eagerly rewrite the missing preference");
         var visibility = legacy.getSettings().getVisibility();
         check(!visibility.isAllPlayersVisible(), "legacy master toggle is preserved");
         check(!visibility.isShowFriends() && !visibility.isShowStaff()
@@ -49,17 +53,21 @@ public final class PlayerVisibilityPersistenceHarness {
         visibility.setShowStaff(true);
         visibility.setShowAddedUsers(true);
         visibility.setShowGameParticipants(true);
+        legacy.getSettings().setFriendPresenceNotificationsEnabled(true);
         check(visibility.addPlayer(owner, first) == AddedVisiblePlayerResult.SUCCESS
                 && visibility.addPlayer(owner, second) == AddedVisiblePlayerResult.SUCCESS,
                 "roundtrip fixture adds UUID targets");
         repository.save(legacy);
         String saved = Files.readString(file).replace("\r\n", "\n");
-        check(saved.contains("show-friends: true") && saved.contains("show-staff: true")
+        check(saved.contains("friend-presence-notifications: true")
+                        && saved.contains("show-friends: true") && saved.contains("show-staff: true")
                 && saved.contains("show-added-users: true") && saved.contains("show-game-participants: true"),
                 "all visibility booleans are persisted");
         check(saved.indexOf(second.toString()) < saved.indexOf(first.toString()),
                 "added UUIDs save in deterministic lexical order");
         CorePlayer reloaded = repository.findByUniqueId(owner).orElseThrow();
+        check(reloaded.getSettings().isFriendPresenceNotificationsEnabled(),
+                "presence notification preference roundtrips");
         check(reloaded.getSettings().getVisibility().getAddedPlayers().equals(Set.of(first, second)),
                 "added players roundtrip as UUIDs");
         check(reloaded.getSettings().getVisibility().isShowFriends()
@@ -76,6 +84,7 @@ public final class PlayerVisibilityPersistenceHarness {
         Path file = directory.resolve(owner + ".yml");
         Files.writeString(file, base("Invalid") + "settings:\n"
                 + "  lobby-players-visible: true\n"
+                + "  friend-presence-notifications: invalid\n"
                 + "  visibility:\n"
                 + "    show-friends: abc\n"
                 + "    show-staff: false\n"
@@ -87,17 +96,23 @@ public final class PlayerVisibilityPersistenceHarness {
                 + "      - '" + owner + "'\n"
                 + "      - 'invalid'\n"
                 + "      - 12\n");
+        String invalidSource = Files.readString(file);
         handler.messages.clear();
         CorePlayer loaded = repository.findByUniqueId(owner).orElseThrow();
+        check(!loaded.getSettings().isFriendPresenceNotificationsEnabled(),
+                "invalid presence preference falls back to false");
         check(!loaded.getSettings().getVisibility().isShowFriends(),
                 "invalid boolean falls back to false");
         check(loaded.getSettings().getVisibility().getAddedPlayers().equals(Set.of(valid)),
                 "duplicates deduplicate while self and invalid entries are ignored");
-        check(handler.messages.stream().anyMatch(message -> message.contains("show-friends"))
+        check(handler.messages.stream().anyMatch(message -> message.contains("friend-presence-notifications"))
+                && handler.messages.stream().anyMatch(message -> message.contains("show-friends"))
                 && handler.messages.stream().anyMatch(message -> message.contains("own UUID"))
                 && handler.messages.stream().anyMatch(message -> message.contains("invalid UUID"))
                 && handler.messages.stream().anyMatch(message -> message.contains("UUID string entry")),
                 "invalid optional values emit controlled warnings");
+        check(Files.readString(file).equals(invalidSource),
+                "invalid optional settings are not eagerly rewritten");
 
         UUID sectionOwner = UUID.randomUUID();
         Path sectionFile = directory.resolve(sectionOwner + ".yml");

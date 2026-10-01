@@ -99,7 +99,7 @@ public final class EconomyIntegrationHarness {
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         check(core.indexOf("moduleManager.register(economyModule)") < core.indexOf("moduleManager.register(identityModule)"),
                 "economy still before identity");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 26, "26 modules including Moderation");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 27, "27 modules including Presence");
         check(source.contains("private final RankModule rankModule;") && source.contains("rankModule.getStaffHierarchyService()"),
                 "explicit RankModule dependency and shared loaded target guard");
         check(core.contains("new EconomyModule(this, playerModule, rankModule, messageService, commandHelpRenderer)"),

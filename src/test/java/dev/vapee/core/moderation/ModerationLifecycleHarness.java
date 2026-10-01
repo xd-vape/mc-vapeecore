@@ -113,14 +113,14 @@ public final class ModerationLifecycleHarness {
                 .equals(List.of(JavaPlugin.class, IdentityModule.class, RankModule.class, MessageService.class)), "explicit plugin/identity/rank/message dependencies");
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
         List<String> expected = List.of("permissionModule", "rankModule", "playerModule", "socialModule", "economyModule",
-                "identityModule", "moderationModule", "friendModule", "clanModule", "rewardModule", "onlineRewardModule",
+                "identityModule", "moderationModule", "friendModule", "presenceModule", "clanModule", "rewardModule", "onlineRewardModule",
                 "questModule", "dailyQuestModule", "lobbyModule", "visibilityModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule", "seatModule", "worldDisplayModule",
                 "blackjackModule", "warpModule", "lobbyExperienceModule");
         var matcher = Pattern.compile("moduleManager\\.register\\((\\w+)\\);").matcher(core);
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));
-        check(actual.equals(expected), "exactly 26 registrations, Identity -> Moderation -> Friend");
+        check(actual.equals(expected), "exactly 27 registrations, Identity -> Moderation -> Friend -> Presence");
         check(core.indexOf("identityModule = new IdentityModule") < core.indexOf("moderationModule = new ModerationModule(this, identityModule, rankModule, messageService)")
                 && core.indexOf("moderationModule = new ModerationModule(this, identityModule, rankModule, messageService)") < core.indexOf("friendModule = new FriendModule"),
                 "module constructed in intended dependency order");

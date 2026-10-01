@@ -22,6 +22,10 @@ public final class PlayerSettingsServiceHarness {
         players.loadPlayer(owner, "Owner");
         int baselineSaves = repository.saves;
 
+        check(!settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow(),
+                "friend presence notifications default to opt-in disabled");
+        check(settings.areFriendPresenceNotificationsEnabled(UUID.randomUUID()).isEmpty(),
+                "unloaded presence setting read is empty");
         check(settings.areLobbyPlayersVisible(owner).orElseThrow()
                 && !settings.areLobbyFriendsVisible(owner).orElseThrow()
                 && !settings.areLobbyStaffVisible(owner).orElseThrow()
@@ -35,13 +39,14 @@ public final class PlayerSettingsServiceHarness {
                 == AddedVisiblePlayerResult.OWNER_NOT_LOADED,
                 "unloaded owner mutations are controlled");
 
-        check(settings.setLobbyPlayersVisible(owner, false)
+        check(settings.setFriendPresenceNotificationsEnabled(owner, true)
+                && settings.setLobbyPlayersVisible(owner, false)
                 && settings.setLobbyFriendsVisible(owner, true)
                 && settings.setLobbyStaffVisible(owner, true)
                 && settings.setLobbyAddedUsersVisible(owner, true)
                 && settings.setLobbyGameParticipantsVisible(owner, true),
                 "all boolean mutations save");
-        check(repository.saves == baselineSaves + 5, "each changed boolean persists immediately");
+        check(repository.saves == baselineSaves + 6, "each changed boolean persists immediately");
         check(settings.addLobbyVisiblePlayer(owner, owner) == AddedVisiblePlayerResult.CANNOT_ADD_SELF,
                 "service rejects self add");
         check(settings.addLobbyVisiblePlayer(owner, target) == AddedVisiblePlayerResult.SUCCESS
@@ -69,6 +74,9 @@ public final class PlayerSettingsServiceHarness {
         assertBooleanRollback(repository, settings, owner, "game-participants",
                 () -> settings.setLobbyGameParticipantsVisible(owner, false),
                 () -> settings.areLobbyGameParticipantsVisible(owner).orElseThrow());
+        assertBooleanRollback(repository, settings, owner, "friend-presence-notifications",
+                () -> settings.setFriendPresenceNotificationsEnabled(owner, false),
+                () -> settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow());
 
         repository.failNext = true;
         expectFailure(() -> settings.addLobbyVisiblePlayer(owner, target));
