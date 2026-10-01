@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
@@ -31,6 +32,7 @@ public final class FlyCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.fly";
     public static final String OTHERS_PERMISSION = "vapeecore.utility.fly.others";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -43,7 +45,8 @@ public final class FlyCommand implements TabExecutor {
             UtilityService utilityService,
             LobbyPlayerStateService lobbyPlayerStateService,
             ActivityService activityService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 utilityService,
@@ -53,7 +56,8 @@ public final class FlyCommand implements TabExecutor {
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(lobbyPlayerStateService, "lobbyPlayerStateService")::isBuildMode,
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -63,7 +67,8 @@ public final class FlyCommand implements TabExecutor {
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> buildCheck,
             Predicate<UUID> activityCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
@@ -71,6 +76,7 @@ public final class FlyCommand implements TabExecutor {
         this.buildCheck = Objects.requireNonNull(buildCheck, "buildCheck");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -113,6 +119,8 @@ public final class FlyCommand implements TabExecutor {
             }
         }
 
+        if (!staffTargetGuard.authorize(sender, target, "fly", messageSender)) return true;
+
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
                     ? "You cannot use this command while participating in an activity."
@@ -152,7 +160,7 @@ public final class FlyCommand implements TabExecutor {
         if (args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
             return List.of();
         }
-        return playerNames(onlinePlayersSupplier.get(), args[0]);
+        return playerNames(staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get()), args[0]);
     }
 
     private static List<String> playerNames(Collection<? extends Player> players, String input) {

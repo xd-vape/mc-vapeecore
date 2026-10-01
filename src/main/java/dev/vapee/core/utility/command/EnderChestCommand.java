@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
@@ -25,19 +26,22 @@ public final class EnderChestCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.enderchest";
     public static final String OTHERS_PERMISSION = "vapeecore.utility.enderchest.others";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final BiConsumer<CommandSender, Component> messageSender;
 
-    public EnderChestCommand(JavaPlugin plugin, UtilityService utilityService, MessageService messageService) {
+    public EnderChestCommand(JavaPlugin plugin, UtilityService utilityService, MessageService messageService,
+                            OnlineStaffTargetGuard staffTargetGuard) {
         this(
                 utilityService,
                 new OnlinePlayerResolver(
                         () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -45,12 +49,14 @@ public final class EnderChestCommand implements TabExecutor {
             UtilityService utilityService,
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -91,6 +97,8 @@ public final class EnderChestCommand implements TabExecutor {
             }
         }
 
+        if (!staffTargetGuard.authorize(sender, owner, "enderchest", messageSender)) return true;
+
         utilityService.openEnderChest(viewer, owner);
         if (!viewer.getUniqueId().equals(owner.getUniqueId())) {
             messageSender.accept(sender, Component.text("Opened ", NamedTextColor.GREEN)
@@ -107,10 +115,11 @@ public final class EnderChestCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
+        if (!(sender instanceof Player) || args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
             return List.of();
         }
-        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], null);
+        return new OnlinePlayerResolver(
+                () -> staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get())).suggest(args[0], null);
     }
 
     private void invalidUsage(CommandSender sender) {

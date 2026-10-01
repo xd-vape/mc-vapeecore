@@ -100,6 +100,12 @@ public final class EconomyIntegrationHarness {
         check(core.indexOf("moduleManager.register(economyModule)") < core.indexOf("moduleManager.register(identityModule)"),
                 "economy still before identity");
         check(core.split("moduleManager.register\\(", -1).length - 1 == 26, "26 modules including Moderation");
+        check(source.contains("private final RankModule rankModule;") && source.contains("rankModule.getStaffHierarchyService()"),
+                "explicit RankModule dependency and shared loaded target guard");
+        check(core.contains("new EconomyModule(this, playerModule, rankModule, messageService, commandHelpRenderer)"),
+                "production constructor receives RankModule");
+        check(core.indexOf("moduleManager.register(rankModule)") < core.indexOf("moduleManager.register(economyModule)"),
+                "RankModule enabled before EconomyModule");
     }
 
     private static void check(boolean value, String message) {

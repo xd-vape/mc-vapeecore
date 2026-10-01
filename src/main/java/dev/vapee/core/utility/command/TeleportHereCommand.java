@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
@@ -28,6 +29,7 @@ public final class TeleportHereCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.teleport.here";
     public static final String BYPASS_PERMISSION = TeleportCommand.BYPASS_PERMISSION;
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -38,7 +40,8 @@ public final class TeleportHereCommand implements TabExecutor {
             JavaPlugin plugin,
             UtilityService utilityService,
             ActivityService activityService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 utilityService,
@@ -47,7 +50,8 @@ public final class TeleportHereCommand implements TabExecutor {
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -56,13 +60,15 @@ public final class TeleportHereCommand implements TabExecutor {
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> activityCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -94,6 +100,8 @@ public final class TeleportHereCommand implements TabExecutor {
             error(sender, "You are already here.");
             return true;
         }
+        if (!staffTargetGuard.authorize(sender, target, "tphere", messageSender)) return true;
+
         if (!sender.hasPermission(BYPASS_PERMISSION)) {
             if (activityCheck.test(player.getUniqueId())) {
                 error(sender, "You cannot use this command while participating in an activity.");
@@ -121,11 +129,12 @@ public final class TeleportHereCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (args.length != 1 || !sender.hasPermission(PERMISSION)) {
+        if (!(sender instanceof Player) || args.length != 1 || !sender.hasPermission(PERMISSION)) {
             return List.of();
         }
         UUID selfId = sender instanceof Player player ? player.getUniqueId() : null;
-        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], selfId);
+        return new OnlinePlayerResolver(
+                () -> staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get())).suggest(args[0], selfId);
     }
 
     private void invalidUsage(CommandSender sender) {

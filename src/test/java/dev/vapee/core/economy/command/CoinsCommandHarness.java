@@ -1,5 +1,6 @@
 package dev.vapee.core.economy.command;
 
+import dev.vapee.core.command.StaffTargetTestFixture;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.economy.EconomyService;
@@ -36,6 +37,7 @@ public final class CoinsCommandHarness {
         testFailures();
         testLiteralComponents();
         testCompletion();
+        testStaffTargets();
         System.out.println("CoinsCommandHarness passed " + checks + " checks.");
     }
 
@@ -262,10 +264,77 @@ public final class CoinsCommandHarness {
         check(f.repo.reads == 0, "completion never loads offline snapshots");
     }
 
+
+    private static void testStaffTargets() throws Exception {
+        for (String action : List.of("add", "remove", "set"))
+            for (String actorGroup : Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null))
+                for (String targetGroup : Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null)) {
+                    Fixture f = new Fixture();
+                    Actor actor = f.player("Actor", 100L, true), target = f.player("Target", 100L, false);
+                    f.staff.groups.put(actor.id, actorGroup); f.staff.groups.put(target.id, targetGroup);
+                    int al = (actorGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(actorGroup));
+                    int tl = (targetGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(targetGroup));
+                    boolean allowed = targetGroup != null && (tl < 0 || actorGroup != null && al > tl);
+                    f.run(actor, action, target.id.toString(), "10");
+                    check(f.repo.saves == (allowed ? 1 : 0) && f.logs.info() == (allowed ? 1 : 0),
+                            "one save/audit only authorized " + action + " " + actorGroup + " -> " + targetGroup);
+                    check(target.received.isEmpty() != allowed, "denial never notifies target");
+                    check(f.balance(target.id) == (allowed ? action.equals("add") ? 110L : action.equals("remove") ? 90L : 10L : 100L),
+                            "wallet balance and durable value " + action);
+                    check(f.repo.persisted.get(target.id) == f.balance(target.id), "durable wallet unchanged on denial");
+                    if (!allowed) check(actor.text().equals(targetGroup == null || actorGroup == null && tl >= 0
+                            ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
+                            : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "controlled no-level denial");
+                    check(f.tab(actor, action, "").contains("Target") == allowed, "mutation target completion filtered");
+                    int reads = f.staff.reads;
+                    f.run(actor, "get", target.id.toString());
+                    check(actor.text().contains("Target's coins:") && f.staff.reads == reads, "get is unprotected online read");
+                    check(f.tab(actor, "get", "").contains("Target") && f.staff.reads == reads, "get completion unfiltered/read-only");
+                    actor.admin = false;
+                    reads = f.staff.reads;
+                    f.run(actor, action, target.name, "10");
+                    check(actor.text().contains("permission") && f.staff.reads == reads, "admin capability before hierarchy");
+                }
+        for (String action : List.of("add", "remove", "set")) {
+            Fixture f = new Fixture();
+            Actor actor = f.player("Actor", 100L, true), target = f.player("Target", 100L, false);
+            f.staff.groups.put(actor.id, null); f.staff.groups.put(target.id, "owner");
+            int reads = f.staff.reads;
+            f.run(actor, action, actor.id.toString(), "10");
+            check(f.repo.saves == 1 && f.staff.reads == reads && actor.received.size() == 1, "economy self no hierarchy/no duplicate notify");
+            Actor console = new Actor(null, "Console", true);
+            f.run(console, action, target.name, "10");
+            check(f.repo.saves == 2 && f.staff.reads == reads, "console authority with capability no LP reads");
+            f.staff.fail = true;
+            long balance = f.balance(target.id);
+            f.run(actor, action, target.name, "10");
+            check(f.repo.saves == 2 && f.balance(target.id) == balance && target.received.isEmpty()
+                    && f.logs.info() == 2 && f.logs.severe() == 0, "lookup exception before save/audit/notify");
+            check(f.logs.records.getLast().getLevel() == Level.WARNING
+                    && f.logs.records.getLast().getMessage().contains(actor.id.toString())
+                    && f.logs.records.getLast().getMessage().contains(target.id.toString()), "lookup warning context");
+            UUID offline = f.seed("OfflineOwner", 900L);
+            reads = f.staff.reads;
+            f.run(actor, "get", offline.toString());
+            check(actor.text().equals("OfflineOwner's coins: 900") && f.staff.reads == reads && !f.players.isLoaded(offline),
+                    "offline get unchanged, no LP loading or hierarchy");
+            List<Component> feedback = new ArrayList<>();
+            CommandSender unsupported = proxy(CommandSender.class, (name, values) -> switch (name) {
+                case "hasPermission" -> true;
+                case "getName" -> "CommandBlock";
+                case "sendMessage" -> { for (Object value : values) if (value instanceof Component c) feedback.add(c); yield null; }
+                default -> null;
+            });
+            f.command.onCommand(unsupported, COMMAND, "coins", new String[]{action, target.name, "10"});
+            check(f.repo.saves == 2 && f.balance(target.id) == balance && !feedback.isEmpty(), "unsupported sender not console");
+        }
+    }
+
     private static final class Fixture {
         final Repository repo = new Repository();
         final Logs logs = new Logs();
         final Logger logger = Logger.getAnonymousLogger();
+        final StaffTargetTestFixture staff = new StaffTargetTestFixture(logger);
         final PlayerService players;
         final EconomyService economy;
         final Map<UUID, Actor> online = new LinkedHashMap<>();
@@ -287,7 +356,7 @@ public final class CoinsCommandHarness {
             var constructor = MessageService.class.getDeclaredConstructor(java.util.function.Supplier.class);
             constructor.setAccessible(true);
             MessageService messages = constructor.newInstance((java.util.function.Supplier<String>) () -> "");
-            command = new CoinsCommand(server, logger, economy, players, messages, new CommandHelpRenderer(messages));
+            command = new CoinsCommand(server, logger, economy, players, messages, new CommandHelpRenderer(messages), staff.guard);
         }
         UUID seed(String name, long balance) {
             UUID id = UUID.randomUUID(); Instant now = Instant.now();
@@ -322,6 +391,7 @@ public final class CoinsCommandHarness {
                 case "getUniqueId" -> id;
                 case "getName" -> name;
                 case "isOnline" -> online;
+                case "isOp" -> true;
                 case "hasPermission" -> args[0].equals("vapeecore.economy.coins") ? base : this.admin;
                 case "sendMessage" -> {
                     for (Object arg : args) if (arg instanceof Component c) received.add(c);

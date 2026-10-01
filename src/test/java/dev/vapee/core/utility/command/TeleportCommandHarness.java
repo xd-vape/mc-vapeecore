@@ -1,11 +1,13 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.StaffTargetTestFixture;
 import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Proxy;
@@ -22,6 +24,7 @@ public final class TeleportCommandHarness {
         commands();
         permissionsAndGuards();
         completion();
+        staffTargets();
         System.out.println("TeleportCommandHarness passed " + checks + " checks.");
     }
 
@@ -164,6 +167,74 @@ public final class TeleportCommandHarness {
         check(!f.complete(console, "Steve", "").contains("world"), "console world hidden");
     }
 
+
+    private static void staffTargets() {
+        List<String> groups = java.util.Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null);
+        for (String a : groups) for (String t : groups) {
+            for (String[] tokens : List.of(new String[]{"Steve", "Alex"}, new String[]{"Steve", "~", "~5", "~"},
+                    new String[]{"Steve", "world", "world_nether", "1", "2", "3", "~", "~"})) {
+                Fixture f = new Fixture();
+                f.self.permissions.addAll(Set.of(TeleportCommand.PERMISSION, TeleportCommand.OTHERS_PERMISSION,
+                        TeleportCommand.WORLD_PERMISSION, TeleportCommand.OTHERS_WORLD_PERMISSION, TeleportCommand.BYPASS_PERMISSION));
+                f.staff.groups.put(f.self.id, a); f.staff.groups.put(f.steve.id, t); f.staff.groups.put(f.alex.id, "owner");
+                int al = (a == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(a));
+                int tl = (t == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(t));
+                boolean allowed = t != null && (tl < 0 || a != null && al > tl);
+                run(f, f.self.player, tokens);
+                check(f.steve.calls == (allowed ? 1 : 0) && f.alex.calls == 0 && f.self.calls == 0,
+                        "protect moved source only " + a + " -> " + t + " " + java.util.Arrays.toString(tokens));
+                if (!allowed) check(f.last().equals(t == null || a == null && tl >= 0
+                        ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
+                        : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "no teleport hierarchy bypass");
+                check(f.complete(f.self.player, "").contains("Alex"), "higher destination first token never filtered");
+                check(f.complete(f.self.player, "Steve", "").contains("Alex"),
+                        "destination suggestions never filtered by source or destination staff level");
+                CommandSender console = f.console(Set.of(TeleportCommand.OTHERS_PERMISSION, TeleportCommand.OTHERS_WORLD_PERMISSION));
+                check(f.complete(console, "").contains("Steve"), "console source suggestions authorized even unavailable LP");
+                run(f, console, tokens);
+                check(f.steve.calls == (allowed ? 2 : 1) && f.alex.calls == 0, "console moves source without LP hierarchy");
+            }
+        }
+        Fixture f = new Fixture();
+        f.self.permissions.add(TeleportCommand.PERMISSION);
+        f.staff.groups.put(f.self.id, null); f.staff.groups.put(f.alex.id, "owner");
+        run(f, f.self.player, "Alex");
+        check(f.self.calls == 1 && f.alex.calls == 0 && f.staff.reads == 0, "implicit self to owner no hierarchy queries");
+        run(f, f.self.player, "Self", "Alex");
+        check(f.last().contains("permission") && f.self.calls == 1, "explicit self SOURCE still others grammar permission");
+        f.self.permissions.add(TeleportCommand.OTHERS_PERMISSION);
+        run(f, f.self.player, "Self", "Alex");
+        check(f.self.calls == 2 && f.staff.reads == 0, "explicit own source self-exempt after capability");
+        f.activity.add(f.alex.id);
+        run(f, f.self.player, "Alex");
+        check(f.last().contains("destination player is participating") && f.self.calls == 2, "higher destination still Activity protected");
+        f.self.permissions.add(TeleportCommand.BYPASS_PERMISSION);
+        f.self.acceptTeleport = false;
+        run(f, f.self.player, "Alex");
+        check(f.last().equals("Teleport failed or was cancelled."), "state bypass still honors external false");
+        f.self.acceptTeleport = true; f.activity.clear();
+        f.staff.groups.put(f.self.id, "admin"); f.staff.groups.put(f.steve.id, "owner");
+        f.activity.add(f.steve.id);
+        run(f, f.self.player, "Steve", "Alex");
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE),
+                "OP/state bypass not hierarchy bypass before activity");
+        f.staff.fail = true;
+        run(f, f.self.player, "Steve", "Alex");
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE),
+                "loaded lookup exception no external teleport");
+        f.self.permissions.remove(TeleportCommand.OTHERS_PERMISSION);
+        int reads = f.staff.reads;
+        run(f, f.self.player, "Steve", "Alex");
+        check(f.staff.reads == reads && f.last().contains("permission"), "TP capability precedes hierarchy");
+        CommandSender unsupported = (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
+                new Class<?>[]{CommandSender.class}, (proxy, method, values) -> method.getName().equals("hasPermission")
+                        ? true : defaultValue(method.getReturnType()));
+        run(f, unsupported, "Steve", "Alex");
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE),
+                "unsupported TP sender never moves source");
+        check(f.complete(unsupported, "").isEmpty(), "unsupported source completion empty");
+    }
+
     private static void run(Fixture fixture, CommandSender sender, String... tokens) {
         fixture.command.onCommand(sender, null, "tp", tokens);
     }
@@ -177,6 +248,7 @@ public final class TeleportCommandHarness {
     }
 
     private static final class Fixture {
+        private final StaffTargetTestFixture staff = new StaffTargetTestFixture();
         private final World world = world("world"), nether = world("world_nether");
         private final State self = new State("Self", world, 100, 64, -20);
         private final State steve = new State("Steve", world, 0, 70, 0);
@@ -188,7 +260,7 @@ public final class TeleportCommandHarness {
                 () -> players.stream().map(state -> state.player).toList(), ignored -> 20);
         private final TeleportCommand command = new TeleportCommand(service, this::lookup,
                 () -> players.stream().filter(state -> state.online).map(state -> state.player).toList(),
-                () -> List.of(world, nether), activity::contains, (sender, message) -> output.add(message));
+                () -> List.of(world, nether), activity::contains, (sender, message) -> output.add(message), staff.guard);
 
         private Player lookup(String name) {
             return players.stream().filter(state -> state.online && state.name.equalsIgnoreCase(name))
@@ -199,8 +271,8 @@ public final class TeleportCommandHarness {
             return command.onTabComplete(sender, null, "tp", args);
         }
         private CommandSender console(Set<String> rights) {
-            return (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
-                    new Class<?>[]{CommandSender.class}, (proxy, method, args) -> {
+            return (CommandSender) Proxy.newProxyInstance(ConsoleCommandSender.class.getClassLoader(),
+                    new Class<?>[]{ConsoleCommandSender.class}, (proxy, method, args) -> {
                         if (method.getName().equals("hasPermission")) return rights.contains(args[0]);
                         if (method.getName().equals("getName")) return "CONSOLE";
                         return defaultValue(method.getReturnType());
@@ -225,6 +297,7 @@ public final class TeleportCommandHarness {
                         case "getUniqueId" -> id;
                         case "getName" -> name;
                         case "isOnline" -> online;
+                        case "isOp" -> true;
                         case "hasPermission" -> permissions.contains(args[0]);
                         case "getLocation" -> last.clone();
                         case "teleport" -> {

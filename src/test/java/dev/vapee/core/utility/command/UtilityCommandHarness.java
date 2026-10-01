@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.StaffTargetTestFixture;
 import dev.vapee.core.utility.OnlinePlayerResolver;
 import dev.vapee.core.utility.UtilityService;
 import net.kyori.adventure.text.Component;
@@ -7,6 +8,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -40,6 +42,7 @@ public final class UtilityCommandHarness {
         testHealAndFeed();
         testPingClearAndEnderChest();
         testExplicitSelfAndCommandBoundaries();
+        testStaffTargetProtection();
         System.out.println("UtilityCommandHarness passed " + checks + " checks.");
     }
 
@@ -63,7 +66,7 @@ public final class UtilityCommandHarness {
         FlyCommand command = new FlyCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.buildPlayers::contains, fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
 
         command.onCommand(fixture.console(Set.of(FlyCommand.OTHERS_PERMISSION)), null, "fly", new String[0]);
         check(fixture.last().contains("target is required"), "fly console requires a target");
@@ -144,7 +147,7 @@ public final class UtilityCommandHarness {
         SpeedCommand command = new SpeedCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         command.onCommand(self.player, null, "speed", new String[]{"0"});
         check(fixture.last().contains("whole number between 1 and 10"), "speed gives a concrete range error");
         command.onCommand(fixture.console(Set.of(SpeedCommand.OTHERS_PERMISSION)), null, "speed", new String[]{"5"});
@@ -194,7 +197,7 @@ public final class UtilityCommandHarness {
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.buildPlayers::contains, fixture.activityPlayers::contains,
                 player -> player == self.player, fixture.messages
-        );
+        , fixture.staff.guard);
         command.onCommand(fixture.console(Set.of(GameModeCommand.OTHERS_PERMISSION)), null,
                 "gamemode", new String[]{"creative"});
         check(fixture.last().contains("target is required"), "gamemode console requires a target");
@@ -244,7 +247,7 @@ public final class UtilityCommandHarness {
         TeleportCommand command = new TeleportCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         self.permissions.remove(TeleportCommand.PERMISSION);
         command.onCommand(self.player, null, "tp", new String[]{"Other"});
         check(fixture.last().contains("do not have permission") && !self.teleported,
@@ -328,7 +331,7 @@ public final class UtilityCommandHarness {
         TeleportHereCommand command = new TeleportHereCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         command.onCommand(fixture.console(Set.of(TeleportHereCommand.PERMISSION)), null,
                 "tphere", new String[]{"Other"});
         check(fixture.last().contains("console has no location"), "tphere is player-only");
@@ -375,11 +378,11 @@ public final class UtilityCommandHarness {
         HealCommand heal = new HealCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         FeedCommand feed = new FeedCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         heal.onCommand(fixture.console(Set.of(HealCommand.OTHERS_PERMISSION)), null, "heal", new String[0]);
         check(fixture.last().contains("target is required"), "heal console requires a target");
         feed.onCommand(fixture.console(Set.of(FeedCommand.OTHERS_PERMISSION)), null, "feed", new String[0]);
@@ -459,7 +462,7 @@ public final class UtilityCommandHarness {
         ClearCommand clear = new ClearCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages
-        );
+        , fixture.staff.guard);
         clear.onCommand(fixture.console(Set.of(ClearCommand.OTHERS_PERMISSION)), null,
                 "clear", new String[0]);
         check(fixture.last().contains("target is required"), "clear console requires a target");
@@ -484,7 +487,7 @@ public final class UtilityCommandHarness {
 
         EnderChestCommand enderChest = new EnderChestCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.messages
-        );
+        , fixture.staff.guard);
         enderChest.onCommand(fixture.console(Set.of(EnderChestCommand.OTHERS_PERMISSION)), null,
                 "enderchest", new String[]{"Other"});
         check(fixture.last().contains("only be used by a player"), "enderchest denies console GUI access");
@@ -512,17 +515,17 @@ public final class UtilityCommandHarness {
                 ClearCommand.PERMISSION, EnderChestCommand.PERMISSION);
         List<TabExecutor> commands = List.of(
                 new FlyCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
-                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, fixture.messages),
+                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, fixture.messages, fixture.staff.guard),
                 new SpeedCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
-                        fixture.activityPlayers::contains, fixture.messages),
+                        fixture.activityPlayers::contains, fixture.messages, fixture.staff.guard),
                 new GameModeCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
-                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, player -> false, fixture.messages),
-                new HealCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages),
-                new FeedCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages),
+                        fixture.buildPlayers::contains, fixture.activityPlayers::contains, player -> false, fixture.messages, fixture.staff.guard),
+                new HealCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages, fixture.staff.guard),
+                new FeedCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.activityPlayers::contains, fixture.messages, fixture.staff.guard),
                 new PingCommand(fixture::lookup, fixture::onlinePlayers, fixture.messages),
                 new ClearCommand(fixture.service, fixture::lookup, fixture::onlinePlayers,
-                        fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages),
-                new EnderChestCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.messages));
+                        fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages, fixture.staff.guard),
+                new EnderChestCommand(fixture.service, fixture::lookup, fixture::onlinePlayers, fixture.messages, fixture.staff.guard));
         List<String[]> explicitSelf = List.of(new String[]{"sElF"}, new String[]{"5", "sElF"},
                 new String[]{"survival", "sElF"}, new String[]{"sElF"}, new String[]{"sElF"},
                 new String[]{"sElF"}, new String[]{"sElF"}, new String[]{"sElF"});
@@ -552,6 +555,124 @@ public final class UtilityCommandHarness {
         }
     }
 
+
+    private static void testStaffTargetProtection() {
+        List<String> groups = java.util.Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null);
+        for (String actorGroup : groups) for (String targetGroup : groups) {
+            for (int index = 0; index < 8; index++) {
+                Fixture f = new Fixture();
+                MutablePlayer actor = f.player("Actor", GameMode.SURVIVAL);
+                MutablePlayer target = f.player("Target", GameMode.SURVIVAL);
+                actor.permissions.addAll(staffPermissions());
+                f.staff.groups.put(actor.id, actorGroup); f.staff.groups.put(target.id, targetGroup);
+                target.health = 1; target.food = 1;
+                List<TabExecutor> commands = staffCommands(f);
+                String[] args = staffArguments(index, "Target");
+                int al = (actorGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(actorGroup));
+                int tl = (targetGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(targetGroup));
+                boolean allowed = targetGroup != null && (tl < 0 || actorGroup != null && al > tl);
+                commands.get(index).onCommand(actor.player, null, "staff", args);
+                check(allowed ? target.writes + actor.writes > 0 : target.writes + actor.writes == 0,
+                        commands.get(index).getClass().getSimpleName() + " real side effects " + actorGroup + " -> " + targetGroup);
+                if (!allowed) check(f.last().equals(targetGroup == null || actorGroup == null && tl >= 0
+                        ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
+                        : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "safe staff denial");
+                String[] completion = index == 1 ? new String[]{"5", ""} : index == 2
+                        ? new String[]{"creative", ""} : new String[]{""};
+                check(commands.get(index).onTabComplete(actor.player, null, "staff", completion).contains("Target") == allowed,
+                        "completion follows scoped target decision");
+            }
+        }
+        for (int index = 0; index < 8; index++) {
+            Fixture f = new Fixture();
+            MutablePlayer actor = f.player("Actor", GameMode.SURVIVAL);
+            MutablePlayer target = f.player("Target", GameMode.SURVIVAL);
+            actor.permissions.addAll(staffPermissions());
+            f.staff.groups.put(actor.id, "admin"); f.staff.groups.put(target.id, "owner");
+            // Existing Activity/BUILD guards must not mask hierarchy; bypass is only a state bypass.
+            f.activityPlayers.add(target.id); f.buildPlayers.add(target.id);
+            List<TabExecutor> commands = staffCommands(f);
+            commands.get(index).onCommand(actor.player, null, "staff", staffArguments(index, "Target"));
+            check(f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)
+                    && target.writes + actor.writes == 0, "hierarchy before Activity/BUILD/open/mutation " + index);
+            actor.permissions.clear();
+            int reads = f.staff.reads;
+            commands.get(index).onCommand(actor.player, null, "staff", staffArguments(index, "Target"));
+            check(f.last().contains("permission") && f.staff.reads == reads, "capability before loaded hierarchy " + index);
+            f.activityPlayers.clear(); f.buildPlayers.clear();
+            target.health = 1; target.food = 1;
+            CommandSender console = f.console(staffPermissions());
+            commands.get(index).onCommand(console, null, "staff", staffArguments(index, "Target"));
+            boolean consoleSupported = index < 6;
+            check(consoleSupported ? target.writes > 0 : target.writes == 0 && actor.writes == 0,
+                    "console command-specific authority " + index);
+            if (!consoleSupported) check(commands.get(index).onTabComplete(console, null, "staff", new String[]{""}).isEmpty(),
+                    "player-only completion never offers console GUI/destination");
+            int writes = target.writes + actor.writes;
+            CommandSender unsupported = proxy(CommandSender.class, (method, values) -> method.getName().equals("hasPermission")
+                    ? true : defaultValue(method.getReturnType()));
+            commands.get(index).onCommand(unsupported, null, "staff", staffArguments(index, "Target"));
+            check(target.writes + actor.writes == writes, "unsupported sender never gets console authority " + index);
+        }
+        Fixture f = new Fixture();
+        MutablePlayer actor = f.player("Actor", GameMode.SURVIVAL);
+        MutablePlayer target = f.player("Target", GameMode.SURVIVAL);
+        actor.permissions.addAll(staffPermissions());
+        f.staff.groups.put(actor.id, "admin"); f.staff.groups.put(target.id, "owner");
+        f.service.toggleFlight(target.player);
+        target.gameMode = GameMode.CREATIVE;
+        int writes = target.writes;
+        staffCommands(f).getFirst().onCommand(actor.player, null, "fly", new String[]{"Target"});
+        check(f.service.hasManagedFlight(target.id) && target.writes == writes,
+                "denied creative fly preserves managed ownership without cleanup");
+        staffCommands(f).get(2).onCommand(actor.player, null, "gamemode", new String[]{"survival", "Target"});
+        check(f.service.hasManagedFlight(target.id) && target.writes == writes && target.gameMode == GameMode.CREATIVE,
+                "denied gamemode preserves managed flight and native mode");
+
+        f.staff.groups.put(actor.id, null);
+        for (int index = 0; index < 8; index++) {
+            int reads = f.staff.reads;
+            staffCommands(f).get(index).onCommand(actor.player, null, "self", staffArguments(index, "Actor"));
+            check(f.staff.reads == reads && !f.last().contains("hierarchy"), "explicit self never queries staff " + index);
+        }
+        f.staff.fail = true;
+        target.writes = 0; actor.writes = 0;
+        for (int index = 0; index < 8; index++) {
+            staffCommands(f).get(index).onCommand(actor.player, null, "exception", staffArguments(index, "Target"));
+            check(f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)
+                    && actor.writes + target.writes == 0, "loaded lookup exception no effect " + index);
+        }
+        // Ping is intentionally a non-sensitive read, even for unavailable/protected staff.
+        actor.permissions.add(PingCommand.OTHERS_PERMISSION);
+        new PingCommand(f::lookup, f::onlinePlayers, f.messages).onCommand(actor.player, null, "ping", new String[]{"Target"});
+        check(f.last().contains("ping:"), "ping remains capability-only, not hierarchy protected");
+    }
+
+    private static Set<String> staffPermissions() {
+        return Set.of(FlyCommand.PERMISSION, FlyCommand.OTHERS_PERMISSION, SpeedCommand.PERMISSION, SpeedCommand.OTHERS_PERMISSION,
+                GameModeCommand.PERMISSION, GameModeCommand.OTHERS_PERMISSION, HealCommand.PERMISSION, HealCommand.OTHERS_PERMISSION,
+                FeedCommand.PERMISSION, FeedCommand.OTHERS_PERMISSION, ClearCommand.PERMISSION, ClearCommand.OTHERS_PERMISSION,
+                EnderChestCommand.PERMISSION, EnderChestCommand.OTHERS_PERMISSION, TeleportHereCommand.PERMISSION,
+                TeleportHereCommand.BYPASS_PERMISSION);
+    }
+
+    private static List<TabExecutor> staffCommands(Fixture f) {
+        return List.of(
+                new FlyCommand(f.service, f::lookup, f::onlinePlayers, f.buildPlayers::contains, f.activityPlayers::contains, f.messages, f.staff.guard),
+                new SpeedCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.messages, f.staff.guard),
+                new GameModeCommand(f.service, f::lookup, f::onlinePlayers, f.buildPlayers::contains, f.activityPlayers::contains, p -> false, f.messages, f.staff.guard),
+                new HealCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.messages, f.staff.guard),
+                new FeedCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.messages, f.staff.guard),
+                new ClearCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.buildPlayers::contains, f.messages, f.staff.guard),
+                new TeleportHereCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.messages, f.staff.guard),
+                new EnderChestCommand(f.service, f::lookup, f::onlinePlayers, f.messages, f.staff.guard));
+    }
+
+    private static String[] staffArguments(int index, String target) {
+        return index == 1 ? new String[]{"5", target} : index == 2
+                ? new String[]{"creative", target} : new String[]{target};
+    }
+
     private static boolean close(double actual, double expected) {
         return Math.abs(actual - expected) < 0.00001D;
     }
@@ -564,6 +685,7 @@ public final class UtilityCommandHarness {
     }
 
     private static final class Fixture {
+        private final StaffTargetTestFixture staff = new StaffTargetTestFixture();
         private final List<Component> output = new ArrayList<>();
         private final List<MutablePlayer> players = new ArrayList<>();
         private final Set<UUID> buildPlayers = new HashSet<>();
@@ -598,7 +720,7 @@ public final class UtilityCommandHarness {
         }
 
         private CommandSender console(Set<String> permissions) {
-            return proxy(CommandSender.class, (method, arguments) -> switch (method.getName()) {
+            return proxy(ConsoleCommandSender.class, (method, arguments) -> switch (method.getName()) {
                 case "hasPermission" -> permissions.contains((String) arguments[0]);
                 case "getName" -> "CONSOLE";
                 default -> defaultValue(method.getReturnType());
@@ -631,6 +753,7 @@ public final class UtilityCommandHarness {
         private boolean teleportResult = true;
         private boolean teleported;
         private int ping;
+        private int writes;
         private int inventoryClearCalls;
         private boolean armorCleared;
         private boolean offhandCleared;
@@ -644,9 +767,9 @@ public final class UtilityCommandHarness {
             this.permissions = new HashSet<>(permissions);
             this.enderChest = proxy(Inventory.class, (method, arguments) -> defaultValue(method.getReturnType()));
             this.inventory = proxy(PlayerInventory.class, (method, arguments) -> switch (method.getName()) {
-                case "clear" -> set(() -> inventoryClearCalls++);
-                case "setArmorContents" -> set(() -> armorCleared = true);
-                case "setItemInOffHand" -> set(() -> offhandCleared = arguments[0] == null);
+                case "clear" -> set(() -> { writes++;  inventoryClearCalls++; });
+                case "setArmorContents" -> set(() -> { writes++;  armorCleared = true; });
+                case "setItemInOffHand" -> set(() -> { writes++;  offhandCleared = arguments[0] == null; });
                 default -> defaultValue(method.getReturnType());
             });
             this.player = proxy(Player.class, (method, arguments) -> switch (method.getName()) {
@@ -655,32 +778,33 @@ public final class UtilityCommandHarness {
                 case "isOnline" -> online;
                 case "hasPermission" -> this.permissions.contains((String) arguments[0]);
                 case "getGameMode" -> this.gameMode;
-                case "setGameMode" -> set(() -> this.gameMode = (GameMode) arguments[0]);
+                case "setGameMode" -> set(() -> { writes++;  this.gameMode = (GameMode) arguments[0]; });
                 case "getAllowFlight" -> allowFlight;
-                case "setAllowFlight" -> set(() -> allowFlight = (boolean) arguments[0]);
+                case "setAllowFlight" -> set(() -> { writes++;  allowFlight = (boolean) arguments[0]; });
                 case "isFlying" -> flying;
-                case "setFlying" -> set(() -> flying = (boolean) arguments[0]);
+                case "setFlying" -> set(() -> { writes++;  flying = (boolean) arguments[0]; });
                 case "getWalkSpeed" -> walkSpeed;
-                case "setWalkSpeed" -> set(() -> walkSpeed = (float) arguments[0]);
+                case "setWalkSpeed" -> set(() -> { writes++;  walkSpeed = (float) arguments[0]; });
                 case "getFlySpeed" -> flySpeed;
-                case "setFlySpeed" -> set(() -> flySpeed = (float) arguments[0]);
+                case "setFlySpeed" -> set(() -> { writes++;  flySpeed = (float) arguments[0]; });
                 case "getHealth" -> health;
-                case "setHealth" -> set(() -> health = (double) arguments[0]);
+                case "setHealth" -> set(() -> { writes++;  health = (double) arguments[0]; });
                 case "getMaxHealth" -> maxHealth;
                 case "getFoodLevel" -> food;
-                case "setFoodLevel" -> set(() -> food = (int) arguments[0]);
+                case "setFoodLevel" -> set(() -> { writes++;  food = (int) arguments[0]; });
                 case "getSaturation" -> saturation;
-                case "setSaturation" -> set(() -> saturation = (float) arguments[0]);
+                case "setSaturation" -> set(() -> { writes++;  saturation = (float) arguments[0]; });
                 case "getExhaustion" -> exhaustion;
-                case "setExhaustion" -> set(() -> exhaustion = (float) arguments[0]);
-                case "setFireTicks" -> set(() -> fireTicks = (int) arguments[0]);
-                case "setFreezeTicks" -> set(() -> freezeTicks = (int) arguments[0]);
+                case "setExhaustion" -> set(() -> { writes++;  exhaustion = (float) arguments[0]; });
+                case "setFireTicks" -> set(() -> { writes++;  fireTicks = (int) arguments[0]; });
+                case "setFreezeTicks" -> set(() -> { writes++;  freezeTicks = (int) arguments[0]; });
                 case "getPing" -> ping;
                 case "getInventory" -> inventory;
                 case "getEnderChest" -> enderChest;
-                case "openInventory" -> set(() -> openedInventory = (Inventory) arguments[0]);
+                case "openInventory" -> set(() -> { writes++;  openedInventory = (Inventory) arguments[0]; });
                 case "getLocation" -> new Location(null, 1.0D, 2.0D, 3.0D);
                 case "teleport" -> {
+                    writes++;
                     teleported = teleportResult;
                     yield teleportResult;
                 }

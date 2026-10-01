@@ -1,9 +1,11 @@
 package dev.vapee.core.economy;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.economy.command.CoinsCommand;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import org.bukkit.command.PluginCommand;
@@ -14,6 +16,7 @@ import java.util.Objects;
 public final class EconomyModule implements CoreModule {
 
     private final JavaPlugin plugin;
+    private final RankModule rankModule;
     private final PlayerModule playerModule;
     private final MessageService messageService;
     private final CommandHelpRenderer commandHelpRenderer;
@@ -24,11 +27,13 @@ public final class EconomyModule implements CoreModule {
     public EconomyModule(
             JavaPlugin plugin,
             PlayerModule playerModule,
+            RankModule rankModule,
             MessageService messageService,
             CommandHelpRenderer commandHelpRenderer
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
+        this.rankModule = Objects.requireNonNull(rankModule, "rankModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
     }
@@ -53,7 +58,8 @@ public final class EconomyModule implements CoreModule {
                     newEconomyService,
                     playerService,
                     messageService,
-                    commandHelpRenderer
+                    commandHelpRenderer,
+                    new OnlineStaffTargetGuard(rankModule.getStaffHierarchyService(), plugin.getLogger())
             );
             newCoinsCommand.setExecutor(executor);
             newCoinsCommand.setTabCompleter(executor);

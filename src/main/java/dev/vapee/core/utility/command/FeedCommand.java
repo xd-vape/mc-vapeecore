@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
@@ -29,6 +30,7 @@ public final class FeedCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.feed";
     public static final String OTHERS_PERMISSION = "vapeecore.utility.feed.others";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -39,7 +41,8 @@ public final class FeedCommand implements TabExecutor {
             JavaPlugin plugin,
             UtilityService utilityService,
             ActivityService activityService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 utilityService,
@@ -48,7 +51,8 @@ public final class FeedCommand implements TabExecutor {
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -57,13 +61,15 @@ public final class FeedCommand implements TabExecutor {
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> activityCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -77,6 +83,8 @@ public final class FeedCommand implements TabExecutor {
         if (target == null) {
             return true;
         }
+        if (!staffTargetGuard.authorize(sender, target, "feed", messageSender)) return true;
+
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
                     ? "You cannot use this command while participating in an activity."
@@ -136,7 +144,7 @@ public final class FeedCommand implements TabExecutor {
         if (args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
             return List.of();
         }
-        return playerNames(onlinePlayersSupplier.get(), args[0]);
+        return playerNames(staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get()), args[0]);
     }
 
     private static List<String> playerNames(Collection<? extends Player> players, String input) {

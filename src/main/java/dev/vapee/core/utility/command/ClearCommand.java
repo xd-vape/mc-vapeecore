@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
@@ -29,6 +30,7 @@ public final class ClearCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.clear";
     public static final String OTHERS_PERMISSION = "vapeecore.utility.clear.others";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -41,7 +43,8 @@ public final class ClearCommand implements TabExecutor {
             UtilityService utilityService,
             ActivityService activityService,
             LobbyPlayerStateService lobbyPlayerStateService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 utilityService,
@@ -51,7 +54,8 @@ public final class ClearCommand implements TabExecutor {
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(lobbyPlayerStateService, "lobbyPlayerStateService")::isBuildMode,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -61,7 +65,8 @@ public final class ClearCommand implements TabExecutor {
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> activityCheck,
             Predicate<UUID> buildCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
@@ -69,6 +74,7 @@ public final class ClearCommand implements TabExecutor {
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.buildCheck = Objects.requireNonNull(buildCheck, "buildCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -110,6 +116,8 @@ public final class ClearCommand implements TabExecutor {
             }
         }
 
+        if (!staffTargetGuard.authorize(sender, target, "clear", messageSender)) return true;
+
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, "That inventory is controlled by an activity and cannot be cleared.");
             return true;
@@ -140,7 +148,8 @@ public final class ClearCommand implements TabExecutor {
         if (args.length != 1 || !sender.hasPermission(OTHERS_PERMISSION)) {
             return List.of();
         }
-        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], null);
+        return new OnlinePlayerResolver(
+                () -> staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get())).suggest(args[0], null);
     }
 
     private void invalidUsage(CommandSender sender) {
