@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.InvseeService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
@@ -25,6 +26,7 @@ public final class InvseeCommand implements TabExecutor {
     public static final String PERMISSION = "vapeecore.utility.invsee";
     public static final String MODIFY_PERMISSION = "vapeecore.utility.invsee.modify";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final InvseeService invseeService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -33,7 +35,8 @@ public final class InvseeCommand implements TabExecutor {
     public InvseeCommand(
             JavaPlugin plugin,
             InvseeService invseeService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 invseeService,
@@ -41,7 +44,8 @@ public final class InvseeCommand implements TabExecutor {
                         () -> Objects.requireNonNull(plugin, "plugin").getServer().getOnlinePlayers()
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -49,12 +53,14 @@ public final class InvseeCommand implements TabExecutor {
             InvseeService invseeService,
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.invseeService = Objects.requireNonNull(invseeService, "invseeService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -82,6 +88,8 @@ public final class InvseeCommand implements TabExecutor {
             playerNotOnline(sender, args[0]);
             return true;
         }
+        if (!staffTargetGuard.authorize(sender, target, "invsee", messageSender)) return true;
+
         if (invseeService.openSnapshot(viewer, target) == null) {
             error(sender, "The read-only inventory snapshot could not be opened.");
             return true;
@@ -100,10 +108,11 @@ public final class InvseeCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
-        if (args.length != 1 || !sender.hasPermission(PERMISSION)) {
+        if (!(sender instanceof Player) || args.length != 1 || !sender.hasPermission(PERMISSION)) {
             return List.of();
         }
-        return new OnlinePlayerResolver(onlinePlayersSupplier).suggest(args[0], null);
+        return new OnlinePlayerResolver(
+                () -> staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get())).suggest(args[0], null);
     }
 
     private void invalidUsage(CommandSender sender) {

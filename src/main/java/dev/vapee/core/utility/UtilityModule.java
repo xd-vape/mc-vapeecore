@@ -1,5 +1,6 @@
 package dev.vapee.core.utility;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyModule;
@@ -7,6 +8,7 @@ import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.utility.command.BuildCommand;
 import dev.vapee.core.utility.command.ClearCommand;
 import dev.vapee.core.utility.command.EnderChestCommand;
@@ -31,6 +33,7 @@ import java.util.Objects;
 public final class UtilityModule implements CoreModule {
 
     private final JavaPlugin plugin;
+    private final RankModule rankModule;
     private final LobbyModule lobbyModule;
     private final ActivityModule activityModule;
     private final MessageService messageService;
@@ -44,11 +47,13 @@ public final class UtilityModule implements CoreModule {
             JavaPlugin plugin,
             LobbyModule lobbyModule,
             ActivityModule activityModule,
+            RankModule rankModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
+        this.rankModule = Objects.requireNonNull(rankModule, "rankModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -62,6 +67,8 @@ public final class UtilityModule implements CoreModule {
         LobbyService lobbyService = lobbyModule.getLobbyService();
         LobbyPlayerStateService lobbyPlayerStateService = lobbyModule.getLobbyPlayerStateService();
         ActivityService activityService = activityModule.getActivityService();
+        OnlineStaffTargetGuard targetGuard = new OnlineStaffTargetGuard(
+                rankModule.getStaffHierarchyService(), plugin.getLogger());
         UtilityService newUtilityService = new UtilityService(plugin);
         UtilityListener newUtilityListener = new UtilityListener(plugin, newUtilityService);
         InvseeService newInvseeService = new InvseeService(plugin);
@@ -75,24 +82,24 @@ public final class UtilityModule implements CoreModule {
                 messageService
         ));
         registerCommand("fly", new FlyCommand(
-                plugin, newUtilityService, lobbyPlayerStateService, activityService, messageService));
+                plugin, newUtilityService, lobbyPlayerStateService, activityService, messageService, targetGuard));
         registerCommand("speed", new SpeedCommand(
-                plugin, newUtilityService, activityService, messageService));
+                plugin, newUtilityService, activityService, messageService, targetGuard));
         registerCommand("gamemode", new GameModeCommand(
-                plugin, newUtilityService, lobbyService, lobbyPlayerStateService, activityService, messageService));
+                plugin, newUtilityService, lobbyService, lobbyPlayerStateService, activityService, messageService, targetGuard));
         registerCommand("tp", new TeleportCommand(
-                plugin, newUtilityService, activityService, messageService));
+                plugin, newUtilityService, activityService, messageService, targetGuard));
         registerCommand("tphere", new TeleportHereCommand(
-                plugin, newUtilityService, activityService, messageService));
+                plugin, newUtilityService, activityService, messageService, targetGuard));
         registerCommand("heal", new HealCommand(
-                plugin, newUtilityService, activityService, messageService));
+                plugin, newUtilityService, activityService, messageService, targetGuard));
         registerCommand("feed", new FeedCommand(
-                plugin, newUtilityService, activityService, messageService));
+                plugin, newUtilityService, activityService, messageService, targetGuard));
         registerCommand("ping", new PingCommand(plugin, messageService));
         registerCommand("clear", new ClearCommand(
-                plugin, newUtilityService, activityService, lobbyPlayerStateService, messageService));
-        registerCommand("invsee", new InvseeCommand(plugin, newInvseeService, messageService));
-        registerCommand("enderchest", new EnderChestCommand(plugin, newUtilityService, messageService));
+                plugin, newUtilityService, activityService, lobbyPlayerStateService, messageService, targetGuard));
+        registerCommand("invsee", new InvseeCommand(plugin, newInvseeService, messageService, targetGuard));
+        registerCommand("enderchest", new EnderChestCommand(plugin, newUtilityService, messageService, targetGuard));
 
         plugin.getServer().getPluginManager().registerEvents(newUtilityListener, plugin);
         plugin.getServer().getPluginManager().registerEvents(newInvseeService, plugin);

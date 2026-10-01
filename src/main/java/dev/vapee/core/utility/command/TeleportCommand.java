@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
@@ -37,6 +38,7 @@ public final class TeleportCommand implements TabExecutor {
     public static final String OTHERS_WORLD_PERMISSION = "vapeecore.utility.teleport.others.world";
     public static final String BYPASS_PERMISSION = "vapeecore.utility.teleport.bypass";
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final UtilityService utilityService;
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
@@ -48,7 +50,8 @@ public final class TeleportCommand implements TabExecutor {
             JavaPlugin plugin,
             UtilityService utilityService,
             ActivityService activityService,
-            MessageService messageService
+            MessageService messageService,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this(
                 utilityService,
@@ -58,7 +61,8 @@ public final class TeleportCommand implements TabExecutor {
                 () -> plugin.getServer().getOnlinePlayers(),
                 () -> plugin.getServer().getWorlds(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                staffTargetGuard
         );
     }
 
@@ -67,9 +71,10 @@ public final class TeleportCommand implements TabExecutor {
             Function<String, Player> playerLookup,
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Predicate<UUID> activityCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
-        this(utilityService, playerLookup, onlinePlayersSupplier, List::of, activityCheck, messageSender);
+        this(utilityService, playerLookup, onlinePlayersSupplier, List::of, activityCheck, messageSender, staffTargetGuard);
     }
 
     TeleportCommand(
@@ -78,7 +83,8 @@ public final class TeleportCommand implements TabExecutor {
             Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
             Supplier<? extends Collection<? extends World>> worldsSupplier,
             Predicate<UUID> activityCheck,
-            BiConsumer<CommandSender, Component> messageSender
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard
     ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
@@ -86,6 +92,7 @@ public final class TeleportCommand implements TabExecutor {
         this.worldsSupplier = Objects.requireNonNull(worldsSupplier, "worldsSupplier");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -121,6 +128,8 @@ public final class TeleportCommand implements TabExecutor {
             playerNotOnline(sender, request.source());
             return true;
         }
+        if (!staffTargetGuard.authorize(sender, source, "tp", messageSender)) return true;
+
         Player target = null;
         Location destination = null;
         if (request.playerTarget()) {
@@ -204,7 +213,8 @@ public final class TeleportCommand implements TabExecutor {
                     result.addAll(suggest(List.of("~", "^"), input));
                 }
                 if (sender.hasPermission(WORLD_PERMISSION)) result.addAll(suggest(List.of("world"), input));
-            } else if (sender.hasPermission(OTHERS_PERMISSION)) result.addAll(resolver.suggest(input, null));
+            } else if (sender.hasPermission(OTHERS_PERMISSION)) result.addAll(new OnlinePlayerResolver(
+                    () -> staffTargetGuard.suggestiblePlayers(sender, onlinePlayersSupplier.get())).suggest(input, null));
             return sorted(result);
         }
         if (args[0].equalsIgnoreCase("world")) {

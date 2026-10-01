@@ -1,5 +1,6 @@
 package dev.vapee.core.economy.command;
 
+import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
 import dev.vapee.core.command.help.CommandHelpRenderer;
@@ -50,6 +51,7 @@ public final class CoinsCommand implements TabExecutor {
             ))
     ));
 
+    private final OnlineStaffTargetGuard staffTargetGuard;
     private final Server server;
     private final Logger logger;
     private final EconomyService economyService;
@@ -58,19 +60,20 @@ public final class CoinsCommand implements TabExecutor {
     private final CommandHelpRenderer helpRenderer;
 
     public CoinsCommand(JavaPlugin plugin, EconomyService economyService, PlayerService playerService,
-                        MessageService messageService, CommandHelpRenderer helpRenderer) {
+                        MessageService messageService, CommandHelpRenderer helpRenderer, OnlineStaffTargetGuard staffTargetGuard) {
         this(Objects.requireNonNull(plugin, "plugin").getServer(), plugin.getLogger(),
-                economyService, playerService, messageService, helpRenderer);
+                economyService, playerService, messageService, helpRenderer, staffTargetGuard);
     }
 
     CoinsCommand(Server server, Logger logger, EconomyService economyService, PlayerService playerService,
-                 MessageService messageService, CommandHelpRenderer helpRenderer) {
+                 MessageService messageService, CommandHelpRenderer helpRenderer, OnlineStaffTargetGuard staffTargetGuard) {
         this.server = Objects.requireNonNull(server, "server");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
         this.playerService = Objects.requireNonNull(playerService, "playerService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
+        this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
     }
 
     @Override
@@ -115,6 +118,7 @@ public final class CoinsCommand implements TabExecutor {
                 && ADMIN_ACTIONS.contains(args[0].toLowerCase(Locale.ROOT))) {
             // Only indexed name lookups: never read offline snapshots or scan storage for completion.
             return matches(server.getOnlinePlayers().stream().filter(Player::isOnline)
+                    .filter(player -> args[0].equalsIgnoreCase("get") || staffTargetGuard.canSuggest(sender, player))
                     .map(this::safeArgument).distinct().toList(), args[1]);
         }
         return List.of();
@@ -219,6 +223,7 @@ public final class CoinsCommand implements TabExecutor {
                             NamedTextColor.RED)));
             return;
         }
+        if (!staffTargetGuard.authorize(sender, online, "coins " + mutation.name(), messageService::send)) return;
         OptionalLong previous = economyService.getCoins(target.id());
         if (!playerService.isLoaded(target.id()) || previous.isEmpty()) {
             sendPlayerNotLoaded(sender, target.name());

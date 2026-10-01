@@ -86,7 +86,7 @@ public final class VapeeCore extends JavaPlugin {
         rankModule = new RankModule(this, configService, permissionModule, messageService);
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
-        economyModule = new EconomyModule(this, playerModule, messageService, commandHelpRenderer);
+        economyModule = new EconomyModule(this, playerModule, rankModule, messageService, commandHelpRenderer);
         identityModule = new IdentityModule(this, playerModule, rankModule, economyModule, messageService);
         moderationModule = new ModerationModule(this, identityModule, rankModule, messageService);
         friendModule = new FriendModule(this, configService, playerModule, socialModule,
@@ -130,6 +130,7 @@ public final class VapeeCore extends JavaPlugin {
                 this,
                 lobbyModule,
                 activityModule,
+                rankModule,
                 messageService
         );
         seatModule = new SeatModule(this, lobbyModule, activityModule);

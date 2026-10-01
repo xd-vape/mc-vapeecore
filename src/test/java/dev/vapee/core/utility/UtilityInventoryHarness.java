@@ -43,6 +43,7 @@ public final class UtilityInventoryHarness {
         testReadOnlyEvents();
         testLifecycle();
         testPluginYaml();
+        testCommandStaffProtection();
         System.out.println("UtilityInventoryHarness passed " + checks + " checks.");
     }
 
@@ -223,6 +224,60 @@ public final class UtilityInventoryHarness {
         check(rejected, "invsee lifecycle rejects off-main-thread ownership");
     }
 
+
+    private static void testCommandStaffProtection() throws Exception {
+        for (String actorGroup : java.util.Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null))
+            for (String targetGroup : java.util.Arrays.asList("default", "vip", "builder", "moderator", "admin", "owner", null)) {
+                for (boolean invsee : List.of(true, false)) {
+                    Fixture f = new Fixture();
+                    MutablePlayer actor = f.player("Actor"), target = f.player("Target");
+                    actor.permissions.addAll(Set.of("vapeecore.utility.invsee", "vapeecore.utility.invsee.modify",
+                            "vapeecore.utility.enderchest", "vapeecore.utility.enderchest.others"));
+                    f.staff.groups.put(actor.id, actorGroup); f.staff.groups.put(target.id, targetGroup);
+                    target.inventoryState.items[0] = item("preserved");
+                    var command = inventoryCommand(f, invsee);
+                    int al = (actorGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(actorGroup));
+                    int tl = (targetGroup == null ? -1 : dev.vapee.core.rank.staff.StaffHierarchyConfig.DEFAULT_GROUPS.indexOf(targetGroup));
+                    boolean allowed = targetGroup != null && (tl < 0 || actorGroup != null && al > tl);
+                    java.util.List<Component> output = f.output;
+                    command.onCommand(actor.player, null, "inventory", new String[]{"Target"});
+                    check(actor.openCalls == (allowed ? 1 : 0), "GUI open only for authorized " + invsee + " " + actorGroup + " -> " + targetGroup);
+                    check(f.createdSnapshots == (allowed && invsee ? 1 : 0)
+                            && f.service.activeViewCount() == (allowed && invsee ? 1 : 0), "denial never creates snapshot or runtime view");
+                    check(marker(target.inventoryState.items[0]).equals("preserved"), "target inventory never modified");
+                    if (allowed && !invsee) check(actor.openInventory == target.enderChest, "authorized EnderChest is real live owner inventory");
+                    check(command.onTabComplete(actor.player, null, "inventory", new String[]{""}).contains("Target") == allowed,
+                            "inventory completion target decision");
+                    actor.permissions.clear();
+                    int reads = f.staff.reads, opens = actor.openCalls;
+                    command.onCommand(actor.player, null, "inventory", new String[]{"Target"});
+                    check(f.staff.reads == reads && actor.openCalls == opens, "GUI capability first without hierarchy or open");
+                    actor.permissions.add(invsee ? "vapeecore.utility.invsee" : "vapeecore.utility.enderchest");
+                    reads = f.staff.reads;
+                    command.onCommand(actor.player, null, "inventory", new String[]{"Actor"});
+                    check(actor.openCalls == opens + 1 && f.staff.reads == reads, "explicit self only base permission despite unknown/same group");
+                    if (invsee) f.service.disable();
+                    check(!output.isEmpty(), "controlled inventory command feedback");
+                }
+            }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static org.bukkit.command.TabExecutor inventoryCommand(Fixture f, boolean invsee) throws Exception {
+        Class<?> type = invsee ? dev.vapee.core.utility.command.InvseeCommand.class
+                : dev.vapee.core.utility.command.EnderChestCommand.class;
+        var constructor = type.getDeclaredConstructor(invsee ? InvseeService.class : UtilityService.class,
+                java.util.function.Function.class, java.util.function.Supplier.class, java.util.function.BiConsumer.class,
+                dev.vapee.core.command.OnlineStaffTargetGuard.class);
+        constructor.setAccessible(true);
+        java.util.function.Function<String, Player> lookup = name -> f.players.values().stream()
+                .filter(p -> p.name.equalsIgnoreCase(name) && p.online).map(p -> p.player).findFirst().orElse(null);
+        java.util.function.Supplier<java.util.Collection<Player>> online = () -> f.players.values().stream().map(p -> p.player).toList();
+        java.util.function.BiConsumer<org.bukkit.command.CommandSender, Component> messages = (sender, message) -> f.output.add(message);
+        return (org.bukkit.command.TabExecutor) constructor.newInstance(invsee ? f.service
+                : new UtilityService(() -> true, online, p -> 20), lookup, online, messages, f.staff.guard);
+    }
+
     private static void testPluginYaml() throws Exception {
         YamlConfiguration yaml;
         try (InputStream stream = UtilityInventoryHarness.class.getClassLoader()
@@ -308,6 +363,9 @@ public final class UtilityInventoryHarness {
     }
 
     private static final class Fixture {
+        private final dev.vapee.core.command.StaffTargetTestFixture staff = new dev.vapee.core.command.StaffTargetTestFixture();
+        private final java.util.List<Component> output = new java.util.ArrayList<>();
+        private int createdSnapshots;
         private final Map<UUID, MutablePlayer> players = new HashMap<>();
         private final InvseeService service = new InvseeService(
                 () -> true,
@@ -325,6 +383,7 @@ public final class UtilityInventoryHarness {
         }
 
         private Inventory createInventory(InvseeInventoryHolder holder, int size, Component title) {
+            createdSnapshots++;
             return inventory(holder, size);
         }
 
@@ -357,6 +416,9 @@ public final class UtilityInventoryHarness {
         private final MutableInventory inventoryState = new MutableInventory(null, 41);
         private final PlayerInventory inventory;
         private final Player player;
+        private final java.util.Set<String> permissions = new java.util.HashSet<>();
+        private final Inventory enderChest;
+        private int openCalls;
         private boolean online = true;
         private boolean inventoryOpenAllowed = true;
         private Inventory openInventory;
@@ -364,6 +426,7 @@ public final class UtilityInventoryHarness {
 
         private MutablePlayer(Fixture fixture, String name) {
             this.name = name;
+            this.enderChest = fixture.inventory(null, 27);
             this.inventory = proxy(PlayerInventory.class, (method, arguments) ->
                     inventoryState.invoke(method.getName(), arguments));
             Player[] playerReference = new Player[1];
@@ -371,8 +434,11 @@ public final class UtilityInventoryHarness {
                 case "getUniqueId" -> id;
                 case "getName" -> name;
                 case "isOnline" -> online;
+                case "hasPermission" -> permissions.contains(arguments[0]);
+                case "getEnderChest" -> enderChest;
                 case "getInventory" -> inventory;
                 case "openInventory" -> {
+                    openCalls++;
                     if (!inventoryOpenAllowed) {
                         yield null;
                     }
