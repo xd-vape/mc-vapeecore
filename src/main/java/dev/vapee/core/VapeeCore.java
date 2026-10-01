@@ -22,6 +22,7 @@ import dev.vapee.core.permission.PermissionModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.presentation.PresentationModule;
+import dev.vapee.core.presence.PresenceModule;
 import dev.vapee.core.privatemessage.PrivateMessageModule;
 import dev.vapee.core.quest.QuestModule;
 import dev.vapee.core.quest.daily.DailyQuestModule;
@@ -54,6 +55,7 @@ public final class VapeeCore extends JavaPlugin {
     private IdentityModule identityModule;
     private ModerationModule moderationModule;
     private FriendModule friendModule;
+    private PresenceModule presenceModule;
     private ClanModule clanModule;
     private RewardModule rewardModule;
     private OnlineRewardModule onlineRewardModule;
@@ -91,6 +93,7 @@ public final class VapeeCore extends JavaPlugin {
         moderationModule = new ModerationModule(this, identityModule, rankModule, messageService);
         friendModule = new FriendModule(this, configService, playerModule, socialModule,
                 identityModule, messageService, commandHelpRenderer);
+        presenceModule = new PresenceModule(this, playerModule, socialModule, friendModule, messageService);
         clanModule = new ClanModule(this, configService, identityModule, messageService, commandHelpRenderer);
         rewardModule = new RewardModule(this, playerModule, economyModule);
         onlineRewardModule = new OnlineRewardModule(
@@ -162,6 +165,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(identityModule);
         moduleManager.register(moderationModule);
         moduleManager.register(friendModule);
+        moduleManager.register(presenceModule);
         moduleManager.register(clanModule);
         moduleManager.register(rewardModule);
         moduleManager.register(onlineRewardModule);

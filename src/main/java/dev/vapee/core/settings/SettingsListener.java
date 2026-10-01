@@ -109,6 +109,8 @@ public final class SettingsListener implements Listener {
                     SettingsMenu.PRIVATE_MESSAGES_SLOT;
             case SettingsMenu.FRIEND_REQUESTS_SLOT, SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT ->
                     SettingsMenu.FRIEND_REQUESTS_SLOT;
+            case SettingsMenu.FRIEND_PRESENCE_SLOT, SettingsMenu.FRIEND_PRESENCE_STATUS_SLOT ->
+                    SettingsMenu.FRIEND_PRESENCE_SLOT;
             default -> -1;
         };
         if (featureSlot < 0) {
@@ -166,6 +168,11 @@ public final class SettingsListener implements Listener {
                         uniqueId,
                         !settings.isFriendRequestsEnabled()
                 );
+                case SettingsMenu.FRIEND_PRESENCE_SLOT ->
+                        playerSettingsService.setFriendPresenceNotificationsEnabled(
+                                uniqueId,
+                                !settings.isFriendPresenceNotificationsEnabled()
+                        );
                 default -> false;
             };
         } catch (RuntimeException exception) {

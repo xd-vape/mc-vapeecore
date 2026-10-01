@@ -34,6 +34,8 @@ public final class SettingsMenu {
     public static final int FRIEND_REQUESTS_STATUS_SLOT = 25;
     public static final int VISIBILITY_SLOT = 31;
     public static final int VISIBILITY_STATUS_SLOT = 40;
+    public static final int FRIEND_PRESENCE_SLOT = 33;
+    public static final int FRIEND_PRESENCE_STATUS_SLOT = 42;
     public static final int CLOSE_SLOT = 49;
     public static final int REFRESH_SLOT = 52;
 
@@ -178,6 +180,15 @@ public final class SettingsMenu {
                         settings.isFriendRequestsEnabled()
                 )
         );
+        validatedInventory.setItem(
+                FRIEND_PRESENCE_SLOT,
+                createToggleItem(
+                        Material.BELL,
+                        "Friend Presence",
+                        List.of("Notify you when friends join or leave."),
+                        settings.isFriendPresenceNotificationsEnabled()
+                )
+        );
         validatedInventory.setItem(CLOSE_SLOT, createCloseItem());
         validatedInventory.setItem(REFRESH_SLOT, itemRenderer.render(new ItemSpec(
                 Material.CLOCK, uiText("Refresh", NamedTextColor.AQUA),
@@ -188,6 +199,8 @@ public final class SettingsMenu {
                 createStatusItem(settings.isPrivateMessagesEnabled()));
         validatedInventory.setItem(FRIEND_REQUESTS_STATUS_SLOT,
                 createStatusItem(settings.isFriendRequestsEnabled()));
+        validatedInventory.setItem(FRIEND_PRESENCE_STATUS_SLOT,
+                createStatusItem(settings.isFriendPresenceNotificationsEnabled()));
         boolean allVisible = settings.isLobbyPlayersVisible();
         validatedInventory.setItem(VISIBILITY_STATUS_SLOT, itemRenderer.render(new ItemSpec(
                 allVisible ? Material.LIME_STAINED_GLASS_PANE : Material.YELLOW_STAINED_GLASS_PANE,

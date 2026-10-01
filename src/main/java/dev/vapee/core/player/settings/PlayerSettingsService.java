@@ -67,6 +67,10 @@ public final class PlayerSettingsService {
         return getSettings(uniqueId).map(PlayerSettings::isFriendRequestsEnabled);
     }
 
+    public Optional<Boolean> areFriendPresenceNotificationsEnabled(UUID uniqueId) {
+        return getSettings(uniqueId).map(PlayerSettings::isFriendPresenceNotificationsEnabled);
+    }
+
     public Optional<Boolean> areKnownFriendRequestsEnabled(UUID uniqueId) {
         return playerService.findKnownPlayer(Objects.requireNonNull(uniqueId, "uniqueId"))
                 .map(player -> player.getSettings().isFriendRequestsEnabled());
@@ -166,6 +170,12 @@ public final class PlayerSettingsService {
         return updateSettings(uniqueId, enabled,
                 PlayerSettings::isFriendRequestsEnabled,
                 PlayerSettings::setFriendRequestsEnabled);
+    }
+
+    public boolean setFriendPresenceNotificationsEnabled(UUID uniqueId, boolean enabled) {
+        return updateSettings(uniqueId, enabled,
+                PlayerSettings::isFriendPresenceNotificationsEnabled,
+                PlayerSettings::setFriendPresenceNotificationsEnabled);
     }
 
     private boolean updateSettings(

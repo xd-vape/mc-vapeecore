@@ -6,24 +6,28 @@ public final class PlayerSettings {
     private static final boolean DEFAULT_SOUNDS_ENABLED = true;
     private static final boolean DEFAULT_PRIVATE_MESSAGES_ENABLED = true;
     private static final boolean DEFAULT_FRIEND_REQUESTS_ENABLED = true;
+    private static final boolean DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED = false;
 
     private boolean scoreboardEnabled;
     private boolean soundsEnabled;
     private boolean privateMessagesEnabled;
     private final PlayerVisibilitySettings visibility;
     private boolean friendRequestsEnabled;
+    private boolean friendPresenceNotificationsEnabled;
 
     private PlayerSettings(
             boolean scoreboardEnabled,
             boolean soundsEnabled,
             boolean privateMessagesEnabled,
-            boolean friendRequestsEnabled
+            boolean friendRequestsEnabled,
+            boolean friendPresenceNotificationsEnabled
     ) {
         this.scoreboardEnabled = scoreboardEnabled;
         this.soundsEnabled = soundsEnabled;
         this.privateMessagesEnabled = privateMessagesEnabled;
         this.visibility = PlayerVisibilitySettings.defaults();
         this.friendRequestsEnabled = friendRequestsEnabled;
+        this.friendPresenceNotificationsEnabled = friendPresenceNotificationsEnabled;
     }
 
     public static PlayerSettings defaults() {
@@ -31,7 +35,8 @@ public final class PlayerSettings {
                 DEFAULT_SCOREBOARD_ENABLED,
                 DEFAULT_SOUNDS_ENABLED,
                 DEFAULT_PRIVATE_MESSAGES_ENABLED,
-                DEFAULT_FRIEND_REQUESTS_ENABLED
+                DEFAULT_FRIEND_REQUESTS_ENABLED,
+                DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED
         );
     }
 
@@ -75,5 +80,13 @@ public final class PlayerSettings {
 
     public void setFriendRequestsEnabled(boolean friendRequestsEnabled) {
         this.friendRequestsEnabled = friendRequestsEnabled;
+    }
+
+    public boolean isFriendPresenceNotificationsEnabled() {
+        return friendPresenceNotificationsEnabled;
+    }
+
+    public void setFriendPresenceNotificationsEnabled(boolean enabled) {
+        this.friendPresenceNotificationsEnabled = enabled;
     }
 }
