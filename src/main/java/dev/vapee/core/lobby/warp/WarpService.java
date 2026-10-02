@@ -9,6 +9,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.NavigableMap;
@@ -51,6 +52,14 @@ public final class WarpService {
         return List.copyOf(warps.values());
     }
 
+    public List<WarpPoint> getNavigatorWarps() {
+        return warps.values().stream()
+                .filter(warp -> warp.navigation().visible())
+                .sorted(Comparator.comparingInt((WarpPoint warp) -> warp.navigation().order())
+                        .thenComparing(WarpPoint::id))
+                .toList();
+    }
+
     public boolean hasWarp(String id) {
         return warps.containsKey(normalizeId(id));
     }
@@ -69,7 +78,7 @@ public final class WarpService {
         WarpPoint existing = warps.get(normalizedId);
         WarpPoint updated = existing == null
                 ? new WarpPoint(normalizedId, defaultDisplayName(normalizedId), DEFAULT_ICON, position)
-                : new WarpPoint(normalizedId, existing.displayName(), existing.icon(), position);
+                : new WarpPoint(normalizedId, existing.displayName(), existing.icon(), position, existing.navigation());
         persistReplacement(normalizedId, updated);
         return WarpResult.SUCCESS;
     }
@@ -96,7 +105,7 @@ public final class WarpService {
             return WarpResult.INVALID_NAME;
         }
         persistReplacement(normalizedId, new WarpPoint(
-                existing.id(), value, existing.icon(), existing.position()
+                existing.id(), value, existing.icon(), existing.position(), existing.navigation()
         ));
         return WarpResult.SUCCESS;
     }
@@ -111,9 +120,51 @@ public final class WarpService {
             return WarpResult.INVALID_ICON;
         }
         persistReplacement(normalizedId, new WarpPoint(
-                existing.id(), existing.displayName(), material, existing.position()
+                existing.id(), existing.displayName(), material, existing.position(), existing.navigation()
         ));
         return WarpResult.SUCCESS;
+    }
+
+    public WarpResult setNavigatorVisible(String id, boolean visible) {
+        WarpPoint existing = warps.get(normalizeId(id));
+        if (existing == null) {
+            return WarpResult.NOT_FOUND;
+        }
+        if (existing.navigation().visible() != visible) {
+            persistNavigation(existing, new WarpNavigation(visible, existing.navigation().order()));
+        }
+        return WarpResult.SUCCESS;
+    }
+
+    public WarpResult setNavigatorOrder(String id, int order) {
+        if (order < 0) {
+            return WarpResult.INVALID_ORDER;
+        }
+        WarpPoint existing = warps.get(normalizeId(id));
+        if (existing == null) {
+            return WarpResult.NOT_FOUND;
+        }
+        if (existing.navigation().order() != order) {
+            persistNavigation(existing, new WarpNavigation(existing.navigation().visible(), order));
+        }
+        return WarpResult.SUCCESS;
+    }
+
+    private void persistNavigation(WarpPoint existing, WarpNavigation navigation) {
+        persistReplacement(existing.id(), new WarpPoint(existing.id(), existing.displayName(),
+                existing.icon(), existing.position(), navigation));
+    }
+
+    public WarpResult teleportFromNavigator(Player player, String id) {
+        Objects.requireNonNull(player, "player");
+        WarpPoint warp = warps.get(normalizeId(id));
+        if (warp == null) {
+            return WarpResult.NOT_FOUND;
+        }
+        if (!warp.navigation().visible()) {
+            return WarpResult.NOT_NAVIGABLE;
+        }
+        return teleport(player, warp);
     }
 
     public WarpResult teleport(Player player, String id) {
@@ -122,6 +173,10 @@ public final class WarpService {
         if (warp == null) {
             return WarpResult.NOT_FOUND;
         }
+        return teleport(validatedPlayer, warp);
+    }
+
+    private WarpResult teleport(Player validatedPlayer, WarpPoint warp) {
         if (!validatedPlayer.isOnline()) {
             return WarpResult.PLAYER_OFFLINE;
         }

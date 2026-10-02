@@ -5,9 +5,14 @@ import org.bukkit.Material;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public record WarpPoint(String id, String displayName, Material icon, WarpPosition position) {
+public record WarpPoint(String id, String displayName, Material icon, WarpPosition position,
+                        WarpNavigation navigation) {
 
     private static final Pattern ID_PATTERN = Pattern.compile("[a-z0-9_-]+");
+
+    public WarpPoint(String id, String displayName, Material icon, WarpPosition position) {
+        this(id, displayName, icon, position, WarpNavigation.DEFAULT);
+    }
 
     public WarpPoint {
         if (!isValidId(id)) {
@@ -22,6 +27,7 @@ public record WarpPoint(String id, String displayName, Material icon, WarpPositi
             throw new IllegalArgumentException("icon must be an item material");
         }
         position = Objects.requireNonNull(position, "position");
+        navigation = Objects.requireNonNull(navigation, "navigation");
     }
 
     public static boolean isValidId(String id) {

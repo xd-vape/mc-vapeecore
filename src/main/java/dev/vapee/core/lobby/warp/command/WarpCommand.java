@@ -24,12 +24,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class WarpCommand implements TabExecutor {
 
     public static final String PERMISSION = "vapeecore.warp.admin";
     private static final List<String> SUBCOMMANDS = List.of(
-            "help", "set", "remove", "list", "info", "name", "icon"
+            "help", "set", "remove", "list", "info", "name", "icon", "show", "hide", "order"
     );
     private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
             "Warp Administration",
@@ -47,13 +48,17 @@ public final class WarpCommand implements TabExecutor {
                             new CommandHelpEntry("/warp list", "Lists all configured warps.")
                     )),
                     new CommandHelpSection("Management", List.of(
+                            new CommandHelpEntry("/warp show <id>", "Shows a destination in the navigator only."),
+                            new CommandHelpEntry("/warp hide <id>", "Hides a destination from the navigator only."),
+                            new CommandHelpEntry("/warp order <id> <order>",
+                                    "Sets navigator order (0-2147483647; lower comes first)."),
                             new CommandHelpEntry("/warp remove <id>", "Permanently removes a warp.")
                     ))
             ),
             "Use /warp info <id> to review a warp before changing it."
     );
 
-    private final JavaPlugin plugin;
+    private final Logger logger;
     private final WarpService warpService;
     private final MessageService messageService;
     private final CommandHelpRenderer helpRenderer;
@@ -64,7 +69,12 @@ public final class WarpCommand implements TabExecutor {
             MessageService messageService,
             CommandHelpRenderer helpRenderer
     ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this(Objects.requireNonNull(plugin, "plugin").getLogger(), warpService, messageService, helpRenderer);
+    }
+
+    WarpCommand(Logger logger, WarpService warpService, MessageService messageService,
+                CommandHelpRenderer helpRenderer) {
+        this.logger = Objects.requireNonNull(logger, "logger");
         this.warpService = Objects.requireNonNull(warpService, "warpService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
@@ -101,10 +111,13 @@ public final class WarpCommand implements TabExecutor {
                 case "info" -> info(sender, args);
                 case "name" -> name(sender, args);
                 case "icon" -> icon(sender, args);
+                case "show" -> visibility(sender, args, true);
+                case "hide" -> visibility(sender, args, false);
+                case "order" -> order(sender, args);
                 default -> sendUnknown(sender, args[0]);
             }
         } catch (RuntimeException exception) {
-            plugin.getLogger().log(Level.SEVERE, "Could not update warp configuration.", exception);
+            logger.log(Level.SEVERE, "Could not update warp configuration.", exception);
             messageService.send(sender, "<red>The warp configuration could not be saved. Check the server log.</red>");
         }
         return true;
@@ -123,9 +136,13 @@ public final class WarpCommand implements TabExecutor {
         if (args.length == 1) {
             return rootSuggestions(args[0]);
         }
-        if (args.length == 2 && List.of("remove", "info", "name", "icon")
+        if (args.length == 2 && List.of("remove", "info", "name", "icon", "show", "hide", "order")
                 .contains(args[0].toLowerCase(Locale.ROOT))) {
-            return matches(warpService.getWarps().stream().map(WarpPoint::id).toList(), args[1]);
+            String action = args[0].toLowerCase(Locale.ROOT);
+            return matches(warpService.getWarps().stream()
+                    .filter(warp -> !action.equals("show") || !warp.navigation().visible())
+                    .filter(warp -> !action.equals("hide") || warp.navigation().visible())
+                    .map(WarpPoint::id).toList(), args[1]);
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("icon")) {
             return matches(Arrays.stream(Material.values())
@@ -237,12 +254,63 @@ public final class WarpCommand implements TabExecutor {
         }
     }
 
+    private void visibility(CommandSender sender, String[] args, boolean visible) {
+        if (args.length != 2) {
+            sendInvalidUsage(sender, visible ? "/warp show <id>" : "/warp hide <id>");
+            return;
+        }
+        WarpResult result = warpService.setNavigatorVisible(args[1], visible);
+        if (result != WarpResult.SUCCESS) {
+            sendResult(sender, result);
+            return;
+        }
+        WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
+        messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
+                .append(Component.text(warp.id(), NamedTextColor.WHITE))
+                .append(Component.text(visible ? "' is visible in the navigator." : "' is hidden from the navigator.",
+                        NamedTextColor.GREEN)));
+    }
+
+    private void order(CommandSender sender, String[] args) {
+        if (args.length != 3) {
+            sendInvalidUsage(sender, "/warp order <id> <order>");
+            return;
+        }
+        Integer value = parseOrder(args[2]);
+        if (value == null) {
+            sendResult(sender, WarpResult.INVALID_ORDER);
+            return;
+        }
+        WarpResult result = warpService.setNavigatorOrder(args[1], value);
+        if (result != WarpResult.SUCCESS) {
+            sendResult(sender, result);
+            return;
+        }
+        WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
+        messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
+                .append(Component.text(warp.id(), NamedTextColor.WHITE))
+                .append(Component.text("' navigator order is " + warp.navigation().order() + ".", NamedTextColor.GREEN)));
+    }
+
+    static Integer parseOrder(String input) {
+        if (input == null || !input.matches("[0-9]+")) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(input);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
     private void sendResult(CommandSender sender, WarpResult result) {
         String message = switch (result) {
             case INVALID_ID -> "<red>Warp IDs must match [a-z0-9_-]+.</red>";
             case INVALID_NAME -> "<red>The display name must not be blank.</red>";
             case INVALID_ICON -> "<red>The specified material cannot be displayed as an item.</red>";
+            case INVALID_ORDER -> "<red>Navigator order must be an integer from 0 to 2147483647.</red>";
             case NOT_FOUND -> "<red>That warp does not exist.</red>";
+            case NOT_NAVIGABLE -> "<red>That destination is no longer available.</red>";
             case PLAYER_OFFLINE -> "<red>The player is no longer online.</red>";
             case WORLD_NOT_LOADED -> "<red>The warp world is not loaded.</red>";
             case TELEPORT_FAILED -> "<red>The teleport was cancelled or failed.</red>";
@@ -299,7 +367,9 @@ public final class WarpCommand implements TabExecutor {
         for (WarpPoint warp : warps) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(warp.id(), NamedTextColor.AQUA));
+                    .append(Component.text(warp.id(), NamedTextColor.AQUA))
+                    .append(Component.text(" • " + (warp.navigation().visible() ? "Visible" : "Hidden")
+                            + " • order " + warp.navigation().order(), NamedTextColor.GRAY));
         }
         return output;
     }
@@ -311,6 +381,11 @@ public final class WarpCommand implements TabExecutor {
                 .append(label("Display Name: ")).append(Component.text(warp.displayName(), NamedTextColor.WHITE))
                 .append(Component.newline())
                 .append(label("Icon: ")).append(Component.text(warp.icon().name(), NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(label("Navigator: ")).append(Component.text(
+                        warp.navigation().visible() ? "Visible" : "Hidden", NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(label("Order: ")).append(Component.text(warp.navigation().order(), NamedTextColor.WHITE))
                 .append(Component.newline())
                 .append(label("World: ")).append(Component.text(warp.position().worldName(), NamedTextColor.WHITE))
                 .append(Component.newline())

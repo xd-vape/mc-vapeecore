@@ -52,6 +52,10 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
         this.inventory = validatedInventory;
     }
 
+    public boolean isBoundTo(Inventory inventory) {
+        return this.inventory != null && this.inventory == inventory;
+    }
+
     @Override
     public @NotNull Inventory getInventory() {
         return Objects.requireNonNull(inventory, "Navigator inventory is not initialized");
