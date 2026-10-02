@@ -1,9 +1,11 @@
 package dev.vapee.core.lobby.experience;
 
+import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.experience.navigator.NavigatorListener;
 import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
+import dev.vapee.core.lobby.experience.navigator.NavigatorAccessPolicy;
 import dev.vapee.core.lobby.item.LobbyItemService;
 import dev.vapee.core.lobby.message.LobbyMessageService;
 import dev.vapee.core.lobby.warp.WarpModule;
@@ -32,6 +34,7 @@ public final class LobbyExperienceModule implements CoreModule {
     private final SettingsModule settingsModule;
     private final WarpModule warpModule;
     private final VisibilityModule visibilityModule;
+    private final ActivityModule activityModule;
     private final MessageService messageService;
 
     private NavigatorMenu navigatorMenu;
@@ -46,6 +49,7 @@ public final class LobbyExperienceModule implements CoreModule {
             SettingsModule settingsModule,
             WarpModule warpModule,
             VisibilityModule visibilityModule,
+            ActivityModule activityModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -54,6 +58,7 @@ public final class LobbyExperienceModule implements CoreModule {
         this.settingsModule = Objects.requireNonNull(settingsModule, "settingsModule");
         this.warpModule = Objects.requireNonNull(warpModule, "warpModule");
         this.visibilityModule = Objects.requireNonNull(visibilityModule, "visibilityModule");
+        this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
     }
 
@@ -73,7 +78,9 @@ public final class LobbyExperienceModule implements CoreModule {
         WarpService newWarpService = warpModule.getWarpService();
 
         VisibilityService newVisibilityService = visibilityModule.getVisibilityService();
-        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService);
+        NavigatorAccessPolicy newAccessPolicy = new NavigatorAccessPolicy(newPlayerService, newLobbyService,
+                lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
+        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
                 plugin,
                 newLobbyService,
@@ -126,6 +133,7 @@ public final class LobbyExperienceModule implements CoreModule {
 
     @Override
     public void disable() {
+        cleanupRuntime(navigatorMenu);
         if (experienceListener != null) {
             experienceListener.deactivate();
             HandlerList.unregisterAll(experienceListener);
@@ -136,8 +144,6 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorListener != null) {
             HandlerList.unregisterAll(navigatorListener);
         }
-        cleanupRuntime(navigatorMenu);
-
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;

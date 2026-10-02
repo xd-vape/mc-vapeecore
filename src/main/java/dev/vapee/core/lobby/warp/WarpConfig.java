@@ -5,10 +5,16 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.nodes.MappingNode;
+import org.yaml.snakeyaml.nodes.Node;
+import org.yaml.snakeyaml.nodes.ScalarNode;
+import org.yaml.snakeyaml.nodes.Tag;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -95,6 +101,8 @@ public final class WarpConfig {
             String root = "warps." + warp.id();
             configuration.set(root + ".display-name", warp.displayName());
             configuration.set(root + ".icon", warp.icon().name());
+            configuration.set(root + ".navigator.visible", warp.navigation().visible());
+            configuration.set(root + ".navigator.order", warp.navigation().order());
             configuration.set(root + ".location.world", warp.position().worldName());
             configuration.set(root + ".location.x", warp.position().x());
             configuration.set(root + ".location.y", warp.position().y());
@@ -138,7 +146,44 @@ public final class WarpConfig {
                 number(location, "yaw").floatValue(),
                 number(location, "pitch").floatValue()
         );
-        return new WarpPoint(id, displayName, icon, position);
+        return new WarpPoint(id, displayName, icon, position, readNavigation(id, section));
+    }
+
+    private WarpNavigation readNavigation(String id, ConfigurationSection section) {
+        if (!section.contains("navigator")) {
+            return WarpNavigation.DEFAULT;
+        }
+        ConfigurationSection navigator = section.getConfigurationSection("navigator");
+        if (navigator == null) {
+            warnNavigation(id, "navigator", "a YAML section", "visible=true, order=0");
+            return WarpNavigation.DEFAULT;
+        }
+
+        boolean visible = true;
+        if (navigator.contains("visible")) {
+            if (navigator.get("visible") instanceof Boolean value) {
+                visible = value;
+            } else {
+                warnNavigation(id, "navigator.visible", "a boolean", "true");
+            }
+        }
+        int order = 0;
+        if (navigator.contains("order")) {
+            Object value = navigator.get("order");
+            if ((value instanceof Integer || value instanceof Long)
+                    && ((Number) value).longValue() >= 0
+                    && ((Number) value).longValue() <= Integer.MAX_VALUE) {
+                order = ((Number) value).intValue();
+            } else {
+                warnNavigation(id, "navigator.order", "an integer in 0..2147483647", "0");
+            }
+        }
+        return new WarpNavigation(visible, order);
+    }
+
+    private void warnNavigation(String id, String key, String expected, String fallback) {
+        logger.warning("Invalid warp '" + id + "' setting '" + key + "' in " + configFile
+                + ": expected " + expected + "; using " + fallback + ". The file was left unchanged.");
     }
 
     private Number number(ConfigurationSection section, String path) {
@@ -169,11 +214,51 @@ public final class WarpConfig {
     private YamlConfiguration loadConfiguration() {
         YamlConfiguration configuration = new YamlConfiguration();
         try {
-            configuration.load(configFile.toFile());
+            String source = Files.readString(configFile, StandardCharsets.UTF_8);
+            configuration.loadFromString(source);
+            retainExplicitNavigationNulls(configuration, source);
             return configuration;
         } catch (IOException | InvalidConfigurationException exception) {
             throw failure("load configuration", exception);
         }
+    }
+
+    private void retainExplicitNavigationNulls(YamlConfiguration configuration, String source) {
+        // Bukkit drops explicit YAML nulls. Keep them distinct from missing legacy metadata
+        // so the normal optional-field parser also warns for an explicitly invalid null.
+        Node root = child(new Yaml().compose(new StringReader(source)), "warps");
+        if (!(root instanceof MappingNode warps)) {
+            return;
+        }
+        for (var entry : warps.getValue()) {
+            if (!(entry.getKeyNode() instanceof ScalarNode id) || !WarpPoint.isValidId(id.getValue())) {
+                continue;
+            }
+            String path = "warps." + id.getValue() + ".navigator";
+            Node navigator = child(entry.getValueNode(), "navigator");
+            if (navigator == null) {
+                continue;
+            }
+            if (Tag.NULL.equals(navigator.getTag())) {
+                configuration.set(path, "explicit YAML null");
+                continue;
+            }
+            for (String key : java.util.List.of("visible", "order")) {
+                Node value = child(navigator, key);
+                if (value != null && Tag.NULL.equals(value.getTag())) {
+                    configuration.set(path + "." + key, "explicit YAML null");
+                }
+            }
+        }
+    }
+
+    private Node child(Node node, String key) {
+        if (!(node instanceof MappingNode mapping)) {
+            return null;
+        }
+        return mapping.getValue().stream()
+                .filter(entry -> entry.getKeyNode() instanceof ScalarNode scalar && scalar.getValue().equals(key))
+                .map(entry -> entry.getValueNode()).findFirst().orElse(null);
     }
 
     private void saveAtomically(YamlConfiguration configuration) {

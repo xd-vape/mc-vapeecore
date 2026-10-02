@@ -30,6 +30,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Lobby hotbar items | `dev.vapee.core.lobby.item.LobbyItemService` |
 | Warp Navigator item material/name/lore | `LobbyItemService` |
 | Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
+| Navigator visibility / order | `WarpNavigation`, `WarpService`, `/warp show`, `/warp hide`, `/warp order` |
+| Navigator opening / click authorization | `NavigatorAccessPolicy` in LobbyExperience; online + loaded + lobby + NORMAL + no activity |
 | Player visibility policy/runtime | `dev.vapee.core.visibility.VisibilityModule`, `VisibilityPolicy`, `VisibilityService` |
 | Persistent visibility preferences | `PlayerVisibilitySettings`, `PlayerSettingsService`, `FilePlayerRepository` |
 | Settings menu und Visibility UX | `SettingsMenu`, `dev.vapee.core.settings.visibility`, `SettingsCommand` |
@@ -195,7 +197,7 @@ Seat + Activity + WorldDisplay + Lobby
   ↑
 Blackjack
 
-Lobby + Player + Settings + Warp + Visibility
+Lobby + Player + Settings + Warp + Visibility + Activity
   ↑
 LobbyExperience
 ```
@@ -568,6 +570,49 @@ Beim Disable schließt SettingsModule alle drei eigenen getrackten Menütypen vo
 
 Future GUI Audit Finding: Root/Visibility/Visible Players, Friend, Clan und Navigator wiederholen Teile von Item-Rendering, Holder-Binding, Active-Tracking und Event-Schutz. Shared GUI-Abstraktionen bleiben für den systematischen Audit in Phase 30C reserviert.
 
+## Lobby & Navigation Completion (Phase 28)
+
+`WarpModule` besitzt weiterhin `WarpConfig`, `WarpService` und den administrativen `/warp`-Root. `LobbyExperienceModule` besitzt Compass-Interaktion, `NavigatorMenu` und `NavigatorListener`. Es bezieht zusätzlich das bereits früher gestartete `ActivityModule` für die kleine konkrete `NavigatorAccessPolicy`; es gibt keine Reverse Dependency. Die 27 Module, sechs Reload-Teilnehmer, 36 Root-Commands und 49 Permission-Nodes bleiben unverändert. Warp ist kein ReloadParticipant; Admin-Mutationen wirken sofort, `/core reload` lädt `warps.yml` nicht neu.
+
+`WarpPoint` enthält ID, literal Display Name, Item-Icon, `WarpPosition` und den immutable Record `WarpNavigation(visible, order)`. Der kompatible Vier-Argument-Konstruktor und neue `/warp set`-Ziele verwenden `visible=true`, `order=0`. Hidden bedeutet ausschließlich im Compass verborgen: Existenz, Admin-Verwaltung und generische `WarpService#teleport`-Semantik bleiben erhalten. Weder Lobby-Spawn noch bestimmte IDs sind reserviert oder automatisch erzeugt.
+
+```yaml
+warps:
+  example:
+    display-name: Example
+    icon: ENDER_PEARL
+    navigator:
+      visible: true
+      order: 0
+    location:
+      world: world
+      x: 0.0
+      y: 64.0
+      z: 0.0
+      yaw: 0.0
+      pitch: 0.0
+```
+
+Legacy-Dateien ohne Navigator-Section oder einzelne Keys erhalten Runtime-Defaults und werden bei Start nicht geschrieben. Eine falsche Section, nicht-boolesches Visible oder nicht-ganzzahliges, negatives beziehungsweise außerhalb `0..Integer.MAX_VALUE` liegendes Order erzeugt WARNING mit Warp-/Key-Kontext und sicheren Fallback. Andere gültige Metadaten bleiben erhalten. Ein fokussierter YAML-Node-Check hält explizite Nullwerte von fehlenden Legacy-Keys unterscheidbar, weil Bukkit Nullwerte entfernt. Pflichtdaten bleiben strikt validiert; ein ungültiger Warp wird weiterhin unabhängig übersprungen.
+
+`saveWarps` schreibt beide Metadaten im bestehenden Tempdatei-/Atomic-Move-/Replace-Fallback. Service-Mutationen bauen den nächsten Zustand, speichern ihn und tauschen erst danach die Runtime-Map. Save-Fehler propagieren bei unverändertem vorherigem Zustand; Commands melden sie kontrolliert. Position, Name und Icon erhalten Navigation; Visible erhält Order und Order erhält Visible. Show/Hide auf gleichem Zustand und Order auf gleichem Wert liefern SUCCESS ohne Datei-Write. Ein normaler späterer Save darf Legacy-Metadaten mitnormalisieren.
+
+`getWarps()` liefert weiterhin alle Warps immutable nach ID für Admins. `getNavigatorWarps()` liefert ausschließlich sichtbare Ziele immutable nach `order ASC`, dann `id ASC`. Der 54-Slot-Navigator behält 45 Content-Slots und die Controls 45/49/50/53. Seitenzahl, Content und Page Info zählen nur sichtbare Ziele; Seiten werden bei jeder neuen Darstellung geklemmt. Hidden-only ist derselbe normale Empty State wie eine leere Registry: `No Destinations Available`. Itemname bleibt literal Aqua, Lore ausschließlich `Click to teleport.`; technische IDs stehen nur in der Verwaltung.
+
+Die Admin-Erweiterungen sind `/warp show <id>`, `/warp hide <id>`, `/warp order <id> <order>` unter dem vorhandenen `vapeecore.warp.admin`-Gate. Order akzeptiert ausschließlich dezimale Ziffern mit kontrolliertem Int-Overflow, keine Vorzeichen, Leerzeichen, Brüche oder Exponenten. Help erklärt Navigator-only Visibility, Info zeigt Visible/Hidden und Order, List weiterhin alle IDs mit Metadaten. Completion ist permission-first und case-insensitive: Show nur hidden, Hide nur visible, Order alle gespeicherten IDs. Es gibt keinen direkten Player-`/warp <id>` und keinen Navigator-Command.
+
+`NavigatorMenu` besitzt `Map<UUID, Inventory> activeInventories`. Erst ein erfolgreiches tatsächliches Open veröffentlicht die neue Instanz; gecancelte Opens erzeugen keinen neuen aktiven Eintrag. Ein Menü muss gleichzeitig Owner-UUID, `inventory.getHolder() == holder`, `holder.isBoundTo(inventory)`, Active-Registry und die tatsächlich geöffnete Top-Inventory erfüllen. `isBoundTo` funktioniert auch für ungebundene Holder ohne NPE. Ein alter Seiten-Holder kann weder teleportieren noch Controls auslösen. Close entfernt nur exakt die aktive Instanz; verspätetes Close einer alten Seite entfernt die neue Seite nicht.
+
+Der Listener cancelt jedes erkannte Navigator-Click-Event zuerst, einschließlich ungebundener/forged Holder, fremder Viewer, Bottom-Transfers und stale Seiten. Nur LEFT/RIGHT auf dem aktiven Top-Inventar dürfen Aktionen auslösen. Shift, Number-Key, Double, Middle, Drop und Offhand-Swap bleiben inert. Drags über Top-Slots sind gecancelt; Bottom-only bleibt nur bei gültiger aktiver Ansicht und gültigem Zugriff erlaubt. Titel, Material, Name und Lore sind keine Action- oder Sicherheitsquelle.
+
+`NavigatorAccessPolicy` verlangt bei Open, nach tatsächlichem Open sowie bei Click/Drag: Player online, `PlayerService#isLoaded`, aktuelle Lobby-Welt, `LobbyPlayerMode.NORMAL`, keine `ActivityService#isParticipating`-Membership. BUILD- oder Activity-Inventory-Übernahme schließt im vorhandenen State-Flow bereits die UI; die erneute Prüfung schützt zusätzlich stale Managed Items und Menüs. Denial öffnet nichts und schließt/vergisst eine eigene Navigator-Ansicht, ohne fremde Inventare zu schließen. Policy bleibt im Lobby-Application-Layer; WarpService kennt weder Lobby, PlayerService, Activity noch Staff-Hierarchie.
+
+Die Anzeige ist ein Snapshot, die Ausführung liest aktuellen Domain-State. Holder speichern Slot→ID, niemals Slot→aktueller Index. `teleportFromNavigator` prüft aktuelle Existenz und Visible, danach dieselbe generische Teleport-Logik. Hidden/Removed liefern `That destination is no longer available.` und einen frischen View derselben, nötigenfalls geklemmten Seite. Reorder ändert keine bereits gebundene ID; Positionsänderungen verwenden bei Click die aktuelle Position. Nicht geladene Zielwelt wird nicht geladen; Bukkit/Paper-Cancellation liefert TELEPORT_FAILED und keinen Erfolg. Erfolgreicher Teleport verwendet PLUGIN, setzt FallDistance/Velocity zurück und schließt/vergisst das Menü, sodass wiederholte stale Events nicht erneut teleportieren. Sichtbare Ziele in derselben Lobby oder einer anderen geladenen Welt sind erlaubt; beim Verlassen entfernt der bestehende LobbyListener die Hotbar.
+
+Quit vergisst die UUID auch bei bereits gewechseltem View. World Leave schließt/vergisst Navigator sofort; World Enter öffnet keine UI. Disable schließt getrackte eigene Ansichten vor Listener-Cleanup, leert die gesamte Active-Map auch bei einzelnen Close-Fehlern und nullt die Modulreferenzen. Partielle Enable-Fehler deaktivieren Experience-Callbacks, unregisteren alle drei Listener und reinigen den lokalen Navigator. Der bisherige Spawn-/Protection-/BUILD-/Activity-/Visibility-/Settings-/Presence-Flow bleibt bestehen, einschließlich globaler Join-/Quit-Texte.
+
+Der Compass bleibt Warp Navigator; Hotbar exakt 0/4/8. Kein Server Menu, keine Kategorien, festen Ziele, zusätzlichen Items, neuen Scheduler, Async-Pipeline, Datenbank oder allgemeines GUI-Framework. Phase 29 ergänzt später Quest Completion; Shared GUI-/Inventory-/Item-Cleanup bleibt Phase 30C, target-controlled Team-Teleport-Consent bleibt Phase 30G. Vollständige Verifikation und Dateiinventar: `docs/LOBBY_NAVIGATION.md`.
+
 ## Lobby player state
 
 `LobbyPlayerMode` enthält bewusst nur `NORMAL` und `BUILD`. Der Runtime-State liegt in `LobbyPlayerStateService` als kleine Menge aktiver BUILD-UUIDs. Er wird nicht im `CorePlayer`, nicht in `PlayerSettings` und nicht in Player-YAML gespeichert. Mutationen sind Main-Thread-only.
@@ -911,6 +956,9 @@ Die ausführbaren Harnesses liegen unter `src/test/java`:
 - `dev.vapee.core.activity.blackjack.BlackjackPresentationHarness`
 - `dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewHarness`
 - `dev.vapee.core.lobby.warp.WarpHarness`
+- `dev.vapee.core.lobby.warp.command.WarpCommandHarness`
+- `dev.vapee.core.lobby.experience.navigator.NavigatorMenuHarness`
+- `dev.vapee.core.lobby.experience.navigator.NavigatorSecurityHarness`
 - `dev.vapee.core.lobby.player.LobbyHarness`
 - `dev.vapee.core.utility.command.BuildCommandHarness`
 - `dev.vapee.core.utility.UtilityServiceHarness`

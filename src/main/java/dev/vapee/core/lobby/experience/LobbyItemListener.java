@@ -95,8 +95,9 @@ public final class LobbyItemListener implements Listener {
 
         switch (itemType.get()) {
             case NAVIGATOR -> {
-                navigatorMenu.open(player);
-                playFeedbackSound(player);
+                if (navigatorMenu.open(player)) {
+                    playFeedbackSound(player);
+                }
             }
             case SETTINGS -> {
                 if (playerSettingsService.getSettings(player.getUniqueId()).isEmpty()) {
