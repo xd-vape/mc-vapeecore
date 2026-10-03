@@ -754,6 +754,9 @@ public final class BlackjackHarness {
         testHitTimeoutAndStaleTaskSafety();
         testMidRoundJoinRejected();
         testLeaveDisconnectAndWorldChangeCleanup();
+        testQuestOutcomeIntegration();
+        testOutcomeCallbackFailureIsolation();
+        testUnloadedQuestOutcome();
         check(java.util.Arrays.equals(BlackjackAction.values(), new BlackjackAction[]{
                 BlackjackAction.DEAL, BlackjackAction.HIT, BlackjackAction.STAND,
                 BlackjackAction.DOUBLE, BlackjackAction.LEAVE
@@ -773,6 +776,138 @@ public final class BlackjackHarness {
                 "rejected BUILD player does not reserve a physical seat");
         check(fixture.messages.stream().anyMatch(message -> message.contains("build mode")),
                 "BUILD conflict returns a controlled blackjack message");
+    }
+
+    private static void testQuestOutcomeIntegration() {
+        for (BlackjackOutcome expected : BlackjackOutcome.values()) {
+            Fixture fixture = new Fixture(1);
+            Player player = fixture.player("Quest " + expected);
+            var registry = new dev.vapee.core.quest.QuestDefinitionRegistry();
+            registry.replaceAll(List.of(new dev.vapee.core.quest.QuestDefinition("win", "Win", "Win rounds",
+                    dev.vapee.core.quest.QuestProgressKey.of("blackjack:win"), 10L, 50L),
+                    new dev.vapee.core.quest.QuestDefinition("win_also", "Also win", "Another matching quest",
+                            dev.vapee.core.quest.QuestProgressKey.of("blackjack:win"), 20L, 75L)));
+            var economy = new dev.vapee.core.economy.EconomyService(fixture.players);
+            var rewards = new dev.vapee.core.reward.RewardService(economy, fixture.players, fixture.logger);
+            var quests = new dev.vapee.core.quest.QuestService(registry, fixture.players, rewards, fixture.logger);
+            quests.replaceAssignments(player.getUniqueId(), List.of("win", "win_also"));
+            dev.vapee.core.message.MessageService messages;
+            try { messages = dev.vapee.core.quest.QuestCompletionFixture.messages(); }
+            catch (Exception exception) { throw new AssertionError(exception); }
+            var reporter = new dev.vapee.core.quest.QuestProgressReporter(quests, messages,
+                    fixture.onlinePlayers::get, fixture.logger);
+            List<BlackjackOutcome> calls = new ArrayList<>();
+            fixture.service.setOutcomeListener((id, outcome) -> {
+                check(fixture.session.getPlayerRound(id).orElseThrow().getOutcome().orElseThrow() == outcome,
+                        "callback observes already settled player outcome");
+                calls.add(outcome);
+                BlackjackModule.reportQuestOutcome(reporter, id, outcome);
+            });
+            fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+            List<BlackjackCard> shoe = switch (expected) {
+                case BLACKJACK -> cards(BlackjackRank.ACE, BlackjackRank.NINE, BlackjackRank.KING, BlackjackRank.SEVEN);
+                case WIN -> cards(BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.NINE, BlackjackRank.SEVEN);
+                case PUSH -> cards(BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.SEVEN, BlackjackRank.SEVEN);
+                case LOSS -> cards(BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.SIX, BlackjackRank.SEVEN);
+                case BUST -> cards(BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.EIGHT, BlackjackRank.SEVEN, BlackjackRank.KING);
+            };
+            fixture.queueShoe(shoe);
+            checkResult(fixture.service.startRound(player), ActivityResult.SUCCESS);
+            if (expected != BlackjackOutcome.BLACKJACK) {
+                checkResult(expected == BlackjackOutcome.BUST ? fixture.service.hit(player) : fixture.service.stand(player),
+                        ActivityResult.SUCCESS);
+            }
+            check(calls.equals(List.of(expected)), "one callback for settled " + expected);
+            long amount = expected == BlackjackOutcome.WIN || expected == BlackjackOutcome.BLACKJACK ? 1L : 0L;
+            check(quests.getActiveQuests(player.getUniqueId()).orElseThrow().stream().allMatch(view -> view.currentProgress() == amount),
+                    "only WIN and BLACKJACK produce one quest progress: " + expected);
+            check(economy.getCoins(player.getUniqueId()).orElseThrow() == 0L,
+                    "blackjack settlement grants no direct coins");
+            fixture.service.stand(player);
+            fixture.service.hit(player);
+            check(calls.size() == 1, "extra settled actions produce no duplicate callback");
+            fixture.scheduler.runNextActive();
+            check(calls.size() == 1 && fixture.session.getRoundPhase() == BlackjackRoundPhase.IDLE,
+                    "result reset does not report quest progress");
+            fixture.queueShoe(shoe);
+            fixture.service.startRound(player);
+            if (expected != BlackjackOutcome.BLACKJACK) {
+                if (expected == BlackjackOutcome.BUST) fixture.service.hit(player); else fixture.service.stand(player);
+            }
+            check(calls.equals(List.of(expected, expected))
+                    && quests.getActiveQuests(player.getUniqueId()).orElseThrow().getFirst().currentProgress() == amount * 2,
+                    "seated rematch produces one new independent outcome");
+            fixture.scheduler.runNextActive();
+            fixture.service.shutdown();
+            fixture.queueShoe(shoe);
+            fixture.service.startRound(player);
+            if (expected != BlackjackOutcome.BLACKJACK) {
+                if (expected == BlackjackOutcome.BUST) fixture.service.hit(player); else fixture.service.stand(player);
+            }
+            check(calls.size() == 2, "shutdown releases captured quest callback");
+        }
+    }
+
+    private static void testOutcomeCallbackFailureIsolation() {
+        Fixture fixture = new Fixture(3);
+        fixture.logger.setLevel(Level.ALL);
+        fixture.logger.setUseParentHandlers(false);
+        List<Player> players = List.of(fixture.player("First"), fixture.player("Second"), fixture.player("Third"));
+        for (Player player : players) fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        List<java.util.logging.LogRecord> logs = new ArrayList<>();
+        fixture.logger.addHandler(new java.util.logging.Handler() {
+            public void publish(java.util.logging.LogRecord record) { logs.add(record); }
+            public void flush() { }
+            public void close() { }
+        });
+        List<UUID> callbacks = new ArrayList<>();
+        fixture.service.setOutcomeListener((id, outcome) -> {
+            callbacks.add(id);
+            if (callbacks.size() == 1) throw new IllegalStateException("synthetic quest callback failure");
+        });
+        fixture.queueShoe(cards(BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.TEN, BlackjackRank.TEN,
+                BlackjackRank.NINE, BlackjackRank.NINE, BlackjackRank.NINE, BlackjackRank.SEVEN));
+        fixture.service.startRound(players.getFirst());
+        for (Player player : players) fixture.service.stand(player);
+        check(callbacks.equals(players.stream().map(Player::getUniqueId).toList()),
+                "throwing first callback does not suppress subsequent player outcomes");
+        check(fixture.session.getPlayerRoundsInOrder().stream()
+                .allMatch(round -> round.getOutcome().orElseThrow() == BlackjackOutcome.WIN),
+                "callback failure leaves every player settled");
+        check(logs.stream().anyMatch(record -> record.getLevel() == java.util.logging.Level.WARNING
+                        && record.getMessage().contains(players.getFirst().getUniqueId().toString())
+                        && record.getMessage().contains("WIN") && record.getThrown() != null),
+                "callback failure logs warning with UUID, outcome and cause");
+        check(fixture.refreshes.getLast().phase() == BlackjackRoundPhase.SETTLED,
+                "callback failure still refreshes final world presentation");
+        fixture.scheduler.runNextActive();
+        check(fixture.session.getState() == ActivityState.AVAILABLE && callbacks.size() == 3,
+                "callback failure still schedules reset without duplicate callbacks");
+    }
+
+    private static void testUnloadedQuestOutcome() {
+        Fixture fixture = new Fixture(1);
+        Player player = fixture.player("Unavailable quest profile");
+        fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        var registry = new dev.vapee.core.quest.QuestDefinitionRegistry();
+        var rewards = new dev.vapee.core.reward.RewardService(
+                new dev.vapee.core.economy.EconomyService(fixture.players), fixture.players, fixture.logger);
+        var quests = new dev.vapee.core.quest.QuestService(registry, fixture.players, rewards, fixture.logger);
+        dev.vapee.core.message.MessageService messages;
+        try { messages = dev.vapee.core.quest.QuestCompletionFixture.messages(); }
+        catch (Exception exception) { throw new AssertionError(exception); }
+        var reporter = new dev.vapee.core.quest.QuestProgressReporter(quests, messages, fixture.onlinePlayers::get, fixture.logger);
+        fixture.service.setOutcomeListener((id, outcome) -> {
+            fixture.players.unloadPlayer(id);
+            BlackjackModule.reportQuestOutcome(reporter, id, outcome);
+        });
+        fixture.queueShoe(cards(BlackjackRank.ACE, BlackjackRank.NINE, BlackjackRank.KING, BlackjackRank.SEVEN));
+        fixture.service.startRound(player);
+        check(fixture.session.getPlayerRound(player.getUniqueId()).orElseThrow().getOutcome().orElseThrow()
+                        == BlackjackOutcome.BLACKJACK && !fixture.players.isLoaded(player.getUniqueId()),
+                "unloaded quest profile cannot interrupt already confirmed blackjack outcome");
+        fixture.scheduler.runNextActive();
+        check(fixture.session.getState() == ActivityState.AVAILABLE, "unloaded quest result still allows scheduled reset");
     }
 
     private static void testHandValuesAndNaturals() {

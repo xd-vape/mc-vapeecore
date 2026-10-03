@@ -1,6 +1,11 @@
 package dev.vapee.core.quest.daily;
 
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.message.MessageService;
+import dev.vapee.core.quest.daily.command.DailyQuestCommand;
+import dev.vapee.core.quest.daily.menu.DailyQuestMenu;
+import dev.vapee.core.quest.daily.menu.DailyQuestMenuListener;
+import org.bukkit.command.PluginCommand;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.quest.QuestDefinition;
@@ -24,16 +29,21 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     private final JavaPlugin plugin;
     private final PlayerModule playerModule;
     private final QuestModule questModule;
+    private final MessageService messages;
 
     private DailyQuestConfig config;
     private DailyQuestService service;
     private DailyQuestListener listener;
     private BukkitTask syncTask;
+    private DailyQuestMenu menu;
+    private DailyQuestMenuListener menuListener;
+    private PluginCommand command;
 
-    public DailyQuestModule(JavaPlugin plugin, PlayerModule playerModule, QuestModule questModule) {
+    public DailyQuestModule(JavaPlugin plugin, PlayerModule playerModule, QuestModule questModule, MessageService messages) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.questModule = Objects.requireNonNull(questModule, "questModule");
+        this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     @Override
@@ -47,18 +57,30 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
         newConfig.initialize();
         QuestDefinitionRegistry registry = questModule.getDefinitionRegistry();
         List<QuestDefinition> previousDefinitions = registry.snapshot();
-        registry.replaceAll(newConfig.getState().definitions());
         DailyQuestService newService = new DailyQuestService(
                 playerModule.getPlayerService(), questModule.getQuestService(),
                 registry, newConfig::getState, plugin.getLogger()
         );
         DailyQuestListener newListener = new DailyQuestListener(newService);
+        DailyQuestMenu newMenu = new DailyQuestMenu(plugin, newService, questModule.getQuestService(),
+                playerModule.getPlayerService(), messages);
+        DailyQuestMenuListener newMenuListener = new DailyQuestMenuListener(newMenu);
+        PluginCommand newCommand = null;
         BukkitTask newTask = null;
         try {
+            registry.replaceAll(newConfig.getState().definitions());
+            newCommand = Objects.requireNonNull(plugin.getCommand("quests"), "Command 'quests' is missing from plugin.yml");
+            DailyQuestCommand executor = new DailyQuestCommand(newMenu, messages);
             plugin.getServer().getPluginManager().registerEvents(newListener, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newMenuListener, plugin);
+            newCommand.setExecutor(executor);
+            newCommand.setTabCompleter(executor);
             config = newConfig;
             service = newService;
             listener = newListener;
+            menu = newMenu;
+            menuListener = newMenuListener;
+            command = newCommand;
             newTask = plugin.getServer().getScheduler().runTaskTimer(
                     plugin, this::syncOnlineSafely, SYNC_INTERVAL_TICKS, SYNC_INTERVAL_TICKS
             );
@@ -66,11 +88,20 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
         } catch (RuntimeException exception) {
             if (newTask != null) newTask.cancel();
             HandlerList.unregisterAll(newListener);
+            HandlerList.unregisterAll(newMenuListener);
+            newMenu.closeOpenInventories();
+            if (newCommand != null) {
+                newCommand.setExecutor(null);
+                newCommand.setTabCompleter(null);
+            }
             registry.replaceAll(previousDefinitions);
             syncTask = null;
             listener = null;
             service = null;
             config = null;
+            menu = null;
+            menuListener = null;
+            command = null;
             throw exception;
         }
         plugin.getLogger().info("DailyQuest module enabled with " + registry.size()
@@ -81,11 +112,20 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     @Override
     public void disable() {
         if (syncTask != null) syncTask.cancel();
+        if (menu != null) menu.closeOpenInventories();
+        if (menuListener != null) HandlerList.unregisterAll(menuListener);
         if (listener != null) HandlerList.unregisterAll(listener);
+        if (command != null) {
+            command.setExecutor(null);
+            command.setTabCompleter(null);
+        }
         syncTask = null;
         listener = null;
         service = null;
         config = null;
+        menu = null;
+        menuListener = null;
+        command = null;
     }
 
     @Override
@@ -97,7 +137,11 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     public ReloadPlan prepareReload() {
         DailyQuestConfig activeConfig = Objects.requireNonNull(config, "DailyQuestModule is not enabled");
         QuestDefinitionRegistry registry = questModule.getDefinitionRegistry();
-        return prepareReloadPlan(activeConfig, registry);
+        ReloadPlan plan = prepareReloadPlan(activeConfig, registry);
+        return ReloadPlan.of(() -> {
+            plan.apply();
+            menu.closeOpenInventories();
+        }, plan::rollback);
     }
 
     static ReloadPlan prepareReloadPlan(DailyQuestConfig activeConfig, QuestDefinitionRegistry registry) {

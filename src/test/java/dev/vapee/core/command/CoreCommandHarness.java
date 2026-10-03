@@ -65,6 +65,11 @@ public final class CoreCommandHarness {
         check(!player.text().contains("/profile") && !player.text().contains("/warp") && !player.text().contains("Administration"),
                 "overview omits unauthorized domains and empty sections");
         check(!player.text().contains("Moderation") && !player.text().contains("/warn"), "unauthorized overview hides staff section");
+        check(!player.text().contains("/quests") && !player.text().contains("Gameplay"), "quest help is permission filtered");
+        player.permissions.add("vapeecore.quest.use");
+        run(command, player, "core", "Gameplay", "help");
+        check(player.text().contains("/quests") && player.text().contains("Alias: /quest"), "quest help includes its alias");
+        player.permissions.remove("vapeecore.quest.use");
         player.permissions.add("vapeecore.moderation.warn");
         run(command, player, "core", "Moderation", "help");
         check(player.text().contains("/warn <player|uuid> <reason...>") && !player.text().contains("/ban")

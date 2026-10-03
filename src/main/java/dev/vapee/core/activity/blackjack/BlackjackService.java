@@ -45,6 +45,7 @@ public final class BlackjackService {
     private final Predicate<UUID> buildModeCheck;
     private final InventoryAccess inventoryAccess;
     private final Logger logger;
+    private BiConsumer<UUID, BlackjackOutcome> outcomeListener = (id, outcome) -> { };
 
     private Consumer<BlackjackSession> tableRefresher = ignored -> {
     };
@@ -141,6 +142,10 @@ public final class BlackjackService {
 
     public void setTableRefresher(Consumer<BlackjackSession> tableRefresher) {
         this.tableRefresher = Objects.requireNonNull(tableRefresher, "tableRefresher");
+    }
+
+    public void setOutcomeListener(BiConsumer<UUID, BlackjackOutcome> listener) {
+        outcomeListener = Objects.requireNonNull(listener, "listener");
     }
 
     public Optional<BlackjackSession> joinTable(Player player, String tableId) {
@@ -337,6 +342,7 @@ public final class BlackjackService {
     }
 
     public void shutdown() {
+        outcomeListener = (id, outcome) -> { };
         tableRefresher = ignored -> {
         };
     }
@@ -525,13 +531,22 @@ public final class BlackjackService {
     }
 
     private void settleRound(BlackjackSession session) {
+        if (session.getRoundPhase() == BlackjackRoundPhase.SETTLED) return;
         session.setRoundPhase(BlackjackRoundPhase.SETTLED);
         for (BlackjackPlayerRound playerRound : session.getPlayerRoundsInOrder()) {
+            if (playerRound.getOutcome().isPresent()) continue;
             BlackjackOutcome outcome = BlackjackOutcome.determine(
                     playerRound.getHand(),
                     session.getDealerHand()
             );
             playerRound.settle(outcome);
+            try {
+                outcomeListener.accept(playerRound.getPlayerId(), outcome);
+            } catch (RuntimeException exception) {
+                logger.log(Level.WARNING, "Blackjack outcome callback failed for "
+                        + playerRound.getPlayerId() + " outcome " + outcome
+                        + "; settlement continues.", exception);
+            }
             Player player = onlinePlayerLookup.apply(playerRound.getPlayerId());
             if (player != null) {
                 send(player, outcomeMessage(outcome));

@@ -103,8 +103,8 @@ public final class VapeeCore extends JavaPlugin {
                 rewardModule,
                 messageService
         );
-        questModule = new QuestModule(this, playerModule, rewardModule);
-        dailyQuestModule = new DailyQuestModule(this, playerModule, questModule);
+        questModule = new QuestModule(this, playerModule, rewardModule, messageService);
+        dailyQuestModule = new DailyQuestModule(this, playerModule, questModule, messageService);
         lobbyModule = new LobbyModule(this, playerModule, messageService);
         visibilityModule = new VisibilityModule(this, playerModule, socialModule, friendModule, lobbyModule);
         chatModule = new ChatModule(this, permissionModule, rankModule, socialModule, messageService);
@@ -145,7 +145,8 @@ public final class VapeeCore extends JavaPlugin {
                 worldDisplayModule,
                 lobbyModule,
                 messageService,
-                commandHelpRenderer
+                commandHelpRenderer,
+                questModule
         );
         warpModule = new WarpModule(this, messageService, commandHelpRenderer);
         lobbyExperienceModule = new LobbyExperienceModule(

@@ -150,6 +150,7 @@ public final class QuestServiceHarness {
         );
         check(completion.updatedQuests() == 2
                         && completion.completedQuestIds().equals(List.of("first", "second"))
+                        && completion.reachedQuestIds().equals(List.of("first", "second"))
                         && completion.rewardPendingQuestIds().isEmpty(),
                 "overflow-sized progress caps and completes both matching quests");
         check(fixture.progress(playerId, "first").progress() == 3L
@@ -196,6 +197,7 @@ public final class QuestServiceHarness {
                 1L
         );
         check(failed.rewardPendingQuestIds().equals(List.of("winner"))
+                        && failed.reachedQuestIds().equals(List.of("winner"))
                         && fixture.progress(playerId, "winner").progress() == 1L
                         && fixture.progress(playerId, "winner").status() == QuestStatus.REWARD_PENDING,
                 "normal reward failure preserves target progress as REWARD_PENDING");
@@ -210,6 +212,7 @@ public final class QuestServiceHarness {
                 100L
         );
         check(pendingSignal.updatedQuests() == 0
+                        && pendingSignal.reachedQuestIds().isEmpty()
                         && pendingSignal.rewardPendingQuestIds().equals(List.of("winner"))
                         && fixture.progress(playerId, "winner").progress() == 1L
                         && !fixture.quests.isDirty(playerId),
@@ -218,6 +221,7 @@ public final class QuestServiceHarness {
         fixture.granter.enqueueSuccess();
         QuestProgressResult retried = fixture.quests.retryPendingRewards(playerId);
         check(retried.completedQuestIds().equals(List.of("winner"))
+                        && retried.reachedQuestIds().isEmpty()
                         && fixture.progress(playerId, "winner").status() == QuestStatus.COMPLETED
                         && fixture.quests.isDirty(playerId),
                 "successful pending retry transitions the quest to COMPLETED");

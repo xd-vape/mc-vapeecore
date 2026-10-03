@@ -74,6 +74,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Technische Quest Progress Keys | `QuestProgressKey` |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
 | Daily-Quest-Auswahl und Rotation | `dev.vapee.core.quest.daily` |
+| Quest-Feedback und Playtime-Quelle | `QuestProgressReporter`, `QuestPlaytimeProducer` |
+| Daily-Quest-Command und lesendes Menü | `quest.daily.command`, `quest.daily.menu` |
 | Player settings persistence | `dev.vapee.core.player.settings` und `FilePlayerRepository` |
 | Ignore/social | `dev.vapee.core.social` und `dev.vapee.core.player.social` |
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
@@ -169,11 +171,11 @@ Config + Player + Reward + Message
   ↑
 OnlineReward
 
-Player + Reward
+Player + Reward + Message
   ↑
 Quest
 
-Player + Quest
+Player + Quest + Message
   ↑
 DailyQuest
 
@@ -193,7 +195,7 @@ Lobby + Activity
   ↑
 Seat
 
-Seat + Activity + WorldDisplay + Lobby
+Seat + Activity + WorldDisplay + Lobby + Quest
   ↑
 Blackjack
 
@@ -406,7 +408,7 @@ Bei `enabled: false` wird die In-Memory-Baseline regelmäßig auf die aktuelle S
 
 ## Quest Foundation
 
-Das Quest-System besitzt ausschließlich die fachliche Frage, ob ein geladener Spieler eine zugewiesene Quest erfüllt hat. Gameplay-Features werden später kleine Producer und rufen `QuestService#addProgress(UUID, QuestProgressKey, long)` auf. Der Service kennt diese Quellen nicht und importiert insbesondere weder Mine, Blackjack, Activity noch OnlineReward. Bei Completion delegiert er den Coin-Grant an `RewardService`; Economy wird niemals direkt verwendet. `QuestModule` hängt deshalb nur von `JavaPlugin`, `PlayerModule` und `RewardModule` ab. Es ist kein `ReloadParticipant` und besitzt keine Config, Commands, Permissions, Messages oder Presentation.
+`QuestService` besitzt die fachliche Frage, ob ein geladener Spieler eine zugewiesene Quest erfüllt hat. Seit Phase 29 melden kleine Producer über `QuestProgressReporter#report(UUID, QuestProgressKey, long)`; der Reporter delegiert an `QuestService#addProgress` und sendet danach best-effort Chat-Feedback. Der Service kennt die Quellen nicht und importiert weder Mine, Blackjack, Activity, OnlineReward, MessageService noch Adventure. Bei Completion delegiert er an RewardService; Economy wird niemals direkt verwendet. QuestModule hängt von JavaPlugin, PlayerModule, RewardModule und MessageService ab und besitzt Reporter sowie Playtime-Producer. Es ist kein ReloadParticipant; Command und Menü gehören zu DailyQuest.
 
 `QuestDefinition` ist ein immutable Record aus `id`, `name`, `description`, `progressKey`, positivem `long target` und positiven `long rewardCoins`. Die technische ID erfüllt `[a-z0-9][a-z0-9_-]{0,63}`; Name und Beschreibung sind non-blank, bleiben aber normale Domain-Strings ohne MiniMessage-Verarbeitung. `QuestProgressKey` ist ein validiertes Value Object nach `[a-z0-9][a-z0-9:._-]{0,127}`. Keys werden ausschließlich exakt verglichen. Es existieren weder ein hartcodiertes Quest-Type-Enum noch Prefix-/Wildcard-Matching; ein Producer kann bei echtem Bedarf mehrere Signale wie `mine:block:any` und `mine:block:stone` melden.
 
@@ -439,17 +441,31 @@ quests:
 
 Fehlt `quests` oder `quests.active`, wird `PlayerQuestState.empty()` geladen. Eine falsch typisierte Quest-Section oder ein beschädigter einzelner Eintrag erzeugt eine kontrollierte Warning und wird als optionaler Feature-State ausgelassen, ohne Name, Settings, Wallet, Social oder OnlineReward des Players unbrauchbar zu machen. Gültige unbekannte Quest-IDs werden dagegen bewusst geladen und beim nächsten Save erhalten. Ohne Registry-Definition gibt es für sie weder Progress, Completion noch Reward. Load allein führt niemals einen Reward oder eine automatische Completion aus; `ACTIVE`, `REWARD_PENDING` und `COMPLETED` überleben Logout und Restart.
 
-Quest-Mutationen sind Main-Thread-owned und sofort im `CorePlayer` sichtbar. `QuestService` hält nur dirty UUIDs und ruft nicht pro Signal `savePlayer` auf. `QuestModule` besitzt genau einen gemeinsamen synchronen 100-Tick-Flush, also ungefähr fünf Sekunden. `flushPlayer` speichert nur geladene dirty Player über `PlayerService#savePlayer`; Erfolg entfernt den Marker, ein Save-Fehler bleibt isoliert und wird im nächsten Batch erneut versucht. `flushAll` arbeitet über einen UUID-Snapshot, damit ein Fehler andere Player nicht blockiert. `QuestListener` läuft bei Quit mit `LOWEST` vor dem normalen Player-Unload. Beim Disable wird zuerst der Task gestoppt, dann geflusht, der Listener abgemeldet und das Dirty Tracking geleert.
+Quest-Mutationen sind Main-Thread-owned und sofort im CorePlayer sichtbar. QuestService hält nur dirty UUIDs und speichert nicht pro Signal. Der eine gemeinsame synchrone 100-Tick-Task von QuestModule verarbeitet zuerst sichere Online-/Loaded-Playtime-Samples und flusht dann alle dirty Player. Save-Fehler bleiben dirty, sind pro Player isoliert und werden erneut versucht. QuestListener finalisiert bei Quit mit LOWEST vor PlayerListener NORMAL, flusht und vergisst den Sample auch bei Statistikfehlern. Disable stoppt den Task, deaktiviert Reporter-Feedback, verarbeitet letzte sichere Samples, flusht, meldet den Listener ab und leert Producer, Dirty Tracking und Referenzen.
 
 RewardService und QuestService speichern jeweils den gesamten aktuellen `CorePlayer`, niemals getrennte Balance- oder Quest-Snapshots. Ein Reward-Flush kann daher aktuellen Quest-State mitpersistieren und ein späterer Quest-Flush redundant sein, aber keiner kann einen alten Teilzustand zurückschreiben. Bei einem harten JVM-/OS-Abbruch können die letzten ungefähr fünf Sekunden Quest-Progress verloren gehen; Coins und Completion-State im selben noch nicht gespeicherten In-Memory-Profil teilen dieses Batching-Fenster. Normales Quit, Plugin-Disable und Server-Shutdown flushen kontrolliert.
 
-Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende Quest Foundation. Konkrete Default-Quests und Producer für `playtime:minute`, `mine:block:any`, `blackjack:win`, `activity:complete` oder `location:visit:mine` sind noch nicht implementiert. `/quests`, GUI, Claim-Button, Completion-Feedback, Mine und Blackjack-Hooks folgen später.
+Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende Quest Foundation. Phase 29 ergänzt genau die Quellen playtime:minute und blackjack:win, /quests, GUI und Chat-Feedback. Andere valide Keys, etwa future:event, mine:block:any, activity:complete oder location:visit:mine, bleiben akzeptiert und ohne Producer inert. Es gibt keine festen Default-Quests oder manuelle Claims.
+
+### Quest Completion (Phase 29)
+
+`QuestProgressResult.reachedQuestIds` enthält ausschließlich ACTIVE-Quests, die mit diesem Signal erstmals das Target erreichen. Die vorhandenen Completed-/Pending-Listen behalten ihre Bedeutung; Retry-Ergebnisse haben keine Reach-IDs. Der Reporter hat keinen eigenen Quest-State, Katalog, Save-Task oder Reward-Pfad. In deterministischer ID-Reihenfolge meldet er den ersten erfolgreichen Abschluss als `Daily quest complete: <name>` plus `+<coins> Coins`, erstmaliges Pending als Completion-Zeile plus `Your reward is pending and will be retried.` und späteren erfolgreichen Progress-Retry als `Quest reward delivered: <name>` plus Coins. Wiederholte erfolglose Retries bleiben still. Name bleibt literal Component.text; Chatfehler werden mit UUID und Cause geloggt, ohne State oder Coins zurückzusetzen. Daily-Retries vor Rotation behalten ihre Domain-Semantik und erzeugen keine zusätzliche Delivery-Nachricht.
+
+`QuestPlaytimeProducer` hält UUID → letztes Statistic.PLAY_ONE_MINUTE-Tick-Sample nur im Speicher. Enable und MONITOR-Join seeden online/geladen vorgefundene Spieler. Eine erste spätere Probe ist ebenfalls nur Baseline. Fortschritt ist `currentTicks / 1200 - previousTicks / 1200`; mehrere Grenzen werden als ein positives Signal gemeldet. Negativwerte werden auf null geklemmt; ein kleinerer aktueller Wert rebased mit UUID-Warning ohne Fortschritt. Quit vergisst, Disable leert Samples. Kein zusätzlicher Task, Offline-Fortschritt, AFK-Filter oder persistierter Counter; OnlineRewardProgress, processed-playtime-ticks und OnlineReward-Schedule bleiben unabhängig. Daily enabled: false deaktiviert Assignment/UI, nicht die generische Quelle für bereits vorhandene Assignments.
+
+`BlackjackService` besitzt einen standardmäßig leeren `BiConsumer<UUID, BlackjackOutcome>`. Er setzt Outcome und SETTLED-State, meldet danach einmal je Player/Runde und führt Refresh und Reset weiter aus. BlackjackModule konsumiert den früher gestarteten QuestModule-Reporter: ausschließlich WIN und BLACKJACK melden blackjack:win mit Amount 1; PUSH, LOSS und BUST bleiben inert. Callback-Ausnahmen warnen mit UUID, Outcome und Cause; andere Player, Refresh und Reset laufen weiter. Shutdown setzt den Callback auf No-op zurück. Kein Blackjack-Coin-Grant, Quest-Import in der Blackjack-Domain oder umgekehrte Abhängigkeit.
+
+`DailyQuestMenu` hat 54 Slots: Content 0–44, Previous 45, Page-Info 49, Close 50, Refresh 52, Next 53. Seiten werden geklemmt; Namen, Beschreibungen und long-Werte bleiben literal. ACTIVE zeigt In Progress, COMPLETED grün mit geliefertem Reward, REWARD_PENDING gelb mit automatischem Retry-Hinweis. Keine technischen IDs/Keys in Lore; Quest-Items sind lesend. Owner-UUID, Holder, exakt gebundene Inventory-Instanz, aktive Registrierung und aktuell geöffnetes Top müssen übereinstimmen. Jeder erkannte Klick und Drag wird zuerst gecancelt; nur LEFT/RIGHT auf Top-Controls handeln nach aktuellen Online-/Loaded-/Permission-Checks. Kein Lobby-, BUILD- oder Activity-Gate. Stale/forged Menüs bleiben inert; alter Close entfernt keine neue Seite. Quit vergisst; Disable schließt nur eigene aktuelle Views, isoliert Close-Fehler und leert alle Bindings.
+
+`/quests` und `/quest` verlangen zuerst vapeecore.quest.use (Default true), dann Player, dann null Argumente. Vor jedem Open/Refresh synchronisiert das Menü mit syncPlayer(UUID, Instant.now()). DISABLED, NO_DEFINITIONS, PLAYER_NOT_LOADED und ASSIGNMENT_FAILED liefern kontrollierte Hinweise ohne Open; Fehler werden mit UUID und vorhandener Cause geloggt. CURRENT, INITIALIZED, ROTATED öffnen. BLOCKED_PENDING_REWARD zeigt die alte Sicht plus `A previous quest reward is still pending.`. Refresh rerollt im gleichen Cycle nicht. Core help zeigt Gameplay-Eintrag und Alias permission-gefiltert; keine Quest-Subcommands oder Tab-Vorschläge.
+
+Reload bleibt der sechste Teilnehmer: Prepare verändert nichts, Apply wechselt Config/Registry und schließt Views, Rollback stellt beide Snapshots wieder her. Player-State wird bei Apply nicht ersetzt. Ein später fehlgeschlagener anderer Apply kann Views geschlossen lassen; nächster Open synchronisiert gegen den zurückgerollten State. Dadurch bleiben keine stale Definitionen sichtbar und kein neuer UI-Scheduler wird benötigt.
 
 ## Daily Quest Cycle & Configuration
 
-`DailyQuestModule` hängt nur von `JavaPlugin`, `PlayerModule` und `QuestModule` ab. Es ist Owner von `plugins/VapeeCore/daily-quests.yml`, `DailyQuestConfig`, `DailyQuestService`, einem Join-Listener und genau einem gemeinsamen synchronen 1200-Tick-Sync-Task. Es besitzt weder eigenen Save-Task noch Quit-Listener, Command, Permission, GUI oder Player-Nachricht. Die generische Quest Foundation bleibt Owner von Definition-Registry, Progress, Completion, Reward-Retry und dem 100-Tick-Dirty-Flush.
+DailyQuestModule hängt von JavaPlugin, PlayerModule, QuestModule und MessageService ab. Es besitzt daily-quests.yml, DailyQuestConfig, DailyQuestService, Join-Listener, /quests-Executor und TabCompleter, konkretes Menü mit separatem UI-Listener sowie genau einen 1200-Tick-Sync-Task. Kein Save-Task. Enable-Fehler räumen Task, beide Listener, Handler, Menü und Referenzen auf und stellen den vorigen Registry-Katalog wieder her. Disable stoppt den Task, schließt eigene Views, meldet beide Listener ab und entfernt beide Handler. Die Quest Foundation bleibt Owner von Registry, Progress, Completion, Reward-Retry und 100-Tick-Flush.
 
-Die Resource liefert `enabled: false`, `quests-per-day: 4`, `reset.time: "00:00"`, `reset.timezone: "system"` und `quests: {}`. Das ist bewusst noch kein sichtbares Feature: Ohne UI und Production-Progress-Producer würden aktive Standardquests den Spielern nichts Nützliches bieten. Administratoren können Definitionen etwa so ergänzen; die Keys sind erst nach einem späteren Producer tatsächlich fortschreitbar:
+Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Unterstützte Keys sind ausschließlich playtime:minute und blackjack:win; eine Parser-Allowlist gibt es nicht. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
 
 ```yaml
 enabled: true
@@ -474,7 +490,7 @@ Slots, Reset-Zeit, Zeitzone sowie Quest-Name, Beschreibung, Progress-Key, Target
 
 Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
 
-Ownership-Kurzform: Daily-Anzahl, Reset und Definitionen → `daily-quests.yml`; Cycle-Rechnung → `DailyQuestCycleResolver`; Auswahl → `DailyQuestSelector`; Assignment/Rotation → `DailyQuestService`; Fortschritt, Completion und Coin-Reward → `QuestService` und `RewardService`. Die sichtbare Quest-UX und erste Producer folgen später. `docs/FORMATTING.md` bleibt unverändert, da Phase 17B keine Player-facing Templates einführt.
+Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](QUEST_COMPLETION.md).
 
 ## Ranks & Server Identity
 
@@ -810,7 +826,7 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 | Invsee-Snapshot, Read-only-Schutz und View-Lifecycle | `InvseeService` und `InvseeInventoryHolder` |
 | Quest Progress Engine | `QuestService` |
 | Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
-| Technische Quest Progress Keys | `QuestProgressKey` und später die Konstanten des produzierenden Features |
+| Technische Quest Progress Keys | `QuestProgressKey`; playtime:minute im QuestPlaytimeProducer, blackjack:win im BlackjackModule |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
 | Daily-Quest-Anzahl, Reset, Zeitzone und Definitionen | `daily-quests.yml` |
 | Daily-Cycle-Berechnung | `DailyQuestCycleResolver` |
@@ -869,6 +885,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/coins`, `/coins help`, `/coins …` | Eigene Coins / Hilfe / bekannte Online-/Offline-Balances lesen, Online-Balances administrieren | `CoinsCommand` | Basis `vapeecore.economy.coins`, get/add/remove/set zusätzlich `vapeecore.economy.admin` |
 | `/msg`, `/reply`, `/r` | Private Online-Nachrichten | `MessageCommand`, `ReplyCommand` | `vapeecore.message.use` |
 | `/settings`, `/settings visibility [add|remove …]` | Settings-/Visibility-Menüs öffnen und Added Users verwalten | `SettingsCommand`, `VisibilitySettingsMenu`, `VisiblePlayersMenu` | `vapeecore.settings.use` |
+| `/quests`, `/quest` | Aktuelle Daily-Quests nach Sync read-only anzeigen | `DailyQuestCommand`, `DailyQuestMenu` | `vapeecore.quest.use` (Default true, keine Children) |
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
@@ -1052,4 +1069,4 @@ Coins add/remove/set prüfen nach Known-Identity und echter Online-Präsenz die 
 
 Ping bleibt absichtlich ein nicht-sensitives, permission-geschütztes Latenz-Read. Build bleibt Self-only. Moderation einschließlich Schema, Mute-Projektion und Chat/PM-Enforcement ist unverändert. Historische Berichte und FORMATTING bleiben unverändert. plugin.yml, config.yml und StaffHierarchyService wurden nicht geändert.
 
-Kanonischer Audit: `docs/PERMISSIONS.md` (36 Roots, 49 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige Verification/Datei-Inventare: `docs/PERMISSION_HARDENING.md`. Phase 27 Notifications & Presence bleibt außerhalb dieser Änderung: keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.
+Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 37 Roots, 50 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige Verification/Datei-Inventare: `docs/PERMISSION_HARDENING.md`. Phase 27 Notifications & Presence bleibt außerhalb dieser Änderung: keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.

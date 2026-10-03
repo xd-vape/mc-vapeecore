@@ -8,6 +8,12 @@ depend:
   - LuckPerms
 
 commands:
+  quests:
+    aliases:
+      - quest
+    description: View your daily quests
+    usage: /quests
+    permission: vapeecore.quest.use
   mute:
     description: Mute a known player's chat and outgoing private messages
     usage: /mute <player|uuid> <duration|permanent> <reason...>
@@ -165,6 +171,9 @@ commands:
     permission: vapeecore.ranks.view
 
 permissions:
+  vapeecore.quest.use:
+    description: Allows viewing your daily quests
+    default: true
   vapeecore.moderation.mute:
     description: Allows muting known players
     default: op

@@ -34,6 +34,7 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 |---|---:|---|---|
 | `vapeecore.message.use` | `true` | `/msg`, `/reply`, `/r` | Private Online-Nachrichten. |
 | `vapeecore.settings.use` | `true` | `/settings`, `/settings visibility …` | Eigenes Settings-Menü, Visibility-Filter und Added-Users-Liste verwalten. |
+| `vapeecore.quest.use` | `true` | `/quests`, `/quest` | Eigene Daily-Quests read-only anzeigen; Player-only, keine Children und keine Staff-/Rank-Anforderung. Rewards sind automatisch. |
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
 | `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |
@@ -140,6 +141,7 @@ VIP darf nicht über Builder/Moderator Staff-Fähigkeiten erben; Staff-Gruppen e
 - `vapeecore.economy.coins`
 - `vapeecore.message.use`
 - `vapeecore.settings.use`
+- `vapeecore.quest.use`
 - `vapeecore.social.ignore`
 - `vapeecore.friend.use`
 - `vapeecore.clan.use`
@@ -254,11 +256,11 @@ Coins add/remove/set prüfen nach Known-Identity und echter Online-Präsenz die 
 
 Ping bleibt absichtlich ein nicht-sensitives, permission-geschütztes Latenz-Read. Build bleibt Self-only. Moderation einschließlich Schema, Mute-Projektion und Chat/PM-Enforcement ist unverändert. Historische Berichte und FORMATTING bleiben unverändert. plugin.yml, config.yml und StaffHierarchyService wurden nicht geändert.
 
-Kanonischer Audit: `docs/PERMISSIONS.md` (36 Roots, 49 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige Verification/Datei-Inventare: `docs/PERMISSION_HARDENING.md`. Phase 27 Notifications & Presence bleibt außerhalb dieser Änderung: keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.
+Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 37 Roots, 50 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige Verification/Datei-Inventare: `docs/PERMISSION_HARDENING.md`. Phase 27 Notifications & Presence bleibt außerhalb dieser Änderung: keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.
 
-## Permission-Children und Default-Audit (Phase 26B)
+## Permission-Children und Default-Audit (aktueller Phase-29-Vertrag)
 
-49 explizite Nodes: 10 Player-Basisrechte mit `default: true`, 39 mit `default: op`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin` und `vapeecore.visibility.staff` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
+50 explizite Nodes: 11 Player-Basisrechte mit `default: true`, 39 mit `default: op`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin` und `vapeecore.visibility.staff` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
 
 | Parent (vapeecore.) | Child (vapeecore.) | Bedeutung |
 |---|---|---|
@@ -278,11 +280,11 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (36 Roots, 49 Nodes, 15 Child-Kanten un
 | utility.enderchest.others | utility.enderchest | Stärkerer Zugang gewährt Basis; kein Target-Schutz-Bypass |
 | economy.admin | economy.coins | Admin gewährt Basis, niemals umgekehrt |
 
-`default: true` bleibt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, social.ignore, rank.view und ranks.view. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` wird nur für die technische Core-Reload-Fähigkeit verwendet, nicht als Staff-Bundle.
+`default: true` bleibt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, quest.use, social.ignore, rank.view und ranks.view. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` wird nur für die technische Core-Reload-Fähigkeit verwendet, nicht als Staff-Bundle.
 
-## Vollständiger Command-/Descriptor-Audit (Phase 26B)
+## Vollständiger Command-/Descriptor-Audit (aktueller Phase-29-Vertrag)
 
-Alle 36 Root-Commands wurden gegen Registrierung, Executor-Gates und den eingefrorenen Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die bestehenden und erweiterten Command-Harnesses prüfen das Verhalten. Paper bestätigt die tatsächlich registrierten Roots. In `plugin.yml` wurde kein Defekt gefunden: keine Änderung erforderlich.
+Alle 37 Root-Commands wurden gegen Registrierung, Executor-Gates und den eingefrorenen Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die bestehenden und erweiterten Command-Harnesses prüfen das Verhalten. Paper bestätigt die tatsächlich registrierten Roots. Phase 29 ergänzt ausschließlich quests, den Alias quest und quest.use; bestehende Defaults und Children bleiben unverändert.
 
 In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarkeit weggelassen. Die Empfehlung ist keine automatische Rangfreigabe. Gezielte Fähigkeiten und die unabhängige Target-Hierarchie gelten gleichzeitig.
 
@@ -305,6 +307,7 @@ In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarke
 | /msg | — | vapeecore.message.use | message.use | User/VIP | /msg <player> <message> | Nein |
 | /reply | r | vapeecore.message.use | message.use | User/VIP | /reply <message> | Nein |
 | /settings | — | vapeecore.settings.use | settings.use | User/VIP | /settings [visibility ...] | Nein |
+| /quests | quest | vapeecore.quest.use | quest.use; Player-only | User/VIP | /quests | Nein |
 | /ignore | — | vapeecore.social.ignore | social.ignore | User/VIP | /ignore <player> | Nein |
 | /unignore | — | vapeecore.social.ignore | social.ignore | User/VIP | /unignore <player\|uuid> | Nein |
 | /ignorelist | — | vapeecore.social.ignore | social.ignore | User/VIP | /ignorelist | Nein |

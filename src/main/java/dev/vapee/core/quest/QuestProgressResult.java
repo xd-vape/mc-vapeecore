@@ -7,7 +7,8 @@ public record QuestProgressResult(
         Status status,
         int updatedQuests,
         List<String> completedQuestIds,
-        List<String> rewardPendingQuestIds
+        List<String> rewardPendingQuestIds,
+        List<String> reachedQuestIds
 ) {
 
     public QuestProgressResult {
@@ -17,15 +18,28 @@ public record QuestProgressResult(
                 rewardPendingQuestIds,
                 "rewardPendingQuestIds"
         ));
+        reachedQuestIds = List.copyOf(Objects.requireNonNull(reachedQuestIds, "reachedQuestIds"));
         if (updatedQuests < 0) {
             throw new IllegalArgumentException("updatedQuests must not be negative");
         }
         if (status != Status.PROCESSED
                 && (updatedQuests != 0
                 || !completedQuestIds.isEmpty()
-                || !rewardPendingQuestIds.isEmpty())) {
+                || !rewardPendingQuestIds.isEmpty()
+                || !reachedQuestIds.isEmpty())) {
             throw new IllegalArgumentException("Only processed results may contain quest changes");
         }
+    }
+
+    public QuestProgressResult(Status status, int updatedQuests, List<String> completedQuestIds,
+                               List<String> rewardPendingQuestIds) {
+        this(status, updatedQuests, completedQuestIds, rewardPendingQuestIds, List.of());
+    }
+
+    static QuestProgressResult processed(int updatedQuests, List<String> completedQuestIds,
+                                         List<String> rewardPendingQuestIds, List<String> reachedQuestIds) {
+        return new QuestProgressResult(Status.PROCESSED, updatedQuests, completedQuestIds,
+                rewardPendingQuestIds, reachedQuestIds);
     }
 
     static QuestProgressResult playerNotLoaded() {

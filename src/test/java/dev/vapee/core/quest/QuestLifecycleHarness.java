@@ -2,6 +2,7 @@ package dev.vapee.core.quest;
 
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.message.MessageService;
 import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerListener;
@@ -56,13 +57,13 @@ public final class QuestLifecycleHarness {
         check(List.of(QuestModule.class.getConstructor(
                         JavaPlugin.class,
                         PlayerModule.class,
-                        RewardModule.class
+                        RewardModule.class, MessageService.class
                 ).getParameterTypes()).equals(List.of(
                         JavaPlugin.class,
                         PlayerModule.class,
-                        RewardModule.class
+                        RewardModule.class, MessageService.class
                 )),
-                "QuestModule depends only on JavaPlugin, PlayerModule, and RewardModule");
+                "QuestModule owns the application messaging boundary alongside player and reward dependencies");
 
         String coreSource = normalizeLineEndings(Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java")));
         List<String> expectedOrder = List.of(
@@ -96,10 +97,9 @@ public final class QuestLifecycleHarness {
                 "reload wiring adds DailyQuest after the existing five participants");
 
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
-        check(!pluginYaml.contains("quests:")
-                        && !pluginYaml.contains("questadmin")
-                        && !pluginYaml.contains("vapeecore.quest"),
-                "Quest adds no command or permission to plugin.yml");
+        check(pluginYaml.contains("quests:") && pluginYaml.contains("vapeecore.quest.use:")
+                        && !pluginYaml.contains("questadmin"),
+                "quest view has one player permission and no admin command");
         check(Files.isRegularFile(Path.of("src/main/resources/daily-quests.yml")),
                 "DailyQuest adds exactly its own configuration resource");
 
@@ -111,11 +111,12 @@ public final class QuestLifecycleHarness {
                         && !questSource.contains("import dev.vapee.core.rank")
                         && !questSource.contains("import dev.vapee.core.permission"),
                 "Quest production code has no Economy, OnlineReward, gameplay, presentation, rank, or permission dependency");
+        String domain = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestService.java"));
         check(!questSource.contains("org.bukkit.command")
-                        && !questSource.contains("dev.vapee.core.message")
+                        && !domain.contains("dev.vapee.core.message") && !domain.contains("net.kyori")
                         && !questSource.contains("BlockBreakEvent")
                         && !questSource.contains("PlayerMoveEvent"),
-                "Quest owns no command, messaging, or gameplay producer hook");
+                "QuestService stays independent of UI and feature-specific hooks");
         check(!questSource.contains("new QuestDefinition("),
                 "production starts with no concrete quest definition");
     }
@@ -156,7 +157,9 @@ public final class QuestLifecycleHarness {
                 ),
                 logger()
         );
-        QuestListener listener = new QuestListener(quests);
+        QuestListener listener = new QuestListener(quests,
+                new QuestPlaytimeProducer(players, new QuestProgressReporter(quests, (id, message) -> { }, logger()), logger()),
+                logger());
         UUID playerId = UUID.randomUUID();
         repository.seed(player(playerId));
         players.loadPlayer(playerId, "Player");

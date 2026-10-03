@@ -1,6 +1,7 @@
 package dev.vapee.core.quest.daily;
 
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.quest.QuestDefinitionRegistry;
 import dev.vapee.core.quest.QuestModule;
@@ -28,9 +29,9 @@ public final class DailyQuestLifecycleHarness {
                         && ReloadParticipant.class.isAssignableFrom(DailyQuestModule.class),
                 "DailyQuest owns one CoreModule and the sixth ReloadParticipant");
         check(List.of(DailyQuestModule.class.getConstructor(
-                        JavaPlugin.class, PlayerModule.class, QuestModule.class
-                ).getParameterTypes()).equals(List.of(JavaPlugin.class, PlayerModule.class, QuestModule.class)),
-                "DailyQuest depends only on plugin, player, and quest modules");
+                        JavaPlugin.class, PlayerModule.class, QuestModule.class, MessageService.class
+                ).getParameterTypes()).equals(List.of(JavaPlugin.class, PlayerModule.class, QuestModule.class, MessageService.class)),
+                "DailyQuest owns the player quest view and messaging boundary");
         check(DailyQuestModule.SYNC_INTERVAL_TICKS == 1200L,
                 "one shared sync task runs every 1200 ticks");
         EventHandler join = DailyQuestListener.class.getDeclaredMethod("onPlayerJoin", PlayerJoinEvent.class)
@@ -66,7 +67,16 @@ public final class DailyQuestLifecycleHarness {
                 "DailyQuest delegates assignment and pending retry without direct reward or economy ownership");
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
         check(!pluginYaml.contains("dailyquests:") && !pluginYaml.contains("vapeecore.daily"),
-                "DailyQuest adds no command or permission");
+                "no separate daily admin command or permission is added");
+        check(module.contains("registerEvents(newMenuListener, plugin)")
+                        && module.contains("HandlerList.unregisterAll(newMenuListener)")
+                        && module.contains("registry.replaceAll(previousDefinitions)")
+                        && module.contains("newCommand.setExecutor(null)")
+                        && module.contains("newCommand.setTabCompleter(null)"),
+                "failed enable cleans up both listeners, handlers, task and registry");
+        check(module.contains("menu.closeOpenInventories()") && module.contains("HandlerList.unregisterAll(menuListener)")
+                        && module.contains("command.setExecutor(null)") && module.contains("command.setTabCompleter(null)"),
+                "disable closes views and releases UI registrations and command handlers");
 
         Path directory = Files.createTempDirectory("vapeecore-daily-reload-");
         Path file = directory.resolve("daily-quests.yml");
