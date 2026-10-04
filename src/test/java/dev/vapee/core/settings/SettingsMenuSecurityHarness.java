@@ -91,6 +91,17 @@ public final class SettingsMenuSecurityHarness {
         f.menu.closeOpenInventories();
         check(owner.closes == closed && owner.open == forgedInventory, "shutdown preserves unrelated inventory");
         check(f.soundCalls == 0 && f.presentationCalls == 0, "invalid actions give no runtime feedback");
+        checks += dev.vapee.core.ui.MenuCloseProbe.verify("SettingsMenu", probe -> {
+            var menu = new SettingsMenu(f.settings, f.messages, probe::lookup,
+                    (boundHolder, size, title) -> inventory(boundHolder, size),
+                    ignored -> new org.bukkit.inventory.ItemStack() { }, probe.logger);
+            var listener = createListener(menu, f.settings, ignored -> { }, ignored -> { },
+                    ignored -> { }, f.messages, probe.logger);
+            return new dev.vapee.core.ui.MenuCloseProbe.Subject(player -> {
+                f.players.loadPlayer(player.getUniqueId(), player.getName());
+                menu.open(player);
+            }, menu::closeOpenInventories, menu::activeCount, listener::onInventoryClose);
+        });
         System.out.println("SettingsMenuSecurityHarness passed " + checks + " checks.");
     }
 

@@ -74,6 +74,14 @@ public final class ClanMenuSecurityHarness {
         f.click(owner, oldClanMenu, ClanMenu.ACTION_SLOT, ClickType.SHIFT_RIGHT);
         check(f.clans.getClanOf(owner.id).isPresent() && owner.open != oldClanMenu,
                 "stale clan context refreshes without owner action");
+        checks += dev.vapee.core.ui.MenuCloseProbe.verify("ClanMenu", probe -> {
+            var menu = new ClanMenu(f.clans, f.identity, f.messages, probe::lookup,
+                    f::inventory, ClanMenuFixture.SpecItem::new, probe.logger);
+            var listener = new ClanMenuListener(menu, f.clans, new ClanMessages(f.messages, probe::lookup),
+                    f.messages, probe.logger);
+            return new dev.vapee.core.ui.MenuCloseProbe.Subject(menu::open, menu::closeOpenInventories,
+                    menu::activeCount, listener::onInventoryClose);
+        });
         System.out.println("ClanMenuSecurityHarness passed " + checks + " checks.");
     }
     private static void check(boolean value, String label) {

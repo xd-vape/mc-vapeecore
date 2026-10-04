@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.lobby.player.LobbyPlayerMode;
 import dev.vapee.core.lobby.warp.*;
 import dev.vapee.core.message.MessageService;
@@ -119,7 +120,7 @@ final class NavigatorFixture {
         });
     }
 
-    static NavigatorMenu.ItemSpec spec(Inventory inventory, int slot) {
+    static UiItemSpec spec(Inventory inventory, int slot) {
         return ((SpecItem) inventory.getItem(slot)).spec;
     }
 
@@ -200,8 +201,8 @@ final class NavigatorFixture {
     }
 
     private static final class SpecItem extends ItemStack {
-        final NavigatorMenu.ItemSpec spec;
-        SpecItem(NavigatorMenu.ItemSpec spec) { super(); this.spec = spec; }
+        final UiItemSpec spec;
+        SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
     }
 
     private static World world(String name) {

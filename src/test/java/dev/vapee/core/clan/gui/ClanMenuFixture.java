@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.clan.*;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.identity.PlayerIdentityService;
@@ -52,7 +53,7 @@ final class ClanMenuFixture {
         menu = new ClanMenu(clans, identity, messages, id -> {
             TestPlayer player = players.get(id);
             return player != null && player.online ? player.player : null;
-        }, this::inventory, SpecItem::new);
+        }, this::inventory, SpecItem::new, logger());
         listener = new ClanMenuListener(menu, clans, new ClanMessages(messages, id -> {
             TestPlayer player = players.get(id);
             return player != null && player.online ? player.player : null;
@@ -143,8 +144,8 @@ final class ClanMenuFixture {
     }
 
     static final class SpecItem extends ItemStack {
-        final ClanMenu.ItemSpec spec;
-        SpecItem(ClanMenu.ItemSpec spec) { super(); this.spec = spec; }
+        final UiItemSpec spec;
+        SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
     }
     private static final class TestInventory {
         final ItemStack[] items;

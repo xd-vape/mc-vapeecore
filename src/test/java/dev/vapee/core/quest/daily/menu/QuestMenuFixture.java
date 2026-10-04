@@ -1,5 +1,6 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.quest.*;
 import dev.vapee.core.quest.daily.*;
@@ -75,7 +76,7 @@ public final class QuestMenuFixture {
             default -> DEFAULT;
         });
     }
-    public static DailyQuestMenu.ItemSpec spec(Inventory inventory, int slot) { return ((SpecItem) inventory.getItem(slot)).spec; }
+    public static UiItemSpec spec(Inventory inventory, int slot) { return ((SpecItem) inventory.getItem(slot)).spec; }
     public static String text(Inventory inventory, int slot) { return plain(spec(inventory, slot).name()); }
     public static String lore(Inventory inventory, int slot) {
         return spec(inventory, slot).lore().stream().map(QuestCompletionFixture::plain).reduce("", (a, b) -> a + "\n" + b);
@@ -119,7 +120,7 @@ public final class QuestMenuFixture {
         public String received() { return output.stream().map(QuestCompletionFixture::plain).reduce("", (a, b) -> a + "\n" + b); }
     }
     private static final class SpecItem extends ItemStack {
-        private final DailyQuestMenu.ItemSpec spec;
-        private SpecItem(DailyQuestMenu.ItemSpec spec) { super(); this.spec = spec; }
+        private final UiItemSpec spec;
+        private SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
     }
 }

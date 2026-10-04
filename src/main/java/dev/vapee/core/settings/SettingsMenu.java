@@ -1,16 +1,16 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -20,6 +20,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class SettingsMenu {
 
@@ -46,6 +48,7 @@ public final class SettingsMenu {
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
     private final Function<UUID, Player> onlinePlayer;
+    private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
 
     public SettingsMenu(
@@ -57,17 +60,19 @@ public final class SettingsMenu {
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.inventoryFactory = (holder, size, title) -> plugin.getServer().createInventory(holder, size, title);
-        this.itemRenderer = SettingsMenu::renderItem;
+        this.itemRenderer = UiItems::render;
+        this.logger = plugin.getLogger();
         this.onlinePlayer = plugin.getServer()::getPlayer;
     }
 
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
                  Function<UUID, Player> onlinePlayer,
-                 InventoryFactory inventoryFactory, ItemRenderer itemRenderer) {
+                 InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger) {
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
         this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.logger = Objects.requireNonNull(logger, "logger");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
     }
 
@@ -111,15 +116,24 @@ public final class SettingsMenu {
     }
 
     public void closeOpenInventories() {
-        for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
-            Player player = onlinePlayer.apply(entry.getKey());
-            if (player != null && player.isOnline()
-                    && player.getOpenInventory().getTopInventory() == entry.getValue()) {
-                player.closeInventory();
+        try {
+            for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
+                try {
+                    Player player = onlinePlayer.apply(entry.getKey());
+                    if (player != null && player.isOnline()
+                            && player.getOpenInventory().getTopInventory() == entry.getValue()) {
+                        player.closeInventory();
+                    }
+                } catch (RuntimeException exception) {
+                    logger.log(Level.WARNING, "Could not close SettingsMenu for " + entry.getKey() + ".", exception);
+                }
             }
+        } finally {
+            activeInventories.clear();
         }
-        activeInventories.clear();
     }
+
+    int activeCount() { return activeInventories.size(); }
 
     public boolean refresh(Player player, Inventory inventory) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
@@ -190,9 +204,9 @@ public final class SettingsMenu {
                 )
         );
         validatedInventory.setItem(CLOSE_SLOT, createCloseItem());
-        validatedInventory.setItem(REFRESH_SLOT, itemRenderer.render(new ItemSpec(
-                Material.CLOCK, uiText("Refresh", NamedTextColor.AQUA),
-                List.of(uiText("Reload your current settings.", NamedTextColor.GRAY)))));
+        validatedInventory.setItem(REFRESH_SLOT, itemRenderer.render(new UiItemSpec(
+                Material.CLOCK, UiItems.text("Refresh", NamedTextColor.AQUA),
+                List.of(UiItems.text("Reload your current settings.", NamedTextColor.GRAY)))));
         validatedInventory.setItem(SCOREBOARD_STATUS_SLOT, createStatusItem(settings.isScoreboardEnabled()));
         validatedInventory.setItem(SOUNDS_STATUS_SLOT, createStatusItem(settings.isSoundsEnabled()));
         validatedInventory.setItem(PRIVATE_MESSAGES_STATUS_SLOT,
@@ -202,19 +216,19 @@ public final class SettingsMenu {
         validatedInventory.setItem(FRIEND_PRESENCE_STATUS_SLOT,
                 createStatusItem(settings.isFriendPresenceNotificationsEnabled()));
         boolean allVisible = settings.isLobbyPlayersVisible();
-        validatedInventory.setItem(VISIBILITY_STATUS_SLOT, itemRenderer.render(new ItemSpec(
+        validatedInventory.setItem(VISIBILITY_STATUS_SLOT, itemRenderer.render(new UiItemSpec(
                 allVisible ? Material.LIME_STAINED_GLASS_PANE : Material.YELLOW_STAINED_GLASS_PANE,
-                uiText(allVisible ? "All Players" : "Filtered",
+                UiItems.text(allVisible ? "All Players" : "Filtered",
                         allVisible ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
-                List.of(uiText("Click to open visibility settings.", NamedTextColor.GRAY)))));
+                List.of(UiItems.text("Click to open visibility settings.", NamedTextColor.GRAY)))));
         return true;
     }
 
     private ItemStack createStatusItem(boolean enabled) {
-        return itemRenderer.render(new ItemSpec(
+        return itemRenderer.render(new UiItemSpec(
                 enabled ? Material.LIME_STAINED_GLASS_PANE : Material.RED_STAINED_GLASS_PANE,
-                uiText(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED),
-                List.of(uiText(enabled ? "Click to disable." : "Click to enable.", NamedTextColor.GRAY))));
+                UiItems.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED),
+                List.of(UiItems.text(enabled ? "Click to disable." : "Click to enable.", NamedTextColor.GRAY))));
     }
 
     private ItemStack createToggleItem(
@@ -225,55 +239,34 @@ public final class SettingsMenu {
     ) {
         List<Component> lore = new java.util.ArrayList<>();
         for (String line : description) {
-            lore.add(uiText(line, NamedTextColor.GRAY));
+            lore.add(UiItems.text(line, NamedTextColor.GRAY));
         }
         lore.add(Component.empty());
-        lore.add(uiText(
+        lore.add(UiItems.text(
                 enabled ? "Click to disable." : "Click to enable.",
                 NamedTextColor.YELLOW
         ));
-        return itemRenderer.render(new ItemSpec(material, uiText(name, NamedTextColor.AQUA), List.copyOf(lore)));
+        return itemRenderer.render(new UiItemSpec(material, UiItems.text(name, NamedTextColor.AQUA), List.copyOf(lore)));
     }
 
     private ItemStack createVisibilityItem() {
-        return itemRenderer.render(new ItemSpec(
+        return itemRenderer.render(new UiItemSpec(
                 Material.SPYGLASS,
-                uiText("Player Visibility", NamedTextColor.AQUA),
+                UiItems.text("Player Visibility", NamedTextColor.AQUA),
                 List.of(
-                        uiText("Manage which lobby players you can see.", NamedTextColor.GRAY),
+                        UiItems.text("Manage which lobby players you can see.", NamedTextColor.GRAY),
                         Component.empty(),
-                        uiText("Click to open.", NamedTextColor.YELLOW)
+                        UiItems.text("Click to open.", NamedTextColor.YELLOW)
                 )
         ));
     }
 
     private ItemStack createCloseItem() {
-        return itemRenderer.render(new ItemSpec(
+        return itemRenderer.render(new UiItemSpec(
                 Material.BARRIER,
-                uiText("Close", NamedTextColor.RED),
+                UiItems.text("Close", NamedTextColor.RED),
                 List.of()
         ));
-    }
-
-    private static Component uiText(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
-    }
-
-    private static ItemStack renderItem(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    record ItemSpec(Material material, Component name, List<Component> lore) {
-        ItemSpec {
-            Objects.requireNonNull(material, "material");
-            Objects.requireNonNull(name, "name");
-            lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
-        }
     }
 
     @FunctionalInterface
@@ -283,6 +276,6 @@ public final class SettingsMenu {
 
     @FunctionalInterface
     interface ItemRenderer {
-        ItemStack render(ItemSpec spec);
+        ItemStack render(UiItemSpec spec);
     }
 }
