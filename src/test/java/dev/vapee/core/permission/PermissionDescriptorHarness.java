@@ -20,6 +20,7 @@ public final class PermissionDescriptorHarness {
     private record Root(String permission, List<String> aliases, String usage) { }
     private record Node(PermissionDefault defaultValue, Set<String> children) { }
     private static final Map<String, Root> ROOTS = Map.ofEntries(
+            Map.entry("quests", new Root("vapeecore.quest.use", List.of("quest"), "/quests")),
             Map.entry("mute", new Root("vapeecore.moderation.mute", List.of(), "/mute <player|uuid> <duration|permanent> <reason...>")),
             Map.entry("unmute", new Root("vapeecore.moderation.unmute", List.of(), "/unmute <player|uuid> [reason...]")),
             Map.entry("warn", new Root("vapeecore.moderation.warn", List.of(), "/warn <player|uuid> <reason...>")),
@@ -58,6 +59,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("ranks", new Root("vapeecore.ranks.view", List.of(), "/ranks"))
     );
     private static final Map<String, Node> NODES = Map.ofEntries(
+            Map.entry("vapeecore.quest.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.moderation.mute", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.moderation.unmute", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.moderation.warn", new Node(PermissionDefault.OP, Set.of())),
@@ -115,7 +117,7 @@ public final class PermissionDescriptorHarness {
             if (stream == null) throw new AssertionError("missing descriptor");
             descriptor = new PluginDescriptionFile(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
-        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 36, "exact 36 command roots");
+        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 37, "exact 37 command roots");
         check(descriptor.getDepend().equals(List.of("LuckPerms")), "required LP dependency");
         Set<String> identifiers = new HashSet<>(ROOTS.keySet());
         for (var entry : ROOTS.entrySet()) {
@@ -131,7 +133,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 49, "all 49 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 50, "all 50 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");
@@ -141,7 +143,8 @@ public final class PermissionDescriptorHarness {
             check(!actual.getName().contains("*"), "no wildcard");
             walk(actual.getName(), permissions, new HashSet<>());
         }
-        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 10, "ten player-base defaults");
+        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 11, "eleven player-base defaults");
+        check(NODES.values().stream().mapToInt(node -> node.children().size()).sum() == 15, "same fifteen child edges");
         for (String action : List.of("mute", "unmute", "warn", "ban", "unban", "kick", "history"))
             check(permissions.get("vapeecore.moderation." + action).getChildren().isEmpty(), "independent moderation " + action);
         for (String node : List.of("vapeecore.admin", "vapeecore.visibility.staff"))

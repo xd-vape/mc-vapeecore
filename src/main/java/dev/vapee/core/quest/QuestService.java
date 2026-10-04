@@ -158,6 +158,7 @@ public final class QuestService {
         PlayerQuestState state = player.get().getQuestState();
         List<String> completedQuestIds = new ArrayList<>();
         List<String> rewardPendingQuestIds = new ArrayList<>();
+        List<String> reachedQuestIds = new ArrayList<>();
         int updatedQuests = 0;
         boolean matched = false;
         boolean rewardAttempted = false;
@@ -217,6 +218,7 @@ public final class QuestService {
                     definition.target(),
                     QuestStatus.REWARD_PENDING
             );
+            reachedQuestIds.add(definition.id());
             state.update(pendingProgress);
             updatedQuests++;
             rewardAttempted = true;
@@ -240,7 +242,8 @@ public final class QuestService {
         return QuestProgressResult.processed(
                 updatedQuests,
                 completedQuestIds,
-                rewardPendingQuestIds
+                rewardPendingQuestIds,
+                reachedQuestIds
         );
     }
 

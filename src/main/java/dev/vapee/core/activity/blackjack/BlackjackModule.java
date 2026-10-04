@@ -15,6 +15,9 @@ import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.module.CoreModule;
+import dev.vapee.core.quest.QuestModule;
+import dev.vapee.core.quest.QuestProgressKey;
+import dev.vapee.core.quest.QuestProgressReporter;
 import dev.vapee.core.seat.SeatModule;
 import dev.vapee.core.seat.SeatPositionResolver;
 import dev.vapee.core.worlddisplay.WorldDisplayModule;
@@ -28,6 +31,8 @@ import java.util.logging.Level;
 
 public final class BlackjackModule implements CoreModule {
 
+    private static final QuestProgressKey QUEST_WIN_KEY = QuestProgressKey.of("blackjack:win");
+
     private final JavaPlugin plugin;
     private final ActivityModule activityModule;
     private final SeatModule seatModule;
@@ -35,6 +40,7 @@ public final class BlackjackModule implements CoreModule {
     private final LobbyModule lobbyModule;
     private final MessageService messageService;
     private final CommandHelpRenderer commandHelpRenderer;
+    private final QuestModule questModule;
 
     private ActivityService activityService;
     private BlackjackTableConfig tableConfig;
@@ -54,7 +60,8 @@ public final class BlackjackModule implements CoreModule {
             WorldDisplayModule worldDisplayModule,
             LobbyModule lobbyModule,
             MessageService messageService,
-            CommandHelpRenderer commandHelpRenderer
+            CommandHelpRenderer commandHelpRenderer,
+            QuestModule questModule
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
@@ -63,6 +70,7 @@ public final class BlackjackModule implements CoreModule {
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
+        this.questModule = Objects.requireNonNull(questModule, "questModule");
     }
 
     @Override
@@ -109,6 +117,8 @@ public final class BlackjackModule implements CoreModule {
                 newInventoryService
         );
         BlackjackActivityType activityType = new BlackjackActivityType(newBlackjackService);
+        QuestProgressReporter reporter = questModule.getProgressReporter();
+        newBlackjackService.setOutcomeListener((id, outcome) -> reportQuestOutcome(reporter, id, outcome));
         ActivityResult typeResult = newActivityService.registerActivityType(activityType);
         if (typeResult != ActivityResult.SUCCESS) {
             throw new IllegalStateException("Could not register blackjack activity type: " + typeResult);
@@ -203,6 +213,12 @@ public final class BlackjackModule implements CoreModule {
         blackjackCommand = newBlackjackCommand;
         plugin.getLogger().info("Blackjack module enabled with "
                 + newTableService.getDefinitions().size() + " physical table(s) (Free Play).");
+    }
+
+    static void reportQuestOutcome(QuestProgressReporter reporter, UUID playerId, BlackjackOutcome outcome) {
+        if (outcome == BlackjackOutcome.WIN || outcome == BlackjackOutcome.BLACKJACK) {
+            reporter.report(playerId, QUEST_WIN_KEY, 1L);
+        }
     }
 
     @Override

@@ -73,6 +73,10 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/settings visibility", "Opens visibility settings and player management.",
                                     "vapeecore.settings.use")
                     )),
+                    new CommandHelpSection("Gameplay", List.of(
+                            new CommandHelpEntry("/quests", "Shows your daily quests and automatic rewards.",
+                                    "vapeecore.quest.use", "Alias: /quest")
+                    )),
                     new CommandHelpSection("Economy", List.of(
                             new CommandHelpEntry("/coins", "Shows your current coin balance.",
                                     "vapeecore.economy.coins"),
