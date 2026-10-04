@@ -3,6 +3,7 @@ package dev.vapee.core.moderation.command;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerLookupStatus;
 import dev.vapee.core.moderation.*;
+import dev.vapee.core.rank.staff.StaffTargetDecision;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.*;
@@ -68,14 +69,15 @@ abstract class AbstractModerationCommand implements TabExecutor {
         }
         Optional<String> loaded = context.hierarchy().getLoadedPrimaryGroup(target.uniqueId());
         if (loaded.isPresent()) {
-            authorizedExecute(sender, actor, target, args, loaded);
+            authorizedExecute(sender, actor, target, args,
+                    context.hierarchy().decide(actor.playerId().orElseThrow(), loaded));
             return;
         }
-        // The completion callback only submits immutable result data. All Bukkit/domain work is deferred.
-        context.hierarchy().loadPrimaryGroup(target.uniqueId()).whenComplete((group, failure) -> {
+        // Completion is only a load barrier; authority is read fresh on main-thread resume.
+        context.hierarchy().loadPrimaryGroup(target.uniqueId()).whenComplete((ignoredGroup, failure) -> {
             if (!context.active().getAsBoolean()) return;
             try {
-                context.mainThread().accept(() -> resume(sender, actor, target, args, group, failure));
+                context.mainThread().accept(() -> resume(sender, actor, target, args, failure));
             } catch (RuntimeException schedulingFailure) {
                 context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_HIERARCHY_SCHEDULE",
                         actor, target.uniqueId().toString(), schedulingFailure);
@@ -84,7 +86,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
     }
 
     private void resume(CommandSender sender, ModerationActor actor, PlayerIdentity target,
-                        String[] args, Optional<String> group, Throwable failure) {
+                        String[] args, Throwable failure) {
         if (!context.active().getAsBoolean()) return;
         try {
             Player player = (Player) sender;
@@ -95,7 +97,8 @@ abstract class AbstractModerationCommand implements TabExecutor {
                 return;
             }
             if (failure != null) throw new IllegalStateException("LuckPerms primary group load failed", failure);
-            authorizedExecute(sender, actor, target, args, group);
+            authorizedExecute(sender, actor, target, args,
+                    context.hierarchy().decideLoaded(actor.playerId().orElseThrow(), target.uniqueId()));
         } catch (RuntimeException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_HIERARCHY",
                     actor, target.uniqueId().toString(), exception);
@@ -104,8 +107,8 @@ abstract class AbstractModerationCommand implements TabExecutor {
     }
 
     private void authorizedExecute(CommandSender sender, ModerationActor actor, PlayerIdentity target,
-                                   String[] args, Optional<String> targetGroup) {
-        switch (context.hierarchy().decide(actor.playerId().orElseThrow(), targetGroup)) {
+                                   String[] args, StaffTargetDecision decision) {
+        switch (decision) {
             case ALLOW -> execute(sender, actor, target, args);
             case DENY_SAME_OR_HIGHER -> context.send(sender, "You cannot target a staff member at your level or above.");
             case DENY_ACTOR_NOT_PROTECTED -> context.send(sender, "You cannot target a protected staff member.");
