@@ -147,6 +147,26 @@ public final class VisibilityMenuSecurityHarness {
                         && !fixture.visiblePlayersMenu.isActive(owner.player, disableVisible,
                         VisibilityMenuFixture.visibleHolder(disableVisible)),
                 "module-style cleanup invalidates both menu registries");
+        checks += dev.vapee.core.ui.MenuCloseProbe.verify("VisibilitySettingsMenu", probe -> {
+            var menu = new VisibilitySettingsMenu(fixture.settings, fixture.messages, probe::lookup,
+                    fixture::visibilityInventory, VisibilityMenuFixture.VisibilitySpecItem::new, probe.logger);
+            var listener = new VisibilitySettingsListener(menu, fixture.visiblePlayersMenu, ignored -> { },
+                    fixture.settings, ignored -> { }, ignored -> { }, ignored -> { }, fixture.messages, probe.logger);
+            return new dev.vapee.core.ui.MenuCloseProbe.Subject(player -> {
+                fixture.players.loadPlayer(player.getUniqueId(), player.getName());
+                menu.open(player);
+            }, menu::closeOpenInventories, menu::activeCount, listener::onInventoryClose);
+        });
+        checks += dev.vapee.core.ui.MenuCloseProbe.verify("VisiblePlayersMenu", probe -> {
+            var menu = new VisiblePlayersMenu(fixture.settings, fixture.identities, fixture.messages, probe::lookup,
+                    fixture::visibleInventory, VisibilityMenuFixture.VisibleSpecItem::new, probe.logger);
+            var listener = new VisiblePlayersListener(menu, fixture.visibilityMenu, fixture.settings,
+                    ignored -> { }, ignored -> { }, fixture.messages, probe.logger);
+            return new dev.vapee.core.ui.MenuCloseProbe.Subject(player -> {
+                fixture.players.loadPlayer(player.getUniqueId(), player.getName());
+                menu.open(player);
+            }, menu::closeOpenInventories, menu::activeCount, listener::onInventoryClose);
+        });
         System.out.println("VisibilityMenuSecurityHarness passed " + checks + " checks.");
     }
 

@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.friend.FriendLimits;
 import dev.vapee.core.friend.FriendMessages;
@@ -85,7 +86,7 @@ final class FriendMenuFixture {
                 id -> {
                     TestPlayer player = players.get(id);
                     return player != null && player.online ? player.player : null;
-                }, this::inventory, SpecItem::new);
+                }, this::inventory, SpecItem::new, logger());
         listener = new FriendMenuListener(menu, friends,
                 new FriendMessages(messages, id -> {
                     TestPlayer player = players.get(id);
@@ -196,9 +197,9 @@ final class FriendMenuFixture {
     }
 
     static final class SpecItem extends ItemStack {
-        final FriendMenu.ItemSpec spec;
+        final UiItemSpec spec;
 
-        SpecItem(FriendMenu.ItemSpec spec) {
+        SpecItem(UiItemSpec spec) {
             super();
             this.spec = spec;
         }

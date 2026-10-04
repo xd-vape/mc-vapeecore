@@ -97,6 +97,15 @@ public final class FriendMenuSecurityHarness {
         fixture.menu.closeOpenInventories();
         check(owner.closeCalls == 1 && !fixture.menu.isActive(owner.player, current,
                 FriendMenuFixture.holder(current)), "disable closes and invalidates active menu");
+        checks += dev.vapee.core.ui.MenuCloseProbe.verify("FriendMenu", probe -> {
+            var menu = new FriendMenu(fixture.friends, fixture.identities, fixture.messages,
+                    probe::lookup, fixture::inventory, FriendMenuFixture.SpecItem::new, probe.logger);
+            var listener = new FriendMenuListener(menu, fixture.friends,
+                    new dev.vapee.core.friend.FriendMessages(fixture.messages, probe::lookup),
+                    fixture.messages, probe.logger);
+            return new dev.vapee.core.ui.MenuCloseProbe.Subject(menu::open, menu::closeOpenInventories,
+                    menu::activeCount, listener::onInventoryClose);
+        });
         System.out.println("FriendMenuSecurityHarness passed " + checks + " checks.");
     }
 

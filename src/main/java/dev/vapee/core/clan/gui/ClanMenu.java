@@ -1,5 +1,8 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.clan.*;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
@@ -8,16 +11,16 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Holder-bound 54-slot clan views; no cached domain data or scheduler. */
 public final class ClanMenu {
@@ -38,21 +41,23 @@ public final class ClanMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final Logger logger;
     private final Map<UUID, Inventory> active = new HashMap<>();
 
     public ClanMenu(JavaPlugin plugin, ClanService clans, PlayerIdentityService identities, MessageService messages) {
         this(clans, identities, messages, plugin.getServer()::getPlayer,
-                (holder, size, title) -> plugin.getServer().createInventory(holder, size, title), ClanMenu::render);
+                (holder, size, title) -> plugin.getServer().createInventory(holder, size, title), UiItems::render, plugin.getLogger());
     }
 
     public ClanMenu(ClanService clans, PlayerIdentityService identities, MessageService messages,
-                    Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory, ItemRenderer itemRenderer) {
+                    Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger) {
         this.clans = Objects.requireNonNull(clans, "clans");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
         this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void open(Player player) { open(player, ClanMenuView.OVERVIEW, 0); }
@@ -65,10 +70,10 @@ public final class ClanMenu {
         ClanMenuView view = clan == null && requestedView == ClanMenuView.MEMBERS
                 ? ClanMenuView.OVERVIEW : requestedView;
         List<Entry> entries = entries(viewer, clan, view);
-        int pages = pageCount(entries.size());
-        int page = Math.max(0, Math.min(requestedPage, pages - 1));
-        int first = page * CONTENT_SIZE;
-        int end = Math.min(first + CONTENT_SIZE, entries.size());
+        Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);
+        int page = pagination.page();
+        int first = pagination.fromIndex();
+        int end = pagination.toIndex();
         Map<Integer, UUID> targets = new LinkedHashMap<>();
         for (int i = first; i < end; i++) targets.put(i - first, entries.get(i).id());
         ClanMenuHolder holder = new ClanMenuHolder(viewer, view, page, clan == null ? null : clan.id(), targets);
@@ -78,7 +83,7 @@ public final class ClanMenu {
         else if (entries.isEmpty()) inventory.setItem(22, item(Material.PAPER,
                 view == ClanMenuView.MEMBERS ? "No members" : "No invites", List.of()));
         for (int i = first; i < end; i++) inventory.setItem(i - first, item(entries.get(i)));
-        if (page > 0) inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", List.of()));
+        if (pagination.hasPrevious()) inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", List.of()));
         inventory.setItem(OVERVIEW_SLOT, tab("Overview", view == ClanMenuView.OVERVIEW));
         if (clan != null) inventory.setItem(MEMBERS_SLOT, tab("Members", view == ClanMenuView.MEMBERS));
         inventory.setItem(INVITES_SLOT, tab("Invites", view == ClanMenuView.INVITES));
@@ -88,7 +93,7 @@ public final class ClanMenu {
         else if (clan.ownerId().equals(viewer)) inventory.setItem(ACTION_SLOT,
                 item(Material.RED_DYE, "Disband Clan", List.of("Shift + Right-click for confirmation command.")));
         inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", List.of("Read current clan state.")));
-        if (page + 1 < pages) inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", List.of()));
+        if (pagination.hasNext()) inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", List.of()));
         var opened = player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) active.put(viewer, inventory);
     }
@@ -155,16 +160,27 @@ public final class ClanMenu {
     void forgetIfActive(UUID viewer, Inventory inventory) { active.remove(viewer, inventory); }
 
     public void closeOpenInventories() {
-        for (Map.Entry<UUID, Inventory> entry : List.copyOf(active.entrySet())) {
-            Player player = onlinePlayer.apply(entry.getKey());
-            if (player != null && player.isOnline()
-                    && player.getOpenInventory().getTopInventory() == entry.getValue()) player.closeInventory();
+        try {
+            for (Map.Entry<UUID, Inventory> entry : List.copyOf(active.entrySet())) {
+                try {
+                    Player player = onlinePlayer.apply(entry.getKey());
+                    if (player != null && player.isOnline()
+                            && player.getOpenInventory().getTopInventory() == entry.getValue()) {
+                        player.closeInventory();
+                    }
+                } catch (RuntimeException exception) {
+                    logger.log(Level.WARNING, "Could not close ClanMenu for " + entry.getKey() + ".", exception);
+                }
+            }
+        } finally {
+            active.clear();
         }
-        active.clear();
     }
 
+    int activeCount() { return active.size(); }
+
     public boolean hasNext(UUID viewer, ClanMenuView view, int page) {
-        return page >= 0 && page + 1 < pageCount(entries(viewer, clans.getClanOf(viewer).orElse(null), view).size());
+        return page >= 0 && Pagination.of(entries(viewer, clans.getClanOf(viewer).orElse(null), view).size(), page, CONTENT_SIZE).hasNext();
     }
 
     public String displayName(UUID id) {
@@ -197,35 +213,19 @@ public final class ClanMenu {
 
     private ItemStack item(Entry entry) { return item(entry.material(), entry.name(), entry.lore()); }
     private ItemStack item(Material material, String name, List<String> lore) {
-        return itemRenderer.render(new ItemSpec(material, ui(name, NamedTextColor.AQUA),
-                lore.stream().map(line -> ui(line, NamedTextColor.GRAY)).toList()));
+        return itemRenderer.render(UiItems.literal(material, name, NamedTextColor.AQUA, lore));
     }
     private static Component title(ClanMenuView view) {
-        return ui(switch (view) {
+        return UiItems.text(switch (view) {
             case OVERVIEW -> "Clan";
             case MEMBERS -> "Clan • Members";
             case INVITES -> "Clan • Invites";
         }, NamedTextColor.DARK_GRAY);
     }
-    private static Component ui(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
-    }
-    private static ItemStack render(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
-    }
-    private static int pageCount(int size) { return size == 0 ? 1 : 1 + (size - 1) / CONTENT_SIZE; }
 
-    public record ItemSpec(Material material, Component name, List<Component> lore) {
-        public ItemSpec { lore = List.copyOf(lore); }
-    }
     private record Entry(UUID id, String name, Material material, List<String> lore, int order) { }
     @FunctionalInterface public interface InventoryFactory {
         Inventory create(ClanMenuHolder holder, int size, Component title);
     }
-    @FunctionalInterface public interface ItemRenderer { ItemStack render(ItemSpec spec); }
+    @FunctionalInterface public interface ItemRenderer { ItemStack render(UiItemSpec spec); }
 }

@@ -1,16 +1,16 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -19,6 +19,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class VisibilitySettingsMenu {
     public static final int INVENTORY_SIZE = 54;
@@ -37,30 +39,32 @@ public final class VisibilitySettingsMenu {
     public static final int CLOSE_SLOT = 49;
     public static final int REFRESH_SLOT = 52;
 
-    private static final Component TITLE = uiText("Visibility Settings", NamedTextColor.DARK_GRAY);
+    private static final Component TITLE = UiItems.text("Visibility Settings", NamedTextColor.DARK_GRAY);
 
     private final PlayerSettingsService settings;
     private final MessageService messages;
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
 
     public VisibilitySettingsMenu(JavaPlugin plugin, PlayerSettingsService settings, MessageService messages) {
         this(settings, messages,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                VisibilitySettingsMenu::renderItem);
+                UiItems::render, plugin.getLogger());
     }
 
     VisibilitySettingsMenu(PlayerSettingsService settings, MessageService messages,
                            Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
-                           ItemRenderer itemRenderer) {
+                           ItemRenderer itemRenderer, Logger logger) {
         this.settings = Objects.requireNonNull(settings, "settings");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
         this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void open(Player player) {
@@ -93,15 +97,24 @@ public final class VisibilitySettingsMenu {
     }
 
     public void closeOpenInventories() {
-        for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
-            Player player = onlinePlayer.apply(entry.getKey());
-            if (player != null && player.isOnline()
-                    && player.getOpenInventory().getTopInventory() == entry.getValue()) {
-                player.closeInventory();
+        try {
+            for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
+                try {
+                    Player player = onlinePlayer.apply(entry.getKey());
+                    if (player != null && player.isOnline()
+                            && player.getOpenInventory().getTopInventory() == entry.getValue()) {
+                        player.closeInventory();
+                    }
+                } catch (RuntimeException exception) {
+                    logger.log(Level.WARNING, "Could not close VisibilitySettingsMenu for " + entry.getKey() + ".", exception);
+                }
             }
+        } finally {
+            activeInventories.clear();
         }
-        activeInventories.clear();
     }
+
+    int activeCount() { return activeInventories.size(); }
 
     private void render(Inventory inventory, PlayerSettings current) {
         var visibility = current.getVisibility();
@@ -173,29 +186,7 @@ public final class VisibilitySettingsMenu {
     }
 
     private ItemStack item(Material material, String name, NamedTextColor color, List<String> lore) {
-        return itemRenderer.render(new ItemSpec(material, uiText(name, color),
-                lore.stream().map(line -> uiText(line, NamedTextColor.GRAY)).toList()));
-    }
-
-    private static ItemStack renderItem(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private static Component uiText(String value, NamedTextColor color) {
-        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
-    }
-
-    record ItemSpec(Material material, Component name, List<Component> lore) {
-        ItemSpec {
-            Objects.requireNonNull(material, "material");
-            Objects.requireNonNull(name, "name");
-            lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
-        }
+        return itemRenderer.render(UiItems.literal(material, name, color, lore));
     }
 
     @FunctionalInterface
@@ -205,6 +196,6 @@ public final class VisibilitySettingsMenu {
 
     @FunctionalInterface
     interface ItemRenderer {
-        ItemStack render(ItemSpec spec);
+        ItemStack render(UiItemSpec spec);
     }
 }

@@ -1,16 +1,17 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.lobby.warp.WarpPoint;
 import dev.vapee.core.lobby.warp.WarpService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -45,7 +46,7 @@ public final class NavigatorMenu {
     public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy) {
         this(warpService, accessPolicy, Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                NavigatorMenu::renderItem, plugin.getLogger());
+                UiItems::render, plugin.getLogger());
     }
 
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
@@ -70,10 +71,11 @@ public final class NavigatorMenu {
             return false;
         }
         List<WarpPoint> warps = warpService.getNavigatorWarps();
-        int pageCount = Math.max(1, (warps.size() + CONTENT_SIZE - 1) / CONTENT_SIZE);
-        int page = Math.max(0, Math.min(requestedPage, pageCount - 1));
-        int fromIndex = page * CONTENT_SIZE;
-        int toIndex = Math.min(fromIndex + CONTENT_SIZE, warps.size());
+        Pagination pagination = Pagination.of(warps.size(), requestedPage, CONTENT_SIZE);
+        int page = pagination.page();
+        int pageCount = pagination.pageCount();
+        int fromIndex = pagination.fromIndex();
+        int toIndex = pagination.toIndex();
         Map<Integer, String> warpIdsBySlot = new LinkedHashMap<>();
         for (int index = fromIndex; index < toIndex; index++) {
             warpIdsBySlot.put(index - fromIndex, warps.get(index).id());
@@ -98,7 +100,7 @@ public final class NavigatorMenu {
                     List.of()
             ));
         }
-        if (page > 0) {
+        if (pagination.hasPrevious()) {
             inventory.setItem(PREVIOUS_SLOT, createItem(
                     Material.ARROW,
                     "Previous Page",
@@ -118,7 +120,7 @@ public final class NavigatorMenu {
                 NamedTextColor.RED,
                 List.of()
         ));
-        if (page + 1 < pageCount) {
+        if (pagination.hasNext()) {
             inventory.setItem(NEXT_SLOT, createItem(
                     Material.ARROW,
                     "Next Page",
@@ -205,29 +207,7 @@ public final class NavigatorMenu {
             NamedTextColor nameColor,
             List<String> loreLines
     ) {
-        return itemRenderer.render(new ItemSpec(material, uiText(name, nameColor), loreLines.stream()
-                .map(line -> uiText(line, NamedTextColor.GRAY)).toList()));
-    }
-
-    private static ItemStack renderItem(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private Component uiText(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
-    }
-
-    record ItemSpec(Material material, Component name, List<Component> lore) {
-        ItemSpec {
-            Objects.requireNonNull(material, "material");
-            Objects.requireNonNull(name, "name");
-            lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
-        }
+        return itemRenderer.render(UiItems.literal(material, name, nameColor, loreLines));
     }
 
     @FunctionalInterface
@@ -237,6 +217,6 @@ public final class NavigatorMenu {
 
     @FunctionalInterface
     interface ItemRenderer {
-        ItemStack render(ItemSpec spec);
+        ItemStack render(UiItemSpec spec);
     }
 }

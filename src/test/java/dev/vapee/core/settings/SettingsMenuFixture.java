@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
@@ -54,7 +55,7 @@ public final class SettingsMenuFixture {
                                          Function<UUID, Player> online,
                                          java.util.function.BiFunction<SettingsInventoryHolder, Integer, Inventory> factory) {
         return new SettingsMenu(settings, messages, online,
-                (holder, size, title) -> factory.apply(holder, size), SpecItem::new);
+                (holder, size, title) -> factory.apply(holder, size), SpecItem::new, Logger.getAnonymousLogger());
     }
 
     public static SettingsListener createListener(SettingsMenu menu, PlayerSettingsService settings,
@@ -111,7 +112,7 @@ public final class SettingsMenuFixture {
         });
     }
 
-    static SettingsMenu.ItemSpec spec(Inventory inventory, int slot) { return ((SpecItem) inventory.getItem(slot)).spec; }
+    static UiItemSpec spec(Inventory inventory, int slot) { return ((SpecItem) inventory.getItem(slot)).spec; }
     static String text(Inventory inventory, int slot) { return plain(spec(inventory, slot).name()); }
     static String plain(Component value) { return PlainTextComponentSerializer.plainText().serialize(value); }
 
@@ -158,8 +159,8 @@ public final class SettingsMenuFixture {
     }
 
     private static final class SpecItem extends ItemStack {
-        final SettingsMenu.ItemSpec spec;
-        SpecItem(SettingsMenu.ItemSpec spec) { super(); this.spec = spec; }
+        final UiItemSpec spec;
+        SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
     }
 
     static final class MemoryRepository implements PlayerRepository {

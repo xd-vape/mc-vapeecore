@@ -1,5 +1,8 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.quest.QuestService;
@@ -9,7 +12,6 @@ import dev.vapee.core.quest.daily.DailyQuestService;
 import dev.vapee.core.quest.daily.DailyQuestSyncResult;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -47,7 +49,7 @@ public final class DailyQuestMenu {
                           PlayerService players, MessageService messages) {
         this(daily, quests, players, messages, plugin.getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                DailyQuestMenu::renderItem, Instant::now, plugin.getLogger());
+                UiItems::render, Instant::now, plugin.getLogger());
     }
 
     DailyQuestMenu(DailyQuestService daily, QuestService quests, PlayerService players, MessageService messages,
@@ -104,21 +106,22 @@ public final class DailyQuestMenu {
         }
         if (!canUse(player)) return;
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
-        int pages = views.isEmpty() ? 1 : (views.size() - 1) / CONTENT_SIZE + 1;
-        int page = Math.max(0, Math.min(requestedPage, pages - 1));
+        Pagination pagination = Pagination.of(views.size(), requestedPage, CONTENT_SIZE);
+        int page = pagination.page();
+        int pages = pagination.pageCount();
         DailyQuestInventoryHolder holder = new DailyQuestInventoryHolder(player.getUniqueId(), page);
-        Inventory inventory = inventories.create(holder, SIZE, text("Daily Quests", NamedTextColor.DARK_GRAY));
+        Inventory inventory = inventories.create(holder, SIZE, UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
         holder.bind(inventory);
-        int start = page * CONTENT_SIZE;
-        for (int slot = 0; slot < CONTENT_SIZE && start + slot < views.size(); slot++) {
+        int start = pagination.fromIndex();
+        for (int slot = 0; slot < pagination.toIndex() - start; slot++) {
             inventory.setItem(slot, questItem(views.get(start + slot)));
         }
-        if (page > 0) inventory.setItem(PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
+        if (pagination.hasPrevious()) inventory.setItem(PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
         inventory.setItem(PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
                 List.of("Rewards are delivered automatically.")));
         inventory.setItem(CLOSE, item(Material.BARRIER, "Close", List.of()));
         inventory.setItem(REFRESH, item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
-        if (page + 1 < pages) inventory.setItem(NEXT, item(Material.ARROW, "Next page", List.of()));
+        if (pagination.hasNext()) inventory.setItem(NEXT, item(Material.ARROW, "Next page", List.of()));
         var opened = player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {
@@ -167,34 +170,21 @@ public final class DailyQuestMenu {
         boolean pending = view.status() == QuestStatus.REWARD_PENDING;
         NamedTextColor color = completed ? NamedTextColor.GREEN : pending ? NamedTextColor.YELLOW : NamedTextColor.AQUA;
         List<Component> lore = new ArrayList<>();
-        lore.add(text(view.definition().description(), NamedTextColor.GRAY));
-        lore.add(text("Progress: " + view.currentProgress() + " / " + view.target(), NamedTextColor.WHITE));
-        lore.add(text("Reward: " + view.definition().rewardCoins() + " Coins", NamedTextColor.GOLD));
-        lore.add(text(completed ? "Completed" : pending ? "Reward Pending" : "In Progress", color));
-        if (completed) lore.add(text("Your reward has already been delivered.", NamedTextColor.GRAY));
-        else if (pending) lore.add(text("Your reward will be retried automatically.", NamedTextColor.YELLOW));
-        return items.render(new ItemSpec(completed ? Material.LIME_DYE : pending ? Material.GOLD_INGOT : Material.PAPER,
-                text(view.definition().name(), color), List.copyOf(lore)));
+        lore.add(UiItems.text(view.definition().description(), NamedTextColor.GRAY));
+        lore.add(UiItems.text("Progress: " + view.currentProgress() + " / " + view.target(), NamedTextColor.WHITE));
+        lore.add(UiItems.text("Reward: " + view.definition().rewardCoins() + " Coins", NamedTextColor.GOLD));
+        lore.add(UiItems.text(completed ? "Completed" : pending ? "Reward Pending" : "In Progress", color));
+        if (completed) lore.add(UiItems.text("Your reward has already been delivered.", NamedTextColor.GRAY));
+        else if (pending) lore.add(UiItems.text("Your reward will be retried automatically.", NamedTextColor.YELLOW));
+        return items.render(new UiItemSpec(completed ? Material.LIME_DYE : pending ? Material.GOLD_INGOT : Material.PAPER,
+                UiItems.text(view.definition().name(), color), List.copyOf(lore)));
     }
 
     private ItemStack item(Material material, String name, List<String> lore) {
-        return items.render(new ItemSpec(material, text(name, NamedTextColor.AQUA),
-                lore.stream().map(line -> text(line, NamedTextColor.GRAY)).toList()));
-    }
-    private static Component text(String value, NamedTextColor color) {
-        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
-    }
-    private static ItemStack renderItem(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        var meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
+        return items.render(UiItems.literal(material, name, NamedTextColor.AQUA, lore));
     }
     @FunctionalInterface interface InventoryFactory {
         Inventory create(DailyQuestInventoryHolder holder, int size, Component title);
     }
-    @FunctionalInterface interface ItemRenderer { ItemStack render(ItemSpec spec); }
-    record ItemSpec(Material material, Component name, List<Component> lore) { }
+    @FunctionalInterface interface ItemRenderer { ItemStack render(UiItemSpec spec); }
 }

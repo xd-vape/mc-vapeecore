@@ -1,5 +1,8 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.friend.FriendRequest;
 import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.identity.PlayerIdentity;
@@ -9,12 +12,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
@@ -26,6 +27,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** A focused, holder-bound view of the existing friends service. */
 public final class FriendMenu {
@@ -51,6 +54,7 @@ public final class FriendMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
 
     public FriendMenu(JavaPlugin plugin, FriendService friends, PlayerIdentityService identities,
@@ -58,18 +62,19 @@ public final class FriendMenu {
         this(friends, identities, messages,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                FriendMenu::renderItem);
+                UiItems::render, plugin.getLogger());
     }
 
     FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
                Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
-               ItemRenderer itemRenderer) {
+               ItemRenderer itemRenderer, Logger logger) {
         this.friends = Objects.requireNonNull(friends, "friends");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
         this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void open(Player player) {
@@ -81,10 +86,10 @@ public final class FriendMenu {
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
         UUID owner = viewer.getUniqueId();
         List<Entry> entries = entries(owner, selectedView);
-        int pageCount = pageCount(entries.size());
-        int page = Math.max(0, Math.min(requestedPage, pageCount - 1));
-        int first = page * CONTENT_SIZE;
-        int end = Math.min(first + CONTENT_SIZE, entries.size());
+        Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);
+        int page = pagination.page();
+        int first = pagination.fromIndex();
+        int end = pagination.toIndex();
         Map<Integer, UUID> targets = new LinkedHashMap<>();
         for (int index = first; index < end; index++) {
             targets.put(index - first, entries.get(index).id());
@@ -106,7 +111,7 @@ public final class FriendMenu {
                     selectedView == FriendMenuView.FRIENDS
                             ? List.of("Use /friend add <player> to get started.") : List.of()));
         }
-        if (page > 0) {
+        if (pagination.hasPrevious()) {
             inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
                     List.of()));
         }
@@ -121,7 +126,7 @@ public final class FriendMenu {
                 Integer.toString(friends.getOutgoingRequests(owner).size())));
         inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
                 List.of("Update friends, requests and online status.")));
-        if (page + 1 < pageCount) {
+        if (pagination.hasNext()) {
             inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW,
                     List.of()));
         }
@@ -143,18 +148,27 @@ public final class FriendMenu {
     }
 
     public void closeOpenInventories() {
-        for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
-            Player player = onlinePlayer.apply(entry.getKey());
-            if (player != null && player.isOnline()
-                    && player.getOpenInventory().getTopInventory() == entry.getValue()) {
-                player.closeInventory();
+        try {
+            for (Map.Entry<UUID, Inventory> entry : List.copyOf(activeInventories.entrySet())) {
+                try {
+                    Player player = onlinePlayer.apply(entry.getKey());
+                    if (player != null && player.isOnline()
+                            && player.getOpenInventory().getTopInventory() == entry.getValue()) {
+                        player.closeInventory();
+                    }
+                } catch (RuntimeException exception) {
+                    logger.log(Level.WARNING, "Could not close FriendMenu for " + entry.getKey() + ".", exception);
+                }
             }
+        } finally {
+            activeInventories.clear();
         }
-        activeInventories.clear();
     }
 
+    int activeCount() { return activeInventories.size(); }
+
     public boolean hasNext(UUID owner, FriendMenuView view, int page) {
-        return page >= 0 && page + 1 < pageCount(entries(owner, view).size());
+        return page >= 0 && Pagination.of(entries(owner, view).size(), page, CONTENT_SIZE).hasNext();
     }
 
     public String displayName(UUID id) {
@@ -184,7 +198,7 @@ public final class FriendMenu {
         return result;
     }
 
-    private ItemSpec entryItem(FriendMenuView view, Entry entry) {
+    private UiItemSpec entryItem(FriendMenuView view, Entry entry) {
         List<String> lore = switch (view) {
             case FRIENDS -> List.of(entry.online() ? "Online" : "Offline",
                     "Shift + Right-click to remove");
@@ -192,55 +206,25 @@ public final class FriendMenu {
                     "Left-click to accept", "Right-click to decline");
             case OUTGOING -> List.of(entry.online() ? "Online" : "Offline", "Click to cancel request.");
         };
-        return spec(Material.PLAYER_HEAD, entry.name(), NamedTextColor.AQUA, lore);
+        return UiItems.literal(Material.PLAYER_HEAD, entry.name(), NamedTextColor.AQUA, lore);
     }
 
     private ItemStack tabItem(String name, boolean active, String count) {
-        return itemRenderer.render(spec(active ? Material.LIME_DYE : Material.GRAY_DYE, name,
+        return itemRenderer.render(UiItems.literal(active ? Material.LIME_DYE : Material.GRAY_DYE, name,
                 active ? NamedTextColor.GREEN : NamedTextColor.WHITE,
                 List.of(count, active ? "Selected" : "Click to open")));
     }
 
     private ItemStack item(Material material, String name, NamedTextColor color, List<String> lore) {
-        return itemRenderer.render(spec(material, name, color, lore));
-    }
-
-    private static ItemSpec spec(Material material, String name, NamedTextColor color, List<String> lore) {
-        return new ItemSpec(material, uiText(name, color),
-                lore.stream().map(line -> uiText(line, NamedTextColor.GRAY)).toList());
+        return itemRenderer.render(UiItems.literal(material, name, color, lore));
     }
 
     private static Component title(FriendMenuView view) {
-        return uiText(switch (view) {
+        return UiItems.text(switch (view) {
             case FRIENDS -> "Friends";
             case INCOMING -> "Friends • Incoming";
             case OUTGOING -> "Friends • Outgoing";
         }, NamedTextColor.DARK_GRAY);
-    }
-
-    private static Component uiText(String value, NamedTextColor color) {
-        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
-    }
-
-    private static ItemStack renderItem(ItemSpec spec) {
-        ItemStack item = new ItemStack(spec.material());
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(spec.name());
-        meta.lore(spec.lore());
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private static int pageCount(int size) {
-        return size == 0 ? 1 : 1 + (size - 1) / CONTENT_SIZE;
-    }
-
-    record ItemSpec(Material material, Component name, List<Component> lore) {
-        ItemSpec {
-            Objects.requireNonNull(material, "material");
-            Objects.requireNonNull(name, "name");
-            lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
-        }
     }
 
     private record Entry(UUID id, String name, boolean online) {}
@@ -252,6 +236,6 @@ public final class FriendMenu {
 
     @FunctionalInterface
     interface ItemRenderer {
-        ItemStack render(ItemSpec spec);
+        ItemStack render(UiItemSpec spec);
     }
 }

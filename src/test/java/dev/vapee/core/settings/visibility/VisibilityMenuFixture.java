@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.CorePlayer;
@@ -56,9 +57,9 @@ final class VisibilityMenuFixture {
         constructor.setAccessible(true);
         messages = constructor.newInstance((java.util.function.Supplier<String>) () -> "");
         visibilityMenu = new VisibilitySettingsMenu(settings, messages, this::onlinePlayer,
-                this::visibilityInventory, VisibilitySpecItem::new);
+                this::visibilityInventory, VisibilitySpecItem::new, logger());
         visiblePlayersMenu = new VisiblePlayersMenu(settings, identities, messages, this::onlinePlayer,
-                this::visibleInventory, VisibleSpecItem::new);
+                this::visibleInventory, VisibleSpecItem::new, logger());
         rootMenu = SettingsMenuFixture.createMenu(settings, messages, this::onlinePlayer,
                 (holder, size) -> inventory(holder, size));
         rootListener = SettingsMenuFixture.createListener(rootMenu, settings, ignored -> { },
@@ -173,11 +174,11 @@ final class VisibilityMenuFixture {
         return (VisiblePlayersHolder) inventory.getHolder();
     }
 
-    static VisibilitySettingsMenu.ItemSpec visibilitySpec(Inventory inventory, int slot) {
+    static UiItemSpec visibilitySpec(Inventory inventory, int slot) {
         return ((VisibilitySpecItem) inventory.getItem(slot)).spec;
     }
 
-    static VisiblePlayersMenu.ItemSpec visibleSpec(Inventory inventory, int slot) {
+    static UiItemSpec visibleSpec(Inventory inventory, int slot) {
         return ((VisibleSpecItem) inventory.getItem(slot)).spec;
     }
 
@@ -232,16 +233,16 @@ final class VisibilityMenuFixture {
     }
 
     static final class VisibilitySpecItem extends ItemStack {
-        final VisibilitySettingsMenu.ItemSpec spec;
-        VisibilitySpecItem(VisibilitySettingsMenu.ItemSpec spec) {
+        final UiItemSpec spec;
+        VisibilitySpecItem(UiItemSpec spec) {
             super();
             this.spec = spec;
         }
     }
 
     static final class VisibleSpecItem extends ItemStack {
-        final VisiblePlayersMenu.ItemSpec spec;
-        VisibleSpecItem(VisiblePlayersMenu.ItemSpec spec) {
+        final UiItemSpec spec;
+        VisibleSpecItem(UiItemSpec spec) {
             super();
             this.spec = spec;
         }
