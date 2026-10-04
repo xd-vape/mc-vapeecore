@@ -3,6 +3,7 @@ package dev.vapee.core.activity.blackjack;
 import dev.vapee.core.activity.ActivityLeaveReason;
 import dev.vapee.core.activity.ActivitySession;
 import dev.vapee.core.activity.blackjack.card.BlackjackHand;
+import dev.vapee.core.activity.blackjack.card.BlackjackHandView;
 import dev.vapee.core.activity.blackjack.card.BlackjackShoe;
 import dev.vapee.core.activity.location.ActivityVenue;
 import dev.vapee.core.activity.player.ActivityParticipant;
@@ -42,19 +43,36 @@ public final class BlackjackSession extends ActivitySession {
         return roundPhase;
     }
 
-    public Optional<BlackjackShoe> getCurrentShoe() {
+    /** Captures the dealer hand on the engine's main thread. */
+    public BlackjackHandView getDealerHandView() {
+        return BlackjackHandView.from(dealerHand);
+    }
+
+    /** Captures every player round, including detached hand data. */
+    public Map<UUID, BlackjackPlayerRoundView> getPlayerRoundViews() {
+        Map<UUID, BlackjackPlayerRoundView> views = new LinkedHashMap<>();
+        playerRounds.forEach((id, round) -> views.put(id, round.toView()));
+        return Map.copyOf(views);
+    }
+
+    public Optional<BlackjackPlayerRoundView> getPlayerRoundView(UUID playerId) {
+        return getPlayerRound(playerId).map(BlackjackPlayerRound::toView);
+    }
+
+    // Mutable engine reads remain inside the blackjack engine package.
+    Optional<BlackjackShoe> getCurrentShoe() {
         return Optional.ofNullable(currentShoe);
     }
 
-    public BlackjackHand getDealerHand() {
+    BlackjackHand getDealerHand() {
         return dealerHand;
     }
 
-    public Map<UUID, BlackjackPlayerRound> getPlayerRounds() {
+    Map<UUID, BlackjackPlayerRound> getPlayerRounds() {
         return Map.copyOf(playerRounds);
     }
 
-    public Optional<BlackjackPlayerRound> getPlayerRound(UUID playerId) {
+    Optional<BlackjackPlayerRound> getPlayerRound(UUID playerId) {
         return Optional.ofNullable(playerRounds.get(Objects.requireNonNull(playerId, "playerId")));
     }
 

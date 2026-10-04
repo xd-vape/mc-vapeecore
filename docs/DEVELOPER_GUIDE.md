@@ -770,6 +770,8 @@ Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt 
 
 `BlackjackService.requiresDealerPlay` überspringt die Dealer-Ausspielung, wenn ausschließlich Bust-Hände oder bereits sichere Naturals übrig sind; normale Live-Hände spielen den Dealer weiterhin bis mindestens 17 aus, inklusive Stand auf Soft 17. `BlackjackShoe` erzeugt sechs vollständige Decks (312 Karten), mischt per Fisher-Yates mit `nextInt(index + 1)` und verwendet keinen konstanten Seed oder dynamische Spielerbevorzugung. `BlackjackFairnessHarness` prüft mit festen Seeds Verteilung, Reproduzierbarkeit, unterschiedliche Reihenfolgen, Ziehen ohne Replacement sowie Dealer-/Outcome-Invarianten; er besitzt absichtlich keine zufällige Winrate-Grenze.
 
+Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Presentation liest auf dem Hauptthread ausschließlich immutable Snapshots über `BlackjackSession#getDealerHandView`, `getPlayerRoundView` und `getPlayerRoundViews`: `BlackjackHandView` kopiert die Kartenliste und speichert den zentral berechneten Wert sowie Natural-Status; `BlackjackPlayerRoundView` enthält diese Handansicht, Spieler-UUID, Finished-/Double-Flags und optionales Outcome. Bereits gelesene Views ändern sich durch spätere Engine-Mutationen oder Reset nicht. Mutable Session-/Round-Getter bleiben package-private; es gibt keinen öffentlichen Current-Shoe-Read. Details und Regression: [ARCHITECTURE_REFACTOR.md](ARCHITECTURE_REFACTOR.md).
+
 ### Blackjack tuning map
 
 | Frage | Stelle |

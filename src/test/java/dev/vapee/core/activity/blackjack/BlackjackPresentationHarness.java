@@ -3,8 +3,10 @@ package dev.vapee.core.activity.blackjack;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackAction;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackDisplayGeometry;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackWorldViewService;
+import dev.vapee.core.activity.blackjack.presentation.BlackjackInventoryService;
 import dev.vapee.core.activity.blackjack.card.BlackjackCard;
 import dev.vapee.core.activity.blackjack.card.BlackjackHand;
+import dev.vapee.core.activity.blackjack.card.BlackjackHandView;
 import dev.vapee.core.activity.blackjack.card.BlackjackRank;
 import dev.vapee.core.activity.blackjack.card.BlackjackSuit;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
@@ -26,6 +28,10 @@ import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -68,16 +74,16 @@ public final class BlackjackPresentationHarness {
         check(invokeText("idleStatusText", new Class<?>[]{int.class, int.class}, 1, 5)
                         .equals("1 / 5"),
                 "idle table status is player-facing and contains no internal enum");
-        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, (Object) null) == null,
+        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRoundView.class}, (Object) null) == null,
                 "idle seated player creates no Ready label");
         BlackjackPlayerRound activeRound = new BlackjackPlayerRound(java.util.UUID.randomUUID());
         activeRound.getHand().add(new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.SPADES));
         activeRound.getHand().add(new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.HEARTS));
-        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, activeRound)
+        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRoundView.class}, activeRound.toView())
                         .equals("17"),
                 "active player label is a compact hand value");
         activeRound.settle(BlackjackOutcome.WIN);
-        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRound.class}, activeRound).equals("WIN"),
+        check(invokeText("playerLabelText", new Class<?>[]{BlackjackPlayerRoundView.class}, activeRound.toView()).equals("WIN"),
                 "settled player label is the short outcome");
         check(new BlackjackCard(BlackjackRank.ACE, BlackjackSuit.SPADES).getDisplayText().equals("A♠")
                         && new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.HEARTS).getDisplayText().equals("10♥"),
@@ -142,11 +148,24 @@ public final class BlackjackPresentationHarness {
                 BlackjackTableInteractionMode.LEGACY_INTERACTION);
         check(BlackjackDisplayGeometry.tableCenter(world, legacy).getY() == definition.dealer().y(),
                 "missing display anchor retains legacy dealer-height fallback");
+        assertInventoryOutput();
+        assertWorldOutput();
         System.out.println("BlackjackPresentationHarness passed " + checks + " checks.");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static void assertDealerPresentation() throws Exception {
+        for (BlackjackRank rank : BlackjackRank.values()) {
+            BlackjackCard card = new BlackjackCard(rank, BlackjackSuit.SPADES);
+            BlackjackHand single = new BlackjackHand(List.of(card));
+            BlackjackHand pair = new BlackjackHand(List.of(card,
+                    new BlackjackCard(BlackjackRank.ACE, BlackjackSuit.HEARTS)));
+            check(PLAIN.serialize(invokeDealerDisplays(pair, true).get("dealer-hand"))
+                            .equals(card.getDisplayText() + "   ◆\nDealer • " + single.getValue()),
+                    "hidden dealer value matches previous single-card scoring for " + rank);
+        }
+        check(PLAIN.serialize(invokeDealerDisplays(new BlackjackHand(), true).get("dealer-hand"))
+                        .equals("\nDealer • 0"), "empty dealer snapshot retains zero value");
         BlackjackHand hand = new BlackjackHand(List.of(
                 new BlackjackCard(BlackjackRank.KING, BlackjackSuit.DIAMONDS),
                 new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.SPADES)
@@ -201,12 +220,145 @@ public final class BlackjackPresentationHarness {
                 "player card world display keys remain unchanged");
     }
 
+    private static void assertInventoryOutput() throws Exception {
+        BlackjackPresentationFixture fixture = new BlackjackPresentationFixture();
+        BlackjackInventoryService inventory = fixture.inventory;
+        inventory.refreshPlayer(fixture.player, fixture.session);
+        check(occupiedSlots(fixture).isEmpty(), "non-owner refresh does not write inventory");
+        check(inventory.takeOwnership(fixture.player) && inventory.isOwner(fixture.playerId)
+                        && fixture.relinquishes == 1 && fixture.selectedSlot == 0,
+                "ownership hands off lobby inventory and selects slot zero");
+        int closes = fixture.closes;
+        check(inventory.takeOwnership(fixture.player) && fixture.closes == closes && fixture.relinquishes == 1,
+                "repeated ownership is idempotent");
+        inventory.refreshSession(fixture.session);
+        check(occupiedSlots(fixture).equals(Set.of(0, 4, 8)), "available slots remain 0/4/8");
+        assertItem(fixture, 0, Material.EMERALD, "Deal", BlackjackAction.DEAL,
+                List.of("Start a new free-play round.", "Right-click to use."));
+        assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+                List.of("Waiting for deal", "1 player(s) seated"));
+        assertItem(fixture, 8, Material.BARRIER, "Leave Table", BlackjackAction.LEAVE,
+                List.of("Leave blackjack and return your lobby items.", "Right-click to use."));
+        fixture.activate();
+        BlackjackPlayerRound round = fixture.session.requirePlayerRound(fixture.playerId);
+        round.getHand().add(new BlackjackCard(BlackjackRank.FIVE, BlackjackSuit.SPADES));
+        round.getHand().add(new BlackjackCard(BlackjackRank.SIX, BlackjackSuit.HEARTS));
+        inventory.refreshPlayer(fixture.player, fixture.session);
+        check(occupiedSlots(fixture).equals(Set.of(0, 1, 2, 4, 8)), "own legal two-card turn exposes all five slots");
+        assertItem(fixture, 0, Material.IRON_SWORD, "Hit", BlackjackAction.HIT,
+                List.of("Draw one card.", "Right-click to use."));
+        assertItem(fixture, 1, Material.SHIELD, "Stand", BlackjackAction.STAND,
+                List.of("Keep your current hand.", "Right-click to use."));
+        assertItem(fixture, 2, Material.GOLD_INGOT, "Double", BlackjackAction.DOUBLE,
+                List.of("Draw exactly one card, then stand.", "Right-click to use."));
+        assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null, List.of("Your turn", "Hand value: 11"));
+        for (String condition : List.of("three-cards", "finished", "doubled", "natural", "missing", "foreign-turn")) {
+            fixture.session.beginRound(dev.vapee.core.activity.blackjack.card.BlackjackShoe.sixDecks(new java.util.Random(3)));
+            fixture.session.beginTurn(fixture.playerId);
+            round = fixture.session.requirePlayerRound(fixture.playerId);
+            round.getHand().add(new BlackjackCard(condition.equals("natural") ? BlackjackRank.ACE : BlackjackRank.FIVE, BlackjackSuit.SPADES));
+            round.getHand().add(new BlackjackCard(condition.equals("natural") ? BlackjackRank.KING : BlackjackRank.SIX, BlackjackSuit.HEARTS));
+            switch (condition) {
+                case "three-cards" -> round.getHand().add(new BlackjackCard(BlackjackRank.TWO, BlackjackSuit.CLUBS));
+                case "finished" -> round.finish();
+                case "doubled" -> round.markDoubledDown();
+                case "missing" -> fixture.session.removePlayerRound(fixture.playerId);
+                case "foreign-turn" -> fixture.session.beginTurn(UUID.randomUUID());
+                default -> { }
+            }
+            inventory.refreshPlayer(fixture.player, fixture.session);
+            check(fixture.items[2] == null, "double hidden for " + condition);
+            if (condition.equals("foreign-turn")) {
+                check(occupiedSlots(fixture).equals(Set.of(4, 8)), "foreign turn retains status/leave only");
+                assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+                        List.of("Another player's turn", "Hand value: 11"));
+            }
+        }
+        for (BlackjackRoundPhase phase : List.of(BlackjackRoundPhase.DEALER_TURN, BlackjackRoundPhase.SETTLED)) {
+            fixture.session.setRoundPhase(phase);
+            inventory.refreshPlayer(fixture.player, fixture.session);
+            check(occupiedSlots(fixture).equals(Set.of(4, 8)), phase + " retains status/leave only");
+            assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+                    List.of(phase == BlackjackRoundPhase.DEALER_TURN ? "Dealer is playing" : "Round complete", "Hand value: 11"));
+        }
+        inventory.release(fixture.playerId, true);
+        check(!inventory.isOwner(fixture.playerId) && occupiedSlots(fixture).isEmpty() && fixture.restores == 1,
+                "normal release removes managed items and restores lobby once");
+        fixture.lobby.enterBuildMode(fixture.player);
+        check(!inventory.takeOwnership(fixture.player) && !inventory.isOwner(fixture.playerId), "BUILD ownership still rejected");
+        fixture.lobby.enterNormalMode(fixture.player);
+        inventory.takeOwnership(fixture.player);
+        inventory.refreshPlayer(fixture.player, fixture.session);
+        int restores = fixture.restores;
+        inventory.shutdown();
+        check(!inventory.isOwner(fixture.playerId) && occupiedSlots(fixture).isEmpty() && fixture.restores == restores,
+                "shutdown releases without reapplying lobby items");
+    }
+
+    private static Set<Integer> occupiedSlots(BlackjackPresentationFixture fixture) {
+        Set<Integer> slots = new java.util.HashSet<>();
+        for (int index = 0; index < fixture.items.length; index++) if (fixture.items[index] != null) slots.add(index);
+        return slots;
+    }
+
+    private static void assertItem(BlackjackPresentationFixture fixture, int slot, Material material,
+                                   String name, BlackjackAction action, List<String> lore) {
+        ItemStack item = fixture.items[slot];
+        check(item != null && item.getType() == material && PLAIN.serialize(item.getItemMeta().displayName()).equals(name),
+                "slot " + slot + " retains material and name " + name);
+        check(fixture.inventory.isManagedItem(item) && fixture.inventory.getAction(item).orElse(null) == action,
+                "slot " + slot + " retains managed/action PDC");
+        check(item.getItemMeta().lore().stream().map(PLAIN::serialize).toList().equals(lore), "slot " + slot + " retains lore");
+    }
+
+    private static void assertWorldOutput() throws Exception {
+        BlackjackPresentationFixture fixture = new BlackjackPresentationFixture();
+        fixture.render();
+        check(fixture.displays.getDisplayCount() == 1 && fixture.displayText("status").equals("Blackjack\n1 / 1"),
+                "idle renders only the unchanged occupancy status");
+        fixture.activate();
+        BlackjackPlayerRound round = fixture.session.requirePlayerRound(fixture.playerId);
+        round.getHand().add(new BlackjackCard(BlackjackRank.TEN, BlackjackSuit.SPADES));
+        round.getHand().add(new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.HEARTS));
+        fixture.session.getDealerHand().add(new BlackjackCard(BlackjackRank.KING, BlackjackSuit.DIAMONDS));
+        fixture.session.getDealerHand().add(new BlackjackCard(BlackjackRank.SEVEN, BlackjackSuit.SPADES));
+        fixture.render();
+        check(fixture.displays.getDisplayCount() == 5 && fixture.creates == 5, "active view creates exactly five expected displays");
+        check(fixture.displayText("seat-1-card-0").equals("10♠") && fixture.displayText("seat-1-card-1").equals("7♥")
+                        && fixture.displayText("seat-1-label").equals("17"), "player card order and hand value remain unchanged");
+        check(fixture.displayText("dealer-hand").equals("K♦   ◆\nDealer • 10")
+                        && fixture.displayText("status").equals("Blackjack\nTester's turn"), "player turn keeps dealer hole hidden and names turn owner");
+        Map<?, ?> ids = Map.copyOf(fixture.entities);
+        fixture.render();
+        check(fixture.creates == 5 && ids.equals(fixture.entities), "identical refresh updates existing entities without churn");
+        fixture.session.setRoundPhase(BlackjackRoundPhase.DEALER_TURN);
+        fixture.render();
+        check(fixture.displayText("dealer-hand").equals("K♦   7♠\nDealer • 17")
+                        && fixture.displayText("status").equals("Blackjack\nDealer"), "dealer turn reveals cards and retains status");
+        fixture.session.getDealerHand().add(new BlackjackCard(BlackjackRank.THREE, BlackjackSuit.CLUBS));
+        fixture.render();
+        check(fixture.displayText("dealer-hand").equals("K♦   7♠   3♣\nDealer • 20") && fixture.creates == 5
+                        && ids.equals(fixture.entities), "dealer card growth reuses the single dealer entity");
+        fixture.session.setRoundPhase(BlackjackRoundPhase.SETTLED);
+        for (BlackjackOutcome outcome : BlackjackOutcome.values()) {
+            round.settle(outcome);
+            fixture.render();
+            check(fixture.displayText("seat-1-label").equals(outcome.name())
+                            && fixture.displayText("status").equals("Blackjack\nRound complete"), "settled label and status for " + outcome);
+            check(fixture.displays.getDisplayCount() == 5 && fixture.creates == 6 && fixture.removals == 1,
+                    "only the existing VALUE-to-RESULT style transition replaces one entity: " + outcome);
+        }
+        fixture.worldView.shutdown();
+        check(fixture.displays.getDisplayCount() == 0 && fixture.entities.isEmpty(), "world shutdown cleans the complete owner");
+        check(fixture.warnings.isEmpty(), "actual presentation path has no swallowed render failure");
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Component> invokeDealerDisplays(BlackjackHand hand, boolean hidden) throws Exception {
         var method = BlackjackWorldViewService.class.getDeclaredMethod(
-                "dealerDisplays", BlackjackHand.class, boolean.class);
+                "dealerDisplays", BlackjackHandView.class, boolean.class);
         method.setAccessible(true);
-        return (Map<String, Component>) method.invoke(null, hand, hidden);
+        return (Map<String, Component>) method.invoke(null, BlackjackHandView.from(hand), hidden);
     }
 
     private static void assertDealerLocation(

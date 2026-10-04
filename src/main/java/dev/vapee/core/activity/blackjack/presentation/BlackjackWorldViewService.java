@@ -1,13 +1,13 @@
 package dev.vapee.core.activity.blackjack.presentation;
 
 import dev.vapee.core.activity.ActivityState;
-import dev.vapee.core.activity.blackjack.BlackjackPlayerRound;
+import dev.vapee.core.activity.blackjack.BlackjackPlayerRoundView;
 import dev.vapee.core.activity.blackjack.BlackjackOutcome;
 import dev.vapee.core.activity.blackjack.BlackjackRoundPhase;
 import dev.vapee.core.activity.blackjack.BlackjackService;
 import dev.vapee.core.activity.blackjack.BlackjackSession;
 import dev.vapee.core.activity.blackjack.card.BlackjackCard;
-import dev.vapee.core.activity.blackjack.card.BlackjackHand;
+import dev.vapee.core.activity.blackjack.card.BlackjackHandView;
 import dev.vapee.core.activity.blackjack.table.BlackjackSeat;
 import dev.vapee.core.activity.blackjack.table.BlackjackDisplayAnchor;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition;
@@ -108,26 +108,26 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                            BlackjackSession session) {
         boolean hidden = session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS;
         Location location = BlackjackDisplayGeometry.dealerHandLocation(world, definition);
-        dealerDisplays(session.getDealerHand(), hidden).forEach((key, text) ->
+        dealerDisplays(session.getDealerHandView(), hidden).forEach((key, text) ->
                 desired.put(key, new DisplaySpec(location, text, DisplayStyle.DEALER_HAND, null)));
     }
 
     private void addPlayer(Map<String, DisplaySpec> desired, World world, BlackjackDisplayAnchor surface,
                            BlackjackSession session,
                            BlackjackSeat seat, UUID playerId) {
-        BlackjackPlayerRound round = session.getPlayerRound(playerId).orElse(null);
+        BlackjackPlayerRoundView round = session.getPlayerRoundView(playerId).orElse(null);
         String detail = playerLabelText(round);
         if (detail == null) return;
-        boolean settled = round.getOutcome().isPresent();
+        boolean settled = round.outcome().isPresent();
         desired.put("seat-" + seat.number() + "-label", new DisplaySpec(
                 settled
                         ? BlackjackDisplayGeometry.resultAnchor(world, surface, seat.position())
                         : BlackjackDisplayGeometry.handValueAnchor(world, surface, seat.position()),
-                settled ? resultText(round.getOutcome().orElseThrow())
+                settled ? resultText(round.outcome().orElseThrow())
                         : Component.text(detail, NamedTextColor.AQUA),
                 settled ? DisplayStyle.RESULT : DisplayStyle.VALUE,
                 BlackjackDisplayGeometry.seatFacingRotation(world, surface, seat.position())));
-        var cards = round.getHand().getCards();
+        var cards = round.hand().cards();
         for (int index = 0; index < cards.size(); index++) {
             desired.put(seatCardKey(seat.number(), index), new DisplaySpec(
                     BlackjackDisplayGeometry.seatCard(world, surface, seat.position(), index, cards.size()),
@@ -198,10 +198,10 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
         return participants + " / " + capacity;
     }
 
-    private static String playerLabelText(BlackjackPlayerRound round) {
+    private static String playerLabelText(BlackjackPlayerRoundView round) {
         if (round == null) return null;
-        return round.getOutcome().map(Enum::name)
-                .orElse(Integer.toString(round.getHand().getValue()));
+        return round.outcome().map(Enum::name)
+                .orElse(Integer.toString(round.hand().value()));
     }
 
     private Component cardText(BlackjackCard card) {
@@ -213,13 +213,13 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
         return Component.text("◆", NamedTextColor.GRAY).decoration(TextDecoration.BOLD, true);
     }
 
-    private static Map<String, Component> dealerDisplays(BlackjackHand hand, boolean hiddenHoleCard) {
+    private static Map<String, Component> dealerDisplays(BlackjackHandView hand, boolean hiddenHoleCard) {
         return Map.of(DEALER_HAND_KEY, dealerHandText(hand, hiddenHoleCard));
     }
 
-    private static Component dealerHandText(BlackjackHand hand, boolean hiddenHoleCard) {
-        BlackjackHand validated = Objects.requireNonNull(hand, "hand");
-        var cards = validated.getCards();
+    private static Component dealerHandText(BlackjackHandView hand, boolean hiddenHoleCard) {
+        BlackjackHandView validated = Objects.requireNonNull(hand, "hand");
+        var cards = validated.cards();
         Component output = Component.empty().decoration(TextDecoration.ITALIC, false);
         int visibleCards = hiddenHoleCard ? Math.min(1, cards.size()) : cards.size();
         for (int index = 0; index < visibleCards; index++) {
@@ -239,8 +239,8 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
             output = output.append(hiddenCardText());
         }
         int value = hiddenHoleCard && !cards.isEmpty()
-                ? new BlackjackHand(java.util.List.of(cards.getFirst())).getValue()
-                : validated.getValue();
+                ? cards.getFirst().rank().getValue()
+                : validated.value();
         return output.append(Component.newline())
                 .append(Component.text("Dealer • ", NamedTextColor.GOLD))
                 .append(Component.text(value, NamedTextColor.WHITE));

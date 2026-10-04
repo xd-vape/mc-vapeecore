@@ -757,11 +757,80 @@ public final class BlackjackHarness {
         testQuestOutcomeIntegration();
         testOutcomeCallbackFailureIsolation();
         testUnloadedQuestOutcome();
+        testSessionReadSnapshots();
         check(java.util.Arrays.equals(BlackjackAction.values(), new BlackjackAction[]{
                 BlackjackAction.DEAL, BlackjackAction.HIT, BlackjackAction.STAND,
                 BlackjackAction.DOUBLE, BlackjackAction.LEAVE
         }), "blackjack hotbar exposes exactly the five world actions");
         System.out.println("BlackjackHarness passed " + checks + " checks.");
+    }
+
+    private static void testSessionReadSnapshots() {
+        Fixture fixture = new Fixture(1);
+        Player player = fixture.player("Read snapshots");
+        UUID id = player.getUniqueId();
+        fixture.service.joinTable(player, Fixture.TABLE_ID).orElseThrow();
+        check(fixture.session.getPlayerRoundView(id).isEmpty()
+                        && fixture.session.getPlayerRoundViews().isEmpty()
+                        && fixture.session.getDealerHandView().cards().isEmpty(),
+                "idle read views contain no round state");
+        fixture.queueShoe(cards(BlackjackRank.FIVE, BlackjackRank.TEN,
+                BlackjackRank.SIX, BlackjackRank.SIX, BlackjackRank.TEN, BlackjackRank.FIVE));
+        checkResult(fixture.service.startRound(player), ActivityResult.SUCCESS);
+        var rounds = fixture.session.getPlayerRoundViews();
+        var playerBefore = fixture.session.getPlayerRoundView(id).orElseThrow();
+        var dealerBefore = fixture.session.getDealerHandView();
+        check(rounds.get(id).equals(playerBefore), "map and optional expose equivalent immutable round values");
+        try {
+            rounds.get(id).hand().cards().add(card(BlackjackRank.ACE));
+            throw new AssertionError("map value hand accepted mutation");
+        } catch (UnsupportedOperationException expected) {
+            check(fixture.session.requirePlayerRound(id).getHand().size() == 2,
+                    "map values cannot mutate the underlying engine hand");
+        }
+        try {
+            fixture.session.getPlayerRoundView(null);
+            throw new AssertionError("null player ID accepted");
+        } catch (NullPointerException expected) {
+            check(true, "new optional read retains null player rejection");
+        }
+        try {
+            rounds.clear();
+            throw new AssertionError("round map accepted mutation");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "round map rejects mutation");
+        }
+        try {
+            rounds.entrySet().iterator().next().setValue(playerBefore);
+            throw new AssertionError("round map entry accepted mutation");
+        } catch (UnsupportedOperationException expected) {
+            check(true, "round map entries reject mutation");
+        }
+        try {
+            dealerBefore.cards().add(card(BlackjackRank.ACE));
+            throw new AssertionError("dealer view accepted mutation");
+        } catch (UnsupportedOperationException expected) {
+            check(fixture.session.getDealerHand().size() == 2, "dealer view cannot change engine hand");
+        }
+        checkResult(fixture.service.doubleDown(player), ActivityResult.SUCCESS);
+        check(playerBefore.hand().value() == 11 && playerBefore.hand().cards().size() == 2
+                        && !playerBefore.finished() && !playerBefore.doubledDown() && playerBefore.outcome().isEmpty()
+                        && rounds.get(id).equals(playerBefore),
+                "optional and map snapshots survive actual double/finish/settle");
+        var playerAfter = fixture.session.getPlayerRoundView(id).orElseThrow();
+        check(playerAfter.hand().value() == 21 && playerAfter.hand().cards().size() == 3
+                        && playerAfter.finished() && playerAfter.doubledDown()
+                        && playerAfter.outcome().orElseThrow() == BlackjackOutcome.PUSH,
+                "new snapshot reflects actual settled double");
+        check(dealerBefore.value() == 16 && dealerBefore.cards().size() == 2
+                        && fixture.session.getDealerHandView().value() == 21
+                        && fixture.session.getDealerHandView().cards().size() == 3,
+                "dealer snapshot survives actual dealer draw");
+        check(fixture.session.getPlayerRoundView(UUID.randomUUID()).isEmpty(), "unknown player has no read view");
+        fixture.scheduler.runNextActive();
+        check(fixture.session.getPlayerRoundViews().isEmpty() && fixture.session.getDealerHandView().cards().isEmpty()
+                        && rounds.size() == 1 && playerAfter.outcome().isPresent() && dealerBefore.value() == 16,
+                "reset clears new reads without changing retained snapshots");
     }
 
     private static void testBuildModeJoinGuard() {

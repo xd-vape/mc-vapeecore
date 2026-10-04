@@ -1,6 +1,7 @@
 package dev.vapee.core.activity.blackjack;
 
 import dev.vapee.core.activity.blackjack.card.BlackjackHand;
+import dev.vapee.core.activity.blackjack.card.BlackjackHandView;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -22,8 +23,13 @@ public final class BlackjackPlayerRound {
         return playerId;
     }
 
-    public BlackjackHand getHand() {
+    BlackjackHand getHand() {
         return hand;
+    }
+
+    BlackjackPlayerRoundView toView() {
+        return new BlackjackPlayerRoundView(playerId, BlackjackHandView.from(hand),
+                finished, doubledDown, getOutcome());
     }
 
     public boolean isFinished() {
