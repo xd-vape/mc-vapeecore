@@ -1,5 +1,7 @@
 package dev.vapee.core.chat.config;
 
+import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.config.ConfigValues;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -10,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public final class ChatConfig {
@@ -19,19 +22,21 @@ public final class ChatConfig {
 
     private static final String RESOURCE_NAME = "chat.yml";
 
-    private final JavaPlugin plugin;
+    private final Supplier<InputStream> defaultResourceSupplier;
     private final Logger logger;
     private final Path configFile;
 
     private volatile State state = State.defaults();
 
     public ChatConfig(JavaPlugin plugin) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.logger = plugin.getLogger();
-        this.configFile = plugin.getDataFolder().toPath()
-                .resolve(RESOURCE_NAME)
-                .toAbsolutePath()
-                .normalize();
+        this(Objects.requireNonNull(plugin, "plugin").getDataFolder().toPath().resolve(RESOURCE_NAME),
+                plugin.getLogger(), () -> plugin.getResource(RESOURCE_NAME));
+    }
+
+    ChatConfig(Path configFile, Logger logger, Supplier<InputStream> defaultResourceSupplier) {
+        this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
+        this.logger = Objects.requireNonNull(logger, "logger");
+        this.defaultResourceSupplier = Objects.requireNonNull(defaultResourceSupplier, "defaultResourceSupplier");
     }
 
     public void initialize() {
@@ -87,19 +92,10 @@ public final class ChatConfig {
     }
 
     private boolean readBoolean(YamlConfiguration configuration, String path, boolean defaultValue) {
-        if (!configuration.contains(path)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        logger.warning("Invalid chat setting '" + path + "' in " + configFile
+        return ConfigValues.readBoolean(configuration, path, defaultValue,
+                () -> logger.warning("Invalid chat setting '" + path + "' in " + configFile
                 + ": expected a boolean; using '" + defaultValue + "'. The file was left unchanged."
-        );
-        return defaultValue;
+        ));
     }
 
     private String readFormat(YamlConfiguration configuration) {
@@ -107,15 +103,10 @@ public final class ChatConfig {
             return DEFAULT_FORMAT;
         }
 
-        Object value = configuration.get("format");
-        if (value instanceof String configuredFormat && !configuredFormat.isBlank()) {
-            return configuredFormat;
-        }
-
-        logger.warning("Invalid 'format' in " + configFile
+        return ConfigValues.nonBlankString(configuration.get("format"), DEFAULT_FORMAT,
+                () -> logger.warning("Invalid 'format' in " + configFile
                 + ": expected a non-blank string; using the internal default. The file was left unchanged."
-        );
-        return DEFAULT_FORMAT;
+        ));
     }
 
     private MetaFormat readMetaFormat(YamlConfiguration configuration) {
@@ -140,20 +131,13 @@ public final class ChatConfig {
 
     private void createDefaultFile() {
         try {
-            Files.createDirectories(configFile.getParent());
-            if (Files.exists(configFile)) {
-                return;
+            if (ConfigFiles.copyDefault(configFile, defaultResourceSupplier, () -> {
+                String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
+                logger.severe(message);
+                return new IllegalStateException(message);
+            })) {
+                logger.info("Created default chat configuration at " + configFile + ".");
             }
-
-            try (InputStream resource = plugin.getResource(RESOURCE_NAME)) {
-                if (resource == null) {
-                    String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
-                    logger.severe(message);
-                    throw new IllegalStateException(message);
-                }
-                Files.copy(resource, configFile);
-            }
-            logger.info("Created default chat configuration at " + configFile + ".");
         } catch (IOException exception) {
             throw configFailure("create default chat configuration", exception);
         }

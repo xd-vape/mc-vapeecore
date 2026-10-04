@@ -1,5 +1,7 @@
 package dev.vapee.core.privatemessage.config;
 
+import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.config.ConfigValues;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -9,6 +11,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public final class PrivateMessageConfig {
@@ -22,19 +25,21 @@ public final class PrivateMessageConfig {
 
     private static final String RESOURCE_NAME = "private-messages.yml";
 
-    private final JavaPlugin plugin;
+    private final Supplier<InputStream> defaultResourceSupplier;
     private final Logger logger;
     private final Path configFile;
 
     private volatile State state = State.defaults();
 
     public PrivateMessageConfig(JavaPlugin plugin) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.logger = plugin.getLogger();
-        this.configFile = plugin.getDataFolder().toPath()
-                .resolve(RESOURCE_NAME)
-                .toAbsolutePath()
-                .normalize();
+        this(Objects.requireNonNull(plugin, "plugin").getDataFolder().toPath().resolve(RESOURCE_NAME),
+                plugin.getLogger(), () -> plugin.getResource(RESOURCE_NAME));
+    }
+
+    PrivateMessageConfig(Path configFile, Logger logger, Supplier<InputStream> defaultResourceSupplier) {
+        this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
+        this.logger = Objects.requireNonNull(logger, "logger");
+        this.defaultResourceSupplier = Objects.requireNonNull(defaultResourceSupplier, "defaultResourceSupplier");
     }
 
     public void initialize() {
@@ -78,34 +83,14 @@ public final class PrivateMessageConfig {
     }
 
     private boolean readEnabled(YamlConfiguration configuration) {
-        if (!configuration.contains("enabled")) {
-            return true;
-        }
-
-        Object value = configuration.get("enabled");
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        logger.warning("Invalid private-message setting 'enabled' in " + configFile
+        return ConfigValues.readBoolean(configuration, "enabled", true,
+                () -> logger.warning("Invalid private-message setting 'enabled' in " + configFile
                 + ": expected a boolean; using 'true'. The file was left unchanged."
-        );
-        return true;
+        ));
     }
 
     private String readFormat(YamlConfiguration configuration, String path, String fallback) {
-        if (!configuration.contains(path)) {
-            warnInvalidFormat(path);
-            return fallback;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof String stringValue && !stringValue.isBlank()) {
-            return stringValue;
-        }
-
-        warnInvalidFormat(path);
-        return fallback;
+        return ConfigValues.nonBlankString(configuration.get(path), fallback, () -> warnInvalidFormat(path));
     }
 
     private void warnInvalidFormat(String path) {
@@ -116,20 +101,13 @@ public final class PrivateMessageConfig {
 
     private void createDefaultFile() {
         try {
-            Files.createDirectories(configFile.getParent());
-            if (Files.exists(configFile)) {
-                return;
+            if (ConfigFiles.copyDefault(configFile, defaultResourceSupplier, () -> {
+                String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
+                logger.severe(message);
+                return new IllegalStateException(message);
+            })) {
+                logger.info("Created default private-message configuration at " + configFile + ".");
             }
-
-            try (InputStream resource = plugin.getResource(RESOURCE_NAME)) {
-                if (resource == null) {
-                    String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
-                    logger.severe(message);
-                    throw new IllegalStateException(message);
-                }
-                Files.copy(resource, configFile);
-            }
-            logger.info("Created default private-message configuration at " + configFile + ".");
         } catch (IOException exception) {
             throw configFailure("create default private-message configuration", exception);
         }

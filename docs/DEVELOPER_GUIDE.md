@@ -118,6 +118,8 @@ Die sechs Reload-Teilnehmer sind exakt `config.yml`, `lobby.yml`, `chat.yml`, `p
 
 ## Module map und Reihenfolge
 
+Seit Phase 30D teilen die sechs Config-Owner nur kleine Lese-/Dateihelfer: `ConfigFiles` kopiert Resource-Bytes ausschließlich bei fehlender Datei; `ConfigValues` prüft Boolean, String und nichtleere Strings. Warnungen, Defaults, Missing-/Null-Sonderfälle, Domain-Validierung und typed Reload-State bleiben beim Feature. `ConfigService` nutzt weiterhin `saveDefaultConfig`. Utility erfasst Command-Hooks vor dem ersten Setter und Listener vor der Registrierung; fehlgeschlagenes Enable räumt lokale Kandidaten auf, isoliert Cleanup-Ausnahmen als suppressed und veröffentlicht keine Services. Normaler Disable versucht ebenfalls alle Ressourcen und leert anschließend die Referenzen. Details und Nachweise: [Config Registration and Module Cleanup](CONFIG_REGISTRATION_MODULE_CLEANUP.md).
+
 Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen Modulen bewusst gepflegt werden:
 
 1. **Permission** – lesender LuckPerms-Zugriff.

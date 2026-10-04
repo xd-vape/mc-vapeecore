@@ -1,5 +1,7 @@
 package dev.vapee.core.quest.daily;
 
+import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.config.ConfigValues;
 import dev.vapee.core.quest.QuestDefinition;
 import dev.vapee.core.quest.QuestProgressKey;
 import org.bukkit.configuration.ConfigurationSection;
@@ -8,7 +10,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.DateTimeException;
@@ -103,11 +104,8 @@ public final class DailyQuestConfig {
     }
 
     private boolean readEnabled(YamlConfiguration yaml) {
-        if (!yaml.contains("enabled")) return DEFAULT_ENABLED;
-        Object value = yaml.get("enabled");
-        if (value instanceof Boolean booleanValue) return booleanValue;
-        warn("enabled", "a boolean", DEFAULT_ENABLED);
-        return DEFAULT_ENABLED;
+        return ConfigValues.readBoolean(yaml, "enabled", DEFAULT_ENABLED,
+                () -> warn("enabled", "a boolean", DEFAULT_ENABLED));
     }
 
     private int readQuestsPerDay(YamlConfiguration yaml) {
@@ -207,13 +205,10 @@ public final class DailyQuestConfig {
     private void createDefaultFile() {
         if (plugin == null || Files.exists(configFile)) return;
         try {
-            Files.createDirectories(configFile.getParent());
-            if (Files.exists(configFile)) return;
-            try (InputStream resource = plugin.getResource(RESOURCE_NAME)) {
-                if (resource == null) throw new IllegalStateException("Missing resource " + RESOURCE_NAME);
-                Files.copy(resource, configFile);
+            if (ConfigFiles.copyDefault(configFile, () -> plugin.getResource(RESOURCE_NAME),
+                    () -> new IllegalStateException("Missing resource " + RESOURCE_NAME))) {
+                logger.info("Created default daily quest configuration at " + configFile + ".");
             }
-            logger.info("Created default daily quest configuration at " + configFile + ".");
         } catch (IOException exception) {
             throw new IllegalStateException("Could not create default daily quest configuration at "
                     + configFile, exception);

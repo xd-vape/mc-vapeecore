@@ -1,5 +1,7 @@
 package dev.vapee.core.presentation.config;
 
+import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.config.ConfigValues;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public final class PresentationConfig {
@@ -40,19 +43,21 @@ public final class PresentationConfig {
             "<gray>you dont need to pay for extra features!</gray>"
     );
 
-    private final JavaPlugin plugin;
+    private final Supplier<InputStream> defaultResourceSupplier;
     private final Logger logger;
     private final Path configFile;
 
     private volatile State state = State.defaults();
 
     public PresentationConfig(JavaPlugin plugin) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.logger = plugin.getLogger();
-        this.configFile = plugin.getDataFolder().toPath()
-                .resolve(RESOURCE_NAME)
-                .toAbsolutePath()
-                .normalize();
+        this(Objects.requireNonNull(plugin, "plugin").getDataFolder().toPath().resolve(RESOURCE_NAME),
+                plugin.getLogger(), () -> plugin.getResource(RESOURCE_NAME));
+    }
+
+    PresentationConfig(Path configFile, Logger logger, Supplier<InputStream> defaultResourceSupplier) {
+        this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
+        this.logger = Objects.requireNonNull(logger, "logger");
+        this.defaultResourceSupplier = Objects.requireNonNull(defaultResourceSupplier, "defaultResourceSupplier");
     }
 
     public void initialize() {
@@ -160,17 +165,8 @@ public final class PresentationConfig {
     }
 
     private boolean readBoolean(YamlConfiguration configuration, String path, boolean defaultValue) {
-        if (!configuration.contains(path)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        warnInvalidValue(path, "a boolean", defaultValue);
-        return defaultValue;
+        return ConfigValues.readBoolean(configuration, path, defaultValue,
+                () -> warnInvalidValue(path, "a boolean", defaultValue));
     }
 
     private long readUpdateInterval(YamlConfiguration configuration) {
@@ -191,17 +187,8 @@ public final class PresentationConfig {
     }
 
     private String readString(YamlConfiguration configuration, String path, String defaultValue) {
-        if (!configuration.contains(path)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof String stringValue) {
-            return stringValue;
-        }
-
-        warnInvalidValue(path, "a string", defaultValue);
-        return defaultValue;
+        return ConfigValues.readString(configuration, path, defaultValue,
+                () -> warnInvalidValue(path, "a string", defaultValue));
     }
 
     private List<String> readStringList(
@@ -264,20 +251,13 @@ public final class PresentationConfig {
 
     private void createDefaultFile() {
         try {
-            Files.createDirectories(configFile.getParent());
-            if (Files.exists(configFile)) {
-                return;
+            if (ConfigFiles.copyDefault(configFile, defaultResourceSupplier, () -> {
+                String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
+                logger.severe(message);
+                return new IllegalStateException(message);
+            })) {
+                logger.info("Created default presentation configuration at " + configFile + ".");
             }
-
-            try (InputStream resource = plugin.getResource(RESOURCE_NAME)) {
-                if (resource == null) {
-                    String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
-                    logger.severe(message);
-                    throw new IllegalStateException(message);
-                }
-                Files.copy(resource, configFile);
-            }
-            logger.info("Created default presentation configuration at " + configFile + ".");
         } catch (IOException exception) {
             throw configFailure("create default presentation configuration", exception);
         }
