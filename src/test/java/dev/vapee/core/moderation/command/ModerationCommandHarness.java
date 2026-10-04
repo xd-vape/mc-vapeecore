@@ -16,7 +16,7 @@ public final class ModerationCommandHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
-        hierarchyMatrix(); hierarchyAsync(); hierarchyCompletion();
+        hierarchyMatrix(); hierarchyFreshness(); hierarchyAsync(); hierarchyCompletion();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
     }
 
@@ -441,6 +441,104 @@ public final class ModerationCommandHarness {
         check(f.repository.saves == 2, "rollback restores protection");
     }
 
+    private static void hierarchyFreshness() throws Exception {
+        Thread main = Thread.currentThread();
+        // Ban first: the audit's offline-target race must reach a real save/disconnect path if bypassed.
+        for (String name : List.of("ban", "warn", "mute", "unmute", "unban", "kick", "history")) {
+            for (String scenario : List.of("higher", "equal", "demotion", "unloaded", "blank", "invalid",
+                    "null-completion", "revoked", "logout", "reconnect", "actor-demoted", "actor-promoted",
+                    "actor-unavailable", "reload", "disabled")) {
+                Fixture f = new Fixture(); seed(f, name, OFFLINE);
+                if (name.equals("history")) f.service.issueWarning(OFFLINE, ModerationActor.console(), "private history fact");
+                f.primaryGroups.put(STAFF, scenario.equals("equal") ? "moderator"
+                        : scenario.equals("actor-promoted") ? "builder" : "admin");
+                f.primaryGroups.remove(OFFLINE);
+                var future = new java.util.concurrent.CompletableFuture<Optional<String>>();
+                f.groupLoads.put(OFFLINE, future);
+                var asyncAccess = new java.util.concurrent.atomic.AtomicInteger();
+                Runnable guard = () -> {
+                    if (Thread.currentThread() != main) {
+                        asyncAccess.incrementAndGet(); throw new AssertionError("Bukkit/domain accessed asynchronously");
+                    }
+                };
+                var target = new Sender(org.bukkit.entity.Player.class, OFFLINE, "Offline", f.events);
+                f.staff.beforeAccess = guard; target.beforeAccess = guard; f.repository.beforeSave = guard;
+                int before = f.repository.saves;
+                var snapshot = f.repository.saved;
+                var records = f.service.getAllRecords();
+                var history = f.service.getHistory(OFFLINE);
+                var ban = f.service.getActiveBan(OFFLINE);
+                var mute = f.service.getActiveMute(OFFLINE);
+                boolean projected = f.projection.isMuted(OFFLINE);
+                String label = name + "/" + scenario;
+                check(command(f, name).onCommand(f.staff.sender, null, name, arguments(name, "Offline")), "handled race " + label);
+                check(f.groupLoadCalls == 1 && !future.isDone() && f.mainTasks.isEmpty()
+                        && f.repository.saves == before && f.staff.output.isEmpty(), "offline pending without effects " + label);
+                String oldGroup = scenario.equals("equal") ? "builder" : scenario.equals("demotion") ? "owner" : "moderator";
+                Thread worker = new Thread(() -> future.complete(scenario.equals("null-completion") ? null : Optional.of(oldGroup)),
+                        "lp-freshness-completion-worker");
+                worker.start(); worker.join();
+                check(asyncAccess.get() == 0 && f.mainTasks.size() == 1 && f.repository.saves == before
+                        && f.repository.saved == snapshot && f.info() == 0 && f.staff.output.isEmpty()
+                        && target.output.isEmpty() && target.kicks.isEmpty(), "completion only queues resume " + label);
+                // All authority/session/config changes happen AFTER completion and BEFORE the queued resume.
+                // The initially offline player comes online here, making stale ban/kick/notification effects observable.
+                f.online.put(OFFLINE, target);
+                f.primaryGroups.put(OFFLINE, scenario.equals("higher") ? "owner" : "moderator");
+                switch (scenario) {
+                    case "unloaded", "null-completion" -> f.primaryGroups.remove(OFFLINE);
+                    case "blank" -> f.primaryGroups.put(OFFLINE, " ");
+                    case "invalid" -> f.primaryGroups.put(OFFLINE, "admin\n");
+                    case "revoked" -> f.staff.allowAll = false;
+                    case "logout" -> f.staff.isOnline = false;
+                    case "reconnect" -> {
+                        var replacement = new Sender(org.bukkit.entity.Player.class, STAFF, "Staff", f.events);
+                        replacement.beforeAccess = guard;
+                        f.online.put(STAFF, replacement);
+                    }
+                    case "actor-demoted" -> f.primaryGroups.put(STAFF, "builder");
+                    case "actor-promoted" -> f.primaryGroups.put(STAFF, "admin");
+                    case "actor-unavailable" -> f.primaryGroups.remove(STAFF);
+                    case "reload" -> f.hierarchyConfig.set(new dev.vapee.core.rank.staff.StaffHierarchyConfig(List.of("admin", "moderator")));
+                    case "disabled" -> f.active.set(false);
+                    default -> { }
+                }
+                f.mainTasks.remove().run();
+                boolean allowed = List.of("demotion", "actor-promoted").contains(scenario);
+                boolean unavailable = List.of("unloaded", "blank", "invalid", "null-completion", "actor-unavailable").contains(scenario);
+                if (allowed) {
+                    check(f.repository.saves == before + (name.equals("history") ? 0 : 1)
+                            && f.info() == (name.equals("history") ? 0 : 1), "fresh authority allows " + label);
+                    check(!f.staff.output.isEmpty() && (name.equals("history") ? f.staff.text().contains("private history fact")
+                            : !f.staff.text().contains("cannot") && !f.staff.text().contains("server log")), "fresh success feedback " + label);
+                    if (List.of("ban", "kick").contains(name)) check(target.kicks.size() == 1, "allowed real disconnect " + label);
+                } else {
+                    String expected = unavailable ? "The moderation operation could not be completed. Check the server log."
+                            : scenario.equals("revoked") ? "You do not have permission to use this command."
+                            : "You cannot target a staff member at your level or above.";
+                    boolean silent = List.of("logout", "reconnect", "disabled").contains(scenario);
+                    check(silent ? f.staff.output.isEmpty() : f.staff.output.size() == 1 && f.staff.text().trim().equals(expected),
+                            "fresh hierarchy denies without success/history feedback " + label + "; received " + f.staff.text());
+                    check(f.repository.saves == before && f.repository.saved == snapshot && f.service.getAllRecords().equals(records)
+                            && f.service.getHistory(OFFLINE).equals(history), "denied save/snapshot/history unchanged " + label);
+                    check(f.service.getActiveBan(OFFLINE).equals(ban) && f.service.getActiveMute(OFFLINE).equals(mute)
+                            && f.projection.isMuted(OFFLINE) == projected, "denied ban/mute/projection unchanged " + label);
+                    check(target.kicks.isEmpty() && target.output.isEmpty() && f.info() == 0 && f.playerWrites == 0,
+                            "denied no external action/notification/success audit " + label);
+                    if (scenario.equals("reconnect")) check(f.online.get(STAFF).output.isEmpty(), "replacement session untouched " + label);
+                }
+                check(f.severe() == (unavailable ? 1 : 0), "controlled unavailable logging only " + label);
+                if (unavailable) {
+                    String log = f.logs.getLast().getMessage();
+                    check(log.contains(name.toUpperCase(Locale.ROOT) + "_HIERARCHY") && log.contains(STAFF.toString())
+                            && log.contains(OFFLINE.toString()), "failure action/actor/target context " + label);
+                }
+                check(asyncAccess.get() == 0 && f.mainTasks.isEmpty() && f.groupLoadCalls == 1,
+                        "one nonblocking main-thread continuation, no retry/fallback " + label);
+            }
+        }
+    }
+
     private static void hierarchyAsync() throws Exception {
         Thread main = Thread.currentThread();
         for (String name : MODERATION) {
@@ -488,6 +586,8 @@ public final class ModerationCommandHarness {
                     else future.complete(scenario.equals("empty") ? Optional.empty() : Optional.of(resolved));
                 }, "lp-completion-worker");
                 worker.start(); worker.join();
+                // Successful LP loading makes the user available to the subsequent loaded-state read.
+                if (!List.of("failure", "empty").contains(scenario)) f.primaryGroups.put(TARGET, resolved);
                 check(asyncAccess.get() == 0 && f.repository.saves == before && f.info() == 0
                         && f.target.output.isEmpty() && f.target.kicks.isEmpty(), "worker only schedules " + name + "/" + scenario);
                 check(f.mainTasks.size() == (scenario.equals("disabled") ? 0 : 1), "one main continuation " + scenario);
@@ -516,6 +616,7 @@ public final class ModerationCommandHarness {
             command(f, name).onCommand(f.staff.sender, null, name, arguments(name, "Offline"));
             check(f.repository.saves == before && !future.isDone(), "offline waits without blocking " + name);
             future.complete(Optional.of(group));
+            f.primaryGroups.put(OFFLINE, group);
             f.mainTasks.remove().run();
             boolean mutation = group.equals("default") && !List.of("kick", "history").contains(name);
             check(f.repository.saves == before + (mutation ? 1 : 0), "offline known target authorized " + name + "/" + group);
