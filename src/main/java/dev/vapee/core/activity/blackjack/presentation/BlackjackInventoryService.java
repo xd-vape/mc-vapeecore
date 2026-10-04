@@ -1,7 +1,7 @@
 package dev.vapee.core.activity.blackjack.presentation;
 
 import dev.vapee.core.activity.ActivityState;
-import dev.vapee.core.activity.blackjack.BlackjackPlayerRound;
+import dev.vapee.core.activity.blackjack.BlackjackPlayerRoundView;
 import dev.vapee.core.activity.blackjack.BlackjackRoundPhase;
 import dev.vapee.core.activity.blackjack.BlackjackSession;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
@@ -135,13 +135,13 @@ public final class BlackjackInventoryService {
 
     private boolean canDoubleDown(BlackjackSession session, UUID playerId) {
         if (!isOwnTurn(session, playerId)) return false;
-        BlackjackPlayerRound round = session.getPlayerRound(playerId).orElse(null);
-        return round != null && !round.isFinished() && !round.isDoubledDown()
-                && round.getHand().getCards().size() == 2 && !round.getHand().isBlackjack();
+        BlackjackPlayerRoundView round = session.getPlayerRoundView(playerId).orElse(null);
+        return round != null && !round.finished() && !round.doubledDown()
+                && round.hand().cards().size() == 2 && !round.hand().blackjack();
     }
 
     private ItemStack statusItem(BlackjackSession session, UUID playerId) {
-        BlackjackPlayerRound round = session.getPlayerRound(playerId).orElse(null);
+        BlackjackPlayerRoundView round = session.getPlayerRoundView(playerId).orElse(null);
         String state;
         if (session.getState() == ActivityState.AVAILABLE) {
             state = "Waiting for deal";
@@ -157,7 +157,7 @@ public final class BlackjackInventoryService {
         }
         List<String> lore = round == null
                 ? List.of(state, session.getParticipantCount() + " player(s) seated")
-                : List.of(state, "Hand value: " + round.getHand().getValue());
+                : List.of(state, "Hand value: " + round.hand().value());
         return item(Material.PAPER, "Blackjack Status", NamedTextColor.GOLD, lore, null);
     }
 
