@@ -1,6 +1,8 @@
 package dev.vapee.core.lobby.config;
 
 import dev.vapee.core.lobby.LobbySpawn;
+import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.config.ConfigValues;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -140,20 +142,13 @@ public final class LobbyConfig {
 
     private void createDefaultFile() {
         try {
-            Files.createDirectories(configFile.getParent());
-            if (Files.exists(configFile)) {
-                return;
+            if (ConfigFiles.copyDefault(configFile, defaultResourceSupplier, () -> {
+                String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
+                logger.severe(message);
+                return new IllegalStateException(message);
+            })) {
+                logger.info("Created default lobby configuration at " + configFile + ".");
             }
-
-            try (InputStream resource = defaultResourceSupplier.get()) {
-                if (resource == null) {
-                    String message = "Default resource '" + RESOURCE_NAME + "' is missing from the plugin JAR.";
-                    logger.severe(message);
-                    throw new IllegalStateException(message);
-                }
-                Files.copy(resource, configFile);
-            }
-            logger.info("Created default lobby configuration at " + configFile + ".");
         } catch (IOException exception) {
             throw configFailure("create default lobby configuration", exception);
         }
@@ -329,19 +324,10 @@ public final class LobbyConfig {
     }
 
     private boolean readBoolean(YamlConfiguration configuration, String path) {
-        if (!configuration.contains(path)) {
-            return true;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        logger.warning("Invalid lobby setting '" + path + "' in " + configFile
+        return ConfigValues.readBoolean(configuration, path, true,
+                () -> logger.warning("Invalid lobby setting '" + path + "' in " + configFile
                 + ": expected a boolean; using 'true'. The file was left unchanged."
-        );
-        return true;
+        ));
     }
 
     private Optional<LobbySpawn> invalidSpawn(String reason, boolean strictValidation) {

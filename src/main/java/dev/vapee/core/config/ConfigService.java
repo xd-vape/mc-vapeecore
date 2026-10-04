@@ -252,31 +252,13 @@ public final class ConfigService implements ReloadParticipant {
     }
 
     private String readString(YamlConfiguration configuration, String path, String defaultValue) {
-        if (!configuration.contains(path)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof String stringValue) {
-            return stringValue;
-        }
-
-        warnInvalidValue(path, "a string", defaultValue);
-        return defaultValue;
+        return ConfigValues.readString(configuration, path, defaultValue,
+                () -> warnInvalidValue(path, "a string", defaultValue));
     }
 
     private boolean readBoolean(YamlConfiguration configuration, String path, boolean defaultValue) {
-        if (!configuration.contains(path)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(path);
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        warnInvalidValue(path, "a boolean", defaultValue);
-        return defaultValue;
+        return ConfigValues.readBoolean(configuration, path, defaultValue,
+                () -> warnInvalidValue(path, "a boolean", defaultValue));
     }
 
     private String readNonBlankString(YamlConfiguration configuration, String path, String defaultValue) {

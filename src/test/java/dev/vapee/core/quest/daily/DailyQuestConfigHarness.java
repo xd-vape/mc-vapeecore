@@ -43,6 +43,21 @@ public final class DailyQuestConfigHarness {
                     "disabled empty resource-style configuration loads the internal defaults");
             check(warnings.isEmpty(), "disabled empty default catalog produces no warnings");
 
+            for (String value : List.of("null", "false", "'false'", "7", "[]", "{}")) {
+                String source = "enabled: " + value + "\nquests: {}\n";
+                Files.writeString(file, source); warnings.clear();
+                var next = config.prepareReloadState();
+                boolean invalid = !List.of("null", "false").contains(value);
+                check(!next.enabled() && warnings.size() == (invalid ? 1 : 0),
+                        "daily boolean missing/null/invalid warning parity");
+                if (invalid) check(warnings.getFirst().equals("Invalid daily quest setting 'enabled' in " + file
+                        + ": expected a boolean; using 'false'. The file was left unchanged."), "daily exact boolean warning");
+                check(config.getState() == state && Files.readString(file).equals(source),
+                        "daily optional fallback prepare does not publish/rewrite");
+                config.initialize(); check(Files.readString(file).equals(source), "daily initialize no rewrite");
+                config.applyState(state);
+            }
+
             Files.writeString(file, "quests: {}\n");
             DailyQuestConfig.State missingKeys = config.prepareReloadState();
             check(!missingKeys.enabled() && missingKeys.questsPerDay() == 4

@@ -26,6 +26,7 @@ public final class ConfigServiceHarness {
         logger.addHandler(handler);
         try {
             hierarchy(configFile, handler, logger);
+            scalarParity(configFile, handler, logger);
             Files.writeString(configFile, "server:\n  name: Test\n");
             ConfigService service = new ConfigService(configFile, logger);
             service.load();
@@ -206,6 +207,33 @@ public final class ConfigServiceHarness {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static void scalarParity(Path file, CapturingHandler handler, Logger logger) throws IOException {
+        var config = new ConfigService(file, logger);
+        for (String source : List.of("", "server:\n  name: null\nsettings:\n  debug: null\n",
+                "server:\n  name: 7\nsettings:\n  debug: 'false'\n",
+                "server:\n  name: []\nsettings:\n  debug: {}\n")) {
+            Files.writeString(file, source); handler.messages.clear(); config.load();
+            int expected = source.isEmpty() || source.contains("null") ? 0 : 2;
+            check(config.getServerName().equals("Vapee Community") && !config.isDebugEnabled(),
+                    "core scalar missing/null/invalid defaults preserved");
+            check(handler.messages.size() == expected, "core scalar warning cardinality");
+            if (expected == 2) check(handler.messages.equals(List.of(
+                    "Invalid core setting 'server.name' in " + file + ": expected a string; using 'Vapee Community'. The file was left unchanged.",
+                    "Invalid core setting 'settings.debug' in " + file + ": expected a boolean; using 'false'. The file was left unchanged."
+            )), "core exact scalar warnings");
+            check(Files.readString(file).equals(source), "core load does not rewrite fallback values");
+            var plan = config.prepareReload();
+            plan.apply(); plan.rollback();
+            check(Files.readString(file).equals(source), "core reload does not rewrite fallback values");
+        }
+        Files.writeString(file, "server:\n  name: ''\nmessages:\n  prefix: '  '\n"
+                + "settings:\n  debug: true\nranks:\n  track: ' custom '\n");
+        handler.messages.clear(); config.load();
+        check(config.getServerName().isEmpty() && config.getMessagePrefix().equals("  ")
+                && config.isDebugEnabled() && config.getRankTrack().equals("custom") && handler.messages.isEmpty(),
+                "core blank strings allowed; local rank trimming retained");
     }
 
     private static void hierarchy(Path file, CapturingHandler handler, Logger logger) throws IOException {
