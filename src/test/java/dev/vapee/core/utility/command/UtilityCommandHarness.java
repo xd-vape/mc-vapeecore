@@ -43,6 +43,7 @@ public final class UtilityCommandHarness {
         testPingClearAndEnderChest();
         testExplicitSelfAndCommandBoundaries();
         testStaffTargetProtection();
+        testCompletionContract();
         System.out.println("UtilityCommandHarness passed " + checks + " checks.");
     }
 
@@ -646,6 +647,58 @@ public final class UtilityCommandHarness {
         actor.permissions.add(PingCommand.OTHERS_PERMISSION);
         new PingCommand(f::lookup, f::onlinePlayers, f.messages).onCommand(actor.player, null, "ping", new String[]{"Target"});
         check(f.last().contains("ping:"), "ping remains capability-only, not hierarchy protected");
+    }
+
+    private static void testCompletionContract() {
+        Fixture f = new Fixture();
+        MutablePlayer self = f.player("Zulu", GameMode.SURVIVAL);
+        self.permissions.addAll(staffPermissions());
+        f.player("Beta", GameMode.SURVIVAL);
+        f.player("alpha", GameMode.SURVIVAL);
+        f.player("Alpine", GameMode.SURVIVAL);
+        f.player("Absent", GameMode.SURVIVAL).online = false;
+        List<TabExecutor> commands = staffCommands(f).subList(0, 5);
+        List<String> roots = List.of("fly", "speed", "gamemode", "heal", "feed");
+        List<String> usages = List.of("/fly [player]", "/speed <1-10> [player]",
+                "/gamemode <mode> [player]", "/heal [player]", "/feed [player]");
+        List<String> others = List.of(FlyCommand.OTHERS_PERMISSION, SpeedCommand.OTHERS_PERMISSION,
+                GameModeCommand.OTHERS_PERMISSION, HealCommand.OTHERS_PERMISSION, FeedCommand.OTHERS_PERMISSION);
+        for (int i = 0; i < commands.size(); i++) {
+            TabExecutor command = commands.get(i);
+            String root = roots.get(i);
+            for (CommandSender sender : List.of(self.player, f.console(staffPermissions()))) {
+                for (String prefix : List.of("", "aL", "bE", "nothing")) {
+                    List<String> expected = switch (prefix) {
+                        case "" -> List.of("alpha", "Alpine", "Beta", "Zulu");
+                        case "aL" -> List.of("alpha", "Alpine");
+                        case "bE" -> List.of("Beta");
+                        default -> List.of();
+                    };
+                    check(command.onTabComplete(sender, null, root, staffArguments(i, prefix)).equals(expected),
+                            root + " actual caller sorted online candidates, prefix=" + prefix);
+                }
+            }
+            self.permissions.remove(others.get(i));
+            check(command.onTabComplete(self.player, null, root, staffArguments(i, "")).isEmpty(),
+                    root + " missing others hides even self suggestions");
+            check(command.onTabComplete(f.console(Set.of()), null, root, staffArguments(i, "")).isEmpty(),
+                    root + " console missing others has no suggestions");
+            command.onCommand(self.player, null, root, staffArguments(i, "Absent"));
+            check(f.last().equals("Player 'Absent' is not online."), root + " lookup failure precedes permission");
+            command.onCommand(self.player, null, root, staffArguments(i, "missing"));
+            check(f.last().equals("Player 'missing' is not online."), root + " exact unknown feedback");
+            self.permissions.add(others.get(i));
+            String[] extra = java.util.Arrays.copyOf(staffArguments(i, "Beta"), staffArguments(i, "Beta").length + 1);
+            extra[extra.length - 1] = "extra";
+            command.onCommand(self.player, null, root, extra);
+            check(f.last().equals("Invalid usage.\nUse: " + usages.get(i)), root + " exact arity/usage preserved");
+            check(command.onTabComplete(self.player, null, root, extra).isEmpty(), root + " extra completion arity");
+            check(command.onTabComplete(self.player, null, root, new String[0]).isEmpty(), root + " zero completion arity");
+            Fixture empty = new Fixture();
+            check(staffCommands(empty).get(i).onTabComplete(empty.console(staffPermissions()), null, root,
+                    staffArguments(i, "")).isEmpty(), root + " empty online universe");
+        }
+        check(f.players.stream().allMatch(player -> player.writes == 0), "completion and invalid input never mutate players");
     }
 
     private static Set<String> staffPermissions() {

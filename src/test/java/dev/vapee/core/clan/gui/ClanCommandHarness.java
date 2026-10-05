@@ -20,6 +20,7 @@ public final class ClanCommandHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         commandUx();
+        safeRelationArguments();
 
         ClanMenuFixture f = new ClanMenuFixture();
         var owner = f.player("Owner", true);
@@ -353,6 +354,39 @@ public final class ClanCommandHarness {
                 "cancel without outgoing invites has a useful empty state");
 
         check(choices.clans.getClan(secondClan).isPresent(), "invite choice rendering leaves unrelated clan intact");
+    }
+
+    private static void safeRelationArguments() throws Exception {
+        ClanMenuFixture f = new ClanMenuFixture();
+        var owner = f.player("Owner", true);
+        var safe = f.player("Safe", false);
+        var spaced = f.player("Two Words", false);
+        var wrong = f.player(owner.id.toString(), false);
+        var twin = f.player("Twin", false);
+        f.player("twin", false);
+        var missing = f.player("Missing", false);
+        f.player("UnrelatedKnown", false);
+        check(f.clans.createClan(owner.id, "Safety Clan", "SAFE") == ClanResult.SUCCESS, "create safety fixture");
+        for (var target : List.of(safe, spaced, wrong, twin, missing)) {
+            check(f.clans.inviteMember(owner.id, target.id) == ClanResult.SUCCESS, "seed outgoing relation");
+        }
+        f.known.remove(missing.id);
+        ClanCommand c = command(f);
+        check(Set.copyOf(c.onTabComplete(owner.player, null, "clan", new String[]{"cancel", ""}))
+                .equals(Set.of("Safe", spaced.id.toString(), wrong.id.toString(), twin.id.toString(), missing.id.toString())),
+                "cancel keeps only outgoing relations and safe UUID fallbacks");
+        run(c, owner, "cancel");
+        for (var target : List.of(spaced, wrong, twin, missing)) {
+            check(hasSuggestion(owner, "/clan cancel " + target.id), "cancel button uses same safe formatter");
+        }
+        UUID clan = f.clans.getClanOf(owner.id).orElseThrow().id();
+        check(f.clans.acceptInvite(spaced.id, clan) == ClanResult.SUCCESS, "seed spaced member");
+        for (String action : List.of("kick", "transfer")) {
+            check(c.onTabComplete(owner.player, null, "clan", new String[]{action, ""})
+                    .equals(List.of(spaced.id.toString())), "member-only " + action + " keeps UUID safety");
+            check(c.onTabComplete(spaced.player, null, "clan", new String[]{action, ""}).isEmpty(),
+                    "member gains no owner suggestions");
+        }
     }
 
     private static ClanCommand command(ClanMenuFixture fixture) {

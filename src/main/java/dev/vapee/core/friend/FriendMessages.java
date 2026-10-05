@@ -3,7 +3,7 @@ package dev.vapee.core.friend;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
-import dev.vapee.core.identity.PlayerLookupStatus;
+import dev.vapee.core.identity.IdentityCommandArgument;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -83,11 +83,8 @@ public final class FriendMessages {
 
     public static String commandArgument(PlayerIdentityService identities, UUID id) {
         String name = identities.findById(id).map(PlayerIdentity::name).orElse(null);
-        if (name == null || !name.matches("\\S+")) return id.toString();
-        var lookup = identities.resolve(name);
-        return lookup.status() == PlayerLookupStatus.FOUND
-                && lookup.identity().map(PlayerIdentity::uniqueId).filter(id::equals).isPresent()
-                ? name : id.toString();
+        return IdentityCommandArgument.nameOrUuid(id, name,
+                candidate -> identities.resolve(candidate).identity().map(PlayerIdentity::uniqueId));
     }
 
     public static Component requestActions(String argument) {

@@ -17,7 +17,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -148,14 +147,10 @@ public final class HealCommand implements TabExecutor {
     }
 
     private static List<String> playerNames(Collection<? extends Player> players, String input) {
-        String prefix = input.toLowerCase(Locale.ROOT);
-        return players.stream()
+        return NameSuggestions.matching(players.stream()
                 .filter(Objects::nonNull)
                 .filter(Player::isOnline)
-                .map(Player::getName)
-                .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
+                .map(Player::getName), input);
     }
 
     private void invalidUsage(CommandSender sender) {
