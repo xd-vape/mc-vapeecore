@@ -3,6 +3,7 @@ package dev.vapee.core.lobby.config;
 import dev.vapee.core.lobby.LobbySpawn;
 import dev.vapee.core.config.ConfigFiles;
 import dev.vapee.core.config.ConfigValues;
+import dev.vapee.core.persistence.SafeFileWriter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -38,6 +39,7 @@ public final class LobbyConfig {
     private final Logger logger;
     private final Path configFile;
     private final Supplier<InputStream> defaultResourceSupplier;
+    private final SafeFileWriter fileWriter;
     private final MiniMessage strictMiniMessage = MiniMessage.builder().strict(true).build();
 
     private volatile State state = State.defaults();
@@ -50,12 +52,18 @@ public final class LobbyConfig {
                 .toAbsolutePath()
                 .normalize();
         this.defaultResourceSupplier = () -> validatedPlugin.getResource(RESOURCE_NAME);
+        this.fileWriter = new SafeFileWriter(logger);
     }
 
     public LobbyConfig(Path configFile, Logger logger) {
+        this(configFile, logger, new SafeFileWriter(logger));
+    }
+
+    LobbyConfig(Path configFile, Logger logger, SafeFileWriter fileWriter) {
         this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
         this.logger = Objects.requireNonNull(logger, "logger");
         this.defaultResourceSupplier = () -> new ByteArrayInputStream(DEFAULT_CONTENT);
+        this.fileWriter = Objects.requireNonNull(fileWriter, "fileWriter");
     }
 
     public void initialize() {
@@ -92,7 +100,7 @@ public final class LobbyConfig {
         currentConfiguration.set("spawn.z", validatedSpawn.z());
         currentConfiguration.set("spawn.yaw", validatedSpawn.yaw());
         currentConfiguration.set("spawn.pitch", validatedSpawn.pitch());
-        save(currentConfiguration);
+        save(currentConfiguration, validatedSpawn);
         state = state.withSpawn(validatedSpawn);
     }
 
@@ -156,6 +164,10 @@ public final class LobbyConfig {
 
     private State readState(boolean strictSpawnValidation) {
         YamlConfiguration configuration = loadConfiguration();
+        return readState(configuration, strictSpawnValidation);
+    }
+
+    private State readState(YamlConfiguration configuration, boolean strictSpawnValidation) {
         return new State(
                 readSpawn(configuration, strictSpawnValidation),
                 readPlayerGameMode(configuration),
@@ -315,9 +327,20 @@ public final class LobbyConfig {
         }
     }
 
-    private void save(YamlConfiguration configuration) {
+    private void save(YamlConfiguration configuration, LobbySpawn expectedSpawn) {
         try {
-            configuration.save(configFile.toFile());
+            fileWriter.write(configFile, configuration::saveToString, candidate -> {
+                YamlConfiguration written = new YamlConfiguration();
+                try {
+                    written.load(candidate.toFile());
+                } catch (InvalidConfigurationException exception) {
+                    throw new IOException("Invalid written lobby candidate", exception);
+                }
+                State validated = readState(written, true);
+                if (!validated.spawn().equals(Optional.of(expectedSpawn))) {
+                    throw new IOException("Written lobby candidate does not contain the requested spawn");
+                }
+            }, ignored -> { });
         } catch (IOException exception) {
             throw configFailure("save lobby configuration", exception);
         }
