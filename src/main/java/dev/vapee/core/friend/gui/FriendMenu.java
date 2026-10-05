@@ -5,6 +5,7 @@ import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.friend.FriendRequest;
 import dev.vapee.core.friend.FriendService;
+import dev.vapee.core.friend.command.FriendCommand;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.message.MessageService;
@@ -84,6 +85,10 @@ public final class FriendMenu {
     public void open(Player player, FriendMenuView view, int requestedPage) {
         Player viewer = Objects.requireNonNull(player, "player");
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
+        if (!viewer.hasPermission(FriendCommand.PERMISSION)) {
+            messages.send(viewer, "<red>You do not have permission to use friends.</red>");
+            return;
+        }
         UUID owner = viewer.getUniqueId();
         List<Entry> entries = entries(owner, selectedView);
         Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);

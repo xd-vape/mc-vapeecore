@@ -11,6 +11,7 @@ public final class SettingsMenuSecurityHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        capabilityBoundaries();
         var f = new SettingsMenuFixture();
         var owner = f.player("Owner");
         var other = f.player("Other");
@@ -103,6 +104,50 @@ public final class SettingsMenuSecurityHarness {
             }, menu::closeOpenInventories, menu::activeCount, listener::onInventoryClose);
         });
         System.out.println("SettingsMenuSecurityHarness passed " + checks + " checks.");
+    }
+
+    private static void capabilityBoundaries() throws Exception {
+        var f = new SettingsMenuFixture(); var owner = f.player("Entry");
+        owner.permitted = false; int saves = f.repository.saves;
+        f.menu.open(owner.player);
+        check(owner.opens == 0 && f.menu.activeCount() == 0 && f.repository.saves == saves,
+                "denied settings entry publishes/saves nothing");
+        check(owner.received.size() == 1 && owner.closes == 0, "controlled entry denial leaves current view alone");
+        owner.permitted = true; f.menu.open(owner.player);
+        check(owner.opens == 1 && f.menu.activeCount() == 1, "grant permits new settings entry");
+        for (int slot : new int[]{10, 19, 12, 21, 14, 23, 16, 25, 33, 42, 31, 40, 49, 52, 54}) {
+            for (boolean allowed : new boolean[]{false, true}) {
+                var test = new SettingsMenuFixture(); var actor = test.player("Actor");
+                test.menu.open(actor.player); Inventory top = actor.open;
+                var settings = test.settings.getSettings(actor.id).orElseThrow();
+                var before = java.util.List.of(settings.isScoreboardEnabled(), settings.isSoundsEnabled(),
+                        settings.isPrivateMessagesEnabled(), settings.isFriendRequestsEnabled(), settings.isFriendPresenceNotificationsEnabled());
+                int initial = test.repository.saves; actor.permitted = allowed;
+                check(test.click(actor, top, slot, ClickType.LEFT).isCancelled(), "settings action cancelled " + slot + allowed);
+                var after = java.util.List.of(settings.isScoreboardEnabled(), settings.isSoundsEnabled(),
+                        settings.isPrivateMessagesEnabled(), settings.isFriendRequestsEnabled(), settings.isFriendPresenceNotificationsEnabled());
+                if (!allowed) {
+                    check(before.equals(after) && test.repository.saves == initial && test.visibilityCalls == 0
+                            && test.presentationCalls == 0 && test.soundCalls == 0, "revoked settings action cannot mutate/save/navigate " + slot);
+                    check(test.menu.activeCount() == 0 && actor.closes == 1 && actor.open == actor.bottom
+                            && actor.received.size() == 1, "owned settings revocation cleanup and one denial " + slot);
+                    test.click(actor, top, slot, ClickType.LEFT);
+                    check(actor.closes == 1 && actor.received.size() == 1, "repeated stale settings event gives no denial spam " + slot);
+                } else if (slot == 31 || slot == 40) {
+                    check(test.visibilityCalls == 1 && test.repository.saves == initial, "authorized visibility navigation " + slot);
+                } else if (slot != 49 && slot != 52 && slot != 54) {
+                    check(!before.equals(after) && test.repository.saves == initial + 1, "authorized settings mutation " + slot);
+                } else check(test.repository.saves == initial, "nonmutating settings route " + slot);
+            }
+        }
+        Inventory top = owner.open; owner.permitted = false; owner.open = owner.bottom;
+        f.click(owner, top, 10, ClickType.LEFT);
+        check(owner.closes == 0 && owner.open == owner.bottom && f.menu.activeCount() == 1,
+                "settings current-top check preserves foreign view and does not reclassify stale event");
+        owner.open = top;
+        f.listener.onPlayerQuit(new PlayerQuitEvent(owner.player, net.kyori.adventure.text.Component.empty(),
+                PlayerQuitEvent.QuitReason.DISCONNECTED));
+        check(f.menu.activeCount() == 0, "quit removes binding after permission revocation");
     }
 
     private static void check(boolean condition, String message) {

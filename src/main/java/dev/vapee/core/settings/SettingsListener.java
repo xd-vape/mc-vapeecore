@@ -1,6 +1,7 @@
 package dev.vapee.core.settings;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.presentation.PresentationService;
@@ -76,6 +77,12 @@ public final class SettingsListener implements Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)
                 || !settingsMenu.isActive(player, topInventory, holder)) {
+            return;
+        }
+        if (!player.hasPermission(SettingsCommand.PERMISSION)) {
+            settingsMenu.forgetIfActive(player.getUniqueId(), topInventory);
+            if (player.getOpenInventory().getTopInventory() == topInventory) player.closeInventory();
+            messageService.send(player, "<red>You do not have permission to use settings.</red>");
             return;
         }
         if (event.getClickedInventory() != topInventory) {

@@ -3,6 +3,7 @@ package dev.vapee.core.friend.gui;
 import dev.vapee.core.friend.FriendMessages;
 import dev.vapee.core.friend.FriendResult;
 import dev.vapee.core.friend.FriendService;
+import dev.vapee.core.friend.command.FriendCommand;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -44,8 +45,16 @@ public final class FriendMenuListener implements Listener {
         }
         // Cancel even forged, stale and bottom-inventory interactions: this GUI is never item storage.
         event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)
-                || event.getClickedInventory() != top) {
+        if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)) {
+            return;
+        }
+        if (!player.hasPermission(FriendCommand.PERMISSION)) {
+            menu.forgetIfActive(player.getUniqueId(), top);
+            if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
+            messages.send(player, "<red>You do not have permission to use friends.</red>");
+            return;
+        }
+        if (event.getClickedInventory() != top) {
             return;
         }
         ClickType click = event.getClick();

@@ -162,6 +162,7 @@ final class FriendMenuFixture {
         final Inventory bottom = inventory(null, 36);
         final List<Component> received = new ArrayList<>();
         boolean online;
+        boolean permitted = true;
         Inventory open;
         int closeCalls;
 
@@ -173,6 +174,7 @@ final class FriendMenuFixture {
                 case "getUniqueId" -> id;
                 case "getName" -> name;
                 case "isOnline" -> this.online;
+                case "hasPermission" -> permitted;
                 case "openInventory" -> {
                     open = (Inventory) args[0];
                     yield view(this, open);
@@ -249,6 +251,7 @@ final class FriendMenuFixture {
 
     static final class MemoryFriends implements FriendRepository {
         FriendSnapshot snapshot = FriendSnapshot.empty();
+        int saves;
         boolean failNext;
 
         @Override
@@ -258,6 +261,7 @@ final class FriendMenuFixture {
 
         @Override
         public void save(FriendSnapshot snapshot) {
+            saves++;
             if (failNext) {
                 failNext = false;
                 throw new FriendRepositoryException("simulated persistence failure");
