@@ -13,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -156,20 +157,24 @@ public final class SeatService {
     public boolean release(SeatKey key) {
         requirePrimaryThread();
         SeatKey validatedKey = Objects.requireNonNull(key, "key");
-        SeatAssignment assignment = assignmentsBySeat.remove(validatedKey);
-        dismountHandlers.remove(validatedKey);
+        SeatAssignment assignment = assignmentsBySeat.get(validatedKey);
         if (assignment == null) {
             return false;
         }
-        seatsByPlayer.remove(assignment.playerId(), validatedKey);
         assignment.seatEntity().ifPresent(entityId -> {
             programmaticDismounts.add(assignment.playerId());
             try {
                 entityGateway.remove(entityId, assignment.playerId());
+            } catch (RuntimeException exception) {
+                throw new IllegalStateException("Seat release failed for " + validatedKey
+                        + ", entity=" + entityId + ", player=" + assignment.playerId(), exception);
             } finally {
                 programmaticDismounts.remove(assignment.playerId());
             }
         });
+        assignmentsBySeat.remove(validatedKey);
+        dismountHandlers.remove(validatedKey);
+        seatsByPlayer.remove(assignment.playerId(), validatedKey);
         return true;
     }
 
@@ -179,7 +184,7 @@ public final class SeatService {
         var keys = assignmentsBySeat.keySet().stream()
                 .filter(key -> key.owner().equals(validatedOwner))
                 .toList();
-        keys.forEach(this::release);
+        releaseAll(keys);
         return keys.size();
     }
 
@@ -213,11 +218,20 @@ public final class SeatService {
 
     public void cleanup() {
         requirePrimaryThread();
-        new ArrayList<>(assignmentsBySeat.keySet()).forEach(this::release);
-        assignmentsBySeat.clear();
-        seatsByPlayer.clear();
-        dismountHandlers.clear();
-        programmaticDismounts.clear();
+        releaseAll(new ArrayList<>(assignmentsBySeat.keySet()));
+    }
+
+    private void releaseAll(List<SeatKey> keys) {
+        IllegalStateException failure = null;
+        for (SeatKey key : keys) {
+            try {
+                release(key);
+            } catch (RuntimeException exception) {
+                if (failure == null) failure = new IllegalStateException("Seat cleanup incomplete");
+                failure.addSuppressed(exception);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private void completeVoluntaryDismount(UUID playerId, SeatKey expectedKey, UUID expectedEntityId) {

@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,7 +39,12 @@ public final class BlackjackSeatService {
                 return validatedSeatService.reserve(key, SeatType.MANAGED, playerId, location, dismountHandler);
             }
             public boolean mount(Player player) { return validatedSeatService.mountReserved(player); }
-            public boolean releasePlayer(UUID playerId) { return validatedSeatService.releasePlayer(playerId); }
+            public boolean release(SeatKey key, UUID playerId) {
+                // A retained failed assignment must not release a later seat owned by another feature.
+                return validatedSeatService.getAssignment(key)
+                        .filter(assignment -> assignment.playerId().equals(playerId))
+                        .map(assignment -> validatedSeatService.release(key)).orElse(false);
+            }
             public int releaseOwner(String owner) { return validatedSeatService.releaseOwner(owner); }
         };
         this.locationResolver = position -> position.toLocation(validatedPlugin.getServer());
@@ -135,35 +141,54 @@ public final class BlackjackSeatService {
 
     public void releaseSeat(UUID playerId) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
-        SeatAssignment assignment = assignmentsByPlayer.remove(validatedPlayerId);
-        if (assignment != null) {
-            Map<Integer, UUID> occupants = occupantsByTable.get(assignment.tableId());
-            if (occupants != null) {
-                occupants.remove(assignment.seatNumber(), validatedPlayerId);
-                if (occupants.isEmpty()) {
-                    occupantsByTable.remove(assignment.tableId());
-                }
+        SeatAssignment assignment = assignmentsByPlayer.get(validatedPlayerId);
+        if (assignment == null) return;
+        try {
+            seatRuntime.release(seatKey(assignment.tableId(), assignment.seatNumber()), validatedPlayerId);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("BlackjackSeat release failed for "
+                    + seatKey(assignment.tableId(), assignment.seatNumber())
+                    + ", player=" + validatedPlayerId, exception);
+        }
+        assignmentsByPlayer.remove(validatedPlayerId);
+        Map<Integer, UUID> occupants = occupantsByTable.get(assignment.tableId());
+        if (occupants != null) {
+            occupants.remove(assignment.seatNumber(), validatedPlayerId);
+            if (occupants.isEmpty()) {
+                occupantsByTable.remove(assignment.tableId());
             }
         }
-
-        seatRuntime.releasePlayer(validatedPlayerId);
     }
 
     public void cleanupTable(String tableId) {
         String validatedTableId = Objects.requireNonNull(tableId, "tableId");
-        assignmentsByPlayer.entrySet().stream()
+        releaseAll(assignmentsByPlayer.entrySet().stream()
                 .filter(entry -> entry.getValue().tableId().equals(validatedTableId))
                 .map(Map.Entry::getKey)
-                .toList()
-                .forEach(this::releaseSeat);
-        seatRuntime.releaseOwner(owner(validatedTableId));
+                .toList());
+        try {
+            seatRuntime.releaseOwner(owner(validatedTableId));
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("BlackjackSeat releaseOwner failed for " + owner(validatedTableId), exception);
+        }
         occupantsByTable.remove(validatedTableId);
     }
 
     public void shutdown() {
-        assignmentsByPlayer.keySet().stream().toList().forEach(this::releaseSeat);
-        occupantsByTable.clear();
-        assignmentsByPlayer.clear();
+        releaseAll(assignmentsByPlayer.keySet().stream().toList());
+    }
+
+    private void releaseAll(List<UUID> players) {
+        IllegalStateException failure = null;
+        for (UUID player : players) {
+            try {
+                releaseSeat(player);
+            } catch (RuntimeException exception) {
+                if (failure == null) failure = new IllegalStateException("BlackjackSeat cleanup incomplete");
+                failure.addSuppressed(exception);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     static SeatKey seatKey(String tableId, int seatNumber) {
@@ -179,7 +204,7 @@ public final class BlackjackSeatService {
 
         boolean mount(Player player);
 
-        boolean releasePlayer(UUID playerId);
+        boolean release(SeatKey key, UUID playerId);
 
         int releaseOwner(String owner);
     }

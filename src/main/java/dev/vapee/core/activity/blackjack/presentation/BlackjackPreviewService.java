@@ -91,17 +91,22 @@ public final class BlackjackPreviewService implements Listener {
 
         List<PreviewMarker> markers = buildMarkers(world, validatedDraft);
         String owner = owner(validatedAdmin, validatedDraft.getId());
+        PreviewState state = new PreviewState(owner);
+        activePreviews.put(validatedAdmin, state);
         try {
             for (PreviewMarker marker : markers) {
                 displayGateway.create(owner, marker);
             }
-            BukkitTask task = taskScheduler.schedule(
-                    () -> expire(validatedAdmin, owner),
+            state.task = Objects.requireNonNull(taskScheduler.schedule(
+                    () -> expire(validatedAdmin, state),
                     PREVIEW_TICKS
-            );
-            activePreviews.put(validatedAdmin, new PreviewState(owner, task));
+            ), "preview task");
         } catch (RuntimeException exception) {
-            displayGateway.removeOwner(owner);
+            try {
+                clear(validatedAdmin);
+            } catch (RuntimeException cleanupFailure) {
+                exception.addSuppressed(cleanupFailure);
+            }
             throw exception;
         }
         return new PreviewResult(
@@ -112,17 +117,43 @@ public final class BlackjackPreviewService implements Listener {
     }
 
     public void clear(UUID adminId) {
-        PreviewState state = activePreviews.remove(Objects.requireNonNull(adminId, "adminId"));
+        PreviewState state = activePreviews.get(Objects.requireNonNull(adminId, "adminId"));
         if (state == null) return;
-        state.task().cancel();
-        displayGateway.removeOwner(state.owner());
+        IllegalStateException failure = new IllegalStateException(
+                "BlackjackPreview cleanup incomplete for owner=" + state.owner + ", admin=" + adminId);
+        if (state.task != null) {
+            try {
+                state.task.cancel();
+                state.task = null;
+            } catch (RuntimeException exception) {
+                failure.addSuppressed(new IllegalStateException(
+                        "BlackjackPreview cancel failed for owner=" + state.owner, exception));
+            }
+        }
+        if (!state.displaysRemoved) {
+            try {
+                displayGateway.removeOwner(state.owner);
+                state.displaysRemoved = true;
+            } catch (RuntimeException exception) {
+                failure.addSuppressed(new IllegalStateException(
+                        "BlackjackPreview removeOwner failed for owner=" + state.owner, exception));
+            }
+        }
+        if (failure.getSuppressed().length != 0) throw failure;
+        activePreviews.remove(adminId, state);
     }
 
     public void shutdown() {
+        IllegalStateException failure = null;
         for (UUID adminId : List.copyOf(activePreviews.keySet())) {
-            clear(adminId);
+            try {
+                clear(adminId);
+            } catch (RuntimeException exception) {
+                if (failure == null) failure = new IllegalStateException("BlackjackPreview shutdown incomplete");
+                failure.addSuppressed(exception);
+            }
         }
-        activePreviews.clear();
+        if (failure != null) throw failure;
     }
 
     @EventHandler
@@ -194,11 +225,11 @@ public final class BlackjackPreviewService implements Listener {
                 new Vector3f(), new Quaternionf(), new Vector3f(PREVIEW_SCALE), new Quaternionf()));
     }
 
-    private void expire(UUID adminId, String expectedOwner) {
+    private void expire(UUID adminId, PreviewState expectedState) {
         PreviewState state = activePreviews.get(adminId);
-        if (state == null || !state.owner().equals(expectedOwner)) return;
-        activePreviews.remove(adminId);
-        displayGateway.removeOwner(expectedOwner);
+        if (state != expectedState) return;
+        state.task = null; // This finite timeout has run; only unfinished display removal remains.
+        clear(adminId);
     }
 
     public enum PreviewStatus {
@@ -239,10 +270,13 @@ public final class BlackjackPreviewService implements Listener {
         BukkitTask schedule(Runnable action, long delayTicks);
     }
 
-    private record PreviewState(String owner, BukkitTask task) {
-        private PreviewState {
-            owner = Objects.requireNonNull(owner, "owner");
-            task = Objects.requireNonNull(task, "task");
+    private static final class PreviewState {
+        private final String owner;
+        private BukkitTask task;
+        private boolean displaysRemoved;
+
+        private PreviewState(String owner) {
+            this.owner = Objects.requireNonNull(owner, "owner");
         }
     }
 }

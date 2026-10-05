@@ -47,6 +47,7 @@ public final class BlackjackPresentationHarness {
     private BlackjackPresentationHarness() { }
 
     public static void main(String[] args) throws Exception {
+        testRejectedWorldViewTeleport();
         check(Arrays.equals(BlackjackAction.values(), new BlackjackAction[]{
                 BlackjackAction.DEAL, BlackjackAction.HIT, BlackjackAction.STAND,
                 BlackjackAction.DOUBLE, BlackjackAction.LEAVE
@@ -386,6 +387,47 @@ public final class BlackjackPresentationHarness {
             return true;
         }
         return component.children().stream().anyMatch(child -> containsTextWithColor(child, text, color));
+    }
+
+    private static void testRejectedWorldViewTeleport() throws Exception {
+        BlackjackPresentationFixture f = new BlackjackPresentationFixture();
+        f.activate();
+        f.render();
+        var key = new dev.vapee.core.worlddisplay.WorldDisplayKey("blackjack:read-parity", "dealer-hand");
+        var original = f.displays.getHandle(key).orElseThrow();
+        int count = f.creates;
+        Set<UUID> originals = Set.copyOf(f.texts.keySet());
+        f.rejectedTeleports.add(original.entityId());
+        f.render();
+        check(f.displays.getHandle(key).orElseThrow() == original,
+                "Blackjack apply retains live rejected original handle");
+        check(f.creates == count && f.texts.keySet().equals(originals),
+                "Blackjack apply never duplicates a live rejected display");
+        check(originals.stream().allMatch(id -> f.teleports.getOrDefault(id, 0) == 1),
+                "Blackjack apply attempts each display once despite one rejected movement");
+        f.rejectedTeleports.clear();
+        f.render();
+        check(f.creates == count && f.displays.getHandle(key).orElseThrow() == original,
+                "later Blackjack refresh updates original handle without recreation");
+        f.rejectedTeleports.add(original.entityId());
+        f.render();
+        f.worldView.onDisabled(f.definition.id());
+        check(f.displays.getDisplayCount() == 0 && f.texts.isEmpty(),
+                "Blackjack owner cleanup removes rejected original without orphan");
+
+        f.render();
+        UUID missing = f.displays.getHandle(key).orElseThrow().entityId();
+        f.disappearOnTeleport.add(missing);
+        count = f.creates;
+        f.render();
+        check(f.creates == count + 1 && !f.displays.getHandle(key).orElseThrow().entityId().equals(missing),
+                "Blackjack apply recreates exactly one entity when it disappears during movement");
+        check(!f.texts.containsKey(missing) && f.texts.size() == f.displays.getDisplayCount(),
+                "Blackjack missing reconciliation has no duplicate physical resource");
+        check(f.warnings.isEmpty(), "Blackjack false movement remains controlled without refresh exception");
+        f.worldView.shutdown();
+        f.worldView.shutdown();
+        check(f.texts.isEmpty(), "Blackjack repeated cleanup removes recreated displays safely");
     }
 
     private static void check(boolean condition, String message) {

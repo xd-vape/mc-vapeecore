@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.CopyOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Collection;
@@ -29,13 +30,12 @@ import java.util.logging.Logger;
 public final class WarpConfig {
 
     private static final String RESOURCE_NAME = "warps.yml";
-    private static final int REPLACE_ATTEMPTS = 5;
-    private static final long REPLACE_RETRY_DELAY_MILLIS = 25L;
     private static final byte[] DEFAULT_CONTENT = "warps: {}\n".getBytes(StandardCharsets.UTF_8);
 
     private final Path configFile;
     private final Logger logger;
     private final Supplier<InputStream> defaultResourceSupplier;
+    private final ReplacementIO replacementIO;
 
     public WarpConfig(JavaPlugin plugin) {
         JavaPlugin validatedPlugin = Objects.requireNonNull(plugin, "plugin");
@@ -45,12 +45,18 @@ public final class WarpConfig {
                 .normalize();
         this.logger = validatedPlugin.getLogger();
         this.defaultResourceSupplier = () -> validatedPlugin.getResource(RESOURCE_NAME);
+        this.replacementIO = new ReplacementIO();
     }
 
     public WarpConfig(Path configFile, Logger logger) {
+        this(configFile, logger, new ReplacementIO());
+    }
+
+    WarpConfig(Path configFile, Logger logger, ReplacementIO replacementIO) {
         this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
         this.logger = Objects.requireNonNull(logger, "logger");
         this.defaultResourceSupplier = () -> new ByteArrayInputStream(DEFAULT_CONTENT);
+        this.replacementIO = Objects.requireNonNull(replacementIO, "replacementIO");
     }
 
     public NavigableMap<String, WarpPoint> initialize() {
@@ -285,7 +291,7 @@ public final class WarpConfig {
     private void replaceConfiguration(Path temporaryFile) throws IOException {
         IOException atomicFailure;
         try {
-            Files.move(
+            replacementIO.move(
                     temporaryFile,
                     configFile,
                     StandardCopyOption.ATOMIC_MOVE,
@@ -296,26 +302,20 @@ public final class WarpConfig {
             atomicFailure = exception;
         }
 
-        IOException replaceFailure = null;
-        for (int attempt = 1; attempt <= REPLACE_ATTEMPTS; attempt++) {
-            try {
-                Files.move(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
-                return;
-            } catch (IOException exception) {
-                replaceFailure = exception;
-                if (attempt < REPLACE_ATTEMPTS) {
-                    waitBeforeReplaceRetry(attempt, atomicFailure, replaceFailure);
-                }
-            }
+        // Preserve the supported fallbacks, with one attempt per stage and no caller-thread backoff.
+        IOException replaceFailure;
+        try {
+            replacementIO.move(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
+            return;
+        } catch (IOException exception) {
+            replaceFailure = exception;
         }
 
         try {
-            Files.copy(temporaryFile, configFile, StandardCopyOption.REPLACE_EXISTING);
+            replacementIO.copy(temporaryFile, configFile);
         } catch (IOException exception) {
             exception.addSuppressed(atomicFailure);
-            if (replaceFailure != null) {
-                exception.addSuppressed(replaceFailure);
-            }
+            exception.addSuppressed(replaceFailure);
             throw exception;
         }
         try {
@@ -325,16 +325,13 @@ public final class WarpConfig {
         }
     }
 
-    private void waitBeforeReplaceRetry(int attempt, IOException atomicFailure, IOException replaceFailure)
-            throws IOException {
-        try {
-            Thread.sleep(REPLACE_RETRY_DELAY_MILLIS * attempt);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            IOException interrupted = new IOException("Interrupted while retrying configuration replacement", exception);
-            interrupted.addSuppressed(atomicFailure);
-            interrupted.addSuppressed(replaceFailure);
-            throw interrupted;
+    static class ReplacementIO {
+        void move(Path source, Path target, CopyOption... options) throws IOException {
+            Files.move(source, target, options);
+        }
+
+        void copy(Path source, Path target) throws IOException {
+            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
