@@ -391,11 +391,8 @@ public final class ClanCommand implements TabExecutor {
     }
 
     private String identityCommandArgument(UUID id) {
-        String name = displayName(id);
-        PlayerLookupResult lookup = identities.resolve(name);
-        return lookup.status() == PlayerLookupStatus.FOUND
-                && lookup.identity().map(PlayerIdentity::uniqueId).filter(id::equals).isPresent()
-                ? name : id.toString();
+        return IdentityCommandArgument.nameOrUuid(id, displayName(id),
+                name -> identities.resolve(name).identity().map(PlayerIdentity::uniqueId));
     }
 
     @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,

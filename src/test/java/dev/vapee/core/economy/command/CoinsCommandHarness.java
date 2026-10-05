@@ -37,6 +37,7 @@ public final class CoinsCommandHarness {
         testFailures();
         testLiteralComponents();
         testCompletion();
+        testSafeCompletionArguments();
         testStaffTargets();
         System.out.println("CoinsCommandHarness passed " + checks + " checks.");
     }
@@ -264,6 +265,26 @@ public final class CoinsCommandHarness {
         check(f.repo.reads == 0, "completion never loads offline snapshots");
     }
 
+
+    private static void testSafeCompletionArguments() throws Exception {
+        Fixture f = new Fixture();
+        Actor admin = f.player("Admin", 0L, true);
+        Actor spaced = f.player("Two Words", 0L, false);
+        Actor uuidNamed = f.player(admin.id.toString(), 0L, false);
+        Actor unknown = new Actor(UUID.randomUUID(), "UnknownOnline", false);
+        Actor mismatch = new Actor(UUID.randomUUID(), "WrongId", false);
+        f.seed("WrongId", 0L);
+        f.seed("UnrelatedOffline", 0L);
+        f.online.put(unknown.id, unknown);
+        f.online.put(mismatch.id, mismatch);
+        for (String action : List.of("get", "add", "remove", "set")) {
+            check(Set.copyOf(f.tab(admin, action, "")).equals(Set.of("Admin", spaced.id.toString(),
+                    uuidNamed.id.toString(), unknown.id.toString(), mismatch.id.toString())),
+                    "exact online universe and UUID safety including UUID-looking name " + action);
+            check(f.tab(admin, action, "Two").isEmpty(), "unsafe spelling is not suggested " + action);
+        }
+        check(f.repo.reads == 0 && f.repo.saves == 0, "safe completion uses only indexed names, no snapshot reads or writes");
+    }
 
     private static void testStaffTargets() throws Exception {
         for (String action : List.of("add", "remove", "set"))

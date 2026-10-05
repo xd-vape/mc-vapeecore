@@ -2,7 +2,7 @@ package dev.vapee.core.moderation.command;
 
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
-import dev.vapee.core.identity.PlayerLookupStatus;
+import dev.vapee.core.identity.IdentityCommandArgument;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.*;
 import dev.vapee.core.rank.staff.StaffHierarchyService;
@@ -80,13 +80,9 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
     }
 
     private String safeArgument(UUID id) {
-        var identity = identities.findById(id);
-        if (identity.isEmpty()) return id.toString();
-        String name = identity.get().name();
-        if (name.codePoints().anyMatch(point -> Character.isWhitespace(point) || Character.isISOControl(point))) return id.toString();
-        var lookup = identities.resolve(name);
-        return lookup.status() == PlayerLookupStatus.FOUND && lookup.identity().orElseThrow().uniqueId().equals(id)
-                ? name : id.toString();
+        String name = identities.findById(id).map(PlayerIdentity::name).orElse(null);
+        return IdentityCommandArgument.nameOrUuid(id, name,
+                candidate -> identities.resolve(candidate).identity().map(PlayerIdentity::uniqueId));
     }
 
     void audit(String action, ModerationActor actor, PlayerIdentity target, ModerationRecord record) {

@@ -7,6 +7,7 @@ import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.command.help.CommandHelpSection;
 import dev.vapee.core.economy.EconomyResult;
 import dev.vapee.core.economy.EconomyService;
+import dev.vapee.core.identity.IdentityCommandArgument;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.PlayerService;
 import net.kyori.adventure.text.Component;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
@@ -131,9 +133,12 @@ public final class CoinsCommand implements TabExecutor {
     }
 
     private String safeArgument(Player player) {
-        Set<UUID> ids = playerService.findKnownIdsByName(player.getName());
-        return ids.size() == 1 && ids.contains(player.getUniqueId())
-                ? player.getName() : player.getUniqueId().toString();
+        return IdentityCommandArgument.nameOrUuid(player.getUniqueId(), player.getName(), name -> {
+            UUID explicitId = parseUuid(name);
+            if (explicitId != null) return Optional.of(explicitId);
+            Set<UUID> ids = playerService.findKnownIdsByName(name);
+            return ids.size() == 1 ? Optional.of(ids.iterator().next()) : Optional.empty();
+        });
     }
 
     private void sendOwnBalance(CommandSender sender) {

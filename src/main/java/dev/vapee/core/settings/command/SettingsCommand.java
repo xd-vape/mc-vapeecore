@@ -1,6 +1,7 @@
 package dev.vapee.core.settings.command;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.identity.IdentityCommandArgument;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.PlayerLookupResult;
@@ -229,12 +230,9 @@ public final class SettingsCommand implements TabExecutor {
     }
 
     private String identityCommandArgument(UUID id) {
-        PlayerIdentity identity = identities.findById(id).orElse(null);
-        if (identity == null) return id.toString();
-        PlayerLookupResult lookup = identities.resolve(identity.name());
-        return lookup.status() == PlayerLookupStatus.FOUND
-                && lookup.identity().map(PlayerIdentity::uniqueId).filter(id::equals).isPresent()
-                ? identity.name() : id.toString();
+        String name = identities.findById(id).map(PlayerIdentity::name).orElse(null);
+        return IdentityCommandArgument.nameOrUuid(id, name,
+                candidate -> identities.resolve(candidate).identity().map(PlayerIdentity::uniqueId));
     }
 
     private void apply(Player player) {

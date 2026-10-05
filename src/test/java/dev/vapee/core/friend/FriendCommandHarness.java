@@ -38,6 +38,7 @@ public final class FriendCommandHarness {
         Path directory = Files.createTempDirectory("vapeecore-friend-command-");
         try {
             completionUx(new Fixture(directory.resolve("completion-ux")));
+            safeRelationArguments(new Fixture(directory.resolve("safe-arguments")));
             Fixture fixture = new Fixture(directory);
             Player alice = fixture.player("Alice", true, true);
             Player bob = fixture.player("Bob", true, true);
@@ -193,6 +194,35 @@ public final class FriendCommandHarness {
             }
         }
         System.out.println("FriendCommandHarness passed " + checks + " checks.");
+    }
+
+    private static void safeRelationArguments(Fixture f) throws Exception {
+        Player actor = f.player("Actor", true, true);
+        Player safe = f.player("Safe", false, true);
+        Player spaced = f.player("Two Words", false, true);
+        Player unicode = f.player("Two\u2003Words", false, true);
+        Player wrong = f.player(actor.getUniqueId().toString(), false, true);
+        Player twin = f.player("Twin", false, true);
+        f.player("twin", false, true);
+        f.player("UnrelatedKnown", false, true);
+        for (Player target : List.of(safe, spaced, unicode, wrong, twin)) {
+            check(f.friends.sendRequest(actor.getUniqueId(), target.getUniqueId()) == FriendResult.SUCCESS,
+                    "seed own request");
+            check(f.friends.acceptRequest(target.getUniqueId(), actor.getUniqueId()) == FriendResult.SUCCESS,
+                    "seed own friendship");
+        }
+        FriendCommand c = f.command();
+        check(java.util.Set.copyOf(c.onTabComplete(actor, null, "friend", new String[]{"remove", ""}))
+                .equals(java.util.Set.of("Safe", spaced.getUniqueId().toString(), unicode.getUniqueId().toString(),
+                        wrong.getUniqueId().toString(), twin.getUniqueId().toString())),
+                "remove keeps exact friend universe and safe spellings");
+        run(c, actor, "remove");
+        for (Player target : List.of(spaced, unicode, wrong, twin)) {
+            check(hasSuggestion(f.messages.get(actor.getUniqueId()), "/friend remove " + target.getUniqueId()),
+                    "friend choice button keeps same safe UUID fallback");
+        }
+        check(c.onTabComplete(actor, null, "friend", new String[]{"cancel", ""}).isEmpty(),
+                "formatter cannot leak friends into outgoing requests");
     }
 
     private static void completionUx(Fixture f) throws Exception {

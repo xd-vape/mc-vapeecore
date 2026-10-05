@@ -17,6 +17,7 @@ public final class ModerationCommandHarness {
     public static void main(String[] args) throws Exception {
         guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
         hierarchyMatrix(); hierarchyFreshness(); hierarchyAsync(); hierarchyCompletion();
+        safeCompletionArguments();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
     }
 
@@ -301,6 +302,24 @@ public final class ModerationCommandHarness {
             check(command(f, name).onTabComplete(f.console.sender, null, name, new String[]{"Alex", "7d", ""}).isEmpty(), "no free-reason suggestions " + name);
         }
         check(f.playerWrites == 0, "no completion player mutation");
+    }
+
+    private static void safeCompletionArguments() throws Exception {
+        for (String commandName : MODERATION) {
+            for (String unsafe : List.of("Two Words", "Two\tWords", "Two\u2003Words", "Two\0Words", STAFF.toString())) {
+                Fixture f = new Fixture();
+                f.addKnown(TARGET, unsafe);
+                seed(f, commandName, TARGET);
+                int writes = f.repository.saves;
+                List<String> candidates = command(f, commandName).onTabComplete(f.console.sender, null,
+                        commandName, new String[]{""});
+                check(candidates.contains(TARGET.toString()) && !candidates.contains(unsafe),
+                        commandName + " whitespace/control/wrong-UUID spelling falls back");
+                check(!candidates.contains("Offline") && f.groupLoadCalls == 0
+                                && f.repository.saves == writes && f.playerWrites == 0,
+                        commandName + " preserves candidate scope and read-only/no-LP-load boundary");
+            }
+        }
     }
 
     private static void mutes() throws Exception {

@@ -34,6 +34,7 @@ public final class SettingsCommandHarness {
         fixture.menuAndSyntax();
         fixture.addAndRemove();
         fixture.completionAndSecurity();
+        new Fixture().safeRelationArguments();
         System.out.println("SettingsCommandHarness passed " + checks + " checks.");
     }
 
@@ -172,6 +173,28 @@ public final class SettingsCommandHarness {
             execute(console, "visibility");
             check(console.text().contains("Only players can open/manage player settings"),
                     "console receives player-only feedback");
+        }
+
+        void safeRelationArguments() {
+            TestSender safe = player("Safe", false, false);
+            TestSender spaced = player("Two Words", false, false);
+            TestSender wrong = player(owner.id.toString(), false, false);
+            TestSender twin = player("Twin", false, false);
+            player("twin", false, false);
+            player("UnrelatedKnown", false, false);
+            UUID unknown = UUID.randomUUID();
+            for (UUID id : List.of(safe.id, spaced.id, wrong.id, twin.id, unknown)) {
+                check(settings.addLobbyVisiblePlayer(owner.id, id) == AddedVisiblePlayerResult.SUCCESS,
+                        "arrange own saved visibility relation");
+            }
+            List<String> result = complete(owner, "visibility", "remove", "");
+            check(Set.copyOf(result).equals(Set.of("Safe", spaced.id.toString(), wrong.id.toString(),
+                    twin.id.toString(), unknown.toString())), "remove keeps exact own relation, with safe UUID spellings");
+            check(complete(owner, "visibility", "remove", "sA").equals(List.of("Safe")), "remove safe name prefix");
+            for (UUID id : List.of(spaced.id, wrong.id, twin.id, unknown)) {
+                execute(owner, "visibility", "remove", id.toString());
+                check(!settings.isLobbyAddedVisiblePlayer(owner.id, id).orElseThrow(), "fallback remains executable");
+            }
         }
 
         TestSender player(String name, boolean online, boolean loaded) {
