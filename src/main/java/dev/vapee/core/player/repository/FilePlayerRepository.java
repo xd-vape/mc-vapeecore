@@ -3,6 +3,7 @@ package dev.vapee.core.player.repository;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
+import dev.vapee.core.persistence.SafeFileWriter;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerVisibilitySettings;
 import dev.vapee.core.player.social.PlayerSocial;
@@ -16,12 +17,13 @@ import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.LinkOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -38,14 +40,22 @@ public final class FilePlayerRepository implements PlayerRepository {
 
     private final Path playersDirectory;
     private final Logger logger;
+    private final SafeFileWriter fileWriter;
+    private final SafeFileWriter.FileAccess files;
     private final Map<UUID, String> indexedNames = new HashMap<>();
     private final Map<String, Set<UUID>> nameIndex = new HashMap<>();
 
     public FilePlayerRepository(Path playersDirectory, Logger logger) {
+        this(playersDirectory, logger, new SafeFileWriter.FileAccess() { });
+    }
+
+    FilePlayerRepository(Path playersDirectory, Logger logger, SafeFileWriter.FileAccess files) {
         this.playersDirectory = Objects.requireNonNull(playersDirectory, "playersDirectory")
                 .toAbsolutePath()
                 .normalize();
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.files = Objects.requireNonNull(files, "files");
+        this.fileWriter = new SafeFileWriter(logger, files);
     }
 
     public void initialize() {
@@ -79,8 +89,8 @@ public final class FilePlayerRepository implements PlayerRepository {
                     continue;
                 }
                 try {
-                    YamlConfiguration configuration = new YamlConfiguration();
-                    configuration.load(file.toFile());
+                    fileWriter.requireReconciled(file);
+                    YamlConfiguration configuration = loadDocument(file).configuration();
                     String name = configuration.getString("name");
                     if (name == null || name.isBlank()) {
                         throw new IllegalStateException("missing or blank name");
@@ -91,7 +101,7 @@ public final class FilePlayerRepository implements PlayerRepository {
                         throw new IllegalStateException("last-join precedes first-join");
                     }
                     indexName(uniqueId, name);
-                } catch (IOException | InvalidConfigurationException | RuntimeException exception) {
+                } catch (IOException | RuntimeException exception) {
                     logger.log(Level.WARNING, "Skipping invalid identity metadata in " + file + ".", exception);
                 }
             }
@@ -105,6 +115,11 @@ public final class FilePlayerRepository implements PlayerRepository {
     @Override
     public Optional<CorePlayer> findByUniqueId(UUID uniqueId) {
         Path playerFile = getPlayerFile(uniqueId);
+        try {
+            fileWriter.requireReconciled(playerFile);
+        } catch (IOException exception) {
+            throw storageFailure("load player data", playerFile, exception);
+        }
         if (Files.notExists(playerFile)) {
             return Optional.empty();
         }
@@ -112,14 +127,11 @@ public final class FilePlayerRepository implements PlayerRepository {
             throw invalidPlayerFile(playerFile, "Path is not a regular file");
         }
 
-        YamlConfiguration configuration = new YamlConfiguration();
         try {
-            configuration.load(playerFile.toFile());
-        } catch (IOException | InvalidConfigurationException exception) {
+            return Optional.of(readPlayer(uniqueId, playerFile, loadDocument(playerFile).configuration()));
+        } catch (IOException | RuntimeException exception) {
             throw storageFailure("load player data", playerFile, exception);
         }
-
-        return Optional.of(readPlayer(uniqueId, playerFile, configuration));
     }
 
     @Override
@@ -128,15 +140,10 @@ public final class FilePlayerRepository implements PlayerRepository {
         ensureInitialized();
 
         Path playerFile = getPlayerFile(player.getUniqueId());
-        Path temporaryFile = null;
-
         try {
-            temporaryFile = Files.createTempFile(
-                    playersDirectory,
-                    player.getUniqueId() + "-",
-                    ".tmp"
-            );
-
+            fileWriter.requireReconciled(playerFile);
+            Document source = Files.notExists(playerFile) ? null : loadDocument(playerFile);
+            if (source != null) readPlayer(player.getUniqueId(), playerFile, source.configuration());
             YamlConfiguration configuration = new YamlConfiguration();
             configuration.set("name", player.getName());
             configuration.set("first-join", player.getFirstJoin().toEpochMilli());
@@ -172,15 +179,27 @@ public final class FilePlayerRepository implements PlayerRepository {
                     .sorted()
                     .toList();
             configuration.set("social.ignored", ignoredPlayers);
-            configuration.save(temporaryFile.toFile());
-
-            replacePlayerFile(temporaryFile, playerFile);
-            temporaryFile = null;
+            Map<Object, Object> preserved = source == null ? new java.util.LinkedHashMap<>() : source.root();
+            fileWriter.write(playerFile, () -> PlayerFileSchema.overlay(preserved, configuration), candidate -> {
+                Document written = loadDocument(candidate);
+                if (written.version() != PlayerFileSchema.CURRENT_VERSION) {
+                    throw new IOException("Written player candidate has an unexpected schema version");
+                }
+                readPlayer(player.getUniqueId(), candidate, written.configuration());
+                PlayerFileSchema.validateOwnedValues(written.configuration(), configuration);
+            }, target -> {
+                // Detect edits during this save as well as rereading extensions/version after a prior load.
+                if (source == null ? !Files.notExists(target)
+                        : !Arrays.equals(source.bytes(), Files.readAllBytes(target))) {
+                    throw new IOException("Player file changed while preparing save: " + target);
+                }
+                if (source != null && source.version() < PlayerFileSchema.CURRENT_VERSION) {
+                    protectMigration(target, source.bytes());
+                }
+            });
             indexName(player.getUniqueId(), player.getName());
         } catch (IOException | RuntimeException exception) {
             throw storageFailure("save player data", playerFile, exception);
-        } finally {
-            deleteTemporaryFile(temporaryFile);
         }
     }
 
@@ -643,30 +662,41 @@ public final class FilePlayerRepository implements PlayerRepository {
         );
     }
 
-    private void replacePlayerFile(Path temporaryFile, Path playerFile) throws IOException {
-        try {
-            Files.move(
-                    temporaryFile,
-                    playerFile,
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(temporaryFile, playerFile, StandardCopyOption.REPLACE_EXISTING);
+    private Document loadDocument(Path path) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Player source is not a regular file: " + path);
         }
+        byte[] bytes = Files.readAllBytes(path);
+        String content = new String(bytes, StandardCharsets.UTF_8);
+        Map<Object, Object> root = PlayerFileSchema.read(content);
+        int version = PlayerFileSchema.version(root);
+        PlayerFileSchema.migrate(root); // Memory only. Keep original bytes/version for migration protection.
+        YamlConfiguration configuration = new YamlConfiguration();
+        try {
+            configuration.loadFromString(content);
+        } catch (InvalidConfigurationException exception) {
+            throw new IOException("Invalid player YAML at " + path, exception);
+        }
+        return new Document(bytes, root, version, configuration);
     }
 
-    private void deleteTemporaryFile(Path temporaryFile) {
-        if (temporaryFile == null) {
+    private void protectMigration(Path target, byte[] original) throws IOException {
+        Path backup = target.resolveSibling(target.getFileName() + ".vapeecore-pre-migration.bak");
+        if (Files.exists(backup, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(backup, LinkOption.NOFOLLOW_LINKS)
+                    || !Arrays.equals(original, Files.readAllBytes(backup))) {
+                throw new IOException("Pre-migration backup requires operator reconciliation: " + backup);
+            }
             return;
         }
-
-        try {
-            Files.deleteIfExists(temporaryFile);
-        } catch (IOException exception) {
-            logger.log(Level.WARNING, "Could not delete temporary player file " + temporaryFile + ".", exception);
+        files.copy(target, backup);
+        if (!Arrays.equals(original, Files.readAllBytes(backup))) {
+            throw new IOException("Pre-migration backup verification failed: " + backup);
         }
     }
+
+    private record Document(byte[] bytes, Map<Object, Object> root, int version,
+                            YamlConfiguration configuration) { }
 
     private void ensureInitialized() {
         if (!Files.isDirectory(playersDirectory)) {
