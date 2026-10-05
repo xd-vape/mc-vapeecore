@@ -3,6 +3,7 @@ package dev.vapee.core.settings;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import net.kyori.adventure.text.Component;
@@ -78,6 +79,10 @@ public final class SettingsMenu {
 
     public void open(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
+        if (!validatedPlayer.hasPermission(SettingsCommand.PERMISSION)) {
+            messageService.send(validatedPlayer, "<red>You do not have permission to use settings.</red>");
+            return;
+        }
         UUID uniqueId = validatedPlayer.getUniqueId();
         if (playerSettingsService.getSettings(uniqueId).isEmpty()) {
             validatedPlayer.closeInventory();

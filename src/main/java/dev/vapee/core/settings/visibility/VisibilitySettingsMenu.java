@@ -3,6 +3,7 @@ package dev.vapee.core.settings.visibility;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import net.kyori.adventure.text.Component;
@@ -69,6 +70,10 @@ public final class VisibilitySettingsMenu {
 
     public void open(Player player) {
         Player viewer = Objects.requireNonNull(player, "player");
+        if (!viewer.hasPermission(SettingsCommand.PERMISSION)) {
+            messages.send(viewer, "<red>You do not have permission to use settings.</red>");
+            return;
+        }
         PlayerSettings current = settings.getSettings(viewer.getUniqueId()).orElse(null);
         if (current == null) {
             messages.send(viewer, "<red>Your player profile is not available.</red>");

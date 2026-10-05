@@ -7,6 +7,7 @@ import dev.vapee.core.lobby.item.LobbyItemType;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -100,6 +101,10 @@ public final class LobbyItemListener implements Listener {
                 }
             }
             case SETTINGS -> {
+                if (!player.hasPermission(SettingsCommand.PERMISSION)) {
+                    messageService.send(player, "<red>You do not have permission to use settings.</red>");
+                    return;
+                }
                 if (playerSettingsService.getSettings(player.getUniqueId()).isEmpty()) {
                     settingsMenu.open(player);
                     return;

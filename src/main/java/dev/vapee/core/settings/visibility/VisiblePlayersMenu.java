@@ -6,6 +6,7 @@ import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -80,6 +81,10 @@ public final class VisiblePlayersMenu {
 
     public void open(Player player, int requestedPage) {
         Player viewer = Objects.requireNonNull(player, "player");
+        if (!viewer.hasPermission(SettingsCommand.PERMISSION)) {
+            messages.send(viewer, "<red>You do not have permission to use settings.</red>");
+            return;
+        }
         List<Entry> entries = entries(viewer.getUniqueId());
         if (entries == null) {
             messages.send(viewer, "<red>Your player profile is not available.</red>");

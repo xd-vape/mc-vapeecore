@@ -125,6 +125,7 @@ public final class SettingsMenuFixture {
         int opens;
         int closes;
         boolean online = true;
+        boolean permitted = true;
         boolean cancelNextOpen;
 
         TestPlayer(UUID id) {
@@ -132,7 +133,7 @@ public final class SettingsMenuFixture {
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
                 case "isOnline" -> online;
-                case "hasPermission" -> true;
+                case "hasPermission" -> permitted;
                 case "openInventory" -> {
                     if (cancelNextOpen) { cancelNextOpen = false; yield null; }
                     Inventory old = open;

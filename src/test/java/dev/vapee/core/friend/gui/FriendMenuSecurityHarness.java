@@ -17,6 +17,7 @@ public final class FriendMenuSecurityHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        capabilityBoundaries();
         FriendMenuFixture fixture = new FriendMenuFixture();
         var owner = fixture.player("Owner", true);
         var other = fixture.player("Other", true);
@@ -107,6 +108,67 @@ public final class FriendMenuSecurityHarness {
                     menu::activeCount, listener::onInventoryClose);
         });
         System.out.println("FriendMenuSecurityHarness passed " + checks + " checks.");
+    }
+
+    private static void capabilityBoundaries() throws Exception {
+        var entry = new FriendMenuFixture();
+        var viewer = entry.player("Entry", true);
+        viewer.permitted = false;
+        int initialSaves = entry.repository.saves;
+        entry.menu.open(viewer.player);
+        check(viewer.open == null && entry.menu.activeCount() == 0
+                && entry.repository.saves == initialSaves, "denied friend entry publishes nothing and saves nothing");
+        check(viewer.received.size() == 1 && viewer.closeCalls == 0, "entry denial is controlled and does not close foreign view");
+        viewer.permitted = true;
+        entry.menu.open(viewer.player);
+        check(entry.menu.isActive(viewer.player, viewer.open, FriendMenuFixture.holder(viewer.open)), "grant permits fresh entry");
+
+        for (int action = 0; action < 4; action++) for (boolean allowed : new boolean[]{false, true}) {
+            var f = new FriendMenuFixture(); var owner = f.player("Actor", true); var target = f.player("Target", true);
+            if (action == 2) f.friends.sendRequest(owner.id, target.id);
+            else f.friends.sendRequest(target.id, owner.id);
+            if (action == 3) f.friends.acceptRequest(owner.id, target.id);
+            FriendMenuView view = action == 2 ? FriendMenuView.OUTGOING
+                    : action == 3 ? FriendMenuView.FRIENDS : FriendMenuView.INCOMING;
+            ClickType click = action == 1 ? ClickType.RIGHT : action == 3 ? ClickType.SHIFT_RIGHT : ClickType.LEFT;
+            f.menu.open(owner.player, view, 0);
+            Inventory top = owner.open;
+            var snapshot = f.repository.snapshot; var relation = f.friends.getRelation(owner.id, target.id);
+            int saves = f.repository.saves, notices = owner.received.size();
+            owner.permitted = allowed;
+            check(f.click(owner, top, 0, click).isCancelled(), "friend capability event cancelled " + action + allowed);
+            if (allowed) {
+                check(f.repository.saves == saves + 1 && f.friends.getRelation(owner.id, target.id)
+                        == (action == 0 ? FriendRelation.FRIENDS : FriendRelation.NONE), "authorized friend action succeeds " + action);
+            } else {
+                check(f.repository.saves == saves && f.repository.snapshot == snapshot
+                        && f.friends.getRelation(owner.id, target.id) == relation, "revoked friend action preserves request/relation/persistence " + action);
+                check(f.menu.activeCount() == 0 && owner.open == owner.bottom && owner.closeCalls == 1,
+                        "revoked friend view forgotten and closed " + action);
+                check(owner.received.size() == notices + 1, "single controlled friend denial " + action);
+                f.click(owner, top, 0, click);
+                f.listener.onInventoryClose(new InventoryCloseEvent(f.view(owner, top)));
+                check(owner.received.size() == notices + 1 && owner.closeCalls == 1 && f.repository.saves == saves,
+                        "replayed denied friend view is inert " + action);
+            }
+        }
+        for (int slot : new int[]{45, 46, 47, 48, 49, 50, 52, 53, 54}) {
+            var f = new FriendMenuFixture(); var owner = f.player("Navigation", true);
+            f.menu.open(owner.player); Inventory top = owner.open; owner.permitted = false;
+            int saves = f.repository.saves;
+            check(f.click(owner, top, slot, ClickType.LEFT).isCancelled() && f.menu.activeCount() == 0
+                    && owner.open == owner.bottom && f.repository.saves == saves, "revocation blocks friend navigation/bottom " + slot);
+        }
+        var f = new FriendMenuFixture(); var owner = f.player("Owner", true); var stranger = f.player("Stranger", true);
+        f.menu.open(owner.player); Inventory top = owner.open;
+        stranger.permitted = false;
+        f.click(stranger, top, FriendMenu.ADD_SLOT, ClickType.LEFT);
+        check(stranger.closeCalls == 0 && stranger.received.isEmpty() && f.menu.activeCount() == 1,
+                "foreign viewer denial does not close or forget owner's binding");
+        owner.open = owner.bottom; owner.permitted = false;
+        f.click(owner, top, FriendMenu.ADD_SLOT, ClickType.LEFT);
+        check(owner.closeCalls == 0 && owner.open == owner.bottom && f.menu.activeCount() == 0,
+                "friend event-top authority forgets owned binding without closing foreign current view");
     }
 
     private static void check(boolean condition, String message) {

@@ -2,6 +2,7 @@ package dev.vapee.core.settings.visibility;
 
 import dev.vapee.core.lobby.item.LobbyItemService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.settings.SettingsMenu;
@@ -68,8 +69,14 @@ public final class VisibilitySettingsListener implements Listener {
         Inventory top = event.getView().getTopInventory();
         if (!(top.getHolder() instanceof VisibilitySettingsHolder holder)) return;
         event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)
-                || event.getClickedInventory() != top) return;
+        if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)) return;
+        if (!player.hasPermission(SettingsCommand.PERMISSION)) {
+            menu.forgetIfActive(player.getUniqueId(), top);
+            if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
+            messages.send(player, "<red>You do not have permission to use settings.</red>");
+            return;
+        }
+        if (event.getClickedInventory() != top) return;
         ClickType click = event.getClick();
         if (click != ClickType.LEFT && click != ClickType.RIGHT) return;
         int slot = event.getRawSlot();

@@ -147,6 +147,7 @@ public final class MenuCloseProbe {
                     case "getUniqueId" -> id;
                     case "getName" -> "Cleanup" + id.getLeastSignificantBits();
                     case "isOnline" -> online;
+                    case "hasPermission" -> true;
                     case "openInventory" -> { open = (Inventory) args[0]; yield view(open, false); }
                     case "getOpenInventory" -> view(open, true);
                     case "closeInventory" -> {

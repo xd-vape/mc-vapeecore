@@ -14,6 +14,7 @@ public final class VisibilityMenuSecurityHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        capabilityBoundaries();
         VisibilityMenuFixture fixture = new VisibilityMenuFixture();
         var owner = fixture.player("Owner", true);
         var other = fixture.player("Other", true);
@@ -168,6 +169,74 @@ public final class VisibilityMenuSecurityHarness {
             }, menu::closeOpenInventories, menu::activeCount, listener::onInventoryClose);
         });
         System.out.println("VisibilityMenuSecurityHarness passed " + checks + " checks.");
+    }
+
+    private static void capabilityBoundaries() throws Exception {
+        for (boolean list : new boolean[]{false, true}) {
+            var f = new VisibilityMenuFixture(); var owner = f.player("Entry", true);
+            owner.permitted = false; int saves = f.repository.saves;
+            if (list) f.visiblePlayersMenu.open(owner.player); else f.visibilityMenu.open(owner.player);
+            check(owner.open == null && f.visibilityMenu.activeCount() == 0 && f.visiblePlayersMenu.activeCount() == 0
+                    && f.repository.saves == saves, "denied visibility entry publishes nothing " + list);
+            check(owner.received.size() == 1 && owner.closeCalls == 0, "controlled visibility entry denial " + list);
+            owner.permitted = true;
+            if (list) f.visiblePlayersMenu.open(owner.player); else f.visibilityMenu.open(owner.player);
+            check(owner.open != null, "grant permits visibility entry " + list);
+        }
+        for (int slot : new int[]{9, 18, 11, 20, 13, 22, 15, 24, 17, 26, 31, 45, 49, 52, 54}) {
+            for (boolean allowed : new boolean[]{false, true}) {
+                var f = new VisibilityMenuFixture(); var owner = f.player("Actor", true);
+                f.visibilityMenu.open(owner.player); Inventory top = owner.open;
+                var state = f.settings.getSettings(owner.id).orElseThrow().getVisibility();
+                var before = java.util.List.of(state.isAllPlayersVisible(), state.isShowFriends(), state.isShowStaff(),
+                        state.isShowAddedUsers(), state.isShowGameParticipants(), state.getAddedPlayers());
+                int saves = f.repository.saves; owner.permitted = allowed;
+                check(f.visibilityClick(owner, top, slot, ClickType.LEFT).isCancelled(), "visibility action cancelled " + slot + allowed);
+                var after = java.util.List.of(state.isAllPlayersVisible(), state.isShowFriends(), state.isShowStaff(),
+                        state.isShowAddedUsers(), state.isShowGameParticipants(), state.getAddedPlayers());
+                if (!allowed) {
+                    check(before.equals(after) && f.repository.saves == saves && f.applyCalls == 0 && f.hotbarCalls == 0
+                            && f.settingsBackCalls == 0 && owner.soundCalls == 0 && f.visiblePlayersMenu.activeCount() == 0,
+                            "revoked visibility action cannot mutate/save/navigate " + slot);
+                    check(f.visibilityMenu.activeCount() == 0 && owner.open == owner.bottom && owner.closeCalls == 1
+                            && owner.received.size() == 1, "visibility revocation cleans owned view once " + slot);
+                    f.visibilityClick(owner, top, slot, ClickType.LEFT);
+                    check(owner.closeCalls == 1 && owner.received.size() == 1, "visibility stale replay inert " + slot);
+                } else if (java.util.List.of(9, 18, 11, 20, 13, 22, 15, 24).contains(slot)) {
+                    check(!before.equals(after) && f.repository.saves == saves + 1 && f.applyCalls == 1,
+                            "authorized visibility mutation " + slot);
+                } else check(before.equals(after) && f.repository.saves == saves, "nonmutating/unavailable visibility route " + slot);
+            }
+        }
+        for (int slot : new int[]{0, 45, 46, 48, 49, 52, 53, 54}) {
+            var f = new VisibilityMenuFixture(); var owner = f.player("List", true); var target = f.player("Target", true);
+            f.settings.addLobbyVisiblePlayer(owner.id, target.id);
+            f.visiblePlayersMenu.open(owner.player); Inventory top = owner.open;
+            int saves = f.repository.saves; owner.permitted = false;
+            check(f.visibleClick(owner, top, slot, ClickType.RIGHT).isCancelled()
+                    && f.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow() && f.repository.saves == saves
+                    && f.applyCalls == 0 && owner.soundCalls == 0, "revoked visible-player action cannot remove/save " + slot);
+            check(f.visiblePlayersMenu.activeCount() == 0 && owner.closeCalls == 1 && owner.open == owner.bottom
+                    && owner.received.size() == 1 && f.visibilityMenu.activeCount() == 0, "visible-player owned denial cleanup " + slot);
+            f.visibleClick(owner, top, slot, ClickType.RIGHT);
+            check(owner.received.size() == 1 && owner.closeCalls == 1, "visible-player replay does not spam " + slot);
+            owner.permitted = true; f.visiblePlayersMenu.open(owner.player);
+            f.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+            check(!f.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow() && f.repository.saves == saves + 1,
+                    "grant restores legitimate added-user removal " + slot);
+        }
+        for (boolean list : new boolean[]{false, true}) {
+            var f = new VisibilityMenuFixture(); var owner = f.player("Foreign", true);
+            if (list) f.visiblePlayersMenu.open(owner.player); else f.visibilityMenu.open(owner.player);
+            Inventory top = owner.open; owner.open = owner.bottom; owner.permitted = false;
+            if (list) f.visibleClick(owner, top, 0, ClickType.RIGHT);
+            else f.visibilityClick(owner, top, 9, ClickType.LEFT);
+            check(owner.closeCalls == 0 && owner.open == owner.bottom && owner.received.isEmpty(),
+                    "revoked stale visibility event preserves foreign current inventory " + list);
+            f.visibilityMenu.closeOpenInventories(); f.visiblePlayersMenu.closeOpenInventories();
+            check(f.visibilityMenu.activeCount() == 0 && f.visiblePlayersMenu.activeCount() == 0 && owner.closeCalls == 0,
+                    "disable forgets revoked stale binding without touching foreign view " + list);
+        }
     }
 
     private static ClickType[] protectedClicks() {
