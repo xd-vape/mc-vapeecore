@@ -60,7 +60,7 @@ public final class ScoreboardService {
 
         UUID uniqueId = validatedPlayer.getUniqueId();
         PlayerScoreboardState state = states.get(uniqueId);
-        if (state != null && validatedPlayer.getScoreboard() != state.scoreboard) {
+        if (state != null && !ownsScoreboard(validatedPlayer)) {
             states.remove(uniqueId);
             state.unregister();
             return;
@@ -92,15 +92,23 @@ public final class ScoreboardService {
 
     public void removePlayer(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
+        boolean owned = ownsScoreboard(validatedPlayer);
         PlayerScoreboardState state = states.remove(validatedPlayer.getUniqueId());
         if (state == null) {
             return;
         }
 
-        if (validatedPlayer.getScoreboard() == state.scoreboard) {
+        if (owned) {
             validatedPlayer.setScoreboard(scoreboardManager.getMainScoreboard());
         }
         state.unregister();
+    }
+
+    /** Current viewer board identity only; this grants no target visibility or foreign-team ownership. */
+    public boolean ownsScoreboard(Player viewer) {
+        Player checked = Objects.requireNonNull(viewer, "viewer");
+        PlayerScoreboardState state = states.get(checked.getUniqueId());
+        return state != null && checked.getScoreboard() == state.scoreboard;
     }
 
     public void clearStates() {

@@ -933,10 +933,20 @@ In `presentation.yml` stehen zur Verfügung:
 | `<rank>` | Rank Display Name mit Rank-Farbe |
 | `<rank_id>` | technische LuckPerms Group ID |
 | `<group>` | Compatibility Alias für `<rank_id>` |
+| `<clan_tag>` | kanonischer Clan-Tag als wörtlicher Text; ohne verfügbaren Clan leer |
 | `<playtime>` | kompakte Minecraft-Spielzeit |
 | `<coins>` | aktuelle Coins |
 | `<online>` | aktuelle Online-Spieler |
 | `<max_players>` | maximale Spieleranzahl |
+
+`<clan_tag>` gilt ausschließlich für die bestehenden Presentation-Templates
+(Sidebar-Titel/-Zeilen, Tablist-Name, Header und Footer). Der Wert ist weder
+Clan-Name noch Clan-ID. MiniMessage-artiger Clan-Text wie `<red>` wird wörtlich
+angezeigt; Farben können im umgebenden Admin-Template gesetzt werden. Ohne Clan
+oder bei fehlendem/ungültigem Read ist der Wert leer, ohne automatische Klammern
+oder Abstände. Die Resource-Defaults aktivieren den Platzhalter nicht.
+Eine manuelle Änderung der Live-Datei wird mit `/core reload` übernommen.
+Overhead-Nametags, Teams und Resource-Pack-Glyphs werden dadurch nicht eingerichtet.
 
 ---
 
