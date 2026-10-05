@@ -20,10 +20,13 @@ public final class WorldDisplayHarness {
     private WorldDisplayHarness() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         testKeyedLifecycle();
         testTypeSafetyAndMissingEntities();
         testOwnerAndStaleCleanup();
+        testRejectedTeleport();
+        testCleanupFaults();
+        testBukkitAliveLookup();
         System.out.println("WorldDisplayHarness passed " + checks + " checks.");
     }
 
@@ -101,6 +104,110 @@ public final class WorldDisplayHarness {
         expectThrows(() -> new WorldDisplayKey(" ", "id"), "blank owner is rejected");
     }
 
+    private static void testBukkitAliveLookup() throws Exception {
+        // Only the external server lookup is substituted; execute the real private gateway read.
+        var type = Class.forName(WorldDisplayService.class.getName() + "$BukkitDisplayGateway");
+        var unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        Object unsafe = unsafeField.get(null);
+        var gateway = (WorldDisplayService.DisplayGateway) unsafe.getClass()
+                .getMethod("allocateInstance", Class.class).invoke(unsafe, type);
+        var serverField = type.getDeclaredField("server");
+        serverField.setAccessible(true);
+        UUID id = UUID.randomUUID();
+        for (int state = 0; state < 4; state++) {
+            int current = state;
+            org.bukkit.entity.Entity entity = state == 0 ? null : proxy(org.bukkit.entity.Entity.class,
+                    (method, args) -> switch (method.getName()) {
+                        case "isValid" -> current != 3;
+                        case "isDead" -> current == 2;
+                        default -> defaultValue(method.getReturnType());
+                    });
+            serverField.set(gateway, proxy(org.bukkit.Server.class, (method, args) -> {
+                if (method.getName().equals("getEntity")) {
+                    check(args[0].equals(id), "Bukkit alive lookup targets exact owned UUID");
+                    return entity;
+                }
+                throw new AssertionError("Unexpected Bukkit lookup " + method.getName());
+            }));
+            check(gateway.isAlive(id) == (state == 1), "Bukkit gateway distinguishes missing live dead invalid entity " + state);
+        }
+    }
+
+    private static void testRejectedTeleport() {
+        Fixture fixture = new Fixture();
+        WorldDisplayKey key = new WorldDisplayKey("move", "original");
+        WorldDisplayKey other = new WorldDisplayKey("move", "other");
+        WorldDisplayHandle original = fixture.service.createText(key, fixture.location(), Component.empty(), null);
+        fixture.service.createText(other, fixture.location(), Component.empty(), null);
+        fixture.gateway.rejected.add(original.entityId());
+        check(!fixture.service.teleport(key, fixture.location()), "rejected movement reports false");
+        check(fixture.service.getHandle(key).orElse(null) == original, "rejected live teleport retains original ownership");
+        check(fixture.service.teleport(other, fixture.location()), "one rejected movement leaves other display usable");
+        expectThrows(() -> fixture.service.createText(key, fixture.location(), Component.empty(), null),
+                "live rejected handle prevents duplicate creation");
+        fixture.gateway.rejected.clear();
+        check(fixture.service.teleport(key, fixture.location()), "later movement succeeds on original");
+        check(fixture.service.getHandle(key).orElseThrow() == original, "later movement keeps same handle");
+        fixture.gateway.rejected.add(original.entityId());
+        check(!fixture.service.teleport(key, fixture.location()), "second rejected movement remains false");
+        check(fixture.service.removeOwner("move") == 2 && fixture.gateway.texts.isEmpty(),
+                "owner cleanup removes rejected original and other display");
+        WorldDisplayHandle missing = fixture.service.createText(key, fixture.location(), Component.empty(), null);
+        fixture.gateway.texts.remove(missing.entityId());
+        check(!fixture.service.teleport(key, fixture.location()) && fixture.service.getHandle(key).isEmpty(),
+                "missing entity reconciles stale ownership");
+        WorldDisplayHandle replacement = fixture.service.createText(key, fixture.location(), Component.empty(), null);
+        check(!replacement.entityId().equals(missing.entityId()), "missing key permits controlled recreation");
+    }
+
+    private static void testCleanupFaults() {
+        for (boolean all : new boolean[]{false, true}) {
+            for (int mask : new int[]{0, 1, 2, 4, 5, 7}) {
+                Fixture f = new Fixture();
+                java.util.List<WorldDisplayHandle> owned = new java.util.ArrayList<>();
+                for (int i = 0; i < 3; i++) owned.add(f.service.createText(
+                        new WorldDisplayKey(all && i == 2 ? "second" : "owner", "resource-" + i),
+                        f.location(), Component.empty(), null));
+                WorldDisplayHandle outside = all ? null : f.service.createText(
+                        new WorldDisplayKey("second", "outside"), f.location(), Component.empty(), null);
+                UUID foreign = UUID.randomUUID();
+                f.gateway.texts.put(foreign, Component.text("foreign"));
+                f.gateway.failMask = mask;
+                RuntimeException failure = capture(() -> { if (all) f.service.cleanup(); else f.service.removeOwner("owner"); });
+                check(f.gateway.attempts.size() == 3, "display cleanup attempts every owned resource despite failure");
+                check((failure == null) == (mask == 0), "display cleanup reports incomplete release");
+                if (failure != null) {
+                    check(failure.getSuppressed().length == Integer.bitCount(mask), "display aggregate contains every failure");
+                    for (Throwable item : failure.getSuppressed()) {
+                        check(item.getMessage().contains("WorldDisplay remove") && item.getMessage().contains("owner=")
+                                        && item.getMessage().contains("id=") && item.getMessage().contains("entity=")
+                                        && f.gateway.failures.containsValue(item.getCause()),
+                                "display failure reports service owner key operation and original cause");
+                    }
+                }
+                for (WorldDisplayHandle handle : owned) {
+                    boolean failed = f.gateway.failures.containsKey(handle.entityId());
+                    check(f.service.getHandle(handle.key()).isPresent() == failed, "failed display retains owned handle");
+                    check(f.gateway.texts.containsKey(handle.entityId()) == failed, "display physical outcome matches ownership");
+                }
+                check(f.gateway.texts.containsKey(foreign), "display cleanup leaves unowned entity untouched");
+                check(outside == null || f.service.getHandle(outside.key()).isPresent(), "owner cleanup leaves second owner untouched");
+                f.gateway.failMask = 0;
+                f.gateway.attempts.clear();
+                if (all) f.service.cleanup(); else f.service.removeOwner("owner");
+                check(f.gateway.attempts.size() == Integer.bitCount(mask), "display retry targets only failed handles");
+                if (all) f.service.cleanup(); else f.service.removeOwner("owner");
+                check(f.gateway.attempts.size() == Integer.bitCount(mask), "display repeated cleanup is idempotent");
+                check(f.gateway.texts.containsKey(foreign), "display retry never touches foreign entity");
+            }
+        }
+    }
+
+    private static RuntimeException capture(Runnable action) {
+        try { action.run(); return null; } catch (RuntimeException failure) { return failure; }
+    }
+
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) {
@@ -170,6 +277,10 @@ public final class WorldDisplayHarness {
         private final Map<UUID, ItemStack> items = new HashMap<>();
         private int teleports;
         private int staleCount;
+        private final java.util.Set<UUID> rejected = new java.util.HashSet<>();
+        private final java.util.List<UUID> attempts = new java.util.ArrayList<>();
+        private final Map<UUID, RuntimeException> failures = new HashMap<>();
+        private int failMask;
 
         @Override
         public UUID createText(WorldDisplayKey key, Location location, Component text,
@@ -205,11 +316,22 @@ public final class WorldDisplayHarness {
         public boolean teleport(UUID entityId, Location location) {
             if (!texts.containsKey(entityId) && !items.containsKey(entityId)) return false;
             teleports++;
-            return true;
+            return !rejected.contains(entityId);
+        }
+
+        @Override
+        public boolean isAlive(UUID entityId) {
+            return texts.containsKey(entityId) || items.containsKey(entityId);
         }
 
         @Override
         public void remove(UUID entityId) {
+            attempts.add(entityId);
+            if ((failMask & (1 << (attempts.size() - 1))) != 0) {
+                RuntimeException failure = new IllegalStateException("injected display remove");
+                failures.put(entityId, failure);
+                throw failure;
+            }
             texts.remove(entityId);
             items.remove(entityId);
         }

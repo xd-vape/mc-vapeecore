@@ -53,6 +53,8 @@ public final class BlackjackTableHarness {
         testRuntimeEnableDisableAndPersistence();
         testWorldAndInUseGuards();
         testSeatOrderAndLeaveCleanup();
+        testSeatCleanupFaults();
+        testReplacementRollback();
         System.out.println("BlackjackTableHarness passed " + checks + " checks.");
     }
 
@@ -329,6 +331,113 @@ public final class BlackjackTableHarness {
                 "table cleanup delegates owner cleanup");
     }
 
+    private static void testReplacementRollback() throws Exception {
+        FailingReplacement io = new FailingReplacement();
+        RuntimeFixture f = new RuntimeFixture(Set.of("world"), io);
+        f.config.createDraft("rollback");
+        f.config.saveDraft(validDraft("rollback", 3));
+        byte[] disabledBytes = Files.readAllBytes(f.config.getConfigFile());
+        io.fail = true;
+        expectThrows(() -> f.tables.enableTable("rollback"), "failed enable save is reported");
+        check(!f.config.getDraft("rollback").orElseThrow().isEnabled(), "failed enable does not publish enabled draft");
+        check(!f.tables.isRuntimeActive("rollback") && f.tables.getSession("rollback").isEmpty(),
+                "failed enable rolls back activated runtime and session");
+        check(f.activity.getVenue(BlackjackActivityType.KEY, "rollback").isEmpty()
+                        && f.tables.getTableAt(new BlackjackBlockPosition("world", 5, 5, 5)).isEmpty(),
+                "failed enable rolls back venue and interaction index");
+        check(java.util.Arrays.equals(disabledBytes, Files.readAllBytes(f.config.getConfigFile())),
+                "injected failed enable preserves disabled disk bytes");
+        io.fail = false;
+        check(f.tables.enableTable("rollback").isSuccess(), "enable succeeds after external replacement fault clears");
+        byte[] enabledBytes = Files.readAllBytes(f.config.getConfigFile());
+        BlackjackTableDefinition before = f.tables.getDefinition("rollback").orElseThrow();
+        io.fail = true;
+        expectThrows(() -> f.tables.disableTable("rollback"), "failed disable save is reported");
+        check(f.config.getDraft("rollback").orElseThrow().isEnabled(), "failed disable does not publish disabled draft");
+        check(f.tables.getDefinition("rollback").orElseThrow() == before
+                        && f.tables.getSession("rollback").isPresent(),
+                "failed disable restores existing definition and a live session");
+        check(f.activity.getVenue(BlackjackActivityType.KEY, "rollback").isPresent()
+                        && f.tables.getTableAt(new BlackjackBlockPosition("world", 5, 5, 5)).isPresent(),
+                "failed disable restores venue and interaction index");
+        check(java.util.Arrays.equals(enabledBytes, Files.readAllBytes(f.config.getConfigFile())),
+                "injected failed disable preserves enabled disk bytes");
+        io.fail = false;
+        check(f.tables.disableTable("rollback").isSuccess(), "disable succeeds after fault clears");
+        f.tables.shutdown();
+    }
+
+    private static final class FailingReplacement extends BlackjackTableConfig.ReplacementIO {
+        private boolean fail;
+        @Override void move(Path source, Path target, java.nio.file.CopyOption... options) throws java.io.IOException {
+            if (fail) throw new java.io.IOException("injected table replacement");
+            super.move(source, target, options);
+        }
+        @Override void copy(Path source, Path target) throws java.io.IOException {
+            if (fail) throw new java.io.IOException("injected table copy");
+            super.copy(source, target);
+        }
+    }
+
+    private static void testSeatCleanupFaults() throws Exception {
+        for (boolean all : new boolean[]{false, true}) {
+            for (int mask : new int[]{0, 1, 2, 4, 5, 7}) {
+                RuntimeFixture f = new RuntimeFixture();
+                java.util.List<UUID> owned = new java.util.ArrayList<>();
+                BlackjackTableDefinition one = BlackjackTableDefinition.fromDraft(validDraft("one", 3));
+                BlackjackTableDefinition two = BlackjackTableDefinition.fromDraft(validDraft("two", 3));
+                for (int i = 0; i < 3; i++) {
+                    UUID player = UUID.randomUUID();
+                    owned.add(player);
+                    f.seats.reserveSeat(all && i == 2 ? two : one, i + 1, player).orElseThrow();
+                }
+                UUID outside = UUID.randomUUID();
+                if (!all) f.seats.reserveSeat(two, 1, outside).orElseThrow();
+                UUID foreign = UUID.randomUUID();
+                f.seatRuntime.callbacks.put(foreign, ignored -> { });
+                f.seatRuntime.keys.put(foreign, new SeatKey("foreign", "seat"));
+                f.seats.releaseSeat(foreign);
+                check(f.seatRuntime.callbacks.containsKey(foreign) && f.seatRuntime.attempts.isEmpty(),
+                        "unknown Blackjack assignment never releases foreign generic seat");
+                f.seatRuntime.failMask = mask;
+                RuntimeException failure = capture(() -> { if (all) f.seats.shutdown(); else f.seats.cleanupTable("one"); });
+                check(f.seatRuntime.attempts.size() == 3, "Blackjack seat cleanup attempts every owned resource despite failure");
+                check((failure == null) == (mask == 0), "Blackjack seat cleanup reports incomplete release");
+                if (failure != null) {
+                    check(failure.getSuppressed().length == Integer.bitCount(mask), "Blackjack seat aggregate includes every failure");
+                    for (Throwable item : failure.getSuppressed()) {
+                        check(item.getMessage().contains("BlackjackSeat release") && item.getMessage().contains("owner=blackjack:")
+                                        && item.getMessage().contains("id=") && item.getMessage().contains("player=")
+                                        && f.seatRuntime.failures.containsValue(item.getCause()),
+                                "Blackjack seat failure retains owner key player operation and original cause");
+                    }
+                }
+                for (UUID player : owned) {
+                    boolean failed = f.seatRuntime.failures.containsKey(player);
+                    check(f.seats.getAssignment(player).isPresent() == failed, "failed Blackjack seat retains assignment");
+                    check(f.seatRuntime.callbacks.containsKey(player) == failed, "Blackjack physical seat remains owned after failure");
+                    if (failed) {
+                        var assignment = f.seats.getAssignment(player).orElseThrow();
+                        check(f.seats.reserveSeat(assignment.tableId().equals("one") ? one : two,
+                                assignment.seatNumber(), UUID.randomUUID()).isEmpty(), "failed Blackjack seat retains occupancy");
+                    }
+                }
+                check(all || f.seats.getAssignment(outside).isPresent(), "table cleanup preserves second table");
+                f.seatRuntime.failMask = 0;
+                f.seatRuntime.attempts.clear();
+                if (all) f.seats.shutdown(); else f.seats.cleanupTable("one");
+                check(f.seatRuntime.attempts.size() == Integer.bitCount(mask), "Blackjack seat retry targets only failed assignments");
+                if (all) f.seats.shutdown(); else f.seats.cleanupTable("one");
+                check(f.seatRuntime.attempts.size() == Integer.bitCount(mask), "Blackjack seat repeated cleanup is safe");
+                check(f.seatRuntime.callbacks.containsKey(foreign), "Blackjack seat retry leaves foreign generic owner untouched");
+            }
+        }
+    }
+
+    private static RuntimeException capture(Runnable action) {
+        try { action.run(); return null; } catch (RuntimeException failure) { return failure; }
+    }
+
     private static BlackjackTableDraft validDraft(String id, int seats) {
         BlackjackTableDraft draft = new BlackjackTableDraft(id);
         draft.setPos1(position("world", 0, 0, 0, 0, 0));
@@ -488,6 +597,10 @@ public final class BlackjackTableHarness {
         }
 
         private RuntimeFixture(Set<String> loadedWorlds) throws Exception {
+            this(loadedWorlds, new BlackjackTableConfig.ReplacementIO());
+        }
+
+        private RuntimeFixture(Set<String> loadedWorlds, BlackjackTableConfig.ReplacementIO replacementIO) throws Exception {
             activity = activityService(players, logger, loadedWorlds);
             seats = new BlackjackSeatService(activity, seatRuntime, position -> Optional.of(new Location(
                     world,
@@ -501,7 +614,7 @@ public final class BlackjackTableHarness {
             check(activity.registerActivityType(new BlackjackActivityType(blackjack)) == ActivityResult.SUCCESS,
                     "blackjack activity type registers");
             Path file = Files.createTempDirectory("vapeecore-blackjack-runtime-").resolve("blackjack.yml");
-            config = new BlackjackTableConfig(file, logger);
+            config = new BlackjackTableConfig(file, logger, replacementIO);
             config.initialize();
             tables = new BlackjackTableService(activity, config, tableId -> {
                 cleanedTables.add(tableId);
@@ -528,6 +641,10 @@ public final class BlackjackTableHarness {
         private final Set<String> releasedOwners = new java.util.HashSet<>();
         private boolean mountResult = true;
         private int mountCalls;
+        private int failMask;
+        private final java.util.List<UUID> attempts = new java.util.ArrayList<>();
+        private final Map<UUID, RuntimeException> failures = new HashMap<>();
+        private final Map<UUID, SeatKey> keys = new HashMap<>();
 
         @Override
         public boolean reserve(SeatKey key, UUID playerId, Location location, Consumer<UUID> dismountHandler) {
@@ -535,6 +652,7 @@ public final class BlackjackTableHarness {
                 return false;
             }
             callbacks.put(playerId, dismountHandler);
+            keys.put(playerId, key);
             return true;
         }
 
@@ -545,7 +663,15 @@ public final class BlackjackTableHarness {
         }
 
         @Override
-        public boolean releasePlayer(UUID playerId) {
+        public boolean release(SeatKey key, UUID playerId) {
+            attempts.add(playerId);
+            if ((failMask & (1 << (attempts.size() - 1))) != 0) {
+                RuntimeException failure = new IllegalStateException("injected Blackjack seat release");
+                failures.put(playerId, failure);
+                throw failure;
+            }
+            if (!key.equals(keys.get(playerId))) return false;
+            keys.remove(playerId);
             return callbacks.remove(playerId) != null;
         }
 

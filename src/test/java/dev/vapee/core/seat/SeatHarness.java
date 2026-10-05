@@ -30,12 +30,14 @@ public final class SeatHarness {
     private SeatHarness() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         testServiceLifecycle();
         testDismountSemantics();
         testPositionResolver();
         testCasualPolicy();
         testLifecycleCleanup();
+        testCleanupFaults();
+        testBlackjackAdapterRetryIsolation();
         System.out.println("SeatHarness passed " + checks + " checks.");
     }
 
@@ -175,6 +177,124 @@ public final class SeatHarness {
             listener.cleanupPlayer(player);
             check(!fixture.service.isSeated(id), path + " cleanup releases assignment");
         }
+    }
+
+    private static void testBlackjackAdapterRetryIsolation() throws Exception {
+        Fixture f = new Fixture();
+        var server = proxy(org.bukkit.Server.class, (method, args) -> switch (method.getName()) {
+            case "getWorld" -> f.world;
+            case "isPrimaryThread" -> true;
+            default -> defaultValue(method.getReturnType());
+        });
+        var unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
+        unsafeField.setAccessible(true);
+        Object unsafe = unsafeField.get(null);
+        var plugin = (org.bukkit.plugin.java.JavaPlugin) unsafe.getClass().getMethod("allocateInstance", Class.class)
+                .invoke(unsafe, TestPlugin.class);
+        var serverField = org.bukkit.plugin.java.JavaPlugin.class.getDeclaredField("server");
+        serverField.setAccessible(true);
+        serverField.set(plugin, server);
+        var quest = new dev.vapee.core.quest.QuestCompletionFixture();
+        var activity = new dev.vapee.core.activity.ActivityService(server, quest.players, quest.logger);
+        var adapter = new dev.vapee.core.activity.blackjack.table.BlackjackSeatService(plugin, activity, f.service);
+        var position = new dev.vapee.core.activity.location.ActivityPosition("world", 5, 5, 5, 0, 0);
+        var definition = new dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition("retry",
+                new dev.vapee.core.activity.location.ActivityArea("world", 0, 0, 0, 10, 10, 10), position,
+                new dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition("world", 5, 5, 5),
+                List.of(new dev.vapee.core.activity.blackjack.table.BlackjackSeat(1, position)));
+        UUID player = UUID.randomUUID();
+        adapter.reserveSeat(definition, 1, player).orElseThrow();
+        adapter.mountReservedPlayer(f.player(player, false, false, 0));
+        f.gateway.failMask = 1;
+        check(capture(adapter::shutdown) != null, "real Blackjack/generic seat failure propagates after attempt");
+        check(adapter.getAssignment(player).isPresent() && f.service.isSeated(player),
+                "real failed release retains both adapter and generic ownership");
+        f.gateway.failMask = 0;
+        f.service.releasePlayer(player); // Existing generic reconciliation completed independently.
+        SeatKey foreignKey = new SeatKey("foreign", "new-seat");
+        f.service.reserve(foreignKey, SeatType.CASUAL, player, new Location(f.world, 1, 2, 3), null);
+        f.service.mountReserved(f.player(player, false, false, 0));
+        UUID foreignEntity = f.service.getAssignment(foreignKey).orElseThrow().seatEntity().orElseThrow();
+        adapter.shutdown();
+        check(adapter.getAssignment(player).isEmpty(), "adapter reconciles original already released assignment");
+        check(f.service.getAssignment(player).orElseThrow().key().equals(foreignKey)
+                        && f.gateway.seatEntities.containsKey(foreignEntity),
+                "adapter retry cannot remove later foreign seat of same player");
+        adapter.shutdown();
+        check(f.gateway.seatEntities.containsKey(foreignEntity), "repeated adapter shutdown preserves foreign seat");
+        f.service.cleanup();
+    }
+
+    private static final class TestPlugin extends org.bukkit.plugin.java.JavaPlugin { }
+
+    private static void testCleanupFaults() {
+        for (boolean all : new boolean[]{false, true}) {
+            for (int mask : new int[]{0, 1, 2, 4, 5, 7}) {
+                Fixture f = new Fixture();
+                List<SeatAssignment> owned = new ArrayList<>();
+                for (int i = 0; i < 3; i++) {
+                    UUID player = UUID.randomUUID();
+                    SeatKey key = new SeatKey(all && i == 2 ? "second" : "owner", "resource-" + i);
+                    f.service.reserve(key, SeatType.MANAGED, player, new Location(f.world, 1, 2, 3), id -> { });
+                    f.service.mountReserved(f.player(player, false, false, 0));
+                    owned.add(f.service.getAssignment(key).orElseThrow());
+                }
+                UUID outside = UUID.randomUUID();
+                if (!all) f.service.reserve(new SeatKey("second", "outside"), SeatType.CASUAL,
+                        outside, new Location(f.world, 1, 2, 3), null);
+                UUID foreign = UUID.randomUUID();
+                f.gateway.seatEntities.put(foreign, true);
+                f.gateway.failMask = mask;
+                RuntimeException failure = capture(() -> { if (all) f.service.cleanup(); else f.service.releaseOwner("owner"); });
+                check(f.gateway.attempts.size() == 3, "seat cleanup attempts every owned resource despite failure");
+                check((failure == null) == (mask == 0), "seat cleanup reports incomplete release");
+                if (failure != null) {
+                    check(failure.getSuppressed().length == Integer.bitCount(mask), "seat aggregate contains every failure");
+                    for (Throwable item : failure.getSuppressed()) {
+                        check(item.getMessage().contains("Seat release") && item.getMessage().contains("owner=")
+                                        && item.getMessage().contains("id=") && item.getMessage().contains("entity=")
+                                        && item.getMessage().contains("player=") && f.gateway.failures.containsValue(item.getCause()),
+                                "seat failure reports service owner key player operation and cause");
+                    }
+                }
+                for (SeatAssignment assignment : owned) {
+                    UUID entity = assignment.seatEntity().orElseThrow();
+                    boolean failed = f.gateway.failures.containsKey(entity);
+                    check(f.service.getAssignment(assignment.key()).isPresent() == failed,
+                            "failed seat retains key ownership");
+                    check(f.service.isSeated(assignment.playerId()) == failed, "failed seat retains player ownership");
+                    check(f.gateway.seatEntities.containsKey(entity) == failed, "seat external state matches retained ownership");
+                }
+                check(f.gateway.seatEntities.containsKey(foreign), "seat cleanup leaves unowned entity untouched");
+                check(all || f.service.isSeated(outside), "seat owner cleanup leaves second owner untouched");
+                f.gateway.failMask = 0;
+                f.gateway.attempts.clear();
+                if (all) f.service.cleanup(); else f.service.releaseOwner("owner");
+                check(f.gateway.attempts.size() == Integer.bitCount(mask), "seat retry targets only failed assignments");
+                if (all) f.service.cleanup(); else f.service.releaseOwner("owner");
+                check(f.gateway.attempts.size() == Integer.bitCount(mask), "seat repeated cleanup is idempotent");
+                check(f.gateway.seatEntities.containsKey(foreign), "seat retry never touches foreign entity");
+            }
+        }
+        Fixture f = new Fixture();
+        UUID player = UUID.randomUUID();
+        SeatKey key = new SeatKey("managed", "callback");
+        AtomicInteger callbacks = new AtomicInteger();
+        f.service.reserve(key, SeatType.MANAGED, player, new Location(f.world, 0, 0, 0), id -> callbacks.incrementAndGet());
+        Player live = f.player(player, false, false, 0);
+        f.service.mountReserved(live);
+        UUID entity = f.service.getAssignment(key).orElseThrow().seatEntity().orElseThrow();
+        f.gateway.failMask = 1;
+        check(capture(() -> f.service.release(key)) != null, "single seat release failure propagates");
+        f.gateway.failMask = 0;
+        f.service.handleDismount(live, f.entity(entity));
+        f.runDelayed();
+        check(callbacks.get() == 1 && !f.service.isSeated(player),
+                "failed release retains callback and resets programmatic guard for later voluntary dismount");
+    }
+
+    private static RuntimeException capture(Runnable action) {
+        try { action.run(); return null; } catch (RuntimeException failure) { return failure; }
     }
 
     private static void checkYaw(SeatPositionResolver resolver, Fixture fixture, BlockFace facing, float expected) {
@@ -335,6 +455,9 @@ public final class SeatHarness {
         final Map<UUID, Boolean> seatEntities = new HashMap<>();
         int removed;
         int staleCount;
+        final List<UUID> attempts = new ArrayList<>();
+        final Map<UUID, RuntimeException> failures = new HashMap<>();
+        int failMask;
 
         @Override
         public UUID spawnAndMount(SeatAssignment assignment, Player player) {
@@ -345,6 +468,12 @@ public final class SeatHarness {
 
         @Override
         public void remove(UUID entityId, UUID playerId) {
+            attempts.add(entityId);
+            if ((failMask & (1 << (attempts.size() - 1))) != 0) {
+                RuntimeException failure = new IllegalStateException("injected seat remove");
+                failures.put(entityId, failure);
+                throw failure;
+            }
             seatEntities.remove(entityId);
             removed++;
         }

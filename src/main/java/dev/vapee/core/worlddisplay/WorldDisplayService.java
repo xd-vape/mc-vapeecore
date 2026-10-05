@@ -15,6 +15,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -108,7 +109,8 @@ public final class WorldDisplayService {
             return false;
         }
         boolean teleported = gateway.teleport(handle.entityId(), validateLocation(location));
-        if (!teleported) {
+        // Rejected movement does not imply that the owned entity disappeared.
+        if (!teleported && !gateway.isAlive(handle.entityId())) {
             handles.remove(handle.key());
         }
         return teleported;
@@ -116,11 +118,17 @@ public final class WorldDisplayService {
 
     public boolean remove(WorldDisplayKey key) {
         requirePrimaryThread();
-        WorldDisplayHandle handle = handles.remove(Objects.requireNonNull(key, "key"));
+        WorldDisplayHandle handle = handles.get(Objects.requireNonNull(key, "key"));
         if (handle == null) {
             return false;
         }
-        gateway.remove(handle.entityId());
+        try {
+            gateway.remove(handle.entityId());
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("WorldDisplay remove failed for " + handle.key()
+                    + ", entity=" + handle.entityId(), exception);
+        }
+        handles.remove(handle.key());
         return true;
     }
 
@@ -130,7 +138,7 @@ public final class WorldDisplayService {
         var keys = handles.keySet().stream()
                 .filter(key -> key.owner().equals(validatedOwner))
                 .toList();
-        keys.forEach(this::remove);
+        removeAll(keys);
         return keys.size();
     }
 
@@ -151,8 +159,20 @@ public final class WorldDisplayService {
 
     public void cleanup() {
         requirePrimaryThread();
-        handles.keySet().stream().toList().forEach(this::remove);
-        handles.clear();
+        removeAll(handles.keySet().stream().toList());
+    }
+
+    private void removeAll(List<WorldDisplayKey> keys) {
+        IllegalStateException failure = null;
+        for (WorldDisplayKey key : keys) {
+            try {
+                remove(key);
+            } catch (RuntimeException exception) {
+                if (failure == null) failure = new IllegalStateException("WorldDisplay cleanup incomplete");
+                failure.addSuppressed(exception);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     private WorldDisplayKey requireAvailableKey(WorldDisplayKey key) {
@@ -226,6 +246,8 @@ public final class WorldDisplayService {
         boolean updateItem(UUID entityId, ItemStack item);
 
         boolean teleport(UUID entityId, Location location);
+
+        boolean isAlive(UUID entityId);
 
         void remove(UUID entityId);
 
@@ -316,6 +338,12 @@ public final class WorldDisplayService {
         public boolean teleport(UUID entityId, Location location) {
             Entity entity = server.getEntity(entityId);
             return entity != null && entity.teleport(location);
+        }
+
+        @Override
+        public boolean isAlive(UUID entityId) {
+            Entity entity = server.getEntity(entityId);
+            return entity != null && entity.isValid() && !entity.isDead();
         }
 
         @Override

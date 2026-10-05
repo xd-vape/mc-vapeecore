@@ -46,6 +46,9 @@ final class BlackjackPresentationFixture {
     final Map<WorldDisplayKey, UUID> entities = new HashMap<>();
     final Map<UUID, Component> texts = new HashMap<>();
     final List<String> warnings = new ArrayList<>();
+    final Set<UUID> rejectedTeleports = new HashSet<>();
+    final Set<UUID> disappearOnTeleport = new HashSet<>();
+    final Map<UUID, Integer> teleports = new HashMap<>();
     int creates;
     int removals;
     int restores;
@@ -170,8 +173,17 @@ final class BlackjackPresentationFixture {
                 ((Consumer<TextDisplay>) args[3]).accept(proxy(TextDisplay.class, (name, values) -> DEFAULT));
                 yield id;
             }
-            case "updateText" -> { texts.put((UUID) args[0], (Component) args[1]); yield true; }
-            case "teleport" -> true;
+            case "updateText" -> {
+                if (!texts.containsKey(args[0])) yield false;
+                texts.put((UUID) args[0], (Component) args[1]); yield true;
+            }
+            case "teleport" -> {
+                UUID id = (UUID) args[0];
+                teleports.merge(id, 1, Integer::sum);
+                if (disappearOnTeleport.remove(id)) { texts.remove(id); entities.values().remove(id); }
+                yield texts.containsKey(id) && !rejectedTeleports.contains(id);
+            }
+            case "isAlive" -> texts.containsKey(args[0]);
             case "remove" -> { texts.remove(args[0]); entities.values().remove(args[0]); removals++; yield null; }
             default -> throw new AssertionError("Unexpected display operation: " + method);
         };
