@@ -208,6 +208,38 @@ LobbyExperience
 
 `RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `PresenceModule` konsumiert Player, Social, Friend und Message, ohne Rückabhängigkeit aus diesen Modulen. `VisibilityModule` konsumiert Player, Social, Friend und Lobby, aber weder SettingsModule noch Activity; die spätere Game-Teilnehmer-Anbindung liegt hinter einem kleinen Predicate. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessageModule bezieht Player, Social und Moderation; PrivateMessageService erhält ausschließlich ein finales UUID-Predicate aus der Mute-Projektion, keinen ModerationService. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
+## Presentation-Ownership seit Phase 30F
+
+Presentation erhält zusätzlich einen lesenden `Function<UUID, Optional<String>>`
+für den kanonischen Clan-Tag. Das Bootstrap-Wiring verwendet
+`ClanService.getClanOf(UUID).map(Clan::tag)`; Clan kennt Presentation nicht.
+`<clan_tag>` wird ausschließlich als literal Component in den bestehenden
+Presentation-Templates eingesetzt. Fehlender Clan/Read sowie leere Tags oder
+Tags mit Whitespace/Controls ergeben leeren Text. Provider-Ausnahmen bleiben
+am vorhandenen geloggten Presentation-Update-Fehlerpfad; sie sind kein fehlender
+Clan. Es gibt weder Display-Cache noch Clan-Persistenzänderung.
+
+TablistService hält pro UUID und Feld den Wert vor dem ersten erfolgreichen
+Write und den zuletzt lesbaren eigenen Component-Wert. Refresh behält den ersten
+Restore-Wert; Cleanup restauriert jedes Feld nur bei Gleichheit mit dem letzten
+eigenen Wert und entfernt den Zyklus. Fremde Writes nach dem letzten Refresh
+bleiben erhalten. Solange Presentation aktiv ist, bleiben die konfigurierten
+Refreshes Writer; dies ist keine laufende Arbitration mit anderen Plugins.
+Paper exponiert beim Namen nur den effektiven Text, nicht den internen null-
+Standardnamen. Nullable Header/Footer werden separat restauriert, ohne styled
+Components in Strings umzuwandeln. Quit, Disable und Reload verwenden dieselben
+Service-Pfade; es bleiben keine Player-Referenzen in den Ownership-Metadaten.
+
+`ScoreboardService.ownsScoreboard(viewer)` prüft UUID-State **und** Identität des
+aktuell angezeigten Boards und wird auch von Update/Cleanup verwendet. Ein
+fremdes Board wird übersprungen; eigene Sidebar-Objectives bleiben getrennt pro
+Viewer. Diese Prüfung erteilt keine Rechte an fremden Teams oder an der Sichtbarkeit
+eines Targets. VisibilityService bleibt alleiniger hide/show-Owner. Presentation
+erstellt keine Overhead-Teams; spätere Teams benötigen aktuelle Viewer-Boards,
+eigene Instanz-Ownership und eine konservative Foreign-Board-/Visibility-Policy.
+Rank-/Permission-Authority bleibt LuckPerms; Glyphs bleiben optionaler Future Input.
+Details und Regression: [Presentation and Nametag Polish](PRESENTATION_NAMETAG_POLISH.md).
+
 ## Player Identity & Profile Foundation (Phase 17C)
 
 `IdentityModule` hängt nur von `JavaPlugin`, `PlayerModule`, `RankModule`, `EconomyModule` und `MessageService` ab. Es steht unmittelbar nach Economy und vor Friend, besitzt weder Listener noch Task noch eigene Config/Persistence und ist keiner der sechs Reload-Teilnehmer. Beim Shutdown werden Command-Executor und Tab-Completer entfernt und Service-Referenzen freigegeben. Friends und Clans greifen auf `PlayerIdentityService` zu und bauen keinen eigenen Name-Resolver oder Player-YAML-Scan.

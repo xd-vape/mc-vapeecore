@@ -23,6 +23,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
 
 public final class PresentationModule implements CoreModule, ReloadParticipant {
 
@@ -34,6 +37,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
     private final PlayerModule playerModule;
     private final EconomyModule economyModule;
     private final LobbyModule lobbyModule;
+    private final Function<UUID, Optional<String>> clanTag;
 
     private PresentationConfig presentationConfig;
     private PresentationRenderer presentationRenderer;
@@ -53,6 +57,21 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
             EconomyModule economyModule,
             LobbyModule lobbyModule
     ) {
+        this(plugin, configService, messageService, permissionModule, rankModule, playerModule,
+                economyModule, lobbyModule, ignored -> Optional.empty());
+    }
+
+    public PresentationModule(
+            JavaPlugin plugin,
+            ConfigService configService,
+            MessageService messageService,
+            PermissionModule permissionModule,
+            RankModule rankModule,
+            PlayerModule playerModule,
+            EconomyModule economyModule,
+            LobbyModule lobbyModule,
+            Function<UUID, Optional<String>> clanTag
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
@@ -61,6 +80,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.economyModule = Objects.requireNonNull(economyModule, "economyModule");
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
+        this.clanTag = Objects.requireNonNull(clanTag, "clanTag");
     }
 
     @Override
@@ -85,7 +105,8 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
                 luckPermsService,
                 rankService,
                 economyService,
-                newPresentationConfig
+                newPresentationConfig,
+                clanTag
         );
         ScoreboardService newScoreboardService = new ScoreboardService(
                 plugin,

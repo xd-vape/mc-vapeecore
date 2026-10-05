@@ -4,6 +4,7 @@ import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.activity.blackjack.BlackjackModule;
 import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.clan.ClanModule;
+import dev.vapee.core.clan.Clan;
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
@@ -117,7 +118,8 @@ public final class VapeeCore extends JavaPlugin {
                 rankModule,
                 playerModule,
                 economyModule,
-                lobbyModule
+                lobbyModule,
+                uniqueId -> clanModule.getClanService().getClanOf(uniqueId).map(Clan::tag)
         );
         settingsModule = new SettingsModule(
                 this,

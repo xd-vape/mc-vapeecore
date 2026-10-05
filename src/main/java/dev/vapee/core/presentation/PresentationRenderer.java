@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,6 +44,7 @@ public final class PresentationRenderer {
     private final LuckPermsService luckPermsService;
     private final RankService rankService;
     private final EconomyService economyService;
+    private final Function<UUID, Optional<String>> clanTag;
     private final Logger logger;
     private final LegacyComponentSerializer legacySerializer;
     private final MiniMessage strictMiniMessage;
@@ -59,12 +61,27 @@ public final class PresentationRenderer {
             EconomyService economyService,
             PresentationConfig presentationConfig
     ) {
+        this(plugin, configService, messageService, luckPermsService, rankService,
+                economyService, presentationConfig, ignored -> Optional.empty());
+    }
+
+    public PresentationRenderer(
+            JavaPlugin plugin,
+            ConfigService configService,
+            MessageService messageService,
+            LuckPermsService luckPermsService,
+            RankService rankService,
+            EconomyService economyService,
+            PresentationConfig presentationConfig,
+            Function<UUID, Optional<String>> clanTag
+    ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.luckPermsService = Objects.requireNonNull(luckPermsService, "luckPermsService");
         this.rankService = Objects.requireNonNull(rankService, "rankService");
         this.economyService = Objects.requireNonNull(economyService, "economyService");
+        this.clanTag = Objects.requireNonNull(clanTag, "clanTag");
         PresentationConfig validatedConfig = Objects.requireNonNull(presentationConfig, "presentationConfig");
         this.logger = plugin.getLogger();
         this.legacySerializer = LegacyComponentSerializer.legacyAmpersand();
@@ -166,6 +183,7 @@ public final class PresentationRenderer {
 
         return TagResolver.resolver(
                 createRankAndPlaytimePlaceholders(rankInfo, player.displayName(), playtimeTicks),
+                clanTagPlaceholder(clanTag.apply(uniqueId)),
                 Placeholder.component("server", Component.text(configService.getServerName())),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
@@ -173,6 +191,14 @@ public final class PresentationRenderer {
                 Placeholder.component("online", Component.text(plugin.getServer().getOnlinePlayers().size())),
                 Placeholder.component("max_players", Component.text(plugin.getServer().getMaxPlayers()))
         );
+    }
+
+    /** Untrusted domain text is never parsed as MiniMessage, legacy styling or authority. */
+    static TagResolver clanTagPlaceholder(Optional<String> tag) {
+        String literal = tag == null ? "" : tag.filter(value -> !value.isEmpty()
+                && value.codePoints().noneMatch(point -> Character.isWhitespace(point)
+                || Character.isSpaceChar(point) || Character.isISOControl(point))).orElse("");
+        return Placeholder.component("clan_tag", Component.text(literal));
     }
 
     static TagResolver createRankAndPlaytimePlaceholders(
@@ -268,6 +294,7 @@ public final class PresentationRenderer {
                 Placeholder.component("rank", Component.empty()),
                 Placeholder.component("rank_id", Component.empty()),
                 Placeholder.component("group", Component.empty()),
+                Placeholder.component("clan_tag", Component.empty()),
                 Placeholder.component("playtime", Component.empty()),
                 Placeholder.component("coins", Component.empty()),
                 Placeholder.component("online", Component.empty()),
