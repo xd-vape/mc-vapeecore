@@ -33,7 +33,7 @@ public final class NametagRenderingHarness {
                 if (failClan[0]) throw new IllegalStateException("injected clan provider failure");
                 return overrideActive[0] ? override.get() : clans.getClanOf(id).map(Clan::tag);
             });
-            Files.writeString(f.directory.resolve("presentation.yml"), "scoreboard:\n  enabled: false\nnametag:\n  lobby-only: false\n");
+            Files.writeString(f.directory.resolve("presentation.yml"), "scoreboard:\n  enabled: false\nnametag:\n  lobby-only: false\n  prefix: '<prefix>'\ntablist:\n  name-format: '<prefix><rank_name><clan_tag_display>'\n");
             f.presentationConfig.applyState(f.presentationConfig.prepareReloadState());
             renderer.applyState(renderer.prepareState(f.presentationConfig.getState()));
             var boards = f.scoreboards();
@@ -44,13 +44,13 @@ public final class NametagRenderingHarness {
             check(own.entries.equals(java.util.Set.of("Alice")), "actual Vanilla player name is the team entry");
             check(plain(own.prefix).equals("[Admin] ") && plain(own.suffix).equals(" [ABC]"), "rank prefix and clan suffix behind name");
             check(own.prefix.equals(renderer.renderMeta("&c[Admin] ")), "styled trusted prefix uses existing Component path");
-            check(plain(a.name).equals("[Admin] Alice [ABC]"), "complete default tablist output");
+            check(plain(a.name).equals("[Admin] Alice [ABC]"), "explicit optional prefix tablist output");
             check(plain(b.name).equals("Bob") && renderer.render(b.player).nametagSuffix().equals(Component.empty()), "no-clan output has no wrapper");
             check(containsColor(own.suffix, NamedTextColor.GRAY), "default clan wrapper renders configured color");
             int saves = repository.saves;
             f.prefixes.put(a.id, "&a[Changed] "); f.groupColors.put("custom_group", "red"); service.updateAll();
             check(plain(a.name).equals("[Changed] Alice [ABC]") && plain(own.prefix).equals("[Changed] "), "rank metadata change refreshes both surfaces");
-            check(own.color == null, "RGB/named rank color does not mutate team color");
+            check(own.color == NamedTextColor.RED, "named rank color updates native team color");
             board.normalizeTeamComponents = true; f.prefixes.put(a.id, "&6[Changed] "); service.updateAll();
             int normalizedWrites = own.mutations; service.updateAll(); service.updateAll();
             check(own.mutations == normalizedWrites && !own.removed && plain(own.prefix).equals("[Changed] "),

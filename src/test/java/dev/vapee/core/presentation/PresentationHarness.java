@@ -21,8 +21,8 @@ public final class PresentationHarness {
     }
 
     public static void main(String[] args) {
-        check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<prefix><rank_name><clan_tag_display>"),
-                "missing tablist name format includes prefix, rank-colored name and conditional clan");
+        check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<rank_name><clan_tag_display>"),
+                "missing tablist name format includes rank-colored name and conditional clan without prefix");
         TextColor rankColor = TextColor.color(0xc35cff);
         RankInfo rank = new RankInfo(
                 "developer",

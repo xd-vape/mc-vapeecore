@@ -21,8 +21,8 @@ public final class PresentationConfig {
 
     public static final long DEFAULT_UPDATE_INTERVAL_TICKS = 20L;
     public static final String DEFAULT_SCOREBOARD_TITLE = "<aqua><bold><server></bold></aqua>";
-    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<prefix><rank_name><clan_tag_display>";
-    public static final String DEFAULT_NAMETAG_PREFIX = "<prefix>";
+    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<rank_name><clan_tag_display>";
+    public static final String DEFAULT_NAMETAG_PREFIX = "";
     public static final String DEFAULT_NAMETAG_SUFFIX = "<clan_tag_display>";
     public static final String DEFAULT_CLAN_TAG_FORMAT = " <dark_gray>[</dark_gray><gray><clan_tag></gray><dark_gray>]</dark_gray>";
 

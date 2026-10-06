@@ -248,7 +248,14 @@ public final class PresentationFixture implements AutoCloseable {
                     case "prefix" -> { if (args.length == 0) yield prefix; prefix = normalizeTeamComponents ? Component.empty().append((Component) args[0]) : (Component) args[0]; mutations++; yield null; }
                     case "suffix" -> { if (args.length == 0) yield suffix; suffix = normalizeTeamComponents ? Component.empty().append((Component) args[0]) : (Component) args[0]; mutations++; yield null; }
                     case "displayName" -> { if (args.length == 0) yield display; display = (Component) args[0]; mutations++; yield null; }
-                    case "color" -> { if (args.length == 0) yield color; color = (TextColor) args[0]; mutations++; yield null; }
+                    case "hasColor" -> color != null;
+                    case "color" -> {
+                        if (args.length == 0) {
+                            if (color == null) throw new IllegalStateException("Team colors must have hex values");
+                            yield color;
+                        }
+                        color = (TextColor) args[0]; mutations++; yield null;
+                    }
                     case "allowFriendlyFire", "canSeeFriendlyInvisibles" -> true;
                     case "getOption" -> Team.OptionStatus.ALWAYS;
                     case "setOption", "setAllowFriendlyFire", "setCanSeeFriendlyInvisibles" -> { optionWrites++; throw new AssertionError("No gameplay option writes"); }

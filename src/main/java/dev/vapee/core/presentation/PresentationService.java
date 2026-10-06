@@ -100,7 +100,7 @@ public final class PresentationService {
             RenderedPresentation presentation = rendered.get(player.getUniqueId());
             if (presentation != null && scoreboardService.isNametagEligible(player)) {
                 targets.add(new NametagService.Target(player.getUniqueId(), player.getName(),
-                        presentation.nametagPrefix(), presentation.nametagSuffix(), player));
+                        presentation.nametagPrefix(), presentation.nametagSuffix(), presentation.nametagColor(), player));
             }
         }
         return targets;

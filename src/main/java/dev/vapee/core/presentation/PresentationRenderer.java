@@ -8,6 +8,8 @@ import dev.vapee.core.rank.RankInfo;
 import dev.vapee.core.rank.RankService;
 import dev.vapee.core.presentation.config.PresentationConfig;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.JoinConfiguration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -21,6 +23,8 @@ import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -49,6 +53,7 @@ public final class PresentationRenderer {
     private final LegacyComponentSerializer legacySerializer;
     private final MiniMessage strictMiniMessage;
     private final Path configFile;
+    private final Set<Integer> warnedTeamColors = new HashSet<>();
 
     private volatile RenderState state;
 
@@ -142,7 +147,8 @@ public final class PresentationRenderer {
     public RenderedPresentation render(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         RenderState currentState = state;
-        TagResolver placeholders = createPlaceholders(validatedPlayer, currentState);
+        Optional<RankInfo> rankInfo = rankService.getPrimaryRank(validatedPlayer.getUniqueId());
+        TagResolver placeholders = createPlaceholders(validatedPlayer, currentState, rankInfo);
 
         Component renderedScoreboardTitle = renderTemplate(currentState.scoreboardTitle(), placeholders);
         List<Component> renderedScoreboardLines = renderTemplates(currentState.scoreboardLines(), placeholders);
@@ -157,7 +163,8 @@ public final class PresentationRenderer {
                 renderedTablistHeader,
                 renderedTablistFooter,
                 renderTemplate(currentState.nametagPrefix(), placeholders),
-                renderTemplate(currentState.nametagSuffix(), placeholders)
+                renderTemplate(currentState.nametagSuffix(), placeholders),
+                nativeTeamColor(rankInfo)
         );
     }
 
@@ -174,7 +181,21 @@ public final class PresentationRenderer {
         };
     }
 
-    private TagResolver createPlaceholders(Player player, RenderState renderState) {
+    private NamedTextColor nativeTeamColor(Optional<RankInfo> rankInfo) {
+        TextColor color = rankInfo.map(RankInfo::effectiveColor).orElse(NamedTextColor.WHITE);
+        for (NamedTextColor named : NamedTextColor.NAMES.values()) {
+            if (named.value() == color.value()) return named;
+        }
+        // Vanilla team packets support only the 16 named colors. Never approximate RGB.
+        if (warnedTeamColors.add(color.value())) {
+            logger.warning("Rank color " + color.asHexString()
+                    + " cannot be represented exactly by a native nametag team; using white."
+                    + " Chat and tablist retain the configured RGB color.");
+        }
+        return NamedTextColor.WHITE;
+    }
+
+    private TagResolver createPlaceholders(Player player, RenderState renderState, Optional<RankInfo> rankInfo) {
         UUID uniqueId = player.getUniqueId();
         PresentationConfig.MetaFormat metaFormat = renderState.metaFormat();
         Component prefix = luckPermsService.getPrefix(uniqueId)
@@ -183,7 +204,6 @@ public final class PresentationRenderer {
         Component suffix = luckPermsService.getSuffix(uniqueId)
                 .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
-        Optional<RankInfo> rankInfo = rankService.getPrimaryRank(uniqueId);
         Component coins = renderCoins(economyService.getCoins(uniqueId));
         long playtimeTicks = (long) player.getStatistic(Statistic.PLAY_ONE_MINUTE);
         String literalTag = literalClanTag(clanTag.apply(uniqueId));
@@ -354,7 +374,8 @@ public final class PresentationRenderer {
             Component tablistHeader,
             Component tablistFooter,
             Component nametagPrefix,
-            Component nametagSuffix
+            Component nametagSuffix,
+            NamedTextColor nametagColor
     ) {
 
         public RenderedPresentation {
@@ -365,11 +386,12 @@ public final class PresentationRenderer {
             Objects.requireNonNull(tablistFooter, "tablistFooter");
             Objects.requireNonNull(nametagPrefix, "nametagPrefix");
             Objects.requireNonNull(nametagSuffix, "nametagSuffix");
+            Objects.requireNonNull(nametagColor, "nametagColor");
         }
 
         public RenderedPresentation(Component title, List<Component> lines, Component name,
                                     Component header, Component footer) {
-            this(title, lines, name, header, footer, Component.empty(), Component.empty());
+            this(title, lines, name, header, footer, Component.empty(), Component.empty(), NamedTextColor.WHITE);
         }
     }
 

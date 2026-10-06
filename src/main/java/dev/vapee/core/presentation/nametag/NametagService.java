@@ -3,6 +3,7 @@ package dev.vapee.core.presentation.nametag;
 import dev.vapee.core.presentation.scoreboard.ScoreboardService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
@@ -120,7 +121,7 @@ public final class NametagService {
                 owned = new OwnedTeam(board, name, team, target.entry());
                 teams.put(target.id(), owned);
             }
-            owned.write(target.prefix(), target.suffix());
+            owned.write(target.prefix(), target.suffix(), target.color());
             if (owned.entries.isEmpty()) {
                 // Recheck immediately before addEntry: that API would otherwise steal membership.
                 if (board.getEntryTeam(target.entry()) != null) return;
@@ -136,7 +137,7 @@ public final class NametagService {
         private final Team team;
         private final String entry;
         private final Component displayName;
-        private final TextColor color;
+        private TextColor color;
         private final boolean friendlyFire;
         private final boolean friendlyInvisibles;
         private final Map<Team.Option, Team.OptionStatus> options = new EnumMap<>(Team.Option.class);
@@ -156,7 +157,7 @@ public final class NametagService {
             suffix = team.suffix();
             requestedPrefix = prefix;
             requestedSuffix = suffix;
-            color = team.color();
+            color = readColor(team);
             friendlyFire = team.allowFriendlyFire();
             friendlyInvisibles = team.canSeeFriendlyInvisibles();
             for (Team.Option option : Team.Option.values()) options.put(option, team.getOption(option));
@@ -170,13 +171,17 @@ public final class NametagService {
                     || (!entries.isEmpty() && (!entries.equals(Set.of(entry))
                     || !team.equals(board.getEntryTeam(entry))))) return false;
             return prefix.equals(team.prefix()) && suffix.equals(team.suffix())
-                    && displayName.equals(team.displayName()) && Objects.equals(color, team.color())
+                    && displayName.equals(team.displayName()) && Objects.equals(color, readColor(team))
                     && friendlyFire == team.allowFriendlyFire()
                     && friendlyInvisibles == team.canSeeFriendlyInvisibles()
                     && options.entrySet().stream().allMatch(option -> team.getOption(option.getKey()) == option.getValue());
         }
 
-        private void write(Component nextPrefix, Component nextSuffix) {
+        private void write(Component nextPrefix, Component nextSuffix, NamedTextColor nextColor) {
+            if (!Objects.equals(color, nextColor)) {
+                try { team.color(nextColor); }
+                finally { color = readColor(team); }
+            }
             if (!requestedPrefix.equals(nextPrefix)) {
                 try { team.prefix(nextPrefix); requestedPrefix = nextPrefix; }
                 finally { prefix = team.prefix(); }
@@ -186,15 +191,21 @@ public final class NametagService {
                 finally { suffix = team.suffix(); }
             }
         }
+
+        private static TextColor readColor(Team team) {
+            // Paper's default RESET has no RGB value; color() throws unless hasColor() is true.
+            return team.hasColor() ? team.color() : null;
+        }
     }
 
     /** Ephemeral refresh input only; no Player reference is retained in ownership metadata. */
-    public record Target(UUID id, String entry, Component prefix, Component suffix, Player player) {
+    public record Target(UUID id, String entry, Component prefix, Component suffix, NamedTextColor color, Player player) {
         public Target {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(entry, "entry");
             Objects.requireNonNull(prefix, "prefix");
             Objects.requireNonNull(suffix, "suffix");
+            Objects.requireNonNull(color, "color");
             Objects.requireNonNull(player, "player");
         }
         private boolean visibleTo(Player viewer) { return player.isOnline() && viewer.canSee(player); }

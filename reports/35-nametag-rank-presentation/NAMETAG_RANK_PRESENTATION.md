@@ -1,5 +1,10 @@
 # Phase 35 – Nametag and Rank Presentation
 
+This document records the original Phase-35 delivery at `44969da2cc3cecfbe646606fc522160e9db1c43b`.
+The original color/default decisions below are superseded by
+[Live Client Correction](LIVE_CLIENT_CORRECTION.md), which records the RESET fix,
+native RankInfo team color, optional labels, follow-up validation and client acceptance status.
+
 ## Delivery and acceptance
 
 Implementation complete. Automated acceptance passed; visual multiplayer

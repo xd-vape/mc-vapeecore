@@ -26,10 +26,10 @@ public final class PresentationConfigHarness {
             check(Arrays.equals(resource, Files.readAllBytes(file)), "presentation default resource bytes");
             var before = config.getState();
             check(before.nametagEnabled() && before.nametagLobbyOnly()
-                    && before.nametagPrefix().equals("<prefix>") && before.nametagSuffix().equals("<clan_tag_display>"),
+                    && before.nametagPrefix().isEmpty() && before.nametagSuffix().equals("<clan_tag_display>"),
                     "missing nametag keys use safe independent defaults");
             check(before.clanTagFormat().equals(PresentationConfig.DEFAULT_CLAN_TAG_FORMAT)
-                    && before.tablistNameFormat().equals("<prefix><rank_name><clan_tag_display>"), "default rank and conditional clan presentation");
+                    && before.tablistNameFormat().equals("<rank_name><clan_tag_display>"), "default rank and conditional clan presentation");
             check(warnings.isEmpty(), "presentation missing optional fields silent");
             for (String source : List.of("", "enabled: null\nscoreboard:\n  title: null\n",
                     "enabled: 7\nscoreboard:\n  title: 9\n",

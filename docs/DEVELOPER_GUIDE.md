@@ -239,7 +239,11 @@ besitzt NametagService pro Viewer→Target ein natives Team auf diesem exakten
 Viewer-Board. Team-Identity (CraftTeam.equals), erwartete Membership und zuletzt
 geschriebene Prefix-/Suffix-Components werden vor Writes/Cleanup geprüft.
 Gleichnamige fremde Teams, fremde Entry-Membership und observable Takeovers werden
-übersprungen. Gameplay-Optionen und Team-Farbe bleiben unverändert.
+übersprungen. Gameplay-Optionen bleiben unverändert; die eigene Team-Farbe
+wird aus derselben `RankInfo.effectiveColor()`-Quelle wie Chat und Tablist gesetzt.
+Ein frisches RESET-Team wird ausschließlich über `hasColor()` sicher gelesen.
+Die zuletzt erfolgreich geschriebene/lesbare Farbe gehört zum Ownership-Snapshot;
+abweichende fremde Farben (auch RESET) werden weder überschrieben noch bereinigt.
 
 Board-Lifetime ist Sidebar ODER Nametags; ein Feature-Toggle entfernt nur das
 betroffene eigene Objective beziehungsweise eigene Teams. Das Player-Scoreboard-
@@ -254,8 +258,13 @@ bereinigt. Join, Quit, Weltwechsel, Reload/Rollback und Disable nutzen diese Pfa
 
 `<clan_tag_display>` ergänzt einen bedingten gemeinsamen `clan-tag-format`-Wrapper;
 raw `<clan_tag>` bleibt literal und kompatibel. Resource-Defaults zeigen
-`<prefix><rank_name><clan_tag_display>` in der Tablist, `<prefix>` vor und
-`<clan_tag_display>` hinter dem echten Overhead-Team-Entry. Bestehende Live-Dateien
+`<rank_name><clan_tag_display>` in der Tablist, einen leeren Prefix und
+`<clan_tag_display>` hinter dem echten Overhead-Team-Entry. Sichtbare Ranklabels
+sind optional über Operator-Templates möglich, aber kein Default. Papers native
+Teamfarbe benötigt `NamedTextColor`: alle 16 benannten RGB-Werte werden exakt
+übernommen, auch aus Hex-Meta. Andere RGB-Werte fallen explizit auf Weiß zurück
+(einmalige Warnung je RGB-Wert und Renderer-Lifetime); keine Farbapproximation.
+Chat und Tablist behalten RGB. Bestehende Live-Dateien
 werden nicht migriert; neue Keys verwenden validierte Defaults. Configuration
 und Rendering bleiben Teil des bestehenden Presentation-Reload-Plans.
 Rank-/Permission-Authority bleibt LuckPerms; Glyphs bleiben optionaler Future Input.

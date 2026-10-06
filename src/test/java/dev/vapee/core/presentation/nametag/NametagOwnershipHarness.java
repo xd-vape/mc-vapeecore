@@ -31,6 +31,9 @@ public final class NametagOwnershipHarness {
                     var board = r.board(a);
                     check(board.objectives.containsKey("vapeecore") == sidebar, "sidebar objective independent");
                     check(board.teams.size() == (nametag ? 2 : 0), "nametag roster independent of sidebar");
+                    if (nametag) check(board.teams.values().stream().allMatch(t -> t.team.hasColor()
+                            && t.color == net.kyori.adventure.text.format.NamedTextColor.WHITE && t.entries.size() == 1),
+                            "Paper RESET default becomes a neutral colored complete native membership");
                     check(a.board != b.board && a.board != r.f.main.board, "teams reside on independent viewer boards");
                     check(r.f.main.teams.isEmpty() && r.f.main.writes == 0, "main scoreboard never rendered");
                 }
@@ -51,8 +54,9 @@ public final class NametagOwnershipHarness {
             int teamWrites = writes(r.f), objectiveWrites = boardA.writes;
             r.service.updateAll(); r.service.updateAll();
             check(writes(r.f) == teamWrites && boardA.writes == objectiveWrites, "unchanged refresh performs no team/sidebar writes");
-            check(r.f.boards.stream().flatMap(board -> board.teams.values().stream()).allMatch(t -> t.optionWrites == 0 && t.color == null),
-                    "no gameplay option or approximate color writes");
+            check(r.f.boards.stream().flatMap(board -> board.teams.values().stream()).allMatch(t -> t.optionWrites == 0
+                            && t.color == net.kyori.adventure.text.format.NamedTextColor.WHITE),
+                    "no gameplay option changes and neutral owned color");
             r.boards.updatePlayer(a.player, Component.text("changed"), List.of(Component.text("one line")), true);
             check(a.board == boardA.board && boardA.teams.get(team(b)) == aToB && boardA.objectives.get("vapeecore").lines.size() == 1,
                     "sidebar line-count change preserves active nametag board/team identity");

@@ -948,15 +948,23 @@ oder bei fehlendem/ungültigem Read ist der Wert leer, ohne automatische Klammer
 oder Abstände. `<clan_tag_display>` ergänzt bei vorhandenem Tag den in
 `clan-tag-format` definierten MiniMessage-Wrapper. Dessen dynamischer Inhalt ist
 `<clan_tag>`; andere Presentation-Placeholder gehören in die äußeren Templates.
-Die neuen Resource-Defaults verwenden `<prefix><rank_name><clan_tag_display>`
-für den Tablist-Namen sowie `<prefix>` und `<clan_tag_display>` für native
+Die neuen Resource-Defaults verwenden `<rank_name><clan_tag_display>`
+für den Tablist-Namen sowie einen leeren Prefix und `<clan_tag_display>` für native
 Overhead-Team-Prefix/-Suffix. Der Team-Entry bleibt der echte Spielername.
-Team-Farben werden nicht gesetzt; RGB-Rank-Farben bleiben im Tablist-Namen und
-in formatierten Prefix-Components erhalten. Der Vanilla-Overhead-Name behält
-seine Standardfarbe.
+Seine native Team-Farbe stammt aus `RankInfo.effectiveColor()` beziehungsweise
+LuckPerms-Meta `vapeecore.rank.color`, derselben Quelle wie Chat und Tablist.
+Alle 16 benannten Minecraft-Farben werden exakt gesetzt, auch bei identischem
+Hexwert (z. B. `blue` und `#5555ff`). Beliebiges RGB kann das Vanilla-Team nicht
+darstellen: es erhält ausdrücklich Weiß mit einmaliger Logwarnung je RGB-Wert
+und Renderer-Lifetime. Es gibt keine stille Näherungsfarbe. Tablist und Chat
+behalten die volle RGB-Farbe. Fehlende/ungültige Rankfarbe verwendet weiterhin
+den bestehenden neutralen weißen RankInfo-Fallback.
+Sichtbare Ranklabels werden nicht automatisch eingefügt. Wer sie möchte,
+kann `nametag.prefix: "<prefix>"` und
+`tablist.name-format: "<prefix><rank_name><clan_tag_display>"` konfigurieren.
 Eine manuelle Änderung der Live-Datei wird mit `/core reload` übernommen.
 Bestehende Dateien werden nicht umgeschrieben. Fehlende Nametag-Keys ergeben
-`enabled: true`, `lobby-only: true`, `prefix: "<prefix>"`,
+`enabled: true`, `lobby-only: true`, `prefix: ""`,
 `suffix: "<clan_tag_display>"`. Der gemeinsame Wrapper ist standardmäßig
 `" <dark_gray>[</dark_gray><gray><clan_tag></gray><dark_gray>]</dark_gray>"`.
 Resource-Pack-Glyph-Assets bleiben ein späterer optionaler Ausbau.
