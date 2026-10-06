@@ -25,6 +25,11 @@ public final class PresentationConfigHarness {
             config.initialize();
             check(Arrays.equals(resource, Files.readAllBytes(file)), "presentation default resource bytes");
             var before = config.getState();
+            check(before.nametagEnabled() && before.nametagLobbyOnly()
+                    && before.nametagPrefix().equals("<prefix>") && before.nametagSuffix().equals("<clan_tag_display>"),
+                    "missing nametag keys use safe independent defaults");
+            check(before.clanTagFormat().equals(PresentationConfig.DEFAULT_CLAN_TAG_FORMAT)
+                    && before.tablistNameFormat().equals("<prefix><rank_name><clan_tag_display>"), "default rank and conditional clan presentation");
             check(warnings.isEmpty(), "presentation missing optional fields silent");
             for (String source : List.of("", "enabled: null\nscoreboard:\n  title: null\n",
                     "enabled: 7\nscoreboard:\n  title: 9\n",
@@ -72,6 +77,17 @@ public final class PresentationConfigHarness {
             check(invalid.scoreboardLines().equals(before.scoreboardLines())
                     && invalid.metaFormat() == PresentationConfig.MetaFormat.LEGACY_AMPERSAND
                     && warnings.size() == 2, "invalid whole list and enum remain feature-owned");
+            String nametagInvalid = "nametag:\n  enabled: 5\n  lobby-only: 'false'\n  prefix: []\n  suffix: 9\nclan-tag-format: false\n";
+            Files.writeString(file, nametagInvalid); warnings.clear();
+            var tags = config.prepareReloadState();
+            check(tags.nametagEnabled() && tags.nametagLobbyOnly()
+                    && tags.nametagPrefix().equals(before.nametagPrefix()) && tags.nametagSuffix().equals(before.nametagSuffix())
+                    && tags.clanTagFormat().equals(before.clanTagFormat()), "wrong nametag types recover locally");
+            check(warnings.size() == 5 && Files.readString(file).equals(nametagInvalid), "nametag validation logs without rewriting operator file");
+            Files.writeString(file, "nametag:\n  enabled: false\n  lobby-only: false\n  prefix: ''\n  suffix: 'SUFFIX'\nclan-tag-format: '<clan_tag>'\n");
+            tags = config.prepareReloadState();
+            check(!tags.nametagEnabled() && !tags.nametagLobbyOnly() && tags.nametagPrefix().isEmpty()
+                    && tags.nametagSuffix().equals("SUFFIX") && tags.clanTagFormat().equals("<clan_tag>"), "explicit nametag values and empty components accepted");
             Files.delete(file); warnings.clear();
             var missing = new PresentationConfig(file, logger(warnings), () -> null);
             try { missing.initialize(); throw new AssertionError("missing resource accepted"); }

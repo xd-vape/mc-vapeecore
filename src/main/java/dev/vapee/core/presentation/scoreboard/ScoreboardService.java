@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class ScoreboardService {
@@ -49,11 +50,17 @@ public final class ScoreboardService {
     }
 
     public void updatePlayer(Player player, Component title, List<Component> lines) {
+        updatePlayer(player, title, lines, false);
+    }
+
+    /** Sidebar and nametags share exactly one viewer-board owner. */
+    public void updatePlayer(Player player, Component title, List<Component> lines, boolean nametagRequired) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         Component validatedTitle = Objects.requireNonNull(title, "title");
         List<Component> validatedLines = List.copyOf(Objects.requireNonNull(lines, "lines"));
 
-        if (!shouldShow(validatedPlayer)) {
+        boolean sidebarRequired = shouldShow(validatedPlayer);
+        if (!sidebarRequired && !nametagRequired) {
             removePlayer(validatedPlayer);
             return;
         }
@@ -66,7 +73,8 @@ public final class ScoreboardService {
             return;
         }
 
-        if (state != null && state.scores.size() != validatedLines.size()) {
+        if (state != null && state.objective != null && state.scores.size() != validatedLines.size()
+                && !nametagRequired) {
             removePlayer(validatedPlayer);
             state = null;
         }
@@ -76,8 +84,9 @@ public final class ScoreboardService {
                 return;
             }
 
-            PlayerScoreboardState newState = createState(validatedTitle, validatedLines);
+            PlayerScoreboardState newState = new PlayerScoreboardState(scoreboardManager.getNewScoreboard());
             try {
+                if (sidebarRequired) newState.update(validatedTitle, validatedLines);
                 validatedPlayer.setScoreboard(newState.scoreboard);
                 states.put(uniqueId, newState);
             } catch (RuntimeException exception) {
@@ -87,7 +96,8 @@ public final class ScoreboardService {
             return;
         }
 
-        state.update(validatedTitle, validatedLines);
+        if (sidebarRequired) state.update(validatedTitle, validatedLines);
+        else state.unregister();
     }
 
     public void removePlayer(Player player) {
@@ -111,6 +121,17 @@ public final class ScoreboardService {
         return state != null && checked.getScoreboard() == state.scoreboard;
     }
 
+    public Optional<Scoreboard> getOwnedScoreboard(Player viewer) {
+        return ownsScoreboard(viewer) ? Optional.of(states.get(viewer.getUniqueId()).scoreboard) : Optional.empty();
+    }
+
+    /** Sidebar preference is not a nametag preference; loaded state and world scope still gate it. */
+    public boolean isNametagEligible(Player player) {
+        return presentationConfig.isEnabled() && presentationConfig.isNametagEnabled() && player.isOnline()
+                && playerSettingsService.getSettings(player.getUniqueId()).isPresent()
+                && (!presentationConfig.isNametagLobbyOnly() || lobbyService.isLobbyWorld(player.getWorld()));
+    }
+
     public void clearStates() {
         for (PlayerScoreboardState state : states.values()) {
             state.unregister();
@@ -128,50 +149,43 @@ public final class ScoreboardService {
         return !presentationConfig.isScoreboardLobbyOnly() || lobbyService.isLobbyWorld(player.getWorld());
     }
 
-    private PlayerScoreboardState createState(Component title, List<Component> lines) {
-        Scoreboard scoreboard = scoreboardManager.getNewScoreboard();
-        Objective objective = scoreboard.registerNewObjective(
-                OBJECTIVE_NAME,
-                Criteria.DUMMY,
-                title
-        );
-        objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-        objective.numberFormat(NumberFormat.blank());
-
-        List<Score> scores = new ArrayList<>(lines.size());
-        for (int index = 0; index < lines.size(); index++) {
-            Score score = objective.getScore(ENTRY_PREFIX + index);
-            score.setScore(lines.size() - index);
-            score.customName(lines.get(index));
-            scores.add(score);
-        }
-        return new PlayerScoreboardState(scoreboard, objective, scores, title, lines);
-    }
-
     private static final class PlayerScoreboardState {
 
         private final Scoreboard scoreboard;
-        private final Objective objective;
-        private final List<Score> scores;
+        private Objective objective;
+        private List<Score> scores = List.of();
 
         private Component title;
         private List<Component> lines;
 
-        private PlayerScoreboardState(
-                Scoreboard scoreboard,
-                Objective objective,
-                List<Score> scores,
-                Component title,
-                List<Component> lines
-        ) {
+        private PlayerScoreboardState(Scoreboard scoreboard) {
             this.scoreboard = scoreboard;
-            this.objective = objective;
-            this.scores = List.copyOf(scores);
-            this.title = title;
-            this.lines = List.copyOf(lines);
         }
 
         private void update(Component newTitle, List<Component> newLines) {
+            if (objective != null && !objective.equals(scoreboard.getObjective(OBJECTIVE_NAME))) {
+                // A same-name foreign objective is never adopted or cleared.
+                objective = null;
+                scores = List.of();
+            }
+            if (objective != null && scores.size() != newLines.size()) unregister();
+            if (objective == null) {
+                if (scoreboard.getObjective(OBJECTIVE_NAME) != null) return;
+                objective = scoreboard.registerNewObjective(OBJECTIVE_NAME, Criteria.DUMMY, newTitle);
+                objective.setDisplaySlot(DisplaySlot.SIDEBAR);
+                objective.numberFormat(NumberFormat.blank());
+                List<Score> newScores = new ArrayList<>(newLines.size());
+                for (int index = 0; index < newLines.size(); index++) {
+                    Score score = objective.getScore(ENTRY_PREFIX + index);
+                    score.setScore(newLines.size() - index);
+                    score.customName(newLines.get(index));
+                    newScores.add(score);
+                }
+                scores = List.copyOf(newScores);
+                title = newTitle;
+                lines = List.copyOf(newLines);
+                return;
+            }
             if (!title.equals(newTitle)) {
                 objective.displayName(newTitle);
                 title = newTitle;
@@ -187,7 +201,9 @@ public final class ScoreboardService {
         }
 
         private void unregister() {
-            objective.unregister();
+            if (objective != null && objective.equals(scoreboard.getObjective(OBJECTIVE_NAME))) objective.unregister();
+            objective = null;
+            scores = List.of();
         }
     }
 }

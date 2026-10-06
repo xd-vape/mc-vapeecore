@@ -21,8 +21,8 @@ public final class PresentationHarness {
     }
 
     public static void main(String[] args) {
-        check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<rank_name>"),
-                "missing tablist name format uses the rank-colored default");
+        check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<prefix><rank_name><clan_tag_display>"),
+                "missing tablist name format includes prefix, rank-colored name and conditional clan");
         TextColor rankColor = TextColor.color(0xc35cff);
         RankInfo rank = new RankInfo(
                 "developer",
@@ -47,9 +47,10 @@ public final class PresentationHarness {
                 "<rank_name> applies the primary-rank color to the player display name");
         Component coloredTabName = MINI_MESSAGE.deserialize(
                 PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT,
-                PresentationRenderer.createRankAndPlaytimePlaceholders(
-                        Optional.of(rank), Component.text("rx29"), 0L
-                )
+                net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver(
+                        PresentationRenderer.createRankAndPlaytimePlaceholders(Optional.of(rank), Component.text("rx29"), 0L),
+                        net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component("prefix", Component.empty()),
+                        net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component("clan_tag_display", Component.empty()))
         );
         check(PLAIN.serialize(coloredTabName).equals("rx29")
                         && hasColoredText(coloredTabName, "rx29", rankColor),

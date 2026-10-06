@@ -934,19 +934,32 @@ In `presentation.yml` stehen zur Verfügung:
 | `<rank_id>` | technische LuckPerms Group ID |
 | `<group>` | Compatibility Alias für `<rank_id>` |
 | `<clan_tag>` | kanonischer Clan-Tag als wörtlicher Text; ohne verfügbaren Clan leer |
+| `<clan_tag_display>` | konfigurierter Clan-Wrapper mit literal Tag; ohne gültigen Tag vollständig leer |
 | `<playtime>` | kompakte Minecraft-Spielzeit |
 | `<coins>` | aktuelle Coins |
 | `<online>` | aktuelle Online-Spieler |
 | `<max_players>` | maximale Spieleranzahl |
 
-`<clan_tag>` gilt ausschließlich für die bestehenden Presentation-Templates
-(Sidebar-Titel/-Zeilen, Tablist-Name, Header und Footer). Der Wert ist weder
+`<clan_tag>` gilt für die Presentation-Templates
+(Sidebar-Titel/-Zeilen, Tablist-Name, Header, Footer und Nametag-Prefix/-Suffix). Der Wert ist weder
 Clan-Name noch Clan-ID. MiniMessage-artiger Clan-Text wie `<red>` wird wörtlich
 angezeigt; Farben können im umgebenden Admin-Template gesetzt werden. Ohne Clan
 oder bei fehlendem/ungültigem Read ist der Wert leer, ohne automatische Klammern
-oder Abstände. Die Resource-Defaults aktivieren den Platzhalter nicht.
+oder Abstände. `<clan_tag_display>` ergänzt bei vorhandenem Tag den in
+`clan-tag-format` definierten MiniMessage-Wrapper. Dessen dynamischer Inhalt ist
+`<clan_tag>`; andere Presentation-Placeholder gehören in die äußeren Templates.
+Die neuen Resource-Defaults verwenden `<prefix><rank_name><clan_tag_display>`
+für den Tablist-Namen sowie `<prefix>` und `<clan_tag_display>` für native
+Overhead-Team-Prefix/-Suffix. Der Team-Entry bleibt der echte Spielername.
+Team-Farben werden nicht gesetzt; RGB-Rank-Farben bleiben im Tablist-Namen und
+in formatierten Prefix-Components erhalten. Der Vanilla-Overhead-Name behält
+seine Standardfarbe.
 Eine manuelle Änderung der Live-Datei wird mit `/core reload` übernommen.
-Overhead-Nametags, Teams und Resource-Pack-Glyphs werden dadurch nicht eingerichtet.
+Bestehende Dateien werden nicht umgeschrieben. Fehlende Nametag-Keys ergeben
+`enabled: true`, `lobby-only: true`, `prefix: "<prefix>"`,
+`suffix: "<clan_tag_display>"`. Der gemeinsame Wrapper ist standardmäßig
+`" <dark_gray>[</dark_gray><gray><clan_tag></gray><dark_gray>]</dark_gray>"`.
+Resource-Pack-Glyph-Assets bleiben ein späterer optionaler Ausbau.
 
 ---
 

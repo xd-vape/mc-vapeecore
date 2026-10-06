@@ -16,6 +16,12 @@ import dev.vapee.core.rank.RankService;
 import net.kyori.adventure.text.Component;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.UserManager;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.model.group.Group;
+import net.luckperms.api.model.group.GroupManager;
+import net.luckperms.api.cacheddata.CachedDataManager;
+import net.luckperms.api.cacheddata.CachedMetaData;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Server;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -41,6 +47,11 @@ public final class PresentationFixture implements AutoCloseable {
     public final List<TestPlayer> online = new ArrayList<>();
     public final List<Task> tasks = new ArrayList<>();
     public final List<Board> boards = new ArrayList<>();
+    public final Map<UUID, String> prefixes = new HashMap<>();
+    public final Map<UUID, String> groups = new HashMap<>();
+    public final Map<String, String> groupColors = new HashMap<>();
+    public boolean failRankRead;
+    public boolean failTaskSchedule;
     public final Board main = new Board();
     public final World world = proxy(World.class, (method, args) -> method.equals("getName") ? "lobby" : null);
     public final JavaPlugin plugin;
@@ -66,6 +77,7 @@ public final class PresentationFixture implements AutoCloseable {
         });
         BukkitScheduler scheduler = proxy(BukkitScheduler.class, (method, args) -> {
             if (method.equals("runTask") || method.equals("runTaskTimer")) {
+                if (failTaskSchedule) throw new IllegalStateException("injected scheduler failure");
                 Task task = new Task((Runnable) args[1]); tasks.add(task); return task.task;
             }
             throw new AssertionError(method);
@@ -97,9 +109,32 @@ public final class PresentationFixture implements AutoCloseable {
             public boolean exists(UUID id) { return false; }
         }, logger);
         settings = new PlayerSettingsService(players);
-        UserManager users = proxy(UserManager.class, (method, args) -> null);
+        UserManager users = proxy(UserManager.class, (method, args) -> {
+            if (failRankRead) throw new IllegalStateException("injected rank provider failure");
+            UUID id = (UUID) args[0];
+            if (!groups.containsKey(id) && !prefixes.containsKey(id)) return null;
+            return proxy(User.class, (operation, values) -> switch (operation) {
+                case "getPrimaryGroup" -> groups.get(id);
+                case "getCachedData" -> proxy(CachedDataManager.class, (read, ignored) ->
+                        proxy(CachedMetaData.class, (meta, keys) -> meta.equals("getPrefix") ? prefixes.get(id) : null));
+                default -> throw new AssertionError(operation);
+            });
+        });
+        GroupManager groupManager = proxy(GroupManager.class, (method, args) -> {
+            String id = (String) args[0];
+            if (!groupColors.containsKey(id)) return null;
+            return proxy(Group.class, (operation, values) -> switch (operation) {
+                case "getName", "getDisplayName" -> id;
+                case "getWeight" -> OptionalInt.empty();
+                case "getCachedData" -> proxy(CachedDataManager.class, (read, ignored) ->
+                        proxy(CachedMetaData.class, (meta, keys) -> meta.equals("getMetaValue")
+                                && keys[0].equals(RankService.COLOR_META_KEY) ? groupColors.get(id) : null));
+                default -> throw new AssertionError(operation);
+            });
+        });
         luckPerms = new LuckPermsService(proxy(LuckPerms.class,
-                (method, args) -> method.equals("getUserManager") ? users : null));
+                (method, args) -> method.equals("getUserManager") ? users
+                        : method.equals("getGroupManager") ? groupManager : null));
         ranks = new RankService(config, luckPerms);
         economy = new EconomyService(players);
         lobby = new LobbyService(plugin, new LobbyConfig(plugin));
@@ -127,6 +162,7 @@ public final class PresentationFixture implements AutoCloseable {
         public final Set<UUID> hidden = new HashSet<>();
         public int writes, visibilityWrites;
         public boolean normalizeName, failHeaderWrite;
+        public World currentWorld = world;
 
         public TestPlayer(UUID id, String vanillaName) {
             this.id = id;
@@ -136,7 +172,7 @@ public final class PresentationFixture implements AutoCloseable {
                 case "getName" -> vanillaName;
                 case "displayName" -> Component.text(vanillaName);
                 case "getStatistic" -> 0;
-                case "getWorld" -> world;
+                case "getWorld" -> currentWorld;
                 case "isOnline" -> online;
                 case "hasPermission" -> false;
                 case "getScoreboard" -> board;
@@ -176,7 +212,9 @@ public final class PresentationFixture implements AutoCloseable {
 
     public static final class Board {
         public final Map<String, Obj> objectives = new HashMap<>();
+        public final Map<String, TestTeam> teams = new HashMap<>();
         public int writes, teamCalls;
+        public boolean normalizeTeamComponents;
         public final Scoreboard board = proxy(Scoreboard.class, (method, args) -> switch (method) {
             case "registerNewObjective" -> {
                 String key = (String) args[0];
@@ -184,8 +222,48 @@ public final class PresentationFixture implements AutoCloseable {
                 Obj obj = new Obj(key, (Component) args[2]); objectives.put(key, obj); writes++; yield obj.objective;
             }
             case "getObjective" -> objectives.get(args[0]) == null ? null : objectives.get(args[0]).objective;
+            case "getTeam" -> teams.get(args[0]) == null ? null : teams.get(args[0]).team;
+            case "getEntryTeam" -> teams.values().stream().filter(team -> team.entries.contains(args[0]))
+                    .map(team -> team.team).findFirst().orElse(null);
+            case "registerNewTeam" -> {
+                String name = (String) args[0];
+                if (teams.containsKey(name)) throw new IllegalArgumentException("Duplicate team");
+                TestTeam team = new TestTeam(name); teams.put(name, team); teamCalls++; yield team.team;
+            }
             default -> { teamCalls++; throw new AssertionError("Unexpected board API: " + method); }
         });
+        public final class TestTeam {
+            public final String name;
+            public Component prefix = Component.empty(), suffix = Component.empty(), display;
+            public TextColor color;
+            public final Set<String> entries = new HashSet<>();
+            public boolean removed;
+            public int mutations, optionWrites;
+            public final Team team;
+            public TestTeam(String name) {
+                this.name = name; display = Component.text(name);
+                team = proxy(Team.class, (method, args) -> switch (method) {
+                    case "getName" -> name;
+                    case "getScoreboard" -> board;
+                    case "prefix" -> { if (args.length == 0) yield prefix; prefix = normalizeTeamComponents ? Component.empty().append((Component) args[0]) : (Component) args[0]; mutations++; yield null; }
+                    case "suffix" -> { if (args.length == 0) yield suffix; suffix = normalizeTeamComponents ? Component.empty().append((Component) args[0]) : (Component) args[0]; mutations++; yield null; }
+                    case "displayName" -> { if (args.length == 0) yield display; display = (Component) args[0]; mutations++; yield null; }
+                    case "color" -> { if (args.length == 0) yield color; color = (TextColor) args[0]; mutations++; yield null; }
+                    case "allowFriendlyFire", "canSeeFriendlyInvisibles" -> true;
+                    case "getOption" -> Team.OptionStatus.ALWAYS;
+                    case "setOption", "setAllowFriendlyFire", "setCanSeeFriendlyInvisibles" -> { optionWrites++; throw new AssertionError("No gameplay option writes"); }
+                    case "getEntries" -> Set.copyOf(entries);
+                    case "hasEntry" -> entries.contains(args[0]);
+                    case "addEntry" -> {
+                        for (TestTeam other : teams.values()) other.entries.remove(args[0]);
+                        entries.add((String) args[0]); mutations++; yield null;
+                    }
+                    case "unregister" -> { removed = true; if (teams.get(name) == this) teams.remove(name); mutations++; yield null; }
+                    case "removeEntry" -> { mutations++; yield entries.remove(args[0]); }
+                    default -> throw new AssertionError("Unexpected team API: " + method);
+                });
+            }
+        }
         public final class Obj {
             public Component title;
             public DisplaySlot slot;
@@ -212,13 +290,17 @@ public final class PresentationFixture implements AutoCloseable {
 
     public static final class Task {
         public boolean cancelled;
+        public boolean failCancel;
         public final Runnable runnable;
         public final BukkitTask task;
         Task(Runnable runnable) {
             this.runnable = runnable;
             task = proxy(BukkitTask.class, (method, args) -> switch (method) {
                 case "isCancelled" -> cancelled;
-                case "cancel" -> { cancelled = true; yield null; }
+                case "cancel" -> {
+                    if (failCancel) throw new IllegalStateException("injected task cancellation failure");
+                    cancelled = true; yield null;
+                }
                 default -> null;
             });
         }

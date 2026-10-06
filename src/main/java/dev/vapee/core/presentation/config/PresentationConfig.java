@@ -21,7 +21,10 @@ public final class PresentationConfig {
 
     public static final long DEFAULT_UPDATE_INTERVAL_TICKS = 20L;
     public static final String DEFAULT_SCOREBOARD_TITLE = "<aqua><bold><server></bold></aqua>";
-    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<rank_name>";
+    public static final String DEFAULT_TABLIST_NAME_FORMAT = "<prefix><rank_name><clan_tag_display>";
+    public static final String DEFAULT_NAMETAG_PREFIX = "<prefix>";
+    public static final String DEFAULT_NAMETAG_SUFFIX = "<clan_tag_display>";
+    public static final String DEFAULT_CLAN_TAG_FORMAT = " <dark_gray>[</dark_gray><gray><clan_tag></gray><dark_gray>]</dark_gray>";
 
     private static final String RESOURCE_NAME = "presentation.yml";
     private static final int MAX_SCOREBOARD_LINES = 15;
@@ -112,7 +115,12 @@ public final class PresentationConfig {
                 readBoolean(configuration, "tablist.enabled", true),
                 readString(configuration, "tablist.name-format", DEFAULT_TABLIST_NAME_FORMAT),
                 readStringList(configuration, "tablist.header", DEFAULT_TABLIST_HEADER),
-                readStringList(configuration, "tablist.footer", DEFAULT_TABLIST_FOOTER)
+                readStringList(configuration, "tablist.footer", DEFAULT_TABLIST_FOOTER),
+                readBoolean(configuration, "nametag.enabled", true),
+                readBoolean(configuration, "nametag.lobby-only", true),
+                readString(configuration, "nametag.prefix", DEFAULT_NAMETAG_PREFIX),
+                readString(configuration, "nametag.suffix", DEFAULT_NAMETAG_SUFFIX),
+                readString(configuration, "clan-tag-format", DEFAULT_CLAN_TAG_FORMAT)
         );
     }
 
@@ -163,6 +171,10 @@ public final class PresentationConfig {
     public Path getConfigFile() {
         return configFile;
     }
+
+    public boolean isNametagEnabled() { return state.nametagEnabled(); }
+
+    public boolean isNametagLobbyOnly() { return state.nametagLobbyOnly(); }
 
     private boolean readBoolean(YamlConfiguration configuration, String path, boolean defaultValue) {
         return ConfigValues.readBoolean(configuration, path, defaultValue,
@@ -279,7 +291,12 @@ public final class PresentationConfig {
             boolean tablistEnabled,
             String tablistNameFormat,
             List<String> tablistHeader,
-            List<String> tablistFooter
+            List<String> tablistFooter,
+            boolean nametagEnabled,
+            boolean nametagLobbyOnly,
+            String nametagPrefix,
+            String nametagSuffix,
+            String clanTagFormat
     ) {
 
         public State {
@@ -292,6 +309,18 @@ public final class PresentationConfig {
             Objects.requireNonNull(tablistNameFormat, "tablistNameFormat");
             tablistHeader = List.copyOf(Objects.requireNonNull(tablistHeader, "tablistHeader"));
             tablistFooter = List.copyOf(Objects.requireNonNull(tablistFooter, "tablistFooter"));
+            Objects.requireNonNull(nametagPrefix, "nametagPrefix");
+            Objects.requireNonNull(nametagSuffix, "nametagSuffix");
+            Objects.requireNonNull(clanTagFormat, "clanTagFormat");
+        }
+
+        /** Existing callers constructing a sidebar/tab-only state retain that explicit scope. */
+        public State(boolean enabled, long interval, MetaFormat metaFormat, boolean scoreboardEnabled,
+                     boolean lobbyOnly, String title, List<String> lines, boolean tablistEnabled,
+                     String name, List<String> header, List<String> footer) {
+            this(enabled, interval, metaFormat, scoreboardEnabled, lobbyOnly, title, lines,
+                    tablistEnabled, name, header, footer, false, true,
+                    DEFAULT_NAMETAG_PREFIX, DEFAULT_NAMETAG_SUFFIX, DEFAULT_CLAN_TAG_FORMAT);
         }
 
         private static State defaults() {
@@ -306,7 +335,12 @@ public final class PresentationConfig {
                     true,
                     DEFAULT_TABLIST_NAME_FORMAT,
                     DEFAULT_TABLIST_HEADER,
-                    DEFAULT_TABLIST_FOOTER
+                    DEFAULT_TABLIST_FOOTER,
+                    true,
+                    true,
+                    DEFAULT_NAMETAG_PREFIX,
+                    DEFAULT_NAMETAG_SUFFIX,
+                    DEFAULT_CLAN_TAG_FORMAT
             );
         }
     }
