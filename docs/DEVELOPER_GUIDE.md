@@ -106,7 +106,7 @@ Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Liv
 | `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
-| `presentation.yml` | `PresentationConfig` / `PresentationModule` | Sidebar, Tablist, Updateintervall | Ja | Durch Reload | `src/main/resources/presentation.yml` |
+| `presentation.yml` | `PresentationConfig` / `PresentationModule` | Sidebar, Tablist, Nametags, Updateintervall | Ja | Durch Reload | `src/main/resources/presentation.yml` |
 | `daily-quests.yml` | `DailyQuestConfig` / `DailyQuestModule` | Daily-Slots, Reset, Zeitzone und Quest-Katalog | Ja | Durch Reload; Player-Rotation erst beim nächsten Sync | `src/main/resources/daily-quests.yml` |
 | `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
@@ -140,7 +140,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 16. **Visibility** – zentrale Lobby-Policy, Paper-Show/Hide-Anwendung und Cleanup eigener Hide-Zustände.
 17. **Chat** – globaler Chat und lesende Rank-Placeholder.
 18. **PrivateMessage** – `/msg`, `/reply` und Session-Konversationen.
-19. **Presentation** – Sidebar, Tablist und lesende Rank-Placeholder.
+19. **Presentation** – Sidebar, Tablist, native Nametags und lesende Rank-Placeholder.
 20. **Settings** – Settings-Inventar und `/settings`.
 21. **Activity** – generische Runtime-Typen, Venues, Sessions und Memberships.
 22. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
@@ -208,7 +208,7 @@ LobbyExperience
 
 `RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich JavaPlugin, PlayerModule, RewardModule und MessageService; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich JavaPlugin, PlayerModule, QuestModule und MessageService, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `PresenceModule` konsumiert Player, Social, Friend und Message, ohne Rückabhängigkeit aus diesen Modulen. `VisibilityModule` konsumiert Player, Social, Friend und Lobby, aber weder SettingsModule noch Activity; die spätere Game-Teilnehmer-Anbindung liegt hinter einem kleinen Predicate. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessageModule bezieht Player, Social und Moderation; PrivateMessageService erhält ausschließlich ein finales UUID-Predicate aus der Mute-Projektion, keinen ModerationService. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. UtilityModule erhält JavaPlugin, LobbyModule, ActivityModule, RankModule und MessageService. Rank besitzt den StaffHierarchyService; Utility verwendet ihn über OnlineStaffTargetGuard an der Command-Grenze. UtilityService bleibt frei von Staff-Policy. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
-## Presentation-Ownership seit Phase 30F
+## Presentation-Ownership seit Phase 30F/35
 
 Presentation erhält zusätzlich einen lesenden `Function<UUID, Optional<String>>`
 für den kanonischen Clan-Tag. Das Bootstrap-Wiring verwendet
@@ -234,11 +234,32 @@ Service-Pfade; es bleiben keine Player-Referenzen in den Ownership-Metadaten.
 aktuell angezeigten Boards und wird auch von Update/Cleanup verwendet. Ein
 fremdes Board wird übersprungen; eigene Sidebar-Objectives bleiben getrennt pro
 Viewer. Diese Prüfung erteilt keine Rechte an fremden Teams oder an der Sichtbarkeit
-eines Targets. VisibilityService bleibt alleiniger hide/show-Owner. Presentation
-erstellt keine Overhead-Teams; spätere Teams benötigen aktuelle Viewer-Boards,
-eigene Instanz-Ownership und eine konservative Foreign-Board-/Visibility-Policy.
+eines Targets. VisibilityService bleibt alleiniger hide/show-Owner. Seit Phase 35
+besitzt NametagService pro Viewer→Target ein natives Team auf diesem exakten
+Viewer-Board. Team-Identity (CraftTeam.equals), erwartete Membership und zuletzt
+geschriebene Prefix-/Suffix-Components werden vor Writes/Cleanup geprüft.
+Gleichnamige fremde Teams, fremde Entry-Membership und observable Takeovers werden
+übersprungen. Gameplay-Optionen und Team-Farbe bleiben unverändert.
+
+Board-Lifetime ist Sidebar ODER Nametags; ein Feature-Toggle entfernt nur das
+betroffene eigene Objective beziehungsweise eigene Teams. Das Player-Scoreboard-
+Setting gilt weiterhin ausschließlich für die Sidebar. Nametags benötigen
+geladene Online-Player und standardmäßig die Lobby-Welt (`nametag.lobby-only`).
+Presentation liest `viewer.canSee(target)` directional und entfernt eigene
+verdeckte Relationen. Der vorhandene synchrone 20-Tick-Task rendert Metadaten
+einmal pro Player und reconciliiert Viewer×Targets; unveränderte Teams erhalten
+keine Writes. Provider-Ausfälle werden geloggt; Sidebar-/Tablist-Werte des
+betroffenen Players bleiben erhalten, Nametag-Roster werden weiterhin sicher
+bereinigt. Join, Quit, Weltwechsel, Reload/Rollback und Disable nutzen diese Pfade.
+
+`<clan_tag_display>` ergänzt einen bedingten gemeinsamen `clan-tag-format`-Wrapper;
+raw `<clan_tag>` bleibt literal und kompatibel. Resource-Defaults zeigen
+`<prefix><rank_name><clan_tag_display>` in der Tablist, `<prefix>` vor und
+`<clan_tag_display>` hinter dem echten Overhead-Team-Entry. Bestehende Live-Dateien
+werden nicht migriert; neue Keys verwenden validierte Defaults. Configuration
+und Rendering bleiben Teil des bestehenden Presentation-Reload-Plans.
 Rank-/Permission-Authority bleibt LuckPerms; Glyphs bleiben optionaler Future Input.
-Details und Regression: [Presentation and Nametag Polish](../reports/30f-presentation-nametag-polish/PRESENTATION_NAMETAG_POLISH.md).
+Der Phase-30F-Vertrag ist in [Presentation and Nametag Polish](../reports/30f-presentation-nametag-polish/PRESENTATION_NAMETAG_POLISH.md) dokumentiert.
 
 ## Player Identity & Profile Foundation (Phase 17C)
 
@@ -388,7 +409,7 @@ Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. E
 
 `ClanMenu` zeigt 54 Slots mit 45 Content-Slots pro Seite und Views `OVERVIEW`, `MEMBERS`, `INVITES`. Clanlose Spieler sehen Create und eingehende Einladungen; Create schließt die GUI und schlägt `/clan create TAG Clan Name` per Click-Event vor. Die Übersicht zeigt Name, Tag, Mitgliedszahl, Owner und eigene Rolle. Mitglieder werden mit Owner zuerst, dann nach bekanntem Namen und UUID sortiert; fehlende Identity-Namen erscheinen als UUID. Online ist nur `Server#getPlayer(UUID)` plus `isOnline()`. Der Owner sieht ausgehende Einladungen; Mitglieder ohne Owner-Rolle erhalten keine Owner-Verwaltung. Eingehende Einladungen werden links angenommen, rechts abgelehnt; ausgehende Einladungen nur rechts abgebrochen. Mitglieder können nur mit Shift + Rechtsklick gekickt oder Shift + Linksklick zum Owner gemacht werden. GUI-Disband bietet nur mit Shift + Rechtsklick einen Vorschlag für `/clan disband confirm`, keine direkte Löschung.
 
-`ClanMenuHolder` trägt Besitzer-UUID, View, Page und serverseitige Slot→UUID-Ziele; er bindet genau eine Inventarinstanz. Der Listener cancelt jeden Click und Drag einschließlich Bottom Inventory, Number-Key, Collect und Drop zunächst pauschal. Eine fachliche Aktion erfordert zusätzlich passenden Viewer, aktive Inventarinstanz, exakte Holder-Bindung und einen explizit erlaubten Klicktyp. Item-Name, Lore, NBT und Titel sind nie Target-Quelle. Vor jeder Mutation liest der Service die aktuelle Mitgliedschaft/Owner-Rolle und Einladungen erneut; verschwundene Ziele liefern kontrollierte Resultate und die Seite wird mit Page-Clamp neu aufgebaut. Close/Quit entfernen nur den jeweils aktiven Eintrag, Disable schließt alle offenen Clan-Inventare. Kein Tick-Refresh und kein globales GUI-Framework. Clan-Tag-Presentation in Chat, Tablist, Nametag oder Scoreboard ist ausdrücklich eine spätere Phase; `Presentation` und `presentation.yml` bleiben unverändert.
+`ClanMenuHolder` trägt Besitzer-UUID, View, Page und serverseitige Slot→UUID-Ziele; er bindet genau eine Inventarinstanz. Der Listener cancelt jeden Click und Drag einschließlich Bottom Inventory, Number-Key, Collect und Drop zunächst pauschal. Eine fachliche Aktion erfordert zusätzlich passenden Viewer, aktive Inventarinstanz, exakte Holder-Bindung und einen explizit erlaubten Klicktyp. Item-Name, Lore, NBT und Titel sind nie Target-Quelle. Vor jeder Mutation liest der Service die aktuelle Mitgliedschaft/Owner-Rolle und Einladungen erneut; verschwundene Ziele liefern kontrollierte Resultate und die Seite wird mit Page-Clamp neu aufgebaut. Close/Quit entfernen nur den jeweils aktiven Eintrag, Disable schließt alle offenen Clan-Inventare. Kein Tick-Refresh und kein globales GUI-Framework. Clan selbst bleibt frei von Presentation-Abhängigkeiten. Seit Phase 35 liest Presentation den kanonischen Tag für Tablist, native Nametags und optionale Sidebar-Templates; Chat-Integration bleibt ein eigener Ausbau.
 
 ## Economy Completion (Phase 22)
 

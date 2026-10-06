@@ -128,7 +128,10 @@ public final class PresentationRenderer {
                 scoreboardLines,
                 tablistNameFormat,
                 tablistHeader,
-                tablistFooter
+                tablistFooter,
+                validateTemplate("nametag.prefix", validatedConfigState.nametagPrefix(), ""),
+                validateTemplate("nametag.suffix", validatedConfigState.nametagSuffix(), ""),
+                validateTemplate("clan-tag-format", validatedConfigState.clanTagFormat(), PresentationConfig.DEFAULT_CLAN_TAG_FORMAT)
         );
     }
 
@@ -139,7 +142,7 @@ public final class PresentationRenderer {
     public RenderedPresentation render(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         RenderState currentState = state;
-        TagResolver placeholders = createPlaceholders(validatedPlayer, currentState.metaFormat());
+        TagResolver placeholders = createPlaceholders(validatedPlayer, currentState);
 
         Component renderedScoreboardTitle = renderTemplate(currentState.scoreboardTitle(), placeholders);
         List<Component> renderedScoreboardLines = renderTemplates(currentState.scoreboardLines(), placeholders);
@@ -152,7 +155,9 @@ public final class PresentationRenderer {
                 renderedScoreboardLines,
                 renderedTablistName,
                 renderedTablistHeader,
-                renderedTablistFooter
+                renderedTablistFooter,
+                renderTemplate(currentState.nametagPrefix(), placeholders),
+                renderTemplate(currentState.nametagSuffix(), placeholders)
         );
     }
 
@@ -169,8 +174,9 @@ public final class PresentationRenderer {
         };
     }
 
-    private TagResolver createPlaceholders(Player player, PresentationConfig.MetaFormat metaFormat) {
+    private TagResolver createPlaceholders(Player player, RenderState renderState) {
         UUID uniqueId = player.getUniqueId();
+        PresentationConfig.MetaFormat metaFormat = renderState.metaFormat();
         Component prefix = luckPermsService.getPrefix(uniqueId)
                 .map(value -> renderMeta(value, metaFormat))
                 .orElse(Component.empty());
@@ -180,10 +186,14 @@ public final class PresentationRenderer {
         Optional<RankInfo> rankInfo = rankService.getPrimaryRank(uniqueId);
         Component coins = renderCoins(economyService.getCoins(uniqueId));
         long playtimeTicks = (long) player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+        String literalTag = literalClanTag(clanTag.apply(uniqueId));
+        Component clanDisplay = literalTag.isEmpty() ? Component.empty()
+                : renderTemplate(renderState.clanTagFormat(), clanTagPlaceholder(Optional.of(literalTag)));
 
         return TagResolver.resolver(
                 createRankAndPlaytimePlaceholders(rankInfo, player.displayName(), playtimeTicks),
-                clanTagPlaceholder(clanTag.apply(uniqueId)),
+                clanTagPlaceholder(Optional.of(literalTag)),
+                Placeholder.component("clan_tag_display", clanDisplay),
                 Placeholder.component("server", Component.text(configService.getServerName())),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
@@ -195,10 +205,13 @@ public final class PresentationRenderer {
 
     /** Untrusted domain text is never parsed as MiniMessage, legacy styling or authority. */
     static TagResolver clanTagPlaceholder(Optional<String> tag) {
-        String literal = tag == null ? "" : tag.filter(value -> !value.isEmpty()
+        return Placeholder.component("clan_tag", Component.text(literalClanTag(tag)));
+    }
+
+    private static String literalClanTag(Optional<String> tag) {
+        return tag == null ? "" : tag.filter(value -> !value.isEmpty()
                 && value.codePoints().noneMatch(point -> Character.isWhitespace(point)
                 || Character.isSpaceChar(point) || Character.isISOControl(point))).orElse("");
-        return Placeholder.component("clan_tag", Component.text(literal));
     }
 
     static TagResolver createRankAndPlaytimePlaceholders(
@@ -295,6 +308,7 @@ public final class PresentationRenderer {
                 Placeholder.component("rank_id", Component.empty()),
                 Placeholder.component("group", Component.empty()),
                 Placeholder.component("clan_tag", Component.empty()),
+                Placeholder.component("clan_tag_display", Component.empty()),
                 Placeholder.component("playtime", Component.empty()),
                 Placeholder.component("coins", Component.empty()),
                 Placeholder.component("online", Component.empty()),
@@ -308,7 +322,10 @@ public final class PresentationRenderer {
             List<String> scoreboardLines,
             String tablistNameFormat,
             List<String> tablistHeader,
-            List<String> tablistFooter
+            List<String> tablistFooter,
+            String nametagPrefix,
+            String nametagSuffix,
+            String clanTagFormat
     ) {
 
         public RenderState {
@@ -318,6 +335,15 @@ public final class PresentationRenderer {
             Objects.requireNonNull(tablistNameFormat, "tablistNameFormat");
             tablistHeader = List.copyOf(Objects.requireNonNull(tablistHeader, "tablistHeader"));
             tablistFooter = List.copyOf(Objects.requireNonNull(tablistFooter, "tablistFooter"));
+            Objects.requireNonNull(nametagPrefix, "nametagPrefix");
+            Objects.requireNonNull(nametagSuffix, "nametagSuffix");
+            Objects.requireNonNull(clanTagFormat, "clanTagFormat");
+        }
+
+        public RenderState(PresentationConfig.MetaFormat metaFormat, String title, List<String> lines,
+                           String name, List<String> header, List<String> footer) {
+            this(metaFormat, title, lines, name, header, footer, PresentationConfig.DEFAULT_NAMETAG_PREFIX,
+                    PresentationConfig.DEFAULT_NAMETAG_SUFFIX, PresentationConfig.DEFAULT_CLAN_TAG_FORMAT);
         }
     }
 
@@ -326,7 +352,9 @@ public final class PresentationRenderer {
             List<Component> scoreboardLines,
             Component tablistName,
             Component tablistHeader,
-            Component tablistFooter
+            Component tablistFooter,
+            Component nametagPrefix,
+            Component nametagSuffix
     ) {
 
         public RenderedPresentation {
@@ -335,6 +363,13 @@ public final class PresentationRenderer {
             Objects.requireNonNull(tablistName, "tablistName");
             Objects.requireNonNull(tablistHeader, "tablistHeader");
             Objects.requireNonNull(tablistFooter, "tablistFooter");
+            Objects.requireNonNull(nametagPrefix, "nametagPrefix");
+            Objects.requireNonNull(nametagSuffix, "nametagSuffix");
+        }
+
+        public RenderedPresentation(Component title, List<Component> lines, Component name,
+                                    Component header, Component footer) {
+            this(title, lines, name, header, footer, Component.empty(), Component.empty());
         }
     }
 

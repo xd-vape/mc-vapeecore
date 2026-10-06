@@ -21,9 +21,18 @@ scoreboard:
 
 tablist:
   enabled: true
-  name-format: "<rank_name>"
+  name-format: "<prefix><rank_name><clan_tag_display>"
   header:
     - "<aqua><bold><server></bold></aqua>"
     - "<gray>The place to meet new friends, hang out and play games together!</gray>"
   footer:
     - "<gray>you dont need to pay for extra features!</gray>"
+
+# The tag itself is literal; the wrapper is an operator-authored MiniMessage template.
+clan-tag-format: " <dark_gray>[</dark_gray><gray><clan_tag></gray><dark_gray>]</dark_gray>"
+
+nametag:
+  enabled: true
+  lobby-only: true
+  prefix: "<prefix>"
+  suffix: "<clan_tag_display>"
