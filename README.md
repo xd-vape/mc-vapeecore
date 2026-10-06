@@ -95,13 +95,15 @@ mvn clean package
 
 Die fertige Plugin-JAR wird unter `target/vapeecore-1.0-SNAPSHOT.jar` erzeugt.
 
+Maven allein kompiliert die Testquellen, führt die ausführbaren Harnesses aber nicht aus. Die vollständige Behavioral Regression startet mit PowerShell 7 über [scripts/run-harnesses.ps1](scripts/run-harnesses.ps1); Optionen und Ergebnisvertrag stehen im [Developer Guide](docs/DEVELOPER_GUIDE.md#build-und-tests).
+
 ### IntelliJ Dev-Server
 
 Das Projekt enthält die geteilten IntelliJ-Run-Konfigurationen `Start VapeeCore Dev Server` und `Build & Deploy VapeeCore`. Der Server sollte über die erste Konfiguration oder über `dev-server/start.bat` gestartet werden. Beide Wege verwenden denselben verwalteten Startprozess und stellen einen sauberen Stop-Kanal bereit.
 
 Während `Start VapeeCore Dev Server` läuft, können Paper-Konsolenbefehle direkt in das zugehörige IntelliJ-Ausgabefenster eingegeben werden. Beim Start über `dev-server/start.bat` werden die Befehle entsprechend im geöffneten Terminalfenster eingegeben.
 
-`Build & Deploy VapeeCore` sendet einem laufenden verwalteten Paper-Server zunächst den regulären Konsolenbefehl `stop` und wartet, bis Plugins, Spieler und Welten vollständig gespeichert wurden. Anschließend führt die Konfiguration `mvn clean package` aus und ersetzt `dev-server/plugins/vapeecore-1.0-SNAPSHOT.jar` über eine temporäre Deployment-Datei. Der Server bleibt danach absichtlich gestoppt und kann über `Start VapeeCore Dev Server` erneut gestartet werden. Ein fremder oder manuell gestarteter Paper-Prozess wird nicht hart beendet; in diesem Fall bricht das Deployment mit einer verständlichen Meldung ab.
+`Build & Deploy VapeeCore` sendet einem laufenden verwalteten Paper-Server zunächst den regulären Konsolenbefehl `stop` und wartet, bis Plugins, Spieler und Welten vollständig gespeichert wurden. Anschließend führt die Konfiguration `mvn clean package` und verpflichtend den vollständigen Harness-Runner aus. Nur wenn beide erfolgreich sind, ersetzt sie `dev-server/plugins/vapeecore-1.0-SNAPSHOT.jar` über eine temporäre Deployment-Datei; ein Build- oder Regression-Fehler lässt die bisherige JAR unverändert. Der Server bleibt danach absichtlich gestoppt und kann über `Start VapeeCore Dev Server` erneut gestartet werden. Ein fremder oder manuell gestarteter Paper-Prozess wird nicht hart beendet; in diesem Fall bricht das Deployment mit einer verständlichen Meldung ab.
 
 ## Architektur
 
