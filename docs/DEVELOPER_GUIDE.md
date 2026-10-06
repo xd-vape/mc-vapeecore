@@ -2,7 +2,7 @@
 
 Diese Datei ist die praktische Landkarte für Änderungen an VapeeCore. Der aktuelle Zielserver ist Paper 1.21.11 mit Java 21 und LuckPerms 5.5.x; gebaut wird mit Maven. Die Main Class ist `dev.vapee.core.VapeeCore`, das Base Package ist `dev.vapee.core`.
 
-VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-/Disable-Lifecycle, `ModuleManager` aktiviert Module in registrierter Reihenfolge und deaktiviert sie rückwärts. Abhängigkeiten werden explizit über Konstruktoren übergeben. Es gibt keine globalen Service-Singletons, keine Reflection-Discovery und keine statischen Player-State-Maps. Packages sind nach Features geschnitten. LuckPerms ist die Quelle für Gruppen und Permissions; Java-Code kennt keine Rangnamen wie „Builder“.
+VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-/Disable-Lifecycle, `ModuleManager` aktiviert Module in registrierter Reihenfolge und deaktiviert sie rückwärts. Abhängigkeiten werden explizit über Konstruktoren übergeben. Es gibt keine globalen Service-Singletons, keine Reflection-Discovery und keine statischen Player-State-Maps. Packages sind nach Features geschnitten. LuckPerms ist die Quelle für Gruppen und Permissions. Die öffentliche Rank-Presentation ist datengetrieben und besitzt keine hartkodierte Rank-Authority. Davon getrennt definiert `StaffHierarchyConfig.DEFAULT_GROUPS` bewusst sichere Schutz-Defaults (`builder`, `moderator`, `admin`, `owner`, aufsteigend); diese Staff-Hierarchie ist unabhängig vom öffentlichen Rank-Track und der LuckPerms-Vererbung.
 
 ## Where do I change this?
 
@@ -189,7 +189,7 @@ Player + Social + Friend + Message
   ↑
 Presence
 
-Lobby + Activity
+Lobby + Activity + Rank + Message
   ↑
 Utility
 
@@ -206,7 +206,7 @@ Lobby + Player + Settings + Warp + Visibility + Activity
 LobbyExperience
 ```
 
-`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich Plugin, Player und Reward; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich Plugin, Player und Quest, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `PresenceModule` konsumiert Player, Social, Friend und Message, ohne Rückabhängigkeit aus diesen Modulen. `VisibilityModule` konsumiert Player, Social, Friend und Lobby, aber weder SettingsModule noch Activity; die spätere Game-Teilnehmer-Anbindung liegt hinter einem kleinen Predicate. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessageModule bezieht Player, Social und Moderation; PrivateMessageService erhält ausschließlich ein finales UUID-Predicate aus der Mute-Projektion, keinen ModerationService. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
+`RankModule` hängt ausschließlich von Plugin, Config, Permission und Message ab. Es hängt insbesondere nicht von Player, Economy, Lobby, Chat, Presentation, Activity oder Blackjack ab. `RewardModule` hängt nur von Plugin, Player und Economy ab. `OnlineRewardModule` konsumiert Config, Player, Reward und Message, aber nie Economy direkt. `QuestModule` konsumiert ausschließlich JavaPlugin, PlayerModule, RewardModule und MessageService; es kennt Economy, OnlineReward, Activity, Blackjack, Mine, Rank, Permission und LuckPerms nicht. `DailyQuestModule` konsumiert ausschließlich JavaPlugin, PlayerModule, QuestModule und MessageService, insbesondere weder Reward noch Economy direkt. Features hängen in Richtung `Gameplay-Producer → Quest → Reward → Economy → Player`, nie umgekehrt; DailyQuest verwaltet nur den Katalog und die Assignments. `PresenceModule` konsumiert Player, Social, Friend und Message, ohne Rückabhängigkeit aus diesen Modulen. `VisibilityModule` konsumiert Player, Social, Friend und Lobby, aber weder SettingsModule noch Activity; die spätere Game-Teilnehmer-Anbindung liegt hinter einem kleinen Predicate. `Presentation` bezieht Rank, Permission, Player, Economy und Lobby. Chat bezieht Rank, Permission und Social; PrivateMessageModule bezieht Player, Social und Moderation; PrivateMessageService erhält ausschließlich ein finales UUID-Predicate aus der Mute-Projektion, keinen ModerationService. `MessageService` sowie bei Bedarf `ConfigService` werden explizit injiziert. UtilityModule erhält JavaPlugin, LobbyModule, ActivityModule, RankModule und MessageService. Rank besitzt den StaffHierarchyService; Utility verwendet ihn über OnlineStaffTargetGuard an der Command-Grenze. UtilityService bleibt frei von Staff-Policy. Utility besitzt keine Blackjack-Abhängigkeit. SeatService kennt weder Lobby noch Activity noch Blackjack; nur SeatListener erhält die Lobby-/Activity-Policy. WorldDisplay hängt nur vom Plugin ab.
 
 ## Presentation-Ownership seit Phase 30F
 
@@ -871,15 +871,15 @@ Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Prese
 
 ## Utility ownership und Lifecycle
 
-`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; seit Phase 27 betragen Module Count und Reload Count insgesamt 27 beziehungsweise 6. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
+`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services sowie den Rank-eigenen StaffHierarchyService für den OnlineStaffTargetGuard, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; seit Phase 27 betragen Module Count und Reload Count insgesamt 27 beziehungsweise 6. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
 
 `UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal, Feed, sicheres Inventory-Clear und das Öffnen echter Enderchests. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
 
 `UtilityListener` entfernt beim Quit den UUID-State und normalisiert verwaltete Bewegung soweit noch sicher möglich. Beim Join vergisst er zunächst möglichen stale Runtime-State und plant die eigentliche Normalisierung einen Tick später. Dadurch läuft zuerst der bereits geplante Lobby-Join-State; anschließend setzt Utility Walk Speed auf `0.2F`, Fly Speed auf `0.1F` und entfernt in `SURVIVAL`/`ADVENTURE` unerwartetes Flight. Native Flight-Semantik in `CREATIVE`/`SPECTATOR` bleibt erhalten. Diese Join-Normalisierung deckt auch Prozessabbrüche ab, bei denen reguläres Disable-Cleanup nicht lief.
 
-`OnlinePlayerResolver` löst Targets ausschließlich aus `Server#getOnlinePlayers()` über einen vollständigen, case-insensitive Namen auf. Es gibt weder Partial-/Fuzzy-Matches noch `OfflinePlayer`, Identity-Lookup oder Netzwerkzugriff. Bei optionalem Target reicht für Self die Basispermission; ein anderes Target und Console-mit-Target benötigen `.others`. Player-Completion wird ohne die erforderliche Permission nicht offengelegt und sonst case-insensitive stabil sortiert. Playernamen werden ausschließlich als `Component.text` gerendert. Gruppen oder Ränge sind keine Business-Logik; die kanonischen externen LuckPerms-Empfehlungen stehen in `docs/PERMISSIONS.md`.
+`OnlinePlayerResolver` löst Targets ausschließlich aus `Server#getOnlinePlayers()` über einen vollständigen, case-insensitive Namen auf. Es gibt weder Partial-/Fuzzy-Matches noch `OfflinePlayer`, Identity-Lookup oder Netzwerkzugriff. Bei optionalem Target reicht für Self die Basispermission; ein anderes Target und Console-mit-Target benötigen `.others`. Player-Completion wird ohne die erforderliche Permission nicht offengelegt und sonst case-insensitive stabil sortiert. Playernamen werden ausschließlich als `Component.text` gerendert. Gewöhnliche Command-Capabilities werden über Permissions geprüft; geschützte administrative Targets zusätzlich über die explizite Staff-Hierarchie; die kanonischen externen LuckPerms-Empfehlungen stehen in `docs/PERMISSIONS.md`.
 
-VapeeCore kennt die Gruppennamen Builder, Moderator und Admin ausdrücklich nicht; sie sind nur Beispiele für eine Serverkonfiguration.
+Rank-Presentation und gewöhnliche Command-Capabilities hängen nicht von festen Gruppennamen ab. Für geschützte Staff-Targets besitzt StaffHierarchyConfig dagegen bewusst die sicheren Default-Gruppennamen builder, moderator, admin und owner. Diese Schutz-Defaults sind keine öffentliche Rank-Authority und dürfen nicht aufgrund der datengetriebenen Presentation entfernt werden.
 
 `/fly` verwaltet ausschließlich Flight in `SURVIVAL` und `ADVENTURE`. BUILD sowie `CREATIVE`/`SPECTATOR` behalten ihren jeweiligen nativen Owner. `/speed` akzeptiert Level 1–10; Level 1 entspricht Walk `0.2F` beziehungsweise Fly `0.1F`, Level 10 jeweils `1.0F`. Der Fly-Kanal gilt bei aktivem Fliegen sowie in `CREATIVE`/`SPECTATOR`, sonst der Walk-Kanal. `/gamemode` akzeptiert vollständige Namen, `s/c/a/sp` und `0/1/2/3`; Completion zeigt nur vollständige Namen. Ein BUILD-Target wird abgewiesen. Ein späterer Lobby-Resync darf einen temporär gesetzten Gamemode wieder auf `lobby.yml` normalisieren; Creative allein schaltet nie BUILD oder Protection-Bypass ein.
 
@@ -936,7 +936,7 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/kick <player\|uuid> <reason...>` | Online-Kick nach Record-Save | `KickCommand` | `vapeecore.moderation.kick` |
 | `/history <player\|uuid> [page]` | Read-only Moderationshistorie | `HistoryCommand` | `vapeecore.moderation.history` |
 
-Ränge sind nicht in Java hardcodiert. LuckPerms vergibt Permissions, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; VapeeCore prüft nur die Permission und kennt den Gruppennamen nicht. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
+Öffentliche Rank-Presentation ist nicht in Java hardcodiert. LuckPerms vergibt gewöhnliche Capabilities, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; deren Capability-Prüfung benötigt keinen festen Gruppennamen. Administrative Target-Prüfungen verwenden zusätzlich die geschützte Staff-Hierarchie mit den expliziten sicheren Defaults aus StaffHierarchyConfig. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
 
 ## Command UX Standard
 
@@ -994,100 +994,37 @@ Für Fly, Speed, Gamemode, Heal, Feed, Ping, Clear und Enderchest entscheidet di
 
 ## Build und Tests
 
-Der vollständige Build ist:
+`mvn clean package` kompiliert Produktion und Testquellen und baut die JAR. Die vorhandenen ausführbaren `main`-Harnesses werden dabei **nicht** von Maven/Surefire als Verhaltenstests ausgeführt.
 
-```bash
-mvn clean package
+Die vollständige Behavioral Regression läuft mit PowerShell 7 und einem Java-21-JDK:
+
+```powershell
+./scripts/run-harnesses.ps1
+# Optional, wenn Abhängigkeiten bereits im lokalen Maven-Repository liegen:
+./scripts/run-harnesses.ps1 -Offline -MavenRepository 'C:\path with spaces\maven-repository'
 ```
 
-Die ausführbaren Harnesses liegen unter `src/test/java`:
+Der [kanonische Runner](../scripts/run-harnesses.ps1) löst Maven über MAVEN_HOME, PATH oder eine vorhandene IntelliJ-Installation auf; Java und javap kommen aus JAVA_HOME oder PATH. Er kompiliert mit `test-compile`, erstellt die Dependency-Classpath und untersucht rekursiv jede `src/test/java/**/*Harness.java`. Package-Pfad und Name müssen wie im bestehenden Repository der gleichnamigen Top-Level-Klasse entsprechen. `javap` bestätigt deren tatsächlich kompilierte `public static void main(String[])`- bzw. Varargs-Signatur. Kommentare, Strings, reine Support-Fixtures, verschachtelte und generierte Klassen werden dadurch nicht als zusätzliche Harnesses gezählt. Es gibt keine gepflegte Klassenliste und keine Skipped-Kategorie.
 
-- `dev.vapee.core.activity.ActivityHarness`
-- `dev.vapee.core.activity.blackjack.BlackjackHarness`
-- `dev.vapee.core.activity.blackjack.BlackjackFairnessHarness`
-- `dev.vapee.core.activity.blackjack.table.BlackjackTableHarness`
-- `dev.vapee.core.activity.blackjack.BlackjackPresentationHarness`
-- `dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewHarness`
-- `dev.vapee.core.lobby.warp.WarpHarness`
-- `dev.vapee.core.lobby.warp.command.WarpCommandHarness`
-- `dev.vapee.core.lobby.experience.navigator.NavigatorMenuHarness`
-- `dev.vapee.core.lobby.experience.navigator.NavigatorSecurityHarness`
-- `dev.vapee.core.lobby.player.LobbyHarness`
-- `dev.vapee.core.utility.command.BuildCommandHarness`
-- `dev.vapee.core.utility.UtilityServiceHarness`
-- `dev.vapee.core.utility.TeleportParserHarness`
-- `dev.vapee.core.utility.command.TeleportCommandHarness`
-- `dev.vapee.core.utility.command.UtilityCommandHarness`
-- `dev.vapee.core.utility.UtilityInventoryHarness`
-- `dev.vapee.core.message.CommandHelpHarness`
-- `dev.vapee.core.command.CoreCommandHarness`
-- `dev.vapee.core.lobby.command.LobbyCommandHarness`
-- `dev.vapee.core.privatemessage.PrivateMessageSocialHarness`
-- `dev.vapee.core.seat.SeatHarness`
-- `dev.vapee.core.worlddisplay.WorldDisplayHarness`
-- `dev.vapee.core.rank.RankServiceHarness`
-- `dev.vapee.core.rank.RankCommandHarness`
-- `dev.vapee.core.rank.RanksCommandHarness`
-- `dev.vapee.core.presentation.PresentationHarness`
-- `dev.vapee.core.presentation.PlaytimeFormatterHarness`
-- `dev.vapee.core.chat.ChatHarness`
-- `dev.vapee.core.config.ConfigServiceHarness`
-- `dev.vapee.core.economy.EconomyServiceHarness`
-- `dev.vapee.core.economy.command.CoinsCommandHarness`
-- `dev.vapee.core.economy.EconomyIntegrationHarness`
-- `dev.vapee.core.identity.IdentityHarness`
-- `dev.vapee.core.identity.ProfileHarness`
-- `dev.vapee.core.moderation.ModerationDomainHarness`
-- `dev.vapee.core.moderation.ModerationServiceHarness`
-- `dev.vapee.core.moderation.ModerationPersistenceHarness`
-- `dev.vapee.core.moderation.ModerationLifecycleHarness`
-- `dev.vapee.core.moderation.command.ModerationDurationHarness`
-- `dev.vapee.core.moderation.command.ModerationCommandHarness`
-- `dev.vapee.core.moderation.ModerationBanEnforcementHarness`
-- `dev.vapee.core.moderation.ModerationMuteProjectionHarness`
-- `dev.vapee.core.moderation.ModerationMuteEnforcementHarness`
-- `dev.vapee.core.friend.FriendPersistenceHarness`
-- `dev.vapee.core.friend.FriendServiceHarness`
-- `dev.vapee.core.friend.FriendDomainHarness`
-- `dev.vapee.core.friend.FriendIntegrationHarness`
-- `dev.vapee.core.friend.FriendCommandHarness`
-- `dev.vapee.core.friend.FriendLifecycleHarness`
-- `dev.vapee.core.friend.gui.FriendMenuHarness`
-- `dev.vapee.core.friend.gui.FriendMenuSecurityHarness`
-- `dev.vapee.core.presence.PresenceServiceHarness`
-- `dev.vapee.core.presence.FriendPresenceNotifierHarness`
-- `dev.vapee.core.presence.PresenceLifecycleHarness`
-- `dev.vapee.core.reward.RewardServiceHarness`
-- `dev.vapee.core.reward.RewardLifecycleHarness`
-- `dev.vapee.core.onlinereward.OnlineRewardServiceHarness`
-- `dev.vapee.core.onlinereward.OnlineRewardLifecycleHarness`
-- `dev.vapee.core.player.repository.PlayerRewardPersistenceHarness`
-- `dev.vapee.core.player.repository.PlayerVisibilityPersistenceHarness`
-- `dev.vapee.core.player.settings.PlayerVisibilitySettingsHarness`
-- `dev.vapee.core.player.settings.PlayerSettingsServiceHarness`
-- `dev.vapee.core.visibility.VisibilityPolicyHarness`
-- `dev.vapee.core.visibility.VisibilityServiceHarness`
-- `dev.vapee.core.visibility.VisibilityModuleHarness`
-- `dev.vapee.core.visibility.FriendVisibilityRefreshHarness`
-- `dev.vapee.core.visibility.IgnoreVisibilityRefreshHarness`
-- `dev.vapee.core.settings.SettingsMenuHarness`
-- `dev.vapee.core.settings.SettingsMenuSecurityHarness`
-- `dev.vapee.core.settings.visibility.SettingsNavigationHarness`
-- `dev.vapee.core.settings.visibility.SettingsModuleLifecycleHarness`
-- `dev.vapee.core.settings.command.SettingsCommandHarness`
-- `dev.vapee.core.settings.visibility.VisibilitySettingsMenuHarness`
-- `dev.vapee.core.settings.visibility.VisiblePlayersMenuHarness`
-- `dev.vapee.core.settings.visibility.VisibilityMenuSecurityHarness`
-- `dev.vapee.core.quest.QuestDefinitionHarness`
-- `dev.vapee.core.quest.QuestServiceHarness`
-- `dev.vapee.core.player.repository.PlayerQuestPersistenceHarness`
-- `dev.vapee.core.quest.QuestLifecycleHarness`
+Jeder gefundene Einstiegspunkt läuft genau einmal in einem eigenen Java-Prozess, alphabetisch nach vollqualifiziertem Klassennamen und mit dem Projektverzeichnis als Arbeitsverzeichnis. Beispielsweise werden CoreCommandHarness, ReloadServiceHarness, ModerationCommandHarness und die Persistence-/Presentation-Harnesses automatisch aufgenommen. Die aktuelle Anzahl steht nach Discovery in der Ausgabe und im vollständigen Laufzeitinventar; neue ausführbare Harness-Dateien benötigen kein Listenupdate.
 
-Nach relevanten Änderungen folgen ein Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x, allen 27 Modulen, `/core`, `/core reload`, `/profile`, `/friend`, `/clan`, Command-Registrierung und sauberem Shutdown. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Erfolg verlangt `Discovered == Executed == Passed`, `Failed == 0` und `Missing/Invalid == 0`. Jeder Prozess muss mit Exit-Code 0 enden und genau eine Ergebniszeile `<Klassenname> passed <positive Ganzzahl> checks.` auf stdout liefern. Prozess-/Startfehler, fehlende oder unlesbare Ergebnisse sowie Build-/Classpath-/Discovery-Fehler führen zu einem nichtnull Exit-Code. Nach einzelnen Harness-Fehlern laufen die übrigen Harnesses weiter. `TotalChecks` summiert die tatsächlich gemeldeten erfolgreichen Checks. Inventory, getrennte stdout/stderr-Logs, Maven-Log und `results.json` liegen ignoriert unter `dev-server/.vapeecore-dev/harnesses/`; frühere Einzeldateien können dort verbleiben, maßgeblich sind das aktuelle Inventar und results.json.
+
+Der [Build-and-Deploy-Workflow](../scripts/build-and-deploy.ps1) stoppt zunächst einen verwalteten Dev-Server sauber, führt `clean package` und anschließend verpflichtend den vollständigen Runner aus. Erst wenn beide erfolgreich sind, wird die gebaute JAR deployed. Es gibt keinen Skip-Harness-Schalter. Ein Build- oder Regression-Fehler lässt die bisher deployed JAR unverändert und startet keinen Server. Beide Skripte unterstützen dieselben optionalen Parameter `-Offline` und `-MavenRepository`.
+
+```powershell
+./scripts/build-and-deploy.ps1 -Offline
+./scripts/start-dev-server.ps1
+# In der Paper-Konsole: core, core version, core help, core reload, bukkit:help VapeeCore
+# Danach stop oder in einer zweiten PowerShell:
+./scripts/stop-dev-server.ps1
+```
+
+Der separate Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x prüft Start aller 27 Module, sechs Reload-Teilnehmer, 37 Command-Roots und sauberen Shutdown in umgekehrter Reihenfolge. Aktuelle Descriptor-Verträge: 50 Permission-Nodes und 15 positive Child-Kanten. Live-YAMLs werden durch einen Build nicht mit Resource-Defaults überschrieben. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 
-Diese Datei ist Teil der Codebase. Wenn eine zukünftige Änderung eine Klasse verschiebt, einen Config-Key ändert, einen Command oder ein Modul hinzufügt, Ownership verschiebt, Permissions verändert oder Join-/Player-State-Flows anpasst, muss `docs/DEVELOPER_GUIDE.md` im selben Arbeitsschritt aktualisiert werden. Das README bleibt die Projektübersicht; die praktische Detaildokumentation bleibt hier.
+Diese Datei ist Teil der Codebase. `docs/` beschreibt den aktuellen, dauerhaft gepflegten Stand; `reports/` bewahrt historische Phasen-Nachweise mit ihren damaligen Counts und Ergebnissen. Wenn eine zukünftige Änderung eine Klasse verschiebt, einen Config-Key ändert, einen Command oder ein Modul hinzufügt, Ownership verschiebt, Permissions verändert oder Join-/Player-State-Flows anpasst, muss `docs/DEVELOPER_GUIDE.md` im selben Arbeitsschritt aktualisiert werden. Das README bleibt die Projektübersicht; die praktische Detaildokumentation bleibt hier.
 
 ### Phase 26B – Administrative online targets / permissions
 

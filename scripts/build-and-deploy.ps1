@@ -1,5 +1,9 @@
+#requires -Version 7.0
 [CmdletBinding()]
-param()
+param(
+    [switch]$Offline,
+    [string]$MavenRepository
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,12 +41,25 @@ function Resolve-MavenExecutable {
 }
 
 & (Join-Path $PSScriptRoot 'stop-dev-server.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Stopping Paper failed. Deployment was cancelled.' }
 
 $maven = Resolve-MavenExecutable
 Write-Host "Building VapeeCore with $maven"
-& $maven clean package
-if ($LASTEXITCODE -ne 0) {
-    throw "Maven build failed with exit code $LASTEXITCODE. The existing deployed plugin was not changed."
+$mavenArgs = @()
+if ($Offline) { $mavenArgs += '-o' }
+if ($MavenRepository) { $mavenArgs += "-Dmaven.repo.local=$MavenRepository" }
+Push-Location -LiteralPath $projectRoot
+try {
+    & $maven @mavenArgs clean package
+    if ($LASTEXITCODE -ne 0) {
+        throw "Maven build failed with exit code $LASTEXITCODE. The existing deployed plugin was not changed."
+    }
+    & (Join-Path $PSScriptRoot 'run-harnesses.ps1') -Offline:$Offline -MavenRepository $MavenRepository
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Behavioral regression failed. The existing deployed plugin was not changed.'
+    }
+} finally {
+    Pop-Location
 }
 
 if (-not (Test-Path -LiteralPath $sourceJar)) {
