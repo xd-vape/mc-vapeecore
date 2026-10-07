@@ -101,30 +101,7 @@ public final class SettingsListener implements Listener {
             refreshOrClose(player, topInventory);
             return;
         }
-        if (slot == SettingsMenu.VISIBILITY_SLOT || slot == SettingsMenu.VISIBILITY_STATUS_SLOT) {
-            if (playerSettingsService.getSettings(player.getUniqueId()).isEmpty()) {
-                handleUnavailableProfile(player);
-                return;
-            }
-            visibilityMenuOpener.accept(player);
-            return;
-        }
-        int featureSlot = switch (slot) {
-            case SettingsMenu.SCOREBOARD_SLOT, SettingsMenu.SCOREBOARD_STATUS_SLOT -> SettingsMenu.SCOREBOARD_SLOT;
-            case SettingsMenu.SOUNDS_SLOT, SettingsMenu.SOUNDS_STATUS_SLOT -> SettingsMenu.SOUNDS_SLOT;
-            case SettingsMenu.PRIVATE_MESSAGES_SLOT, SettingsMenu.PRIVATE_MESSAGES_STATUS_SLOT ->
-                    SettingsMenu.PRIVATE_MESSAGES_SLOT;
-            case SettingsMenu.FRIEND_REQUESTS_SLOT, SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT ->
-                    SettingsMenu.FRIEND_REQUESTS_SLOT;
-            case SettingsMenu.FRIEND_PRESENCE_SLOT, SettingsMenu.FRIEND_PRESENCE_STATUS_SLOT ->
-                    SettingsMenu.FRIEND_PRESENCE_SLOT;
-            default -> -1;
-        };
-        if (featureSlot < 0) {
-            return;
-        }
-
-        toggleSetting(player, topInventory, featureSlot);
+        settingsMenu.entryAt(slot).ifPresent(entry -> executeEntry(player, topInventory, entry));
     }
 
     @EventHandler
@@ -147,7 +124,7 @@ public final class SettingsListener implements Listener {
         settingsMenu.forget(event.getPlayer().getUniqueId());
     }
 
-    private void toggleSetting(Player player, Inventory inventory, int slot) {
+    private void executeEntry(Player player, Inventory inventory, SettingsMenuEntry entry) {
         UUID uniqueId = player.getUniqueId();
         Optional<PlayerSettings> optionalSettings = playerSettingsService.getSettings(uniqueId);
         if (optionalSettings.isEmpty()) {
@@ -155,33 +132,10 @@ public final class SettingsListener implements Listener {
             return;
         }
 
-        PlayerSettings settings = optionalSettings.get();
-        boolean saved;
+        SettingsMenuEntry.Result result;
         try {
-            saved = switch (slot) {
-                case SettingsMenu.SCOREBOARD_SLOT -> playerSettingsService.setScoreboardEnabled(
-                        uniqueId,
-                        !settings.isScoreboardEnabled()
-                );
-                case SettingsMenu.SOUNDS_SLOT -> playerSettingsService.setSoundsEnabled(
-                        uniqueId,
-                        !settings.isSoundsEnabled()
-                );
-                case SettingsMenu.PRIVATE_MESSAGES_SLOT -> playerSettingsService.setPrivateMessagesEnabled(
-                        uniqueId,
-                        !settings.isPrivateMessagesEnabled()
-                );
-                case SettingsMenu.FRIEND_REQUESTS_SLOT -> playerSettingsService.setFriendRequestsEnabled(
-                        uniqueId,
-                        !settings.isFriendRequestsEnabled()
-                );
-                case SettingsMenu.FRIEND_PRESENCE_SLOT ->
-                        playerSettingsService.setFriendPresenceNotificationsEnabled(
-                                uniqueId,
-                                !settings.isFriendPresenceNotificationsEnabled()
-                        );
-                default -> false;
-            };
+            result = entry.action().execute(player, optionalSettings.get(),
+                    new SettingsMenuEntry.Context(playerSettingsService, presentationRefresh, visibilityMenuOpener));
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save player settings for " + uniqueId + ".", exception);
             messageService.send(player, "<red>Your setting could not be saved. Please try again.</red>");
@@ -189,12 +143,10 @@ public final class SettingsListener implements Listener {
             return;
         }
 
-        if (!saved) {
+        if (result == SettingsMenuEntry.Result.OPENED) return;
+        if (result == SettingsMenuEntry.Result.UNAVAILABLE) {
             handleUnavailableProfile(player);
             return;
-        }
-        if (slot == SettingsMenu.SCOREBOARD_SLOT) {
-            presentationRefresh.accept(player);
         }
         if (!refreshOrClose(player, inventory)) {
             return;

@@ -1,6 +1,11 @@
 package dev.vapee.core.lobby.experience;
 
 import dev.vapee.core.activity.ActivityModule;
+import dev.vapee.core.friend.FriendModule;
+import dev.vapee.core.lobby.item.LobbyItemRegistrations;
+import dev.vapee.core.visibility.VisibilityLobbyItemAction;
+import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.experience.navigator.NavigatorListener;
@@ -15,7 +20,6 @@ import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
-import dev.vapee.core.settings.SettingsMenu;
 import dev.vapee.core.settings.SettingsModule;
 import dev.vapee.core.visibility.VisibilityModule;
 import dev.vapee.core.visibility.VisibilityService;
@@ -36,6 +40,7 @@ public final class LobbyExperienceModule implements CoreModule {
     private final VisibilityModule visibilityModule;
     private final ActivityModule activityModule;
     private final MessageService messageService;
+    private VisibilityLobbyItemAction visibilityAction;
 
     private NavigatorMenu navigatorMenu;
     private LobbyExperienceListener experienceListener;
@@ -50,6 +55,7 @@ public final class LobbyExperienceModule implements CoreModule {
             WarpModule warpModule,
             VisibilityModule visibilityModule,
             ActivityModule activityModule,
+            FriendModule friendModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -60,6 +66,10 @@ public final class LobbyExperienceModule implements CoreModule {
         this.visibilityModule = Objects.requireNonNull(visibilityModule, "visibilityModule");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
+        Objects.requireNonNull(friendModule, "friendModule");
+        // Registration precedes Lobby configuration loading; menu suppliers are invoked only after activation.
+        LobbyItemRegistrations.register(lobbyModule.getItemRegistry(), () -> navigatorMenu,
+                settingsModule::getSettingsMenu, friendModule::getFriendMenu, () -> visibilityAction);
     }
 
     @Override
@@ -74,7 +84,6 @@ public final class LobbyExperienceModule implements CoreModule {
         LobbyMessageService newLobbyMessageService = lobbyModule.getLobbyMessageService();
         PlayerService newPlayerService = playerModule.getPlayerService();
         PlayerSettingsService newPlayerSettingsService = playerModule.getPlayerSettingsService();
-        SettingsMenu newSettingsMenu = settingsModule.getSettingsMenu();
         WarpService newWarpService = warpModule.getWarpService();
 
         VisibilityService newVisibilityService = visibilityModule.getVisibilityService();
@@ -88,16 +97,12 @@ public final class LobbyExperienceModule implements CoreModule {
                 newVisibilityService,
                 newLobbyMessageService
         );
-        LobbyItemListener newItemListener = new LobbyItemListener(
-                plugin,
-                newLobbyService,
-                newLobbyItemService,
-                newVisibilityService,
-                newPlayerSettingsService,
-                newNavigatorMenu,
-                newSettingsMenu,
-                messageService
-        );
+        var registry = lobbyModule.getItemRegistry();
+        var newVisibilityAction = new VisibilityLobbyItemAction(plugin, newLobbyService, newLobbyItemService,
+                newVisibilityService, newPlayerSettingsService, messageService, this::playFeedbackSound,
+                player -> registry.isActive() && newAccessPolicy.canAccess(player) && newLobbyItemService.isEnabled("visibility"));
+        LobbyItemListener newItemListener = new LobbyItemListener(newLobbyService, newLobbyItemService,
+                registry, newAccessPolicy::canAccess, this::playFeedbackSound, plugin.getLogger());
         NavigatorListener newNavigatorListener = new NavigatorListener(
                 newWarpService,
                 messageService,
@@ -115,7 +120,24 @@ public final class LobbyExperienceModule implements CoreModule {
                 }
                 newVisibilityService.synchronizePlayer(player);
             }
+            navigatorMenu = newNavigatorMenu;
+            visibilityAction = newVisibilityAction;
+            registry.activate();
+            experienceListener = newExperienceListener;
+            itemListener = newItemListener;
+            navigatorListener = newNavigatorListener;
+            lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player ->
+                    newPlayerService.isLoaded(player.getUniqueId())
+                            && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
+            lobbyModule.getLobbyPlayerStateService().refreshLobbyItems();
         } catch (RuntimeException exception) {
+            registry.deactivate();
+            visibilityAction = null;
+            navigatorMenu = null;
+            experienceListener = null;
+            itemListener = null;
+            navigatorListener = null;
+            lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
             newExperienceListener.deactivate();
             HandlerList.unregisterAll(newNavigatorListener);
             HandlerList.unregisterAll(newItemListener);
@@ -124,18 +146,13 @@ public final class LobbyExperienceModule implements CoreModule {
             throw exception;
         }
 
-        navigatorMenu = newNavigatorMenu;
-        experienceListener = newExperienceListener;
-        itemListener = newItemListener;
-        navigatorListener = newNavigatorListener;
-        lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player ->
-                newPlayerService.isLoaded(player.getUniqueId())
-                        && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
         plugin.getLogger().info("Lobby experience module enabled.");
     }
 
     @Override
     public void disable() {
+        lobbyModule.getItemRegistry().deactivate();
+        visibilityAction = null;
         lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
         cleanupRuntime(navigatorMenu);
         if (experienceListener != null) {
@@ -152,6 +169,14 @@ public final class LobbyExperienceModule implements CoreModule {
         itemListener = null;
         experienceListener = null;
         navigatorMenu = null;
+    }
+
+    private void playFeedbackSound(Player player) {
+        if (!playerModule.getPlayerSettingsService().areSoundsEnabled(player.getUniqueId()).orElse(false)) return;
+        try { player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, SoundCategory.MASTER, 0.5F, 1.0F); }
+        catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING, "Could not play lobby UI feedback sound for " + player.getUniqueId(), exception);
+        }
     }
 
     private void cleanupRuntime(NavigatorMenu activeNavigatorMenu) {

@@ -42,7 +42,10 @@ public final class SettingsHotbarSecurityHarness {
             field(plugin, "server", proxy(Server.class, (method, values) -> method.equals("getWorld") ? world : null));
             var config = new LobbyConfig(directory.resolve("lobby.yml"), f.logger); config.initialize();
             var lobby = new LobbyService(plugin, config); lobby.setSpawn(new Location(world, 0, 64, 0));
-            var items = new LobbyItemService(plugin, lobby, f.settings);
+            var registry = new dev.vapee.core.lobby.item.LobbyItemRegistry();
+            dev.vapee.core.lobby.item.LobbyItemRegistrations.register(registry, () -> null, () -> f.menu, () -> null, () -> null);
+            registry.activate();
+            var items = new LobbyItemService(plugin, lobby, registry, dev.vapee.core.lobby.config.LobbyItemsConfig::defaults);
             NamespacedKey key = new NamespacedKey(plugin, "lobby_item");
             PersistentDataContainer pdc = proxy(PersistentDataContainer.class, (method, values) -> switch (method) {
                 case "has" -> key.equals(values[0]) && values[1] == PersistentDataType.STRING;
@@ -61,11 +64,9 @@ public final class SettingsHotbarSecurityHarness {
                         if (method.getName().equals("playSound")) { sounds[0]++; return null; }
                         return method.invoke(owner.player, values);
                     });
-            // These dependencies are never invoked by the SETTINGS branch; no service behavior is replaced.
-            var listener = new LobbyItemListener(plugin, lobby, items, shell(VisibilityService.class), f.settings,
-                    shell(NavigatorMenu.class), f.menu, f.messages);
-            check(items.isManagedItem(item) && items.getItemType(item).orElseThrow()
-                    == dev.vapee.core.lobby.item.LobbyItemType.SETTINGS, "real settings PDC item recognition");
+            var listener = new LobbyItemListener(lobby, items, registry, ignored -> true,
+                    ignored -> { if (f.settings.areSoundsEnabled(owner.id).orElse(false)) sounds[0]++; }, f.logger);
+            check(items.isManagedItem(item) && items.getItemId(item).orElseThrow().equals("settings"), "real settings PDC item recognition");
             check(lobby.isLobbyWorld(player.getWorld()), "valid lobby player");
             int saves = f.repository.saves;
             owner.permitted = false;

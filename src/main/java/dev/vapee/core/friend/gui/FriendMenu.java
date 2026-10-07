@@ -81,16 +81,16 @@ public final class FriendMenu {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
-    public void open(Player player) {
-        open(player, FriendMenuView.FRIENDS, 0);
+    public boolean open(Player player) {
+        return open(player, FriendMenuView.FRIENDS, 0);
     }
 
-    public void open(Player player, FriendMenuView view, int requestedPage) {
+    public boolean open(Player player, FriendMenuView view, int requestedPage) {
         Player viewer = Objects.requireNonNull(player, "player");
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
         if (!viewer.hasPermission(FriendCommand.PERMISSION)) {
             messages.send(viewer, "<red>You do not have permission to use friends.</red>");
-            return;
+            return false;
         }
         UUID owner = viewer.getUniqueId();
         List<Entry> entries = entries(owner, selectedView);
@@ -141,7 +141,9 @@ public final class FriendMenu {
         var opened = viewer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) {
             activeInventories.put(owner, inventory);
+            return true;
         }
+        return false;
     }
 
     public boolean isActive(Player viewer, Inventory inventory, FriendMenuHolder holder) {

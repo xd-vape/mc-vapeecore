@@ -8,10 +8,10 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 
 | Häufige Änderung | Konkreter Einstieg |
 |---|---|
-| Lobby-Item: Material, Slot, Name, Lore oder enabled | Live `plugins/VapeeCore/lobby.yml` → `items.navigator`, `items.visibility`, `items.settings`; Vorlage `src/main/resources/lobby.yml` |
+| Lobby-Item: Material, Slot, Name, Lore oder enabled | Live `plugins/VapeeCore/lobby.yml` → `items.navigator`, `items.visibility`, `items.settings`, `items.friends`; Vorlage `src/main/resources/lobby.yml` |
 | Eigenen Spielerkopf statt Material anzeigen | Dasselbe Item: `material: PLAYER_HEAD`, `head-owner: self`; vorhandenes Online-Profil, kein Lookup |
-| Friends-Lobby-Item ändern | Der Source registriert keines. `/friend` verwendet `src/main/java/dev/vapee/core/friend/gui/FriendMenu.java`; keine YAML-Aktion erfinden |
-| Settings-Feature im GUI verschieben | Layout-Block und `*_SLOT` in `src/main/java/dev/vapee/core/settings/SettingsMenu.java`; `SettingsListener` verwendet dieselben Konstanten |
+| Friends-Lobby-Item ändern | Presentation `lobby.yml` → `items.friends`; Aktion `src/main/java/dev/vapee/core/friend/gui/FriendsLobbyItemAction.java` → bestehendes `FriendMenu.open` |
+| Settings-Feature im GUI verschieben | Layout-Block und `*_SLOT` in `src/main/java/dev/vapee/core/settings/SettingsMenu.java`; `SettingsMenuEntries` definiert den gemeinsamen Render-/Action-Eintrag; `SettingsListener` löst ihn ohne eigenen Slot-Router auf |
 | Andere GUI-Layouts | Lokale Layout-Blöcke in `settings/visibility/VisibilitySettingsMenu.java`, `VisiblePlayersMenu.java`, `friend/gui/FriendMenu.java`, `clan/gui/ClanMenu.java`, `lobby/experience/navigator/NavigatorMenu.java`, `quest/daily/menu/DailyQuestMenu.java` unter `src/main/java/dev/vapee/core/` |
 | Chat-Format | Live `plugins/VapeeCore/chat.yml` → `format`; Vorlage `src/main/resources/chat.yml` |
 | Clan-Tag, Tablist oder Nametag formatieren | Live `plugins/VapeeCore/presentation.yml`; Vorlage `src/main/resources/presentation.yml`; Platzhalter in [FORMATTING.md](FORMATTING.md) |
@@ -26,6 +26,55 @@ Lobby-Items werden nach `/core reload` für geladene NORMAL-Spieler in der Lobby
 ### Package-Navigation
 
 `config`, `module`, `reload` und `ui` enthalten kleine Infrastrukturbausteine. `lobby`, `settings`, `friend`, `clan`, `quest`, `chat`, `privatemessage` und `presentation` besitzen ihre Feature-Module, Services und UI/Commands. `player/repository` sowie die jeweiligen `repository`-Packages speichern Domainzustände. Ein typischer Einstieg ist `FeatureModule` → Config/Service → Menu/Listener oder Command. Sicherheitsregeln bleiben beim jeweiligen Command/Listener und Domain-Service; Operator-Darstellung steht in YAML oder im lokalen Menü-Layout.
+
+## Feature Extension Map
+
+Alle Java-Pfade in dieser Tabelle beginnen mit `src/main/java/dev/vapee/core/`.
+
+| Aufgabe | Einstieg |
+|---|---|
+| Neues Lobby-Item | `lobby/item/LobbyItemRegistrations.register` + Feature-Adapter + `src/main/resources/lobby.yml` |
+| Lobby-Item-Darstellung | Live `plugins/VapeeCore/lobby.yml`, `items.<registered-id>` |
+| Neue Settings-Kachel | `settings/SettingsMenuEntries.defaults`, Descriptor `settings/SettingsMenuEntry` |
+| Settings-Layout ändern | `settings/SettingsMenu` Konstanten; Render/Click verwenden denselben Entry |
+| Neue Friend-GUI-Action | `friend/gui/FriendMenu.entryItem`/Footer + `FriendMenuListener.navigate`/View-Aktion + `FriendService` |
+| Neue Clan-GUI-Action | `clan/gui/ClanMenu` + `ClanMenuListener.navigate`/`mutate`; `ClanService` bleibt Authority |
+| Neuer Navigator-Eintrag | Bestehendes `/warp` bzw. `lobby/warp/WarpService`, Anzeige `lobby/experience/navigator/NavigatorMenu.createWarpItem` |
+| Neue Visibility-GUI-Action | `settings/visibility/VisibilitySettingsMenu` + `VisibilitySettingsListener`; Personen über `VisiblePlayersHolder` UUIDs |
+| Neue DailyQuest-GUI-Action | `quest/daily/menu/DailyQuestMenu` + `DailyQuestMenuListener`; Quest-Domain bleibt im Service |
+| Neue Config-Option | Resource + owning typed Config + `config/ConfigEvolution.MANAGED_CONFIGS` Versionsbump |
+| Neuer Command im bestehenden Feature | Feature-`command`-Package + Feature-Module + `src/main/resources/plugin.yml` |
+| Neues Modul | `module/CoreModule` implementieren, explizites Konstruktor-Wiring/Register in `VapeeCore.java` |
+| Neue Permission | `src/main/resources/plugin.yml` + `docs/PERMISSIONS.md` + Descriptor-/Security-Harness |
+
+### Adding a new lobby item
+
+1. Im zugehörigen Feature einen kleinen `LobbyItemAction`-Adapter bereitstellen. Vorlage: `friend/gui/FriendsLobbyItemAction.java`. `handleClick(Player, Action)` ruft den bestehenden Feature-Open-/Service-Pfad auf. Nur ein tatsächlich erfolgreicher sofortiger UI-Vorgang gibt `true` zurück (Sound). Keine Permission- oder Domain-Authority in die Registry verschieben.
+2. Genau eine Zeile für die stabile ID in `lobby/item/LobbyItemRegistrations.register` ergänzen. Dort stehen alle vier produktiven IDs, Java-Fallbacks und Adapter. Ein dynamischer Zustand kann die optionale Presentation-Funktion benutzen; Visibility zeigt das konkrete Muster.
+3. Benötigte Feature-Abhängigkeiten explizit in `lobby/experience/LobbyExperienceModule`/`VapeeCore` injizieren, wie die FriendModule-Menüversorgung. Supplier dienen nur dem vorhandenen Modul-Lifecycle: Registrierung erfolgt vor LobbyConfig.load, Aufruf nach Registry-Aktivierung am Ende des letzten Moduls. Vor Enable, nach Disable oder bei fehlendem Menü wird keine Aktion ausgeführt. Fehlgeschlagener Enable deaktiviert und bereinigt die Registry/Listener.
+4. Presentation unter `items.<id>` in `src/main/resources/lobby.yml` ergänzen: enabled, slot 0..8, material, name, lore, head-owner. MiniMessage erlaubt implizites Schließen der Farbtags. Keine action-, command-, class- oder method-Felder: unbekannte IDs warnen und werden ignoriert; YAML erzeugt keine Aktion. Ein expliziter `items`-Abschnitt bestimmt, welche registrierten IDs vorhanden sind: fehlende IDs sind deaktiviert und ihre alten PDC-Items werden beim Reload entfernt. `items: {}` deaktiviert alle. Nur beim vollständigen Fehlen des Abschnitts oder einem falschen Abschnittstyp bleibt der bestehende Legacy-Fallback auf Java-Defaults erhalten; Migration/frische Installation liefern den vollständigen YAML-Abschnitt. Ein gültiger Titel wird über `name` geändert, nicht über die stabile ID.
+5. **Nur lobby.yml** in Resource und `config/ConfigEvolution.MANAGED_CONFIGS` auf die nächste Version erhöhen. V1→V2 hat Friends ergänzt; bestehende Operatorwerte bleiben erhalten. Kein neues Reload-Modul und keine Persistence-Migration.
+6. Produktionspfad testen: Registrierung → `LobbyItemsConfig` → `LobbyItemService`/PDC → `LobbyItemListener` → aktuelle Feature-Authorization. Beispiele: `src/test/java/dev/vapee/core/lobby/item/LobbyItemRegistryHarness.java`, `friend/gui/FriendsLobbyItemHarness.java`, `config/LobbyConfigUpgradeHarness.java`. Danach echten Client mit Reload, Fremdinventar und verweigerter Permission testen.
+
+**Keine Änderungen an LobbyItemsConfig, LobbyItemService oder LobbyItemListener pro neuer ID.** `LobbyItemType` existiert nicht mehr; Strings im PDC sind unverändert und die explizite Registry ist die einzige ID-Liste. PDC-Besitz wird auch für unbekannte alte IDs gereinigt, ausgeführt werden nur registrierte und aktuell aktivierte IDs. Doppelte/ungültige Registration wird abgewiesen; Registration wird vor Config-Laden versiegelt. Sind alle neun Hotbar-Slots reserviert, wird ein weiterer Eintrag mit Warnung deaktiviert.
+
+### Adding a Settings tile
+
+`settings/SettingsMenuEntries.defaults()` ist die eine produktive Entry-Liste. Ein `SettingsMenuEntry` enthält Icon-Slot, optionalen Status-Slot (-1 bedeutet keinen), die beiden Darstellungen aus aktuellem `PlayerSettings` und die fachliche Aktion. `SettingsMenu.refresh` rendert diesen Entry; `SettingsListener` verwendet `menu.entryAt(clickedSlot)` für beide Slots. Es gibt keinen zweiten Slot-Switch.
+
+Neue Zustandsfunktion zuerst in `player/settings/PlayerSettingsService`/PlayerSettings samt eigenem Persistence-Vertrag implementieren; danach einen Entry mit Getter/Setter oder eigener Settings-Action hinzufügen. `SAVED` bedeutet gespeichert → Refresh/Feedback, `OPENED` einen delegierten Menüwechsel ohne Toggle-Feedback, `UNAVAILABLE` einen fehlenden Zustand. Die Permission-, Profile-, Owner-, Active-Inventory- und Click-Gates des Listeners bleiben vor jedem Entry-Aufruf. Die UI-Liste ist keine Authority. `SettingsEntryExtensionHarness` ergänzt allein im Fixture Slot 28/Status 37 und beweist Render/Action mit demselben Descriptor; kein erfundenes Produktionssetting.
+
+### Adding a GUI action
+
+Friend und VisiblePlayers verwenden gebundene Holder mit Slot→UUID, Clan zusätzlich Clan-ID/View, Navigator Slot→Warp-ID. Eine neue Anzeige gehört in das jeweilige Menu, ihre Navigation/Action in dessen Listener. Immer die Holder-ID lesen und aktuellen Domainzustand/Permission prüfen; niemals Name, Lore oder Material als Ziel/Authority verwenden. Friend neue Target-Aktion: `FriendMenu.entryItem` + `FriendMenuListener` View-/Service-Aktion. Clan: `ClanMenu.entries`/Overview + `ClanMenuListener.mutate`/`navigate`, Owner-/Mitglied-Prüfung im `ClanService`. Navigator-Destinationen kommen bereits dynamisch vom `WarpService`; eine neue Action bleibt hinter `NavigatorAccessPolicy` und Warp-Service-Prüfungen. DailyQuest-Einträge bleiben lesend; Verhalten/Synchronisierung gehört in `DailyQuestService`/`QuestService`, nicht in Item-Lore. Kein gemeinsames Universal-Menu-Framework erforderlich.
+
+### Adding a config key / bumping a schema
+
+Betroffene Resource ergänzen, typisierten Fallback/Parser/immutable State in der owning Config und deren Consumer anpassen. Beispiel: `lobby/config/LobbyConfig.readState`/`State` + `LobbyModule.prepareReload`. Dann ausschließlich die betroffene Version in Resource und `config/ConfigEvolution.MANAGED_CONFIGS` erhöhen und Upgrade-/Fresh-/Idempotency-/Backup-Test ergänzen. Bestehende Werte werden nie mit neuen Defaults ersetzt. Keine Datendatei in die sechs Operator-Dateien aufnehmen. Bei einem registrierten neuen Lobby-Item wird der generische Item-Parser unverändert benutzt.
+
+### Adding an existing-feature command / registering a module
+
+Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService`/Identity-/Permission-Pfade benutzen, in `FriendModule.enable` Command und TabCompleter registrieren und in Failure/Disable entfernen. Neuen Descriptor/Permission nur bei tatsächlichem Bedarf in plugin.yml deklarieren und Dokumentation/Harness ergänzen. Neues Modul implementiert `module/CoreModule`, erhält konkrete Abhängigkeiten über Konstruktor und wird in `VapeeCore.onEnable` explizit nach seinen benötigten Modulen registriert. `ModuleManager` übernimmt Enable-Rollback und umgekehrtes Disable. Keine Reflection oder automatische Paketsuche; nur bei echter Operator-Config-Notwendigkeit einen ReloadParticipant in der expliziten Liste ergänzen.
 
 ### Weitere Änderungen
 
@@ -121,7 +170,7 @@ Lobby-Items werden nach `/core reload` für geladene NORMAL-Spieler in der Lobby
 
 **`src/main/resources/*.yml` sind nur Defaults, die in die Plugin-JAR gepackt werden. `plugins/VapeeCore/*.yml` sind die tatsächlich verwendeten Dateien eines laufenden Servers.**
 
-Beim Startup prüft `ConfigEvolution` vor den Modulen ausschließlich die sechs Operator-Dateien der festen Allowlist. Fehlende Version bedeutet Legacy 0; alle sechs vormals unversionierten Dateien beginnen mit `config-version: 1`. Eine ältere Version erhält vor jedem Migrationswrite ein einzigartiges exaktes Backup unter `plugins/VapeeCore/backups/config/`. Der Merge ergänzt rekursiv nur fehlende bekannte Keys: vorhandene Werte, unbekannte Keys (auch null), Kommentare und komplette vorhandene Listen bleiben erhalten. Typkonflikte warnen und werden nicht überschrieben; der Feature-Parser behält seine Fallbacks. Der Kandidat wird validiert, temporär geschrieben und atomar ersetzt; ohne Atomic-Move steht das permanente Backup für eine wiederherstellbare Ersetzung bereit. Schreibfehler brechen den Startup ab und behalten Original/Backup. Ungültige oder zukünftige Versionen warnen und werden nicht verändert. Eine bereits unterstützte Version erzeugt weder Rewrite noch Backup, auch wenn ein Betreiber einzelne Keys gelöscht hat. Neue Defaults erfordern deshalb einen bewussten Versionsbump in Registry und Resource.
+Beim Startup prüft `ConfigEvolution` vor den Modulen ausschließlich die sechs Operator-Dateien der festen Allowlist. Fehlende Version bedeutet Legacy 0; `lobby.yml` unterstützt `config-version: 2` (Friends-Ergänzung), die anderen fünf Dateien `config-version: 1`. Eine ältere Version erhält vor jedem Migrationswrite ein einzigartiges exaktes Backup unter `plugins/VapeeCore/backups/config/`. Der Merge ergänzt rekursiv nur fehlende bekannte Keys: vorhandene Werte, unbekannte Keys (auch null), Kommentare und komplette vorhandene Listen bleiben erhalten. Typkonflikte warnen und werden nicht überschrieben; der Feature-Parser behält seine Fallbacks. Der Kandidat wird validiert, temporär geschrieben und atomar ersetzt; ohne Atomic-Move steht das permanente Backup für eine wiederherstellbare Ersetzung bereit. Schreibfehler brechen den Startup ab und behalten Original/Backup. Ungültige oder zukünftige Versionen warnen und werden nicht verändert. Eine bereits unterstützte Version erzeugt weder Rewrite noch Backup, auch wenn ein Betreiber einzelne Keys gelöscht hat. Neue Defaults erfordern deshalb einen bewussten Versionsbump in Registry und Resource.
 
 Die Knoten-API der bereits durch Paper bereitgestellten SnakeYAML-Library erhält Kommentare und unbekannte null-Werte; Bukkit würde letztere beim Neuschreiben verlieren. Es wird keine neue YAML-Library eingebunden. Zu mergende Operator-Mappings benötigen eindeutige String-Keys; YAML-Merge-Keys und rekursive Aliase werden ohne Rewrite abgewiesen, normale Aliase bleiben erhalten. Bestehende Werte werden durch eine Resource-Änderung niemals ersetzt: gewünschte Änderungen an bereits gesetzten Werten trägt der Betreiber weiter in der Live-Datei ein. `/core reload` liest die sechs Dateien ohne Migrationswrites neu. `blackjack.yml`, `warps.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind ausdrücklich ausgeschlossen und behalten ihre separaten Persistence-Schemas. Keine Rekursionssuche über den Plugin-Ordner findet statt.
 

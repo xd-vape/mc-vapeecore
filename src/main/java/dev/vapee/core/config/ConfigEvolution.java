@@ -41,7 +41,7 @@ public final class ConfigEvolution {
     // All six files were unversioned before this first operator-schema release.
     // A subsequent defaults/schema change must deliberately bump the affected file's version here and in its resource.
     public static final Map<String, Integer> MANAGED_CONFIGS = Map.of(
-            "config.yml", 1, "lobby.yml", 1, "chat.yml", 1,
+            "config.yml", 1, "lobby.yml", 2, "chat.yml", 1,
             "private-messages.yml", 1, "presentation.yml", 1, "daily-quests.yml", 1);
 
     private final Path directory;

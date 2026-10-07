@@ -40,12 +40,12 @@ public final class LobbyItemsConfigHarness {
         installRegistries();
         Logger logger = Logger.getAnonymousLogger(); logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() { public void publish(LogRecord r) { logs.add(r); } public void flush() { } public void close() { } });
-        check(LobbyItemsConfig.defaults().size() == 3, "only existing navigator/visibility/settings types");
+        check(LobbyItemsConfig.defaults().size() == 4, "four explicit production registrations");
         var defaults = read("", logger);
-        check(defaults.get(LobbyItemType.NAVIGATOR).slot() == 0 && defaults.get(LobbyItemType.VISIBILITY).slot() == 4
-                && defaults.get(LobbyItemType.SETTINGS).slot() == 8, "default hotbar layout unchanged");
-        check(defaults.get(LobbyItemType.NAVIGATOR).appearance().material() == Material.COMPASS
-                && defaults.get(LobbyItemType.SETTINGS).appearance().material() == Material.COMPARATOR, "default materials unchanged");
+        check(defaults.get("navigator").slot() == 0 && defaults.get("visibility").slot() == 4
+                && defaults.get("settings").slot() == 8, "default hotbar layout unchanged");
+        check(defaults.get("navigator").appearance().material() == Material.COMPASS
+                && defaults.get("settings").appearance().material() == Material.COMPARATOR, "default materials unchanged");
         check(logs.isEmpty(), "missing legacy item section uses quiet internal defaults");
         var custom = read("""
                 items:
@@ -63,18 +63,18 @@ public final class LobbyItemsConfigHarness {
                   settings:
                     enabled: false
                 """, logger);
-        var appearance = custom.get(LobbyItemType.NAVIGATOR).appearance();
+        var appearance = custom.get("navigator").appearance();
         check(appearance.material() == Material.PLAYER_HEAD && appearance.selfHead(), "configured self head parsed");
         check(plain(appearance.name()).equals("My Navigator") && plain(appearance.lore().getFirst()).equals("Custom lore"), "configured MiniMessage name/lore");
         check(appearance.lore().size() == 2 && plain(appearance.lore().get(1)).isEmpty(), "lore blank line retained");
         check(appearance.name().decoration(TextDecoration.ITALIC) == TextDecoration.State.FALSE, "UI text explicitly non-italic");
-        check(!custom.get(LobbyItemType.SETTINGS).enabled(), "disabled item parsed");
+        check(!custom.get("settings").enabled(), "disabled item parsed");
         var invalid = read("""
                 items:
                   navigator:
                     slot: 9
                     material: AIR
-                    name: '<red>unclosed'
+                    name: true
                     lore: [true]
                     head-owner: url
                     enabled: wrong
@@ -84,14 +84,14 @@ public final class LobbyItemsConfigHarness {
                   settings:
                     slot: 0
                 """, logger);
-        check(invalid.get(LobbyItemType.NAVIGATOR).slot() == 0, "out-of-range slot fallback");
-        check(invalid.get(LobbyItemType.VISIBILITY).slot() == 4 && invalid.get(LobbyItemType.SETTINGS).slot() == 8, "duplicate slots use safe distinct fallbacks");
-        check(invalid.get(LobbyItemType.NAVIGATOR).appearance().material() == Material.COMPASS
-                && invalid.get(LobbyItemType.VISIBILITY).appearance().material() == Material.LIME_DYE, "invalid/air materials fallback");
-        check(plain(invalid.get(LobbyItemType.NAVIGATOR).appearance().name()).equals("Warp Navigator"), "invalid MiniMessage fallback");
+        check(invalid.get("navigator").slot() == 0, "out-of-range slot fallback");
+        check(invalid.get("visibility").slot() == 4 && invalid.get("settings").slot() == 8, "duplicate slots use safe distinct fallbacks");
+        check(invalid.get("navigator").appearance().material() == Material.COMPASS
+                && invalid.get("visibility").appearance().material() == Material.LIME_DYE, "invalid/air materials fallback");
+        check(plain(invalid.get("navigator").appearance().name()).equals("Warp Navigator"), "invalid typed text fallback (implicit style closing is now valid)");
         check(logs.stream().filter(r -> r.getLevel().intValue() >= 900).count() >= 8, "invalid fields and duplicate slots warn");
         var fractional = read("items:\n  navigator:\n    slot: 1.5\n  visibility:\n    slot: -1\n", logger);
-        check(fractional.get(LobbyItemType.NAVIGATOR).slot() == 0 && fractional.get(LobbyItemType.VISIBILITY).slot() == 4, "fractional/negative slot fallback");
+        check(fractional.get("navigator").slot() == 0 && fractional.get("visibility").slot() == 4, "fractional/negative slot fallback");
 
         Path root = Files.createTempDirectory("vapeecore-lobby-items-");
         try {
@@ -123,17 +123,23 @@ public final class LobbyItemsConfigHarness {
                 default -> null;
             });
             var current = new AtomicReference<>(defaults);
-            var service = new LobbyItemService(plugin, lobby, settings, current::get);
+            var registry = new LobbyItemRegistry();
+            var visibility = new AtomicReference<dev.vapee.core.visibility.VisibilityLobbyItemAction>();
+            LobbyItemRegistrations.register(registry, () -> null, () -> null, () -> null, visibility::get);
+            var service = new LobbyItemService(plugin, lobby, registry, current::get);
+            visibility.set(new dev.vapee.core.visibility.VisibilityLobbyItemAction(plugin, lobby, service,
+                    allocate(dev.vapee.core.visibility.VisibilityService.class), settings,
+                    allocate(dev.vapee.core.message.MessageService.class), ignored -> { }, ignored -> true));
             service.applyLobbyItems(player);
-            for (var type : LobbyItemType.values()) check(service.getItemType(storage[defaults.get(type).slot()]).orElseThrow() == type, "default PDC identity " + type);
-            check(countOwned(service, storage) == 3, "exact three initial owned items");
+            for (var type : defaults.keySet()) check(service.getItemId(storage[defaults.get(type).slot()]).orElseThrow().equals(type), "default PDC identity " + type);
+            check(countOwned(service, storage) == 4, "exact four initial owned items");
             current.set(read("items:\n  navigator:\n    material: CLOCK\n", logger));
             service.applyLobbyItems(player);
-            check(storage[0].getType() == Material.CLOCK && service.getItemType(storage[0]).orElseThrow() == LobbyItemType.NAVIGATOR,
+            check(storage[0].getType() == Material.CLOCK && service.getItemId(storage[0]).orElseThrow().equals("navigator"),
                     "one YAML material edit changes existing item without Java or action changes");
             current.set(custom); service.applyLobbyItems(player);
             check(countOwned(service, storage) == 2 && storage[0] == null && storage[4] == null && storage[8] == null, "config change removes old slots and disabled item");
-            check(service.getItemType(storage[2]).orElseThrow() == LobbyItemType.NAVIGATOR, "head still carries navigator identity/action");
+            check(service.getItemId(storage[2]).orElseThrow().equals("navigator"), "head still carries navigator identity/action");
             check(((SkullMeta) storage[2].getItemMeta()).getPlayerProfile() == profile, "cached online profile assigned without lookup");
             check(plain(storage[2].getItemMeta().displayName()).equals("My Navigator"), "configured name reaches production item");
             service.applyLobbyItems(player);
@@ -148,7 +154,7 @@ public final class LobbyItemsConfigHarness {
             check(storage[0] == foreign, "displacement uses free non-reserved storage");
             Arrays.fill(storage, foreign); service.applyLobbyItems(player);
             check(Arrays.stream(storage).allMatch(item -> item == foreign), "full inventory preserves every foreign item and skips owned items");
-            Arrays.fill(storage, null); current.set(read("items:\n  navigator:\n    enabled: false\n  visibility:\n    enabled: false\n  settings:\n    enabled: false\n", logger));
+            Arrays.fill(storage, null); current.set(read("items:\n  navigator:\n    enabled: false\n  visibility:\n    enabled: false\n  settings:\n    enabled: false\n  friends:\n    enabled: false\n", logger));
             service.applyLobbyItems(player); service.refreshVisibilityItem(player);
             check(countOwned(service, storage) == 0, "all disabled means no items even on visibility refresh");
             current.set(defaults); service.applyLobbyItems(player); storage[10] = foreign; service.removeManagedItems(player);
@@ -160,13 +166,13 @@ public final class LobbyItemsConfigHarness {
     }
 
     private static int countOwned(LobbyItemService service, ItemStack[] contents) { return (int) Arrays.stream(contents).filter(service::isManagedItem).count(); }
-    private static Map<LobbyItemType, LobbyItemDefinition> read(String source, Logger logger) throws Exception {
+    private static Map<String, LobbyItemDefinition> read(String source, Logger logger) throws Exception {
         var yaml = new YamlConfiguration(); yaml.loadFromString(source); return LobbyItemsConfig.read(yaml, logger);
     }
     private static String plain(Component component) { return PlainTextComponentSerializer.plainText().serialize(component); }
     private static void check(boolean value, String label) { checks++; if (!value) throw new AssertionError(label); }
     private static Object unsafe() throws Exception { var f = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); f.setAccessible(true); return f.get(null); }
-    private static <T> T allocate(Class<T> type) throws Exception { Object unsafe = unsafe(); return type.cast(unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, type)); }
+    static <T> T allocate(Class<T> type) throws Exception { Object unsafe = unsafe(); return type.cast(unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, type)); }
     public static final class TestPlugin extends JavaPlugin { }
     private static final class MemoryRepository implements PlayerRepository {
         private final Map<UUID, CorePlayer> values = new HashMap<>();
@@ -174,7 +180,7 @@ public final class LobbyItemsConfigHarness {
         public void save(CorePlayer player) { values.put(player.getUniqueId(), player); }
         public boolean exists(UUID id) { return values.containsKey(id); }
     }
-    @SuppressWarnings("unchecked") private static <T> T proxy(Class<T> type, Call call) {
+    @SuppressWarnings("unchecked") static <T> T proxy(Class<T> type, Call call) {
         return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (ignored, method, args) -> {
             if (method.getName().equals("toString")) return type.getSimpleName();
             Object result = call.run(method.getName(), args == null ? new Object[0] : args);
@@ -185,9 +191,9 @@ public final class LobbyItemsConfigHarness {
             return 0;
         });
     }
-    @FunctionalInterface private interface Call { Object run(String name, Object[] args); }
+    @FunctionalInterface interface Call { Object run(String name, Object[] args); }
 
-    private static void installRegistries() throws Exception {
+    static void installRegistries() throws Exception {
         var access = proxy(io.papermc.paper.registry.RegistryAccess.class, (name, args) -> {
             if (!name.equals("getRegistry")) return null;
             boolean items = args[0].toString().contains("item");
@@ -208,7 +214,7 @@ public final class LobbyItemsConfigHarness {
         long offset = (long) type.getMethod("staticFieldOffset", java.lang.reflect.Field.class).invoke(unsafe, field);
         type.getMethod("putObject", Object.class, long.class, Object.class).invoke(unsafe, base, offset, Optional.of(access));
     }
-    private static final class TestItem extends ItemStack {
+    static final class TestItem extends ItemStack {
         private final Material material;
         private ItemMeta meta;
         TestItem(Material material) {

@@ -2,36 +2,54 @@ package dev.vapee.core.lobby.config;
 
 import dev.vapee.core.lobby.item.LobbyItemDefinition;
 import dev.vapee.core.lobby.item.LobbyItemDefinition.Appearance;
-import dev.vapee.core.lobby.item.LobbyItemType;
+import dev.vapee.core.lobby.item.LobbyItemRegistry;
+import dev.vapee.core.lobby.item.LobbyItemRegistrations;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 
-/** Only the three existing lobby item types are configurable; YAML cannot register actions. */
+/** Parses presentation only for explicitly registered Java features. YAML cannot register behavior. */
 public final class LobbyItemsConfig {
     private static final MiniMessage TEXT = MiniMessage.miniMessage();
-    private static final MiniMessage STRICT_TEXT = MiniMessage.builder().strict(true).build();
-    private static final Map<LobbyItemType, LobbyItemDefinition> DEFAULTS = defaultsInternal();
 
     private LobbyItemsConfig() { }
 
-    public static Map<LobbyItemType, LobbyItemDefinition> defaults() { return DEFAULTS; }
-
-    public static Map<LobbyItemType, LobbyItemDefinition> read(YamlConfiguration yaml, Logger logger) {
-        Map<LobbyItemType, LobbyItemDefinition> result = new EnumMap<>(LobbyItemType.class);
+    public static Map<String, LobbyItemDefinition> defaults() { return defaults(LobbyItemRegistrations.inactive()); }
+    public static Map<String, LobbyItemDefinition> defaults(LobbyItemRegistry registry) {
+        Map<String, LobbyItemDefinition> result = new LinkedHashMap<>();
+        registry.entries().forEach((id, entry) -> result.put(id, entry.defaults()));
+        return Map.copyOf(result);
+    }
+    public static Map<String, LobbyItemDefinition> read(YamlConfiguration yaml, Logger logger) {
+        return read(yaml, logger, LobbyItemRegistrations.inactive());
+    }
+    public static Map<String, LobbyItemDefinition> read(YamlConfiguration yaml, Logger logger, LobbyItemRegistry registry) {
+        Map<String, LobbyItemDefinition> result = new LinkedHashMap<>();
+        var configured = yaml.getConfigurationSection("items");
+        if (configured != null) {
+            for (String id : configured.getKeys(false)) {
+                if (registry.resolve(id).isEmpty()) warn(logger, "items." + id, "unregistered Java feature; ignored (no item or action)");
+            }
+        } else if (yaml.contains("items")) warn(logger, "items", "expected a section; using registered defaults");
         Set<Integer> reserved = new HashSet<>();
-        for (LobbyItemType type : LobbyItemType.values()) {
-            var fallback = DEFAULTS.get(type);
-            String path = "items." + type.getPersistentId();
+        for (var entry : registry.entries().values()) {
+            var fallback = entry.defaults();
+            String path = "items." + entry.id();
+            // An explicit items section owns its entries; removing an ID must not resurrect its Java fallback.
+            if (configured != null && !configured.contains(entry.id())) {
+                result.put(entry.id(), new LobbyItemDefinition(false, fallback.slot(),
+                        fallback.appearance(), fallback.filteredAppearance()));
+                continue;
+            }
             if (yaml.contains(path) && !yaml.isConfigurationSection(path)) {
                 warn(logger, path, "expected a section; using defaults");
             }
@@ -51,11 +69,15 @@ public final class LobbyItemsConfig {
                     }
                 }
             }
+            if (enabled && reserved.contains(slot)) {
+                warn(logger, path + ".slot", "no free hotbar slot; item disabled");
+                enabled = false;
+            }
             if (enabled) reserved.add(slot);
             Appearance normal = appearance(yaml, path, fallback.appearance(), logger);
-            Appearance filtered = type == LobbyItemType.VISIBILITY
+            Appearance filtered = !fallback.filteredAppearance().equals(fallback.appearance())
                     ? appearance(yaml, path + ".filtered", fallback.filteredAppearance(), logger) : normal;
-            result.put(type, new LobbyItemDefinition(enabled, slot, normal, filtered));
+            result.put(entry.id(), new LobbyItemDefinition(enabled, slot, normal, filtered));
         }
         return Map.copyOf(result);
     }
@@ -75,7 +97,7 @@ public final class LobbyItemsConfig {
         List<Component> lore = fallback.lore();
         Object loreValue = yaml.get(path + ".lore");
         if (loreValue instanceof List<?> lines && lines.stream().allMatch(String.class::isInstance)) {
-            try { lore = lines.stream().map(line -> text((String) line, true)).toList(); }
+            try { lore = lines.stream().map(line -> text((String) line)).toList(); }
             catch (RuntimeException malformed) { warn(logger, path + ".lore", "invalid MiniMessage; using default"); }
         } else if (loreValue != null) warn(logger, path + ".lore", "expected list of MiniMessage strings; using default");
         boolean selfHead = fallback.selfHead();
@@ -87,27 +109,13 @@ public final class LobbyItemsConfig {
     }
 
     private static Component parse(String value, Component fallback, String path, Logger logger) {
-        try { return text(value, true); }
+        try { return text(value); }
         catch (RuntimeException invalid) { warn(logger, path, "invalid MiniMessage; using default"); return fallback; }
     }
 
-    private static Component text(String value, boolean strict) {
-        return (strict ? STRICT_TEXT : TEXT).deserialize(value).decoration(TextDecoration.ITALIC, false);
-    }
-
-    private static Map<LobbyItemType, LobbyItemDefinition> defaultsInternal() {
-        var navigator = new Appearance(Material.COMPASS, text("<aqua>Warp Navigator</aqua>", false),
-                List.of(text("<gray>Right-click to open the warp navigator.</gray>", false)), false);
-        var visible = new Appearance(Material.LIME_DYE, text("<green>Players: Visible</green>", false),
-                List.of(text("<gray>Right-click to use your visibility filters.</gray>", false)), false);
-        var filtered = new Appearance(Material.GRAY_DYE, text("<gray>Players: Filtered</gray>", false),
-                List.of(text("<gray>Right-click to show all lobby players.</gray>", false)), false);
-        var settings = new Appearance(Material.COMPARATOR, text("<yellow>Settings</yellow>", false),
-                List.of(text("<gray>Right-click to open your settings.</gray>", false)), false);
-        return Map.of(
-                LobbyItemType.NAVIGATOR, new LobbyItemDefinition(true, 0, navigator, navigator),
-                LobbyItemType.VISIBILITY, new LobbyItemDefinition(true, 4, visible, filtered),
-                LobbyItemType.SETTINGS, new LobbyItemDefinition(true, 8, settings, settings));
+    private static Component text(String value) {
+        // Standard MiniMessage supports implicit style closing, including the operator examples.
+        return TEXT.deserialize(value).decoration(TextDecoration.ITALIC, false);
     }
 
     private static void warn(Logger logger, String path, String reason) {

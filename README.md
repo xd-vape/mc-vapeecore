@@ -4,7 +4,7 @@ VapeeCore ist ein modular aufgebautes Minecraft-Plugin für Paper. Es verbindet 
 
 ## Funktionen
 
-- **Lobby:** Spawn, konfigurierbare Teleports und Schutzregeln, NORMAL-/BUILD-Verhalten, Warp-Navigator, Sichtbarkeitsfilter und anpassbare Hotbar-Items.
+- **Lobby:** Spawn, konfigurierbare Teleports und Schutzregeln, NORMAL-/BUILD-Verhalten, Warp-Navigator, Sichtbarkeitsfilter, Freunde-Menü per eigenem Spielerkopf und anpassbare Hotbar-Items.
 - **Spieler:** bekannte Namen/UUIDs, Online-/Offline-Profile, gespeicherte Einstellungen, Ignore-Liste und Coins.
 - **Community:** Freundschaften und Anfragen, gefilterte Friend-Presence-Hinweise, Clans mit Einladungen und Mitgliederverwaltung, private Nachrichten und Reply.
 - **Moderation und Utility:** Mutes, Bans, Warnungen und Historie; berechtigungsgesteuerte Bewegungs-, Teleport- und Spielerwerkzeuge.
@@ -46,7 +46,7 @@ Bei Updates den vorhandenen `plugins/VapeeCore/`-Ordner behalten. Beim Startup e
 | `presentation.yml` | Sidebar, Tablist, Nametags, Rank-/Clan-Darstellung und Updateintervall |
 | `daily-quests.yml` | Aktivierung, Auswahl, Reset, Zeitzone und Quest-Katalog |
 
-Diese sechs Dateien besitzen `config-version: 1` und werden beim Startup auf der festen Operator-Allowlist weiterentwickelt. Die Version nicht manuell erhöhen, um Defaults anzufordern: neue Keys werden mit einem entsprechenden Schema-Update ergänzt. Typkonflikte bewahren den Betreiberwert und erzeugen eine Warnung; der jeweilige Loader verwendet seine sicheren Fallbacks.
+`lobby.yml` besitzt `config-version: 2`, die anderen fünf Dateien `config-version: 1` und werden beim Startup auf der festen Operator-Allowlist weiterentwickelt. Die Version nicht manuell erhöhen, um Defaults anzufordern: neue Keys werden mit einem entsprechenden Schema-Update ergänzt. Typkonflikte bewahren den Betreiberwert und erzeugen eine Warnung; der jeweilige Loader verwendet seine sicheren Fallbacks.
 
 Nach normalen Änderungen liest **`/core reload`** alle sechs Dateien in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Neue Daily-Assignments entstehen erst beim nächsten regulären Sync.
 
@@ -54,7 +54,7 @@ Nach normalen Änderungen liest **`/core reload`** alle sechs Dateien in einer g
 
 ### Lobby-Items anpassen
 
-Die vorhandenen Typen heißen `navigator`, `visibility` und `settings`. Ein eigenes Friends-Hotbar-Item ist derzeit nicht registriert; Freunde sind über `/friend` erreichbar. Material, Slot, Name, Lore, Aktivierung und optionaler eigener Spielerkopf stehen in `lobby.yml`:
+Die registrierten Items heißen `navigator`, `visibility`, `settings` und `friends`. Der Friends-Spielerkopf öffnet das bestehende Freunde-Menü mit der aktuellen Friend-Berechtigung; `/friend` bleibt verfügbar. Friends liegt im Standardlayout auf Slot 1. Material, Slot, Name, Lore, Aktivierung und optionaler eigener Spielerkopf stehen in `lobby.yml`:
 
 ```yaml
 items:
@@ -68,7 +68,7 @@ items:
       - "<gray>Öffne die Warps.</gray>"
 ```
 
-`head-owner: self` verwendet bei `PLAYER_HEAD` das bereits vorhandene Online-Profil ohne zusätzlichen Lookup; bei anderen Materialien wird es ignoriert. Slots sind **0 bis 8**, aktivierte Items benötigen unterschiedliche Slots. Bei ungültigen Materialien oder Slots warnen sichere Fallbacks. Fremde Items werden nur in freie, nicht reservierte Storage-Slots verschoben; ohne freien Platz bleibt das fremde Item erhalten. PDC-Identität und Click-Aktion bleiben in Java, unabhängig von Text und Material.
+`head-owner: self` verwendet bei `PLAYER_HEAD` das bereits vorhandene Online-Profil ohne zusätzlichen Lookup; bei anderen Materialien wird es ignoriert. Slots sind **0 bis 8**, aktivierte Items benötigen unterschiedliche Slots. Bei ungültigen Materialien oder Slots warnen sichere Fallbacks. Fremde Items werden nur in freie, nicht reservierte Storage-Slots verschoben; ohne freien Platz bleibt das fremde Item erhalten. Name/Lore verwenden MiniMessage; Farbtags dürfen implizit geschlossen werden. PDC-Identität und Click-Aktion bleiben in Java, unabhängig von Text und Material. Nicht registrierte YAML-IDs werden mit Warnung ignoriert. Ein aus dem vorhandenen `items`-Abschnitt entfernter Eintrag wird nach Reload entfernt; `enabled: false` deaktiviert ihn ebenfalls. Die ID `friends` beibehalten und für einen anderen Titel nur `name` ändern.
 
 Die zweite Sichtbarkeitsdarstellung liegt unter `items.visibility.filtered`. Nach `/core reload` werden die Items geladener NORMAL-Spieler in der Lobby aktualisiert; BUILD- und Activity-Inventare behalten ihre Zuständigkeit.
 

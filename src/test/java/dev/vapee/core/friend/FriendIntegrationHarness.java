@@ -129,11 +129,11 @@ public final class FriendIntegrationHarness {
                             && SettingsMenu.INVENTORY_SIZE == 54,
                     "friend request setting has feature and status below in redesigned settings GUI");
             String menuSource = Files.readString(Path.of(
-                    "src/main/java/dev/vapee/core/settings/SettingsMenu.java"));
+                    "src/main/java/dev/vapee/core/settings/SettingsMenuEntries.java"));
             String listenerSource = Files.readString(Path.of(
-                    "src/main/java/dev/vapee/core/settings/SettingsListener.java"));
-            check(menuSource.contains("settings.isFriendRequestsEnabled()")
-                            && listenerSource.contains("setFriendRequestsEnabled("),
+                    "src/main/java/dev/vapee/core/settings/SettingsMenuEntries.java"));
+            check(menuSource.contains("PlayerSettings::isFriendRequestsEnabled")
+                            && listenerSource.contains("PlayerSettingsService::setFriendRequestsEnabled"),
                     "settings GUI displays and toggles persisted friend request privacy");
         } finally {
             try (var files = Files.walk(directory)) {
