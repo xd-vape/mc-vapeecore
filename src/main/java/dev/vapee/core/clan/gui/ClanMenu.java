@@ -24,8 +24,14 @@ import java.util.logging.Logger;
 
 /** Holder-bound 54-slot clan views; no cached domain data or scheduler. */
 public final class ClanMenu {
+    // Layout: overview name 20, member count 22, role 24; other views paginate entries 0..44.
+    // Footer: previous 45, overview 46, members 47, invites 48, close 49, action 50, refresh 52, next 53.
     public static final int INVENTORY_SIZE = 54;
     public static final int CONTENT_SIZE = 45;
+    private static final int CLAN_NAME_SLOT = 20;
+    private static final int MEMBER_COUNT_SLOT = 22;
+    private static final int ROLE_SLOT = 24;
+    private static final int EMPTY_SLOT = 22;
     public static final int PREVIOUS_SLOT = 45;
     public static final int OVERVIEW_SLOT = 46;
     public static final int MEMBERS_SLOT = 47;
@@ -80,7 +86,7 @@ public final class ClanMenu {
         Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, title(view));
         holder.bind(inventory);
         if (view == ClanMenuView.OVERVIEW) renderOverview(inventory, viewer, clan);
-        else if (entries.isEmpty()) inventory.setItem(22, item(Material.PAPER,
+        else if (entries.isEmpty()) inventory.setItem(EMPTY_SLOT, item(Material.PAPER,
                 view == ClanMenuView.MEMBERS ? "No members" : "No invites", List.of()));
         for (int i = first; i < end; i++) inventory.setItem(i - first, item(entries.get(i)));
         if (pagination.hasPrevious()) inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", List.of()));
@@ -100,14 +106,14 @@ public final class ClanMenu {
 
     private void renderOverview(Inventory inventory, UUID viewer, Clan clan) {
         if (clan == null) {
-            inventory.setItem(22, item(Material.PAPER, "You are not in a clan",
+            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, "You are not in a clan",
                     List.of("Create one or review incoming invites.")));
             return;
         }
-        inventory.setItem(20, item(Material.NAME_TAG, clan.name(), List.of("Tag: " + clan.tag())));
-        inventory.setItem(22, item(Material.PLAYER_HEAD, "Members: " + clan.members().size()
+        inventory.setItem(CLAN_NAME_SLOT, item(Material.NAME_TAG, clan.name(), List.of("Tag: " + clan.tag())));
+        inventory.setItem(MEMBER_COUNT_SLOT, item(Material.PLAYER_HEAD, "Members: " + clan.members().size()
                 + "/" + clans.getLimits().maxMembers(), List.of("Owner: " + displayName(clan.ownerId()))));
-        inventory.setItem(24, item(Material.PAPER, "Your role: " +
+        inventory.setItem(ROLE_SLOT, item(Material.PAPER, "Your role: " +
                 (clan.ownerId().equals(viewer) ? "OWNER" : "MEMBER"), List.of("Clan ID: " + clan.id())));
     }
 

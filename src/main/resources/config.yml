@@ -1,3 +1,8 @@
+# Operator schema version. Startup adds missing defaults after an exact-byte backup.
+# Keep this version; existing values and unknown keys are preserved. Future versions are never downgraded.
+config-version: 1
+
+# Operator settings only; player/friend/clan/moderation state is stored separately.
 server:
   name: "Vapee Community"
 

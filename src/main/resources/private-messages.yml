@@ -1,5 +1,11 @@
+# Operator schema version. Startup adds missing defaults after an exact-byte backup.
+# Keep this version; existing values and unknown keys are preserved. Future versions are never downgraded.
+config-version: 1
+
+# Global PM switch. Player receive preferences and permission checks remain authoritative.
 enabled: true
 
+# MiniMessage templates; sender/recipient/message are safe Component placeholders.
 format:
   outgoing: "<dark_gray>[</dark_gray><gray>You</gray><dark_gray> → </dark_gray><recipient><dark_gray>]</dark_gray> <white><message></white>"
   incoming: "<dark_gray>[</dark_gray><sender><dark_gray> → </dark_gray><gray>You</gray><dark_gray>]</dark_gray> <white><message></white>"

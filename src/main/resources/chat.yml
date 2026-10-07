@@ -1,6 +1,14 @@
+# Operator schema version. Startup adds missing defaults after an exact-byte backup.
+# Keep this version; existing values and unknown keys are preserved. Future versions are never downgraded.
+config-version: 1
+
+# Disable VapeeCore chat formatting without changing saved formats.
 enabled: true
 
+# MiniMessage server template; player messages are inserted as safe Components.
+# Rank/clan placeholders and LuckPerms meta are documented in docs/FORMATTING.md.
 format: "<rank_name><dark_gray> » </dark_gray><white><message></white>"
 
 luckperms-meta:
+  # legacy-ampersand, mini-message or plain; this affects meta, never player message parsing.
   format: "legacy-ampersand"

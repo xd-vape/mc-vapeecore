@@ -87,12 +87,12 @@ public final class VisibilityModuleHarness {
                         && itemListener.contains("playFeedbackSound(player)"),
                 "hotbar cooldown and sound feedback remain in place");
 
-        String itemService = Files.readString(Path.of(
-                "src/main/java/dev/vapee/core/lobby/item/LobbyItemService.java"));
-        check(itemService.contains("Players: Visible")
-                        && itemService.contains("Right-click to use your visibility filters.")
-                        && itemService.contains("Players: Filtered")
-                        && itemService.contains("Right-click to show all lobby players."),
+        String itemDefaults = Files.readString(Path.of(
+                "src/main/java/dev/vapee/core/lobby/config/LobbyItemsConfig.java"));
+        check(itemDefaults.contains("Players: Visible")
+                        && itemDefaults.contains("Right-click to use your visibility filters.")
+                        && itemDefaults.contains("Players: Filtered")
+                        && itemDefaults.contains("Right-click to show all lobby players."),
                 "hotbar labels describe visible and filtered master states");
 
         String plugin = Files.readString(Path.of("src/main/resources/plugin.yml")).replace("\r\n", "\n");

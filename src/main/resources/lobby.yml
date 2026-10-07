@@ -1,3 +1,7 @@
+# Operator schema version. Startup adds missing defaults after an exact-byte backup.
+# Keep this version; existing values and unknown keys are preserved. Future versions are never downgraded.
+config-version: 1
+
 player:
   gamemode: ADVENTURE
 
@@ -22,3 +26,42 @@ messages:
   quit:
     enabled: true
     format: "<dark_gray>[<red>-<dark_gray>] <white><name>"
+
+# Existing item types only. Actions/PDC identity and safe inventory ownership stay in Java.
+# Slots are zero-based hotbar positions 0..8. Enabled items must use distinct slots.
+# Invalid/duplicate slots warn and use a safe free fallback; foreign items are displaced only into free storage.
+# Material: Bukkit item name (no AIR). Name/lore: MiniMessage, close style tags explicitly.
+# head-owner: self uses the online player's cached profile with PLAYER_HEAD; none uses no owner.
+# No texture URL/profile lookup is performed; head-owner is ignored for other materials.
+items:
+  navigator:
+    enabled: true
+    slot: 0
+    material: COMPASS
+    name: "<aqua>Warp Navigator</aqua>"
+    lore:
+      - "<gray>Right-click to open the warp navigator.</gray>"
+    head-owner: none
+  visibility:
+    enabled: true
+    slot: 4
+    material: LIME_DYE
+    name: "<green>Players: Visible</green>"
+    lore:
+      - "<gray>Right-click to use your visibility filters.</gray>"
+    head-owner: none
+    # Presentation when the persisted master visibility switch is off. The action remains the same.
+    filtered:
+      material: GRAY_DYE
+      name: "<gray>Players: Filtered</gray>"
+      lore:
+        - "<gray>Right-click to show all lobby players.</gray>"
+      head-owner: none
+  settings:
+    enabled: true
+    slot: 8
+    material: COMPARATOR
+    name: "<yellow>Settings</yellow>"
+    lore:
+      - "<gray>Right-click to open your settings.</gray>"
+    head-owner: none

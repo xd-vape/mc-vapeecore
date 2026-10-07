@@ -4,7 +4,30 @@ Diese Datei ist die praktische Landkarte für Änderungen an VapeeCore. Der aktu
 
 VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-/Disable-Lifecycle, `ModuleManager` aktiviert Module in registrierter Reihenfolge und deaktiviert sie rückwärts. Abhängigkeiten werden explizit über Konstruktoren übergeben. Es gibt keine globalen Service-Singletons, keine Reflection-Discovery und keine statischen Player-State-Maps. Packages sind nach Features geschnitten. LuckPerms ist die Quelle für Gruppen und Permissions. Die öffentliche Rank-Presentation ist datengetrieben und besitzt keine hartkodierte Rank-Authority. Davon getrennt definiert `StaffHierarchyConfig.DEFAULT_GROUPS` bewusst sichere Schutz-Defaults (`builder`, `moderator`, `admin`, `owner`, aufsteigend); diese Staff-Hierarchie ist unabhängig vom öffentlichen Rank-Track und der LuckPerms-Vererbung.
 
-## Where do I change this?
+## Common Changes / Where do I change this?
+
+| Häufige Änderung | Konkreter Einstieg |
+|---|---|
+| Lobby-Item: Material, Slot, Name, Lore oder enabled | Live `plugins/VapeeCore/lobby.yml` → `items.navigator`, `items.visibility`, `items.settings`; Vorlage `src/main/resources/lobby.yml` |
+| Eigenen Spielerkopf statt Material anzeigen | Dasselbe Item: `material: PLAYER_HEAD`, `head-owner: self`; vorhandenes Online-Profil, kein Lookup |
+| Friends-Lobby-Item ändern | Der Source registriert keines. `/friend` verwendet `src/main/java/dev/vapee/core/friend/gui/FriendMenu.java`; keine YAML-Aktion erfinden |
+| Settings-Feature im GUI verschieben | Layout-Block und `*_SLOT` in `src/main/java/dev/vapee/core/settings/SettingsMenu.java`; `SettingsListener` verwendet dieselben Konstanten |
+| Andere GUI-Layouts | Lokale Layout-Blöcke in `settings/visibility/VisibilitySettingsMenu.java`, `VisiblePlayersMenu.java`, `friend/gui/FriendMenu.java`, `clan/gui/ClanMenu.java`, `lobby/experience/navigator/NavigatorMenu.java`, `quest/daily/menu/DailyQuestMenu.java` unter `src/main/java/dev/vapee/core/` |
+| Chat-Format | Live `plugins/VapeeCore/chat.yml` → `format`; Vorlage `src/main/resources/chat.yml` |
+| Clan-Tag, Tablist oder Nametag formatieren | Live `plugins/VapeeCore/presentation.yml`; Vorlage `src/main/resources/presentation.yml`; Platzhalter in [FORMATTING.md](FORMATTING.md) |
+| Rank-Name/-Farbe/-Badge | LuckPerms-Meta; Parser/Anzeige in `src/main/java/dev/vapee/core/rank/RankService.java` und `RankInfo.java` |
+| Neues Operator-Default einführen | Betroffene Resource, Feature-Parser/Fallback und `src/main/java/dev/vapee/core/config/ConfigEvolution.java`; betroffene Version bewusst erhöhen |
+| Module und Abhängigkeiten verstehen | `src/main/java/dev/vapee/core/VapeeCore.java`, danach Module map unten |
+
+Alle GUI-Slots sind nullbasiert. Bei einem reinen Layoutwechsel zuerst die benannte lokale Konstante ändern, dann Menü und Listener neu kompilieren (Java inlined `static final int`). Render- und Click-Pfad sowie Status-Partner mit dem jeweiligen Harness prüfen. Content-Bereich und Footer dürfen sich nicht überlappen. UUID-Zuordnung, Active-/Owner-Binding und Domain-Gates werden nicht aus Item-Material oder Lore abgeleitet.
+
+Lobby-Items werden nach `/core reload` für geladene NORMAL-Spieler in der Lobby neu abgeglichen. BUILD-Spieler und Activity-Teilnehmer werden ausgelassen. `LobbyItemsConfig` validiert immutable Definitionen; `LobbyItemService` bleibt alleiniger Besitzer von PDC, Erzeugung und sicherer Displacement-Logik. Die Visibility-Off-Darstellung liegt unter `items.visibility.filtered`. Ungültige Materialien/Slots warnen, doppelte aktive Slots erhalten einen freien Fallback. `head-owner` ist `none` oder `self` und wirkt nur mit `PLAYER_HEAD`.
+
+### Package-Navigation
+
+`config`, `module`, `reload` und `ui` enthalten kleine Infrastrukturbausteine. `lobby`, `settings`, `friend`, `clan`, `quest`, `chat`, `privatemessage` und `presentation` besitzen ihre Feature-Module, Services und UI/Commands. `player/repository` sowie die jeweiligen `repository`-Packages speichern Domainzustände. Ein typischer Einstieg ist `FeatureModule` → Config/Service → Menu/Listener oder Command. Sicherheitsregeln bleiben beim jeweiligen Command/Listener und Domain-Service; Operator-Darstellung steht in YAML oder im lokalen Menü-Layout.
+
+### Weitere Änderungen
 
 | I want to change… | Owner / place |
 |---|---|
@@ -27,8 +50,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | `/heal` | `dev.vapee.core.utility.command.HealCommand` |
 | `/feed` | `dev.vapee.core.utility.command.FeedCommand` |
 | Utility-Modul-Lifecycle und Command-Registrierung | `dev.vapee.core.utility.UtilityModule` |
-| Lobby hotbar items | `dev.vapee.core.lobby.item.LobbyItemService` |
-| Warp Navigator item material/name/lore | `LobbyItemService` |
+| Lobby hotbar items | Live `lobby.yml` → `items`; Validierung `LobbyItemsConfig`, Ownership `LobbyItemService` |
+| Warp Navigator item material/name/lore | Live `lobby.yml` → `items.navigator` |
 | Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
 | Navigator visibility / order | `WarpNavigation`, `WarpService`, `/warp show`, `/warp hide`, `/warp order` |
 | Navigator opening / click authorization | `NavigatorAccessPolicy` in LobbyExperience; online + loaded + lobby + NORMAL + no activity |
@@ -98,12 +121,14 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 
 **`src/main/resources/*.yml` sind nur Defaults, die in die Plugin-JAR gepackt werden. `plugins/VapeeCore/*.yml` sind die tatsächlich verwendeten Dateien eines laufenden Servers.**
 
-Eine geänderte Resource ersetzt niemals automatisch eine bereits vorhandene Live-Datei. Bei einer bestehenden Dev- oder Produktionsinstallation muss der neue Wert auch in der Datei unter `plugins/VapeeCore/` eingetragen werden. `/core reload` liest seine sechs registrierten Live-Dateien neu. `blackjack.yml` und `warps.yml` werden stattdessen durch ihre Admin-Commands zur Laufzeit geschrieben und aktualisiert.
+Beim Startup prüft `ConfigEvolution` vor den Modulen ausschließlich die sechs Operator-Dateien der festen Allowlist. Fehlende Version bedeutet Legacy 0; alle sechs vormals unversionierten Dateien beginnen mit `config-version: 1`. Eine ältere Version erhält vor jedem Migrationswrite ein einzigartiges exaktes Backup unter `plugins/VapeeCore/backups/config/`. Der Merge ergänzt rekursiv nur fehlende bekannte Keys: vorhandene Werte, unbekannte Keys (auch null), Kommentare und komplette vorhandene Listen bleiben erhalten. Typkonflikte warnen und werden nicht überschrieben; der Feature-Parser behält seine Fallbacks. Der Kandidat wird validiert, temporär geschrieben und atomar ersetzt; ohne Atomic-Move steht das permanente Backup für eine wiederherstellbare Ersetzung bereit. Schreibfehler brechen den Startup ab und behalten Original/Backup. Ungültige oder zukünftige Versionen warnen und werden nicht verändert. Eine bereits unterstützte Version erzeugt weder Rewrite noch Backup, auch wenn ein Betreiber einzelne Keys gelöscht hat. Neue Defaults erfordern deshalb einen bewussten Versionsbump in Registry und Resource.
+
+Die Knoten-API der bereits durch Paper bereitgestellten SnakeYAML-Library erhält Kommentare und unbekannte null-Werte; Bukkit würde letztere beim Neuschreiben verlieren. Es wird keine neue YAML-Library eingebunden. Zu mergende Operator-Mappings benötigen eindeutige String-Keys; YAML-Merge-Keys und rekursive Aliase werden ohne Rewrite abgewiesen, normale Aliase bleiben erhalten. Bestehende Werte werden durch eine Resource-Änderung niemals ersetzt: gewünschte Änderungen an bereits gesetzten Werten trägt der Betreiber weiter in der Live-Datei ein. `/core reload` liest die sechs Dateien ohne Migrationswrites neu. `blackjack.yml`, `warps.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind ausdrücklich ausgeschlossen und behalten ihre separaten Persistence-Schemas. Keine Rekursionssuche über den Plugin-Ordner findet statt.
 
 | File | Owner | Purpose | `/core reload`? | Runtime mutable? | Defaults |
 |---|---|---|---:|---|---|
 | `config.yml` | `ConfigService` | Servername, globaler Message-Prefix, Debug, `ranks.track`, Online-Reward-Regeln und -Nachricht, `friends.limits`, `clans.limits` | Ja | Durch Reload | `src/main/resources/config.yml` |
-| `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
+| `lobby.yml` | `LobbyConfig` / `LobbyModule` | Spawn, Teleport, Protection, `player.gamemode`, Join/Quit-Texte, `items` | Ja | Spawn durch `/setspawn`, übrige Werte durch Reload | `src/main/resources/lobby.yml` |
 | `chat.yml` | `ChatConfig` / `ChatModule` | Globaler Chat und LuckPerms-Metaformat | Ja | Durch Reload | `src/main/resources/chat.yml` |
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
 | `presentation.yml` | `PresentationConfig` / `PresentationModule` | Sidebar, Tablist, Nametags, Updateintervall | Ja | Durch Reload | `src/main/resources/presentation.yml` |
@@ -691,7 +716,7 @@ Die Anzeige ist ein Snapshot, die Ausführung liest aktuellen Domain-State. Hold
 
 Quit vergisst die UUID auch bei bereits gewechseltem View. World Leave schließt/vergisst Navigator sofort; World Enter öffnet keine UI. Disable schließt getrackte eigene Ansichten vor Listener-Cleanup, leert die gesamte Active-Map auch bei einzelnen Close-Fehlern und nullt die Modulreferenzen. Partielle Enable-Fehler deaktivieren Experience-Callbacks, unregisteren alle drei Listener und reinigen den lokalen Navigator. Der bisherige Spawn-/Protection-/BUILD-/Activity-/Visibility-/Settings-/Presence-Flow bleibt bestehen, einschließlich globaler Join-/Quit-Texte.
 
-Der Compass bleibt Warp Navigator; Hotbar exakt 0/4/8. Kein Server Menu, keine Kategorien, festen Ziele, zusätzlichen Items, neuen Scheduler, Async-Pipeline, Datenbank oder allgemeines GUI-Framework. Phase 29 ergänzt später Quest Completion; Shared GUI-/Inventory-/Item-Cleanup bleibt Phase 30C, target-controlled Team-Teleport-Consent bleibt Phase 30G. Vollständige Verifikation und Dateiinventar: `reports/28-lobby-navigation/LOBBY_NAVIGATION.md`.
+Im Default bleibt der Compass der Warp Navigator und die Hotbar verwendet 0/4/8; Darstellung, Slot und Aktivierung sind über items in lobby.yml konfigurierbar. Kein Server Menu, keine Kategorien, festen Ziele, zusätzlichen Items, neuen Scheduler, Async-Pipeline, Datenbank oder allgemeines GUI-Framework. Quest Completion und gemeinsamer UI-/Inventory-Cleanup sind bereits umgesetzt; target-controlled Team-Teleport-Consent bleibt geplante Weiterentwicklung. Vollständige Verifikation und Dateiinventar: `reports/28-lobby-navigation/LOBBY_NAVIGATION.md`.
 
 ## Lobby player state
 
@@ -699,11 +724,13 @@ Der Compass bleibt Warp Navigator; Hotbar exakt 0/4/8. Kein Server Menu, keine K
 
 ### NORMAL
 
-In `NORMAL` besitzt die Lobby die Inventory-Präsentation vollständig. `LobbyPlayerStateService` schließt ein offenes Inventar, leert Cursor, Storage, Armor und Offhand, wählt Hotbar-Slot 0, setzt `player.gamemode` aus `lobby.yml` und lässt `LobbyItemService` die drei Items erzeugen:
+Beim regulären NORMAL-Eintritt besitzt die Lobby die Inventory-Präsentation vollständig. `LobbyPlayerStateService` schließt ein offenes Inventar, leert Cursor, Storage, Armor und Offhand, wählt Hotbar-Slot 0, setzt `player.gamemode` aus `lobby.yml` und lässt `LobbyItemService` die aktivierten konfigurierten Items erzeugen. Die Default-Slots sind:
 
 - Slot 0: Warp Navigator (`navigator`)
 - Slot 4: Player Visibility (`visibility`)
 - Slot 8: Settings (`settings`)
+
+Material, Slot, Name, Lore, enabled und head-owner stehen unter items in der Live-lobby.yml. Der Reload-Item-Abgleich leert kein Inventar: Er entfernt ausschließlich eigene PDC-Items und nutzt sichere freie Storage-Slots für fremde Items an einem Zielplatz. Ohne freien Platz bleibt das fremde Item erhalten. Die Eligibility aus LobbyExperience verlangt geladene Playerdaten und keine Activity-Session; BUILD und fremde Welten werden zusätzlich im Lobby-State ausgeschlossen.
 
 Die PDC-ID liegt weiterhin unter dem Namespaced Key `lobby_item`. Die Ender Chest wird nicht angefasst. Zulässige Gamemodes sind die Bukkit-Werte, case-insensitive gelesen; Default und Fallback sind `ADVENTURE`. Ein ungültiger Wert wie `BANANA` erzeugt eine Warnung, startet trotzdem und verändert die Datei nicht.
 
@@ -863,6 +890,8 @@ Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Prese
 | Änderung | Richtiger Ort |
 |---|---|
 | Wortlaut einer bestehenden Join-/Quit-Nachricht | Live-`lobby.yml` |
+| Lobby-Hotbar-Material, Slot, Name, Lore, Aktivierung, eigener Kopf | Live-`lobby.yml` → `items`; Aktionen bleiben in `LobbyItemListener` |
+| GUI-Layout | Benannte Konstanten im jeweiligen `*Menu`, gemeinsamer Render-/Click-Vertrag |
 | Default-Text für einen neuen Server | Resource-`lobby.yml` und internen Fallback gemeinsam prüfen |
 | Rendering, Placeholder oder Laufzeit-Fallback | `LobbyMessageService` |
 | Normaler Lobby-Gamemode | Live-`lobby.yml`, Key `player.gamemode` |

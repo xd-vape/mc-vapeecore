@@ -28,6 +28,8 @@ import java.util.logging.Logger;
 /** Focused read-only daily quest view. Controls always synchronize and rebuild from current state. */
 public final class DailyQuestMenu {
     public static final String PERMISSION = "vapeecore.quest.use";
+    // Layout: paginated quest entries 0..44; footer previous 45, page info 49, close 50, refresh 52, next 53.
+    // DailyQuestMenuListener uses these constants; entries remain read-only views.
     public static final int SIZE = 54;
     public static final int CONTENT_SIZE = 45;
     public static final int PREVIOUS = 45;

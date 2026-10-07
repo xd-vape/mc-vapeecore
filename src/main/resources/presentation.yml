@@ -1,3 +1,9 @@
+# Operator schema version. Startup adds missing defaults after an exact-byte backup.
+# Keep this version; existing values and unknown keys are preserved. Future versions are never downgraded.
+config-version: 1
+
+# Templates use MiniMessage and safe Component placeholders; see docs/FORMATTING.md.
+# Existing operator templates and rank/clan formats are preserved during evolution.
 enabled: true
 
 update-interval-ticks: 20

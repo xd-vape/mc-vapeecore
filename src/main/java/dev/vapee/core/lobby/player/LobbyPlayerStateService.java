@@ -29,6 +29,7 @@ public final class LobbyPlayerStateService {
     private final Consumer<Player> lobbyItemRemover;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final Set<UUID> buildPlayers = new HashSet<>();
+    private Predicate<Player> itemRefreshEligibility = player -> false;
 
     public LobbyPlayerStateService(
             JavaPlugin plugin,
@@ -196,6 +197,22 @@ public final class LobbyPlayerStateService {
             lobbyItemRemover.accept(player);
         }
         buildPlayers.clear();
+    }
+
+    /** Reconcile configured items without clearing foreign inventory or taking BUILD/activity ownership. */
+    public void refreshLobbyItems() {
+        requirePrimaryThread();
+        for (Player player : onlinePlayersSupplier.get()) {
+            if (player != null && player.isOnline() && lobbyPlayerCheck.test(player)
+                    && !isBuildMode(player.getUniqueId()) && itemRefreshEligibility.test(player)) {
+                lobbyItemApplier.accept(player);
+            }
+        }
+    }
+
+    public void setItemRefreshEligibility(Predicate<Player> eligibility) {
+        requirePrimaryThread();
+        itemRefreshEligibility = Objects.requireNonNull(eligibility, "eligibility");
     }
 
     private void applyNormalMode(Player player, boolean applyLobbyItems) {

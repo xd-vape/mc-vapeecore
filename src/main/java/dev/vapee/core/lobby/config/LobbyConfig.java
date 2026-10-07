@@ -1,6 +1,8 @@
 package dev.vapee.core.lobby.config;
 
 import dev.vapee.core.lobby.LobbySpawn;
+import dev.vapee.core.lobby.item.LobbyItemDefinition;
+import dev.vapee.core.lobby.item.LobbyItemType;
 import dev.vapee.core.config.ConfigFiles;
 import dev.vapee.core.config.ConfigValues;
 import dev.vapee.core.persistence.SafeFileWriter;
@@ -19,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -89,6 +92,10 @@ public final class LobbyConfig {
 
     public GameMode getPlayerGameMode() {
         return state.playerGameMode();
+    }
+
+    public Map<LobbyItemType, LobbyItemDefinition> getItems() {
+        return state.items();
     }
 
     public void saveSpawn(LobbySpawn spawn) {
@@ -189,7 +196,8 @@ public final class LobbyConfig {
                         configuration,
                         "messages.quit",
                         DEFAULT_QUIT_MESSAGE_FORMAT
-                )
+                ),
+                LobbyItemsConfig.read(configuration, logger)
         );
     }
 
@@ -381,7 +389,8 @@ public final class LobbyConfig {
             boolean itemDropProtection,
             boolean itemPickupProtection,
             MessageSettings joinMessage,
-            MessageSettings quitMessage
+            MessageSettings quitMessage,
+            Map<LobbyItemType, LobbyItemDefinition> items
     ) {
 
         public State {
@@ -389,6 +398,7 @@ public final class LobbyConfig {
             playerGameMode = Objects.requireNonNull(playerGameMode, "playerGameMode");
             joinMessage = Objects.requireNonNull(joinMessage, "joinMessage");
             quitMessage = Objects.requireNonNull(quitMessage, "quitMessage");
+            items = Map.copyOf(items);
         }
 
         private static State defaults() {
@@ -405,7 +415,8 @@ public final class LobbyConfig {
                     true,
                     true,
                     new MessageSettings(true, DEFAULT_JOIN_MESSAGE_FORMAT),
-                    new MessageSettings(true, DEFAULT_QUIT_MESSAGE_FORMAT)
+                    new MessageSettings(true, DEFAULT_QUIT_MESSAGE_FORMAT),
+                    LobbyItemsConfig.defaults()
             );
         }
 
@@ -423,7 +434,8 @@ public final class LobbyConfig {
                     itemDropProtection,
                     itemPickupProtection,
                     joinMessage,
-                    quitMessage
+                    quitMessage,
+                    items
             );
         }
     }

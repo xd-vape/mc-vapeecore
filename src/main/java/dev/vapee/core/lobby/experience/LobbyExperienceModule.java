@@ -128,11 +128,15 @@ public final class LobbyExperienceModule implements CoreModule {
         experienceListener = newExperienceListener;
         itemListener = newItemListener;
         navigatorListener = newNavigatorListener;
+        lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player ->
+                newPlayerService.isLoaded(player.getUniqueId())
+                        && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
         plugin.getLogger().info("Lobby experience module enabled.");
     }
 
     @Override
     public void disable() {
+        lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
         cleanupRuntime(navigatorMenu);
         if (experienceListener != null) {
             experienceListener.deactivate();

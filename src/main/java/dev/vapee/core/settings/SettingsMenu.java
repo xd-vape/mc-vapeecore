@@ -26,6 +26,9 @@ import java.util.logging.Logger;
 
 public final class SettingsMenu {
 
+    // Layout (zero-based slots): feature icons 10/12/14/16, matching status 19/21/23/25.
+    // Lower features 31/33, status 40/42; footer close 49, refresh 52.
+    // SettingsListener uses these same constants for actions and status clicks.
     public static final int INVENTORY_SIZE = 54;
     public static final int SCOREBOARD_SLOT = 10;
     public static final int SOUNDS_SLOT = 12;
