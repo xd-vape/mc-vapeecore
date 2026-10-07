@@ -1525,7 +1525,9 @@ src/main/resources/presentation.yml
 plugins/VapeeCore/presentation.yml
 ```
 
-Bestehende Live-Dateien müssen bei neuen Einstellungen gegebenenfalls manuell angepasst werden.
+Fehlende neue Einstellungen ergänzt die Startup-Evolution bei einer älteren `config-version` nach einem exakten Backup unter `plugins/VapeeCore/backups/config/`. Die feste Allowlist enthält `config.yml`, `lobby.yml`, `chat.yml`, `private-messages.yml`, `presentation.yml` und `daily-quests.yml` (derzeit jeweils Version 1). Vorhandene Texte und Werte, unbekannte Keys, Kommentare sowie vorhandene Listen bleiben erhalten. Zukünftige Versionen werden mit Warnung unverändert gelassen. Ein weiterer Startup derselben unterstützten Version und `/core reload` erzeugen keine Migrationswrites. Persistence-Dateien sind ausgeschlossen. Details: [Developer Guide](DEVELOPER_GUIDE.md#defaults-und-live-konfiguration).
+
+Bereits gesetzte Formate müssen bei einer gewünschten Darstellungsänderung weiter manuell angepasst werden.
 
 Für Rank-Farben in bestehenden Live-Configs konkret:
 

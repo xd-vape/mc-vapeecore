@@ -8,6 +8,7 @@ import dev.vapee.core.clan.Clan;
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
+import dev.vapee.core.config.ConfigEvolution;
 import dev.vapee.core.economy.EconomyModule;
 import dev.vapee.core.friend.FriendModule;
 import dev.vapee.core.identity.IdentityModule;
@@ -78,6 +79,7 @@ public final class VapeeCore extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        new ConfigEvolution(this).evolveAll();
         configService = new ConfigService(this);
         configService.load();
 

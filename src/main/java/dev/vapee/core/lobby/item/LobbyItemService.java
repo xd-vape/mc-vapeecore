@@ -1,20 +1,21 @@
 package dev.vapee.core.lobby.item;
 
 import dev.vapee.core.lobby.LobbyService;
+import dev.vapee.core.lobby.config.LobbyItemsConfig;
 import dev.vapee.core.player.settings.PlayerSettingsService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -28,16 +29,24 @@ public final class LobbyItemService {
     private final LobbyService lobbyService;
     private final PlayerSettingsService playerSettingsService;
     private final NamespacedKey lobbyItemKey;
+    private final Supplier<Map<LobbyItemType, LobbyItemDefinition>> definitions;
 
     public LobbyItemService(
             JavaPlugin plugin,
             LobbyService lobbyService,
             PlayerSettingsService playerSettingsService
     ) {
+        this(plugin, lobbyService, playerSettingsService, LobbyItemsConfig::defaults);
+    }
+
+    public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService,
+                            PlayerSettingsService playerSettingsService,
+                            Supplier<Map<LobbyItemType, LobbyItemDefinition>> definitions) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.lobbyItemKey = new NamespacedKey(plugin, "lobby_item");
+        this.definitions = Objects.requireNonNull(definitions, "definitions");
     }
 
     public void applyLobbyItems(Player player) {
@@ -47,9 +56,15 @@ public final class LobbyItemService {
         }
 
         removeManagedItems(validatedPlayer);
-        placeItem(validatedPlayer, NAVIGATOR_SLOT, createNavigatorItem());
-        placeItem(validatedPlayer, VISIBILITY_SLOT, createVisibilityItem(validatedPlayer));
-        placeItem(validatedPlayer, SETTINGS_SLOT, createSettingsItem());
+        Map<LobbyItemType, LobbyItemDefinition> current = definitions.get();
+        Set<Integer> reserved = current.values().stream().filter(LobbyItemDefinition::enabled)
+                .map(LobbyItemDefinition::slot).collect(Collectors.toSet());
+        for (LobbyItemType type : LobbyItemType.values()) {
+            var definition = current.get(type);
+            if (definition.enabled()) {
+                placeItem(validatedPlayer, definition.slot(), createItem(validatedPlayer, type, definition), reserved);
+            }
+        }
     }
 
     public void refreshVisibilityItem(Player player) {
@@ -58,9 +73,11 @@ public final class LobbyItemService {
             return;
         }
 
-        ItemStack currentItem = validatedPlayer.getInventory().getItem(VISIBILITY_SLOT);
-        if (isManagedItem(currentItem) || isEmpty(currentItem)) {
-            validatedPlayer.getInventory().setItem(VISIBILITY_SLOT, createVisibilityItem(validatedPlayer));
+        var definition = definitions.get().get(LobbyItemType.VISIBILITY);
+        if (!definition.enabled()) return;
+        ItemStack currentItem = validatedPlayer.getInventory().getItem(definition.slot());
+        if (getItemType(currentItem).orElse(null) == LobbyItemType.VISIBILITY || isEmpty(currentItem)) {
+            validatedPlayer.getInventory().setItem(definition.slot(), createItem(validatedPlayer, LobbyItemType.VISIBILITY, definition));
         }
     }
 
@@ -93,7 +110,7 @@ public final class LobbyItemService {
                 : LobbyItemType.fromPersistentId(persistentId);
     }
 
-    private void placeItem(Player player, int targetSlot, ItemStack lobbyItem) {
+    private void placeItem(Player player, int targetSlot, ItemStack lobbyItem, Set<Integer> reserved) {
         PlayerInventory inventory = player.getInventory();
         ItemStack existingItem = inventory.getItem(targetSlot);
         if (isEmpty(existingItem) || isManagedItem(existingItem)) {
@@ -101,7 +118,7 @@ public final class LobbyItemService {
             return;
         }
 
-        int freeSlot = findFreeStorageSlot(inventory);
+        int freeSlot = findFreeStorageSlot(inventory, reserved);
         if (freeSlot < 0) {
             plugin.getLogger().warning("Could not place lobby item for " + player.getUniqueId()
                     + " in reserved slot " + targetSlot
@@ -114,67 +131,28 @@ public final class LobbyItemService {
         inventory.setItem(targetSlot, lobbyItem);
     }
 
-    private int findFreeStorageSlot(PlayerInventory inventory) {
+    private int findFreeStorageSlot(PlayerInventory inventory, Set<Integer> reserved) {
         ItemStack[] storageContents = inventory.getStorageContents();
         for (int slot = 0; slot < storageContents.length; slot++) {
-            if (!isReservedSlot(slot) && isEmpty(storageContents[slot])) {
+            if (!reserved.contains(slot) && isEmpty(storageContents[slot])) {
                 return slot;
             }
         }
         return -1;
     }
 
-    private boolean isReservedSlot(int slot) {
-        return slot == NAVIGATOR_SLOT || slot == VISIBILITY_SLOT || slot == SETTINGS_SLOT;
-    }
-
-    private ItemStack createNavigatorItem() {
-        return createItem(
-                Material.COMPASS,
-                "Warp Navigator",
-                NamedTextColor.AQUA,
-                List.of("Right-click to open the warp navigator."),
-                LobbyItemType.NAVIGATOR
-        );
-    }
-
-    private ItemStack createVisibilityItem(Player player) {
-        boolean visible = playerSettingsService.areLobbyPlayersVisible(player.getUniqueId()).orElse(true);
-        return createItem(
-                visible ? Material.LIME_DYE : Material.GRAY_DYE,
-                visible ? "Players: Visible" : "Players: Filtered",
-                visible ? NamedTextColor.GREEN : NamedTextColor.GRAY,
-                List.of(visible
-                        ? "Right-click to use your visibility filters."
-                        : "Right-click to show all lobby players."),
-                LobbyItemType.VISIBILITY
-        );
-    }
-
-    private ItemStack createSettingsItem() {
-        return createItem(
-                Material.COMPARATOR,
-                "Settings",
-                NamedTextColor.YELLOW,
-                List.of("Right-click to open your settings."),
-                LobbyItemType.SETTINGS
-        );
-    }
-
-    private ItemStack createItem(
-            Material material,
-            String name,
-            NamedTextColor nameColor,
-            List<String> loreLines,
-            LobbyItemType type
-    ) {
-        ItemStack item = new ItemStack(material);
+    private ItemStack createItem(Player player, LobbyItemType type, LobbyItemDefinition definition) {
+        boolean filtered = type == LobbyItemType.VISIBILITY
+                && !playerSettingsService.areLobbyPlayersVisible(player.getUniqueId()).orElse(true);
+        var appearance = filtered ? definition.filteredAppearance() : definition.appearance();
+        ItemStack item = new ItemStack(appearance.material());
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(uiText(name, nameColor));
-        meta.lore(loreLines.stream()
-                .map(line -> uiText(line, NamedTextColor.GRAY))
-                .toList()
-        );
+        meta.displayName(appearance.name());
+        meta.lore(appearance.lore());
+        if (appearance.selfHead() && meta instanceof SkullMeta skull) {
+            // Uses the already available online-player profile; never completes/fetches profiles or textures.
+            skull.setPlayerProfile(player.getPlayerProfile());
+        }
         meta.getPersistentDataContainer().set(
                 lobbyItemKey,
                 PersistentDataType.STRING,
@@ -182,10 +160,6 @@ public final class LobbyItemService {
         );
         item.setItemMeta(meta);
         return item;
-    }
-
-    private Component uiText(String text, NamedTextColor color) {
-        return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
     private boolean isEmpty(ItemStack item) {

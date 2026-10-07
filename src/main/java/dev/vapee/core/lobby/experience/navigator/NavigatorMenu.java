@@ -26,8 +26,11 @@ import java.util.logging.Logger;
 
 public final class NavigatorMenu {
 
+    // Layout: paginated warps 0..44; empty-state marker 22.
+    // Footer: previous 45, page info 49, close 50, next 53. Listener shares these constants.
     public static final int INVENTORY_SIZE = 54;
     public static final int CONTENT_SIZE = 45;
+    private static final int EMPTY_SLOT = 22;
     public static final int PREVIOUS_SLOT = 45;
     public static final int PAGE_INFO_SLOT = 49;
     public static final int CLOSE_SLOT = 50;
@@ -93,7 +96,7 @@ public final class NavigatorMenu {
             inventory.setItem(index - fromIndex, createWarpItem(warps.get(index)));
         }
         if (warps.isEmpty()) {
-            inventory.setItem(22, createItem(
+            inventory.setItem(EMPTY_SLOT, createItem(
                     Material.GRAY_DYE,
                     "No Destinations Available",
                     NamedTextColor.GRAY,

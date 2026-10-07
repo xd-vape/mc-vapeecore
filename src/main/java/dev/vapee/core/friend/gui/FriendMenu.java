@@ -34,8 +34,11 @@ import java.util.logging.Logger;
 /** A focused, holder-bound view of the existing friends service. */
 public final class FriendMenu {
 
+    // Layout: paginated entries 0..44; empty-state marker 22.
+    // Footer: previous 45, add 46, friends 47, incoming 48, close 49, outgoing 50, refresh 52, next 53.
     public static final int INVENTORY_SIZE = 54;
     public static final int CONTENT_SIZE = 45;
+    private static final int EMPTY_SLOT = 22;
     public static final int PREVIOUS_SLOT = 45;
     public static final int ADD_SLOT = 46;
     public static final int FRIENDS_SLOT = 47;
@@ -112,7 +115,7 @@ public final class FriendMenu {
                 case INCOMING -> "No incoming requests";
                 case OUTGOING -> "No outgoing requests";
             };
-            inventory.setItem(22, item(Material.PAPER, empty, NamedTextColor.GRAY,
+            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, empty, NamedTextColor.GRAY,
                     selectedView == FriendMenuView.FRIENDS
                             ? List.of("Use /friend add <player> to get started.") : List.of()));
         }

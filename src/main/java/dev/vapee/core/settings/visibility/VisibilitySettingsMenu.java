@@ -24,6 +24,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisibilitySettingsMenu {
+    // Layout: filter icons 9/11/13/15/17; status indicators 18/20/22/24/26.
+    // Manage list 31; footer back 45, close 49, refresh 52. Clicks share these constants.
     public static final int INVENTORY_SIZE = 54;
     public static final int MASTER_SLOT = 9;
     public static final int FRIENDS_SLOT = 11;

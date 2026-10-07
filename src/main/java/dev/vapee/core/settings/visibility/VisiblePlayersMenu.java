@@ -31,8 +31,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisiblePlayersMenu {
+    // Layout: paginated entries 0..44; empty-state marker 22.
+    // Footer: previous 45, add 46, back 48, close 49, refresh 52, next 53.
     public static final int INVENTORY_SIZE = 54;
     public static final int CONTENT_SIZE = 45;
+    private static final int EMPTY_SLOT = 22;
     public static final int PREVIOUS_SLOT = 45;
     public static final int ADD_SLOT = 46;
     public static final int BACK_SLOT = 48;
@@ -106,7 +109,7 @@ public final class VisiblePlayersMenu {
             inventory.setItem(index - first, itemRenderer.render(entryItem(entries.get(index))));
         }
         if (entries.isEmpty()) {
-            inventory.setItem(22, item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
+            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
                     List.of("Use Add Player to get started.")));
         }
         if (pagination.hasPrevious()) {

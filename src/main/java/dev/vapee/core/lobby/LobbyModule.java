@@ -57,7 +57,8 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         LobbyItemService newLobbyItemService = new LobbyItemService(
                 plugin,
                 newLobbyService,
-                newPlayerSettingsService
+                newPlayerSettingsService,
+                newLobbyConfig::getItems
         );
         LobbyMessageService newLobbyMessageService = new LobbyMessageService(
                 plugin,
@@ -188,11 +189,13 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
                     activeConfig.applyState(preparedConfigState);
                     activeService.applySpawn(preparedConfigState.spawn());
                     activePlayerStateService.refreshNormalGameModes();
+                    activePlayerStateService.refreshLobbyItems();
                 },
                 () -> {
                     activeConfig.applyState(previousConfigState);
                     activeService.applySpawn(previousSpawn);
                     activePlayerStateService.refreshNormalGameModes();
+                    activePlayerStateService.refreshLobbyItems();
                 }
         );
     }
