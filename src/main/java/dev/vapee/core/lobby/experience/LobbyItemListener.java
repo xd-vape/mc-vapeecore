@@ -1,17 +1,8 @@
 package dev.vapee.core.lobby.experience;
 
 import dev.vapee.core.lobby.LobbyService;
-import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
+import dev.vapee.core.lobby.item.LobbyItemRegistry;
 import dev.vapee.core.lobby.item.LobbyItemService;
-import dev.vapee.core.lobby.item.LobbyItemType;
-import dev.vapee.core.message.MessageService;
-import dev.vapee.core.player.settings.PlayerSettingsService;
-import dev.vapee.core.settings.SettingsMenu;
-import dev.vapee.core.settings.command.SettingsCommand;
-import dev.vapee.core.visibility.VisibilityService;
-import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.SoundCategory;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -24,51 +15,29 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.HashSet;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class LobbyItemListener implements Listener {
-
-    private static final long VISIBILITY_TOGGLE_COOLDOWN_TICKS = 10L;
-
-    private final JavaPlugin plugin;
     private final LobbyService lobbyService;
     private final LobbyItemService lobbyItemService;
-    private final VisibilityService visibilityService;
-    private final PlayerSettingsService playerSettingsService;
-    private final NavigatorMenu navigatorMenu;
-    private final SettingsMenu settingsMenu;
-    private final MessageService messageService;
+    private final LobbyItemRegistry registry;
+    private final Predicate<Player> eligible;
+    private final Consumer<Player> feedback;
     private final Logger logger;
-    private final Set<UUID> visibilityToggleCooldowns = new HashSet<>();
 
-    public LobbyItemListener(
-            JavaPlugin plugin,
-            LobbyService lobbyService,
-            LobbyItemService lobbyItemService,
-            VisibilityService visibilityService,
-            PlayerSettingsService playerSettingsService,
-            NavigatorMenu navigatorMenu,
-            SettingsMenu settingsMenu,
-            MessageService messageService
-    ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
-        this.lobbyItemService = Objects.requireNonNull(lobbyItemService, "lobbyItemService");
-        this.visibilityService = Objects.requireNonNull(visibilityService, "visibilityService");
-        this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
-        this.navigatorMenu = Objects.requireNonNull(navigatorMenu, "navigatorMenu");
-        this.settingsMenu = Objects.requireNonNull(settingsMenu, "settingsMenu");
-        this.messageService = Objects.requireNonNull(messageService, "messageService");
-        this.logger = plugin.getLogger();
+    public LobbyItemListener(LobbyService lobbyService, LobbyItemService lobbyItemService,
+                             LobbyItemRegistry registry, Predicate<Player> eligible,
+                             Consumer<Player> feedback, Logger logger) {
+        this.lobbyService = Objects.requireNonNull(lobbyService);
+        this.lobbyItemService = Objects.requireNonNull(lobbyItemService);
+        this.registry = Objects.requireNonNull(registry);
+        this.eligible = Objects.requireNonNull(eligible);
+        this.feedback = Objects.requireNonNull(feedback);
+        this.logger = Objects.requireNonNull(logger);
     }
 
     @EventHandler
@@ -89,31 +58,14 @@ public final class LobbyItemListener implements Listener {
             return;
         }
 
-        Optional<LobbyItemType> itemType = lobbyItemService.getItemType(event.getItem());
-        if (itemType.isEmpty()) {
-            return;
-        }
-
-        switch (itemType.get()) {
-            case NAVIGATOR -> {
-                if (navigatorMenu.open(player)) {
-                    playFeedbackSound(player);
-                }
+        if (!eligible.test(player)) return;
+        lobbyItemService.getItemId(event.getItem()).filter(lobbyItemService::isEnabled).ifPresent(id -> {
+            try {
+                if (registry.handleClick(id, player, event.getAction())) feedback.accept(player);
+            } catch (RuntimeException exception) {
+                logger.log(Level.WARNING, "Could not use lobby item '" + id + "' for " + player.getUniqueId(), exception);
             }
-            case SETTINGS -> {
-                if (!player.hasPermission(SettingsCommand.PERMISSION)) {
-                    messageService.send(player, "<red>You do not have permission to use settings.</red>");
-                    return;
-                }
-                if (playerSettingsService.getSettings(player.getUniqueId()).isEmpty()) {
-                    settingsMenu.open(player);
-                    return;
-                }
-                settingsMenu.open(player);
-                playFeedbackSound(player);
-            }
-            case VISIBILITY -> handleVisibilityInteraction(player, event.getAction());
-        }
+        });
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -164,89 +116,4 @@ public final class LobbyItemListener implements Listener {
                 && lobbyItemService.isManagedItem(player.getInventory().getItemInOffHand());
     }
 
-    private void toggleVisibility(Player player) {
-        UUID uniqueId = player.getUniqueId();
-        if (!beginVisibilityToggleCooldown(player, uniqueId)) {
-            return;
-        }
-
-        Optional<Boolean> currentValue = playerSettingsService.areLobbyPlayersVisible(uniqueId);
-        if (currentValue.isEmpty()) {
-            messageService.send(player, "<red>Your player profile is not available.</red>");
-            return;
-        }
-
-        boolean saved;
-        try {
-            saved = playerSettingsService.setLobbyPlayersVisible(uniqueId, !currentValue.get());
-        } catch (RuntimeException exception) {
-            logger.log(Level.SEVERE, "Could not save lobby visibility setting for " + uniqueId + ".", exception);
-            messageService.send(player, "<red>Your visibility setting could not be saved. Please try again.</red>");
-            return;
-        }
-        if (!saved) {
-            messageService.send(player, "<red>Your player profile is not available.</red>");
-            return;
-        }
-
-        visibilityService.applyViewerPreference(player);
-        lobbyItemService.refreshVisibilityItem(player);
-        playFeedbackSound(player);
-    }
-
-    private void handleVisibilityInteraction(Player player, Action action) {
-        if (action != Action.RIGHT_CLICK_BLOCK) {
-            toggleVisibility(player);
-            return;
-        }
-
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!player.isOnline() || !lobbyService.isLobbyWorld(player.getWorld())) {
-                return;
-            }
-            toggleVisibility(player);
-        });
-    }
-
-    private boolean beginVisibilityToggleCooldown(Player player, UUID uniqueId) {
-        if (!visibilityToggleCooldowns.add(uniqueId)) {
-            return false;
-        }
-
-        try {
-            player.setCooldown(Material.LIME_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
-            player.setCooldown(Material.GRAY_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
-            plugin.getServer().getScheduler().runTaskLater(
-                    plugin,
-                    () -> visibilityToggleCooldowns.remove(uniqueId),
-                    VISIBILITY_TOGGLE_COOLDOWN_TICKS
-            );
-            return true;
-        } catch (RuntimeException exception) {
-            visibilityToggleCooldowns.remove(uniqueId);
-            throw exception;
-        }
-    }
-
-    private void playFeedbackSound(Player player) {
-        if (!playerSettingsService.areSoundsEnabled(player.getUniqueId()).orElse(false)) {
-            return;
-        }
-
-        try {
-            player.playSound(
-                    player.getLocation(),
-                    Sound.UI_BUTTON_CLICK,
-                    SoundCategory.MASTER,
-                    0.5F,
-                    1.0F
-            );
-        } catch (RuntimeException exception) {
-            logger.log(
-                    Level.WARNING,
-                    "Could not play lobby UI feedback sound for " + player.getUniqueId() + ".",
-                    exception
-            );
-        }
-    }
 }

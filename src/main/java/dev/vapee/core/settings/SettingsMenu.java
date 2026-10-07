@@ -28,7 +28,7 @@ public final class SettingsMenu {
 
     // Layout (zero-based slots): feature icons 10/12/14/16, matching status 19/21/23/25.
     // Lower features 31/33, status 40/42; footer close 49, refresh 52.
-    // SettingsListener uses these same constants for actions and status clicks.
+    // SettingsMenuEntries owns each tile and its paired action; listener resolves the same entries.
     public static final int INVENTORY_SIZE = 54;
     public static final int SCOREBOARD_SLOT = 10;
     public static final int SOUNDS_SLOT = 12;
@@ -47,6 +47,7 @@ public final class SettingsMenu {
 
     private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
 
+    private final List<SettingsMenuEntry> entries;
     private final PlayerSettingsService playerSettingsService;
     private final MessageService messageService;
     private final InventoryFactory inventoryFactory;
@@ -60,6 +61,7 @@ public final class SettingsMenu {
             PlayerSettingsService playerSettingsService,
             MessageService messageService
     ) {
+        this.entries = validateEntries(SettingsMenuEntries.defaults());
         Objects.requireNonNull(plugin, "plugin");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
@@ -72,6 +74,13 @@ public final class SettingsMenu {
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
                  Function<UUID, Player> onlinePlayer,
                  InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger) {
+        this(playerSettingsService, messageService, onlinePlayer, inventoryFactory, itemRenderer, logger, SettingsMenuEntries.defaults());
+    }
+
+    SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
+                 Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                 ItemRenderer itemRenderer, Logger logger, List<SettingsMenuEntry> entries) {
+        this.entries = validateEntries(entries);
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
@@ -80,17 +89,17 @@ public final class SettingsMenu {
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
     }
 
-    public void open(Player player) {
+    public boolean open(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         if (!validatedPlayer.hasPermission(SettingsCommand.PERMISSION)) {
             messageService.send(validatedPlayer, "<red>You do not have permission to use settings.</red>");
-            return;
+            return false;
         }
         UUID uniqueId = validatedPlayer.getUniqueId();
         if (playerSettingsService.getSettings(uniqueId).isEmpty()) {
             validatedPlayer.closeInventory();
             messageService.send(validatedPlayer, "<red>Your player profile is not available.</red>");
-            return;
+            return false;
         }
 
         SettingsInventoryHolder holder = new SettingsInventoryHolder(uniqueId);
@@ -99,12 +108,14 @@ public final class SettingsMenu {
         if (!refresh(validatedPlayer, inventory)) {
             validatedPlayer.closeInventory();
             messageService.send(validatedPlayer, "<red>Your player profile is not available.</red>");
-            return;
+            return false;
         }
         var opened = validatedPlayer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) {
             activeInventories.put(uniqueId, inventory);
+            return true;
         }
+        return false;
     }
 
     public boolean isActive(Player viewer, Inventory inventory, SettingsInventoryHolder holder) {
@@ -158,115 +169,29 @@ public final class SettingsMenu {
         }
 
         PlayerSettings settings = optionalSettings.get();
-        validatedInventory.setItem(VISIBILITY_SLOT, createVisibilityItem());
-        validatedInventory.setItem(
-                SCOREBOARD_SLOT,
-                createToggleItem(
-                        Material.MAP,
-                        "Scoreboard",
-                        List.of("Show or hide the lobby scoreboard."),
-                        settings.isScoreboardEnabled()
-                )
-        );
-        validatedInventory.setItem(
-                SOUNDS_SLOT,
-                createToggleItem(
-                        Material.NOTE_BLOCK,
-                        "Sounds",
-                        List.of(
-                                "Enable or disable VapeeCore",
-                                "interface feedback sounds."
-                        ),
-                        settings.isSoundsEnabled()
-                )
-        );
-        validatedInventory.setItem(
-                PRIVATE_MESSAGES_SLOT,
-                createToggleItem(
-                        Material.WRITABLE_BOOK,
-                        "Private Messages",
-                        List.of(
-                                "Choose whether other players can send",
-                                "private messages to you."
-                        ),
-                        settings.isPrivateMessagesEnabled()
-                )
-        );
-        validatedInventory.setItem(
-                FRIEND_REQUESTS_SLOT,
-                createToggleItem(
-                        Material.PLAYER_HEAD,
-                        "Friend Requests",
-                        List.of("Choose whether other players can send",
-                                "friend requests to you."),
-                        settings.isFriendRequestsEnabled()
-                )
-        );
-        validatedInventory.setItem(
-                FRIEND_PRESENCE_SLOT,
-                createToggleItem(
-                        Material.BELL,
-                        "Friend Presence",
-                        List.of("Notify you when friends join or leave."),
-                        settings.isFriendPresenceNotificationsEnabled()
-                )
-        );
+        for (var entry : entries) {
+            validatedInventory.setItem(entry.slot(), itemRenderer.render(entry.icon().apply(settings)));
+            if (entry.statusSlot() >= 0) validatedInventory.setItem(entry.statusSlot(), itemRenderer.render(entry.status().apply(settings)));
+        }
         validatedInventory.setItem(CLOSE_SLOT, createCloseItem());
         validatedInventory.setItem(REFRESH_SLOT, itemRenderer.render(new UiItemSpec(
                 Material.CLOCK, UiItems.text("Refresh", NamedTextColor.AQUA),
                 List.of(UiItems.text("Reload your current settings.", NamedTextColor.GRAY)))));
-        validatedInventory.setItem(SCOREBOARD_STATUS_SLOT, createStatusItem(settings.isScoreboardEnabled()));
-        validatedInventory.setItem(SOUNDS_STATUS_SLOT, createStatusItem(settings.isSoundsEnabled()));
-        validatedInventory.setItem(PRIVATE_MESSAGES_STATUS_SLOT,
-                createStatusItem(settings.isPrivateMessagesEnabled()));
-        validatedInventory.setItem(FRIEND_REQUESTS_STATUS_SLOT,
-                createStatusItem(settings.isFriendRequestsEnabled()));
-        validatedInventory.setItem(FRIEND_PRESENCE_STATUS_SLOT,
-                createStatusItem(settings.isFriendPresenceNotificationsEnabled()));
-        boolean allVisible = settings.isLobbyPlayersVisible();
-        validatedInventory.setItem(VISIBILITY_STATUS_SLOT, itemRenderer.render(new UiItemSpec(
-                allVisible ? Material.LIME_STAINED_GLASS_PANE : Material.YELLOW_STAINED_GLASS_PANE,
-                UiItems.text(allVisible ? "All Players" : "Filtered",
-                        allVisible ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
-                List.of(UiItems.text("Click to open visibility settings.", NamedTextColor.GRAY)))));
         return true;
     }
 
-    private ItemStack createStatusItem(boolean enabled) {
-        return itemRenderer.render(new UiItemSpec(
-                enabled ? Material.LIME_STAINED_GLASS_PANE : Material.RED_STAINED_GLASS_PANE,
-                UiItems.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED),
-                List.of(UiItems.text(enabled ? "Click to disable." : "Click to enable.", NamedTextColor.GRAY))));
+    public Optional<SettingsMenuEntry> entryAt(int slot) {
+        return entries.stream().filter(entry -> entry.matches(slot)).findFirst();
     }
 
-    private ItemStack createToggleItem(
-            Material material,
-            String name,
-            List<String> description,
-            boolean enabled
-    ) {
-        List<Component> lore = new java.util.ArrayList<>();
-        for (String line : description) {
-            lore.add(UiItems.text(line, NamedTextColor.GRAY));
+    private static List<SettingsMenuEntry> validateEntries(List<SettingsMenuEntry> entries) {
+        var slots = new java.util.HashSet<Integer>(List.of(CLOSE_SLOT, REFRESH_SLOT));
+        for (var entry : entries) {
+            if (!slots.add(entry.slot()) || entry.statusSlot() >= 0 && !slots.add(entry.statusSlot())) {
+                throw new IllegalArgumentException("Duplicate/reserved Settings tile slot");
+            }
         }
-        lore.add(Component.empty());
-        lore.add(UiItems.text(
-                enabled ? "Click to disable." : "Click to enable.",
-                NamedTextColor.YELLOW
-        ));
-        return itemRenderer.render(new UiItemSpec(material, UiItems.text(name, NamedTextColor.AQUA), List.copyOf(lore)));
-    }
-
-    private ItemStack createVisibilityItem() {
-        return itemRenderer.render(new UiItemSpec(
-                Material.SPYGLASS,
-                UiItems.text("Player Visibility", NamedTextColor.AQUA),
-                List.of(
-                        UiItems.text("Manage which lobby players you can see.", NamedTextColor.GRAY),
-                        Component.empty(),
-                        UiItems.text("Click to open.", NamedTextColor.YELLOW)
-                )
-        ));
+        return List.copyOf(entries);
     }
 
     private ItemStack createCloseItem() {

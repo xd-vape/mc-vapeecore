@@ -63,10 +63,10 @@ public final class ConfigEvolutionHarness {
                 unknown-map: {}
                 unknown-string: '007'
                 """;
-        Path file = root.resolve("lobby.yml");
+        Path file = root.resolve("chat.yml");
         Files.writeString(file, original);
         var evolution = evolution(root, DEFAULTS, new ConfigEvolution.FileAccess());
-        check(evolution.evolve("lobby.yml"), "legacy config migrated");
+        check(evolution.evolve("chat.yml"), "legacy config migrated");
         Map<?, ?> actual = yaml(file);
         check(actual.get("config-version").equals(1), "version advanced");
         check(actual.get("enabled").equals(false), "existing false preserved");
@@ -87,15 +87,15 @@ public final class ConfigEvolutionHarness {
         List<Path> backups = backups(root);
         check(backups.size() == 1 && Arrays.equals(Files.readAllBytes(backups.getFirst()), original.getBytes(StandardCharsets.UTF_8)), "one exact-byte pre-migration backup");
         byte[] first = Files.readAllBytes(file);
-        check(!evolution.evolve("lobby.yml"), "second migration is skipped");
+        check(!evolution.evolve("chat.yml"), "second migration is skipped");
         check(Arrays.equals(first, Files.readAllBytes(file)) && backups(root).size() == 1, "idempotent bytes and backup count");
         // An explicit legacy file installed again gets a distinct backup, never overwrites the first receipt.
         Files.writeString(file, "enabled: false\n");
-        check(evolution.evolve("lobby.yml") && backups(root).size() == 2, "unique second legacy backup");
+        check(evolution.evolve("chat.yml") && backups(root).size() == 2, "unique second legacy backup");
         check(Arrays.equals(Files.readAllBytes(backups.getFirst()), original.getBytes(StandardCharsets.UTF_8)), "older backup untouched");
 
         Files.writeString(file, "section: operator-scalar\nlist: []\nenabled: 'wrong-type'\n");
-        check(evolution.evolve("lobby.yml"), "type-conflicting legacy file still evolves missing peers");
+        check(evolution.evolve("chat.yml"), "type-conflicting legacy file still evolves missing peers");
         actual = yaml(file);
         check(actual.get("section").equals("operator-scalar") && actual.get("enabled").equals("wrong-type"), "type conflict never overwrites operator values");
         check(actual.get("list").equals(List.of()), "empty existing list preserved");
@@ -134,13 +134,13 @@ public final class ConfigEvolutionHarness {
 
     private static void testFailures(Path root) throws Exception {
         Files.createDirectories(root);
-        Path file = root.resolve("lobby.yml");
+        Path file = root.resolve("chat.yml");
         byte[] original = "enabled: false\n".getBytes(StandardCharsets.UTF_8);
         Files.write(file, original);
         var writeFailure = new ConfigEvolution.FileAccess() {
             @Override void write(Path target, byte[] content) throws IOException { throw new IOException("injected write failure"); }
         };
-        expectFailure(() -> evolution(root, DEFAULTS, writeFailure).evolve("lobby.yml"), "candidate write failure propagates");
+        expectFailure(() -> evolution(root, DEFAULTS, writeFailure).evolve("chat.yml"), "candidate write failure propagates");
         check(Arrays.equals(original, Files.readAllBytes(file)), "failed write leaves original intact");
         check(backups(root).size() == 1 && Arrays.equals(original, Files.readAllBytes(backups(root).getFirst())), "backup recoverable after failed write");
         check(noTemporary(root), "failed candidate cleaned up");
@@ -151,7 +151,7 @@ public final class ConfigEvolutionHarness {
                 throw new IOException("injected non-atomic failure");
             }
         };
-        expectFailure(() -> evolution(root, DEFAULTS, corruptFallback).evolve("lobby.yml"), "failed fallback propagates");
+        expectFailure(() -> evolution(root, DEFAULTS, corruptFallback).evolve("chat.yml"), "failed fallback propagates");
         check(Arrays.equals(original, Files.readAllBytes(file)) && backups(root).size() == 2, "failed fallback restores exact original and keeps backups");
         check(noTemporary(root), "fallback temporary cleaned up");
         var nonAtomic = new ConfigEvolution.FileAccess() {
@@ -160,7 +160,7 @@ public final class ConfigEvolutionHarness {
                 super.replace(temporary, target, false);
             }
         };
-        check(evolution(root, DEFAULTS, nonAtomic).evolve("lobby.yml") && yaml(file).get("enabled").equals(false), "recoverable fallback success uses production merge");
+        check(evolution(root, DEFAULTS, nonAtomic).evolve("chat.yml") && yaml(file).get("enabled").equals(false), "recoverable fallback success uses production merge");
         Files.write(file, original);
         var changed = new ConfigEvolution.FileAccess() {
             @Override void write(Path temporary, byte[] content) throws IOException {
@@ -168,7 +168,7 @@ public final class ConfigEvolutionHarness {
                 Files.writeString(file, "enabled: true # concurrent operator edit\n");
             }
         };
-        expectFailure(() -> evolution(root, DEFAULTS, changed).evolve("lobby.yml"), "concurrent edit rejected");
+        expectFailure(() -> evolution(root, DEFAULTS, changed).evolve("chat.yml"), "concurrent edit rejected");
         check(Files.readString(file).contains("concurrent operator edit"), "concurrent operator edit not clobbered");
     }
 
@@ -187,7 +187,7 @@ public final class ConfigEvolutionHarness {
         evolution.evolveAll();
         for (String name : ConfigEvolution.MANAGED_CONFIGS.keySet()) {
             Map<?, ?> config = yaml(root.resolve(name));
-            check(config.get("config-version").equals(1) && config.containsKey("operator-extra"), "actual resource merged without dropping unknown null " + name);
+            check(config.get("config-version").equals(ConfigEvolution.MANAGED_CONFIGS.get(name)) && config.containsKey("operator-extra"), "actual resource merged without dropping unknown null " + name);
         }
         for (var entry : excluded.entrySet()) check(Arrays.equals(entry.getValue(), Files.readAllBytes(root.resolve(entry.getKey()))), "persistence byte parity " + entry.getKey());
         check(backups(root).size() == 6, "only operator configs generate backups");

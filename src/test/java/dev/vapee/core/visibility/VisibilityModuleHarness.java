@@ -78,17 +78,17 @@ public final class VisibilityModuleHarness {
                 "quit and lobby exit restore plugin-owned visibility");
 
         String itemListener = Files.readString(Path.of(
-                "src/main/java/dev/vapee/core/lobby/experience/LobbyItemListener.java"));
+                "src/main/java/dev/vapee/core/visibility/VisibilityLobbyItemAction.java"));
         check(itemListener.contains("setLobbyPlayersVisible(uniqueId, !currentValue.get())")
                         && itemListener.contains("visibilityService.applyViewerPreference(player)")
                         && itemListener.contains("lobbyItemService.refreshVisibilityItem(player)"),
                 "hotbar master toggle persists and refreshes visibility plus item immediately");
         check(itemListener.contains("VISIBILITY_TOGGLE_COOLDOWN_TICKS = 10L")
-                        && itemListener.contains("playFeedbackSound(player)"),
+                        && itemListener.contains("feedback.accept(player)"),
                 "hotbar cooldown and sound feedback remain in place");
 
         String itemDefaults = Files.readString(Path.of(
-                "src/main/java/dev/vapee/core/lobby/config/LobbyItemsConfig.java"));
+                "src/main/java/dev/vapee/core/lobby/item/LobbyItemRegistrations.java"));
         check(itemDefaults.contains("Players: Visible")
                         && itemDefaults.contains("Right-click to use your visibility filters.")
                         && itemDefaults.contains("Players: Filtered")

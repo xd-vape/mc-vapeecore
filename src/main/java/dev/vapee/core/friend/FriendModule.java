@@ -123,6 +123,10 @@ public final class FriendModule implements CoreModule {
         }
     }
 
+    public FriendMenu getFriendMenu() {
+        return Objects.requireNonNull(friendMenu, "FriendModule is not enabled");
+    }
+
     public FriendService getFriendService() {
         return Objects.requireNonNull(friendService, "FriendModule is not enabled");
     }

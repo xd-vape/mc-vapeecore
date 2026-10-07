@@ -1,8 +1,6 @@
 package dev.vapee.core.lobby.item;
 
 import dev.vapee.core.lobby.LobbyService;
-import dev.vapee.core.lobby.config.LobbyItemsConfig;
-import dev.vapee.core.player.settings.PlayerSettingsService;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -27,24 +25,15 @@ public final class LobbyItemService {
 
     private final JavaPlugin plugin;
     private final LobbyService lobbyService;
-    private final PlayerSettingsService playerSettingsService;
+    private final LobbyItemRegistry registry;
     private final NamespacedKey lobbyItemKey;
-    private final Supplier<Map<LobbyItemType, LobbyItemDefinition>> definitions;
+    private final Supplier<Map<String, LobbyItemDefinition>> definitions;
 
-    public LobbyItemService(
-            JavaPlugin plugin,
-            LobbyService lobbyService,
-            PlayerSettingsService playerSettingsService
-    ) {
-        this(plugin, lobbyService, playerSettingsService, LobbyItemsConfig::defaults);
-    }
-
-    public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService,
-                            PlayerSettingsService playerSettingsService,
-                            Supplier<Map<LobbyItemType, LobbyItemDefinition>> definitions) {
+    public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService, LobbyItemRegistry registry,
+                            Supplier<Map<String, LobbyItemDefinition>> definitions) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
-        this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
+        this.registry = Objects.requireNonNull(registry, "registry");
         this.lobbyItemKey = new NamespacedKey(plugin, "lobby_item");
         this.definitions = Objects.requireNonNull(definitions, "definitions");
     }
@@ -56,29 +45,34 @@ public final class LobbyItemService {
         }
 
         removeManagedItems(validatedPlayer);
-        Map<LobbyItemType, LobbyItemDefinition> current = definitions.get();
+        Map<String, LobbyItemDefinition> current = definitions.get();
         Set<Integer> reserved = current.values().stream().filter(LobbyItemDefinition::enabled)
                 .map(LobbyItemDefinition::slot).collect(Collectors.toSet());
-        for (LobbyItemType type : LobbyItemType.values()) {
-            var definition = current.get(type);
-            if (definition.enabled()) {
-                placeItem(validatedPlayer, definition.slot(), createItem(validatedPlayer, type, definition), reserved);
+        for (var entry : registry.entries().values()) {
+            var definition = current.get(entry.id());
+            if (definition != null && definition.enabled()) {
+                placeItem(validatedPlayer, definition.slot(), createItem(validatedPlayer, entry, definition), reserved);
             }
         }
     }
 
-    public void refreshVisibilityItem(Player player) {
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        if (!lobbyService.isLobbyWorld(validatedPlayer.getWorld())) {
-            return;
-        }
+    public void refreshVisibilityItem(Player player) { refreshItem(player, "visibility"); }
 
-        var definition = definitions.get().get(LobbyItemType.VISIBILITY);
-        if (!definition.enabled()) return;
+    public void refreshItem(Player player, String id) {
+        Player validatedPlayer = Objects.requireNonNull(player, "player");
+        if (!lobbyService.isLobbyWorld(validatedPlayer.getWorld())) return;
+        var entry = registry.resolve(id).orElse(null);
+        var definition = definitions.get().get(id);
+        if (entry == null || definition == null || !definition.enabled()) return;
         ItemStack currentItem = validatedPlayer.getInventory().getItem(definition.slot());
-        if (getItemType(currentItem).orElse(null) == LobbyItemType.VISIBILITY || isEmpty(currentItem)) {
-            validatedPlayer.getInventory().setItem(definition.slot(), createItem(validatedPlayer, LobbyItemType.VISIBILITY, definition));
+        if (getItemId(currentItem).filter(id::equals).isPresent() || isEmpty(currentItem)) {
+            validatedPlayer.getInventory().setItem(definition.slot(), createItem(validatedPlayer, entry, definition));
         }
+    }
+
+    public boolean isEnabled(String id) {
+        var definition = definitions.get().get(id);
+        return registry.resolve(id).isPresent() && definition != null && definition.enabled();
     }
 
     public void removeManagedItems(Player player) {
@@ -99,7 +93,7 @@ public final class LobbyItemService {
                 .has(lobbyItemKey, PersistentDataType.STRING);
     }
 
-    public Optional<LobbyItemType> getItemType(ItemStack item) {
+    public Optional<String> getItemId(ItemStack item) {
         if (!isManagedItem(item)) {
             return Optional.empty();
         }
@@ -107,7 +101,7 @@ public final class LobbyItemService {
                 .get(lobbyItemKey, PersistentDataType.STRING);
         return persistentId == null
                 ? Optional.empty()
-                : LobbyItemType.fromPersistentId(persistentId);
+                : registry.resolve(persistentId).map(LobbyItemRegistry.Entry::id);
     }
 
     private void placeItem(Player player, int targetSlot, ItemStack lobbyItem, Set<Integer> reserved) {
@@ -141,10 +135,8 @@ public final class LobbyItemService {
         return -1;
     }
 
-    private ItemStack createItem(Player player, LobbyItemType type, LobbyItemDefinition definition) {
-        boolean filtered = type == LobbyItemType.VISIBILITY
-                && !playerSettingsService.areLobbyPlayersVisible(player.getUniqueId()).orElse(true);
-        var appearance = filtered ? definition.filteredAppearance() : definition.appearance();
+    private ItemStack createItem(Player player, LobbyItemRegistry.Entry entry, LobbyItemDefinition definition) {
+        var appearance = Objects.requireNonNull(entry.presentation().apply(player, definition));
         ItemStack item = new ItemStack(appearance.material());
         ItemMeta meta = item.getItemMeta();
         meta.displayName(appearance.name());
@@ -156,7 +148,7 @@ public final class LobbyItemService {
         meta.getPersistentDataContainer().set(
                 lobbyItemKey,
                 PersistentDataType.STRING,
-                type.getPersistentId()
+                entry.id()
         );
         item.setItemMeta(meta);
         return item;

@@ -2,7 +2,8 @@ package dev.vapee.core.lobby.config;
 
 import dev.vapee.core.lobby.LobbySpawn;
 import dev.vapee.core.lobby.item.LobbyItemDefinition;
-import dev.vapee.core.lobby.item.LobbyItemType;
+import dev.vapee.core.lobby.item.LobbyItemRegistry;
+import dev.vapee.core.lobby.item.LobbyItemRegistrations;
 import dev.vapee.core.config.ConfigFiles;
 import dev.vapee.core.config.ConfigValues;
 import dev.vapee.core.persistence.SafeFileWriter;
@@ -45,9 +46,14 @@ public final class LobbyConfig {
     private final SafeFileWriter fileWriter;
     private final MiniMessage strictMiniMessage = MiniMessage.builder().strict(true).build();
 
-    private volatile State state = State.defaults();
+    private final LobbyItemRegistry itemRegistry;
+    private volatile State state;
 
-    public LobbyConfig(JavaPlugin plugin) {
+    public LobbyConfig(JavaPlugin plugin) { this(plugin, LobbyItemRegistrations.inactive()); }
+
+    public LobbyConfig(JavaPlugin plugin, LobbyItemRegistry itemRegistry) {
+        this.itemRegistry = Objects.requireNonNull(itemRegistry);
+        this.state = State.defaults(itemRegistry);
         JavaPlugin validatedPlugin = Objects.requireNonNull(plugin, "plugin");
         this.logger = validatedPlugin.getLogger();
         this.configFile = validatedPlugin.getDataFolder().toPath()
@@ -63,6 +69,8 @@ public final class LobbyConfig {
     }
 
     LobbyConfig(Path configFile, Logger logger, SafeFileWriter fileWriter) {
+        this.itemRegistry = LobbyItemRegistrations.inactive();
+        this.state = State.defaults(itemRegistry);
         this.configFile = Objects.requireNonNull(configFile, "configFile").toAbsolutePath().normalize();
         this.logger = Objects.requireNonNull(logger, "logger");
         this.defaultResourceSupplier = () -> new ByteArrayInputStream(DEFAULT_CONTENT);
@@ -94,7 +102,7 @@ public final class LobbyConfig {
         return state.playerGameMode();
     }
 
-    public Map<LobbyItemType, LobbyItemDefinition> getItems() {
+    public Map<String, LobbyItemDefinition> getItems() {
         return state.items();
     }
 
@@ -197,7 +205,7 @@ public final class LobbyConfig {
                         "messages.quit",
                         DEFAULT_QUIT_MESSAGE_FORMAT
                 ),
-                LobbyItemsConfig.read(configuration, logger)
+                LobbyItemsConfig.read(configuration, logger, itemRegistry)
         );
     }
 
@@ -390,7 +398,7 @@ public final class LobbyConfig {
             boolean itemPickupProtection,
             MessageSettings joinMessage,
             MessageSettings quitMessage,
-            Map<LobbyItemType, LobbyItemDefinition> items
+            Map<String, LobbyItemDefinition> items
     ) {
 
         public State {
@@ -401,7 +409,7 @@ public final class LobbyConfig {
             items = Map.copyOf(items);
         }
 
-        private static State defaults() {
+        private static State defaults(LobbyItemRegistry itemRegistry) {
             return new State(
                     Optional.empty(),
                     DEFAULT_PLAYER_GAME_MODE,
@@ -416,7 +424,7 @@ public final class LobbyConfig {
                     true,
                     new MessageSettings(true, DEFAULT_JOIN_MESSAGE_FORMAT),
                     new MessageSettings(true, DEFAULT_QUIT_MESSAGE_FORMAT),
-                    LobbyItemsConfig.defaults()
+                    LobbyItemsConfig.defaults(itemRegistry)
             );
         }
 

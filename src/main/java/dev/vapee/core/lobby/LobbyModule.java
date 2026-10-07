@@ -4,13 +4,13 @@ import dev.vapee.core.lobby.command.SetSpawnCommand;
 import dev.vapee.core.lobby.command.SpawnCommand;
 import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.item.LobbyItemService;
+import dev.vapee.core.lobby.item.LobbyItemRegistry;
 import dev.vapee.core.lobby.message.LobbyMessageService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
-import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import org.bukkit.command.PluginCommand;
@@ -26,6 +26,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
     private final PlayerModule playerModule;
     private final MessageService messageService;
 
+    private final LobbyItemRegistry itemRegistry = new LobbyItemRegistry();
     private LobbyConfig lobbyConfig;
     private LobbyService lobbyService;
     private LobbyItemService lobbyItemService;
@@ -48,16 +49,16 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
 
     @Override
     public void enable() {
-        LobbyConfig newLobbyConfig = new LobbyConfig(plugin);
+        itemRegistry.seal();
+        LobbyConfig newLobbyConfig = new LobbyConfig(plugin, itemRegistry);
         newLobbyConfig.initialize();
 
         LobbyService newLobbyService = new LobbyService(plugin, newLobbyConfig);
         PlayerService newPlayerService = playerModule.getPlayerService();
-        PlayerSettingsService newPlayerSettingsService = playerModule.getPlayerSettingsService();
         LobbyItemService newLobbyItemService = new LobbyItemService(
                 plugin,
                 newLobbyService,
-                newPlayerSettingsService,
+                itemRegistry,
                 newLobbyConfig::getItems
         );
         LobbyMessageService newLobbyMessageService = new LobbyMessageService(
@@ -146,6 +147,8 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
         lobbyService = null;
         lobbyConfig = null;
     }
+
+    public LobbyItemRegistry getItemRegistry() { return itemRegistry; }
 
     public LobbyService getLobbyService() {
         return Objects.requireNonNull(lobbyService, "LobbyModule is not enabled");

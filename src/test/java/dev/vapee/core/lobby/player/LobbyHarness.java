@@ -2,7 +2,7 @@ package dev.vapee.core.lobby.player;
 
 import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.item.LobbyItemService;
-import dev.vapee.core.lobby.item.LobbyItemType;
+import dev.vapee.core.lobby.item.LobbyItemRegistrations;
 import dev.vapee.core.lobby.message.LobbyMessageService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -229,11 +229,11 @@ public final class LobbyHarness {
         check(LobbyItemService.NAVIGATOR_SLOT == 0, "navigator remains in slot 0");
         check(LobbyItemService.VISIBILITY_SLOT == 4, "visibility remains in slot 4");
         check(LobbyItemService.SETTINGS_SLOT == 8, "settings remains in slot 8");
-        check(LobbyItemType.NAVIGATOR.getPersistentId().equals("navigator"),
+        check(LobbyItemRegistrations.inactive().resolve("navigator").orElseThrow().id().equals("navigator"),
                 "navigator persistent id is unchanged");
-        check(LobbyItemType.VISIBILITY.getPersistentId().equals("visibility"),
+        check(LobbyItemRegistrations.inactive().resolve("visibility").orElseThrow().id().equals("visibility"),
                 "visibility persistent id is unchanged");
-        check(LobbyItemType.SETTINGS.getPersistentId().equals("settings"),
+        check(LobbyItemRegistrations.inactive().resolve("settings").orElseThrow().id().equals("settings"),
                 "settings persistent id is unchanged");
     }
 

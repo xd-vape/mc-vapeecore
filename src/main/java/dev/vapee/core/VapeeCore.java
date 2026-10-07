@@ -161,6 +161,7 @@ public final class VapeeCore extends JavaPlugin {
                 warpModule,
                 visibilityModule,
                 activityModule,
+                friendModule,
                 messageService
         );
         moduleManager.register(permissionModule);
