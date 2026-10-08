@@ -26,18 +26,18 @@ import java.util.logging.Logger;
 
 public final class SettingsMenu {
 
-    // Layout (zero-based slots): feature icons 10/12/14/16, matching status 19/21/23/25.
+    // Layout (zero-based slots): feature icons 10/11/12/13, matching status 19/20/21/22.
     // Lower features 31/33, status 40/42; footer close 49, refresh 52.
     // SettingsMenuEntries owns each tile and its paired action; listener resolves the same entries.
     public static final int INVENTORY_SIZE = 54;
     public static final int SCOREBOARD_SLOT = 10;
-    public static final int SOUNDS_SLOT = 12;
-    public static final int PRIVATE_MESSAGES_SLOT = 14;
-    public static final int FRIEND_REQUESTS_SLOT = 16;
+    public static final int SOUNDS_SLOT = 11;
+    public static final int PRIVATE_MESSAGES_SLOT = 12;
+    public static final int FRIEND_REQUESTS_SLOT = 13;
     public static final int SCOREBOARD_STATUS_SLOT = 19;
-    public static final int SOUNDS_STATUS_SLOT = 21;
-    public static final int PRIVATE_MESSAGES_STATUS_SLOT = 23;
-    public static final int FRIEND_REQUESTS_STATUS_SLOT = 25;
+    public static final int SOUNDS_STATUS_SLOT = 20;
+    public static final int PRIVATE_MESSAGES_STATUS_SLOT = 21;
+    public static final int FRIEND_REQUESTS_STATUS_SLOT = 22;
     public static final int VISIBILITY_SLOT = 31;
     public static final int VISIBILITY_STATUS_SLOT = 40;
     public static final int FRIEND_PRESENCE_SLOT = 33;

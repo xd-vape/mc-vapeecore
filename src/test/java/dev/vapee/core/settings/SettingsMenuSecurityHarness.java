@@ -6,6 +6,7 @@ import org.bukkit.inventory.Inventory;
 import java.util.Map;
 
 import static dev.vapee.core.settings.SettingsMenuFixture.*;
+import static dev.vapee.core.settings.SettingsMenu.*;
 
 public final class SettingsMenuSecurityHarness {
     private static int checks;
@@ -26,7 +27,7 @@ public final class SettingsMenuSecurityHarness {
                 ClickType.NUMBER_KEY, ClickType.DOUBLE_CLICK, ClickType.SWAP_OFFHAND,
                 ClickType.DROP, ClickType.CONTROL_DROP, ClickType.MIDDLE, ClickType.CREATIVE,
                 ClickType.WINDOW_BORDER_LEFT, ClickType.UNKNOWN}) {
-            check(f.click(owner, active, 10, click).isCancelled() && f.repository.saves == baseline,
+            check(f.click(owner, active, SCOREBOARD_SLOT, click).isCancelled() && f.repository.saves == baseline,
                     "non-menu action cannot mutate: " + click);
         }
         for (int slot : new int[]{54, 60, -999, 0, 53}) {
@@ -34,24 +35,24 @@ public final class SettingsMenuSecurityHarness {
                     "bottom, outside and invalid slots blocked: " + slot);
         }
         check(f.click(owner, active, 54, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift transfer cancelled");
-        check(f.click(other, active, 10, ClickType.RIGHT).isCancelled() && f.repository.saves == baseline,
+        check(f.click(other, active, SCOREBOARD_SLOT, ClickType.RIGHT).isCancelled() && f.repository.saves == baseline,
                 "wrong viewer cannot mutate");
         var unbound = new SettingsInventoryHolder(owner.id);
         Inventory unboundInventory = inventory(unbound, 54);
-        check(f.click(owner, unboundInventory, 10, ClickType.LEFT).isCancelled()
+        check(f.click(owner, unboundInventory, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled()
                         && f.repository.saves == baseline, "unbound holder is cancelled without NPE");
         var forged = new SettingsInventoryHolder(owner.id);
         Inventory forgedInventory = inventory(forged, 54);
         forged.bindInventory(forgedInventory);
         owner.open = forgedInventory;
-        check(f.click(owner, forgedInventory, 10, ClickType.RIGHT).isCancelled()
+        check(f.click(owner, forgedInventory, SCOREBOARD_SLOT, ClickType.RIGHT).isCancelled()
                         && f.repository.saves == baseline, "even opened forged holder cannot mutate");
         Inventory mismatched = inventory(holder, 54);
         owner.open = mismatched;
-        check(f.click(owner, mismatched, 10, ClickType.LEFT).isCancelled()
+        check(f.click(owner, mismatched, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled()
                         && f.repository.saves == baseline, "holder must bind exact inventory");
         owner.open = owner.bottom;
-        check(f.click(owner, active, 10, ClickType.LEFT).isCancelled() && f.repository.saves == baseline,
+        check(f.click(owner, active, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled() && f.repository.saves == baseline,
                 "registry entry requires currently open inventory");
         owner.open = active;
         for (Inventory top : new Inventory[]{active, forgedInventory, unboundInventory}) {
@@ -61,7 +62,7 @@ public final class SettingsMenuSecurityHarness {
         }
         f.menu.open(owner.player);
         Inventory replacement = owner.open;
-        check(f.click(owner, active, 10, ClickType.LEFT).isCancelled() && f.repository.saves == baseline,
+        check(f.click(owner, active, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled() && f.repository.saves == baseline,
                 "replaced inventory is stale");
         f.listener.onInventoryClose(new InventoryCloseEvent(view(owner, active)));
         check(f.menu.isActive(owner.player, replacement, (SettingsInventoryHolder) replacement.getHolder()),
@@ -115,7 +116,10 @@ public final class SettingsMenuSecurityHarness {
         check(owner.received.size() == 1 && owner.closes == 0, "controlled entry denial leaves current view alone");
         owner.permitted = true; f.menu.open(owner.player);
         check(owner.opens == 1 && f.menu.activeCount() == 1, "grant permits new settings entry");
-        for (int slot : new int[]{10, 19, 12, 21, 14, 23, 16, 25, 33, 42, 31, 40, 49, 52, 54}) {
+        for (int slot : new int[]{SCOREBOARD_SLOT, SCOREBOARD_STATUS_SLOT, SOUNDS_SLOT, SOUNDS_STATUS_SLOT,
+                PRIVATE_MESSAGES_SLOT, PRIVATE_MESSAGES_STATUS_SLOT, FRIEND_REQUESTS_SLOT, FRIEND_REQUESTS_STATUS_SLOT,
+                FRIEND_PRESENCE_SLOT, FRIEND_PRESENCE_STATUS_SLOT, VISIBILITY_SLOT, VISIBILITY_STATUS_SLOT,
+                CLOSE_SLOT, REFRESH_SLOT, INVENTORY_SIZE}) {
             for (boolean allowed : new boolean[]{false, true}) {
                 var test = new SettingsMenuFixture(); var actor = test.player("Actor");
                 test.menu.open(actor.player); Inventory top = actor.open;
@@ -133,15 +137,15 @@ public final class SettingsMenuSecurityHarness {
                             && actor.received.size() == 1, "owned settings revocation cleanup and one denial " + slot);
                     test.click(actor, top, slot, ClickType.LEFT);
                     check(actor.closes == 1 && actor.received.size() == 1, "repeated stale settings event gives no denial spam " + slot);
-                } else if (slot == 31 || slot == 40) {
+                } else if (slot == VISIBILITY_SLOT || slot == VISIBILITY_STATUS_SLOT) {
                     check(test.visibilityCalls == 1 && test.repository.saves == initial, "authorized visibility navigation " + slot);
-                } else if (slot != 49 && slot != 52 && slot != 54) {
+                } else if (slot != CLOSE_SLOT && slot != REFRESH_SLOT && slot != INVENTORY_SIZE) {
                     check(!before.equals(after) && test.repository.saves == initial + 1, "authorized settings mutation " + slot);
                 } else check(test.repository.saves == initial, "nonmutating settings route " + slot);
             }
         }
         Inventory top = owner.open; owner.permitted = false; owner.open = owner.bottom;
-        f.click(owner, top, 10, ClickType.LEFT);
+        f.click(owner, top, SCOREBOARD_SLOT, ClickType.LEFT);
         check(owner.closes == 0 && owner.open == owner.bottom && f.menu.activeCount() == 1,
                 "settings current-top check preserves foreign view and does not reclassify stale event");
         owner.open = top;

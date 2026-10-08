@@ -125,7 +125,9 @@ public final class FriendIntegrationHarness {
                     "privacy change does not destroy accepted friendship");
             check(friends.sendRequest(bob, charlie) == FriendResult.REQUESTS_DISABLED,
                     "disabled privacy blocks new request without persistence mutation");
-            check(SettingsMenu.FRIEND_REQUESTS_SLOT == 16 && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT == 25
+            check(SettingsMenu.FRIEND_REQUESTS_SLOT >= 0
+                            && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT == SettingsMenu.FRIEND_REQUESTS_SLOT + 9
+                            && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT < SettingsMenu.INVENTORY_SIZE
                             && SettingsMenu.INVENTORY_SIZE == 54,
                     "friend request setting has feature and status below in redesigned settings GUI");
             String menuSource = Files.readString(Path.of(
