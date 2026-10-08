@@ -180,17 +180,17 @@ public final class WarpHarness {
     private static void testNavigatorHolderAndPaginationContract() throws Exception {
         UUID owner = UUID.randomUUID();
         Map<Integer, String> mapping = new LinkedHashMap<>();
-        mapping.put(0, "totally-custom-destination");
-        mapping.put(44, "zeta");
+        mapping.put(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), "totally-custom-destination");
+        mapping.put(NavigatorMenu.DEFAULT_LAYOUT.contentSlots().getLast(), "zeta");
         NavigatorInventoryHolder holder = new NavigatorInventoryHolder(owner, 2, mapping);
         check(holder.getOwnerUniqueId().equals(owner), "navigator holder owns one player");
         check(holder.getPage() == 2, "navigator holder stores page");
-        check(holder.getWarpId(0).orElseThrow().equals("totally-custom-destination"),
+        check(holder.getWarpId(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals("totally-custom-destination"),
                 "navigator maps slot to arbitrary warp id");
-        check(holder.getWarpId(1).isEmpty(), "unmapped navigator slot has no destination");
-        check(NavigatorMenu.INVENTORY_SIZE == 54 && NavigatorMenu.CONTENT_SIZE == 45,
-                "navigator uses 54 slots with 45 paginated destinations");
-        check(NavigatorMenu.PREVIOUS_SLOT >= NavigatorMenu.CONTENT_SIZE
+        check(holder.getWarpId(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(1)).isEmpty(), "unmapped navigator slot has no destination");
+        check(NavigatorMenu.INVENTORY_SIZE == NavigatorMenu.DEFAULT_LAYOUT.size() && NavigatorMenu.CONTENT_SIZE == NavigatorMenu.DEFAULT_LAYOUT.pageSize(),
+                "navigator size and capacity match its default definition");
+        check(!NavigatorMenu.DEFAULT_LAYOUT.isContent(NavigatorMenu.PREVIOUS_SLOT)
                         && NavigatorMenu.NEXT_SLOT < NavigatorMenu.INVENTORY_SIZE,
                 "pagination controls are outside content slots");
 

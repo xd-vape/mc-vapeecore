@@ -80,23 +80,24 @@ public final class VisibilitySettingsListener implements Listener {
         ClickType click = event.getClick();
         if (click != ClickType.LEFT && click != ClickType.RIGHT) return;
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= VisibilitySettingsMenu.INVENTORY_SIZE) return;
+        if (slot < 0 || slot >= top.getSize()) return;
 
-        switch (slot) {
-            case VisibilitySettingsMenu.BACK_SLOT -> settingsMenuOpener.accept(player);
-            case VisibilitySettingsMenu.CLOSE_SLOT -> player.closeInventory();
-            case VisibilitySettingsMenu.REFRESH_SLOT -> menu.open(player);
-            case VisibilitySettingsMenu.MANAGE_PLAYERS_SLOT -> visiblePlayersMenu.open(player);
-            case VisibilitySettingsMenu.GAME_PARTICIPANTS_SLOT,
-                 VisibilitySettingsMenu.GAME_PARTICIPANTS_STATUS_SLOT -> messages.send(player,
+        var action = menu.layout().actionAt(slot).orElse(null);
+        if (action == null) return;
+        switch (action) {
+            case BACK -> settingsMenuOpener.accept(player);
+            case CLOSE -> player.closeInventory();
+            case REFRESH -> menu.open(player);
+            case MANAGE_PLAYERS -> visiblePlayersMenu.open(player);
+            case GAME_PARTICIPANTS -> messages.send(player,
                     "<yellow>This visibility option will become available with game integration.</yellow>");
-            case VisibilitySettingsMenu.MASTER_SLOT, VisibilitySettingsMenu.MASTER_STATUS_SLOT ->
+            case MASTER ->
                     toggle(player, Toggle.MASTER);
-            case VisibilitySettingsMenu.FRIENDS_SLOT, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT ->
+            case FRIENDS ->
                     toggle(player, Toggle.FRIENDS);
-            case VisibilitySettingsMenu.STAFF_SLOT, VisibilitySettingsMenu.STAFF_STATUS_SLOT ->
+            case STAFF ->
                     toggle(player, Toggle.STAFF);
-            case VisibilitySettingsMenu.ADDED_USERS_SLOT, VisibilitySettingsMenu.ADDED_USERS_STATUS_SLOT ->
+            case ADDED_USERS ->
                     toggle(player, Toggle.ADDED_USERS);
             default -> { }
         }

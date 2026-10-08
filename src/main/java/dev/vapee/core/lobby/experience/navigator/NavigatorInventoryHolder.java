@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.MenuLayout;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
@@ -18,11 +19,16 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
     private Inventory inventory;
 
     public NavigatorInventoryHolder(UUID ownerUniqueId, int page, Map<Integer, String> warpIdsBySlot) {
+        this(ownerUniqueId, page, warpIdsBySlot, NavigatorMenu.DEFAULT_LAYOUT);
+    }
+
+    public NavigatorInventoryHolder(UUID ownerUniqueId, int page, Map<Integer, String> warpIdsBySlot, MenuLayout<NavigatorMenu.Action> layout) {
         this.ownerUniqueId = Objects.requireNonNull(ownerUniqueId, "ownerUniqueId");
         if (page < 0) {
             throw new IllegalArgumentException("page must not be negative");
         }
         this.page = page;
+        layout.validateTargets(warpIdsBySlot.keySet());
         this.warpIdsBySlot = Map.copyOf(new LinkedHashMap<>(
                 Objects.requireNonNull(warpIdsBySlot, "warpIdsBySlot")
         ));

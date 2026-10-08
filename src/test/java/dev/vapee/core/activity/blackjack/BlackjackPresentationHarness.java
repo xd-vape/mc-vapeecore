@@ -233,26 +233,26 @@ public final class BlackjackPresentationHarness {
         check(inventory.takeOwnership(fixture.player) && fixture.closes == closes && fixture.relinquishes == 1,
                 "repeated ownership is idempotent");
         inventory.refreshSession(fixture.session);
-        check(occupiedSlots(fixture).equals(Set.of(0, 4, 8)), "available slots remain 0/4/8");
-        assertItem(fixture, 0, Material.EMERALD, "Deal", BlackjackAction.DEAL,
+        check(occupiedSlots(fixture).equals(Set.of(BlackjackInventoryService.PRIMARY_SLOT, BlackjackInventoryService.STATUS_SLOT, BlackjackInventoryService.LEAVE_SLOT)), "available state exposes primary/status/leave");
+        assertItem(fixture, BlackjackInventoryService.PRIMARY_SLOT, Material.EMERALD, "Deal", BlackjackAction.DEAL,
                 List.of("Start a new free-play round.", "Right-click to use."));
-        assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+        assertItem(fixture, BlackjackInventoryService.STATUS_SLOT, Material.PAPER, "Blackjack Status", null,
                 List.of("Waiting for deal", "1 player(s) seated"));
-        assertItem(fixture, 8, Material.BARRIER, "Leave Table", BlackjackAction.LEAVE,
+        assertItem(fixture, BlackjackInventoryService.LEAVE_SLOT, Material.BARRIER, "Leave Table", BlackjackAction.LEAVE,
                 List.of("Leave blackjack and return your lobby items.", "Right-click to use."));
         fixture.activate();
         BlackjackPlayerRound round = fixture.session.requirePlayerRound(fixture.playerId);
         round.getHand().add(new BlackjackCard(BlackjackRank.FIVE, BlackjackSuit.SPADES));
         round.getHand().add(new BlackjackCard(BlackjackRank.SIX, BlackjackSuit.HEARTS));
         inventory.refreshPlayer(fixture.player, fixture.session);
-        check(occupiedSlots(fixture).equals(Set.of(0, 1, 2, 4, 8)), "own legal two-card turn exposes all five slots");
-        assertItem(fixture, 0, Material.IRON_SWORD, "Hit", BlackjackAction.HIT,
+        check(occupiedSlots(fixture).equals(Set.of(BlackjackInventoryService.PRIMARY_SLOT, BlackjackInventoryService.STAND_SLOT, BlackjackInventoryService.DOUBLE_SLOT, BlackjackInventoryService.STATUS_SLOT, BlackjackInventoryService.LEAVE_SLOT)), "own legal two-card turn exposes all five controls");
+        assertItem(fixture, BlackjackInventoryService.PRIMARY_SLOT, Material.IRON_SWORD, "Hit", BlackjackAction.HIT,
                 List.of("Draw one card.", "Right-click to use."));
-        assertItem(fixture, 1, Material.SHIELD, "Stand", BlackjackAction.STAND,
+        assertItem(fixture, BlackjackInventoryService.STAND_SLOT, Material.SHIELD, "Stand", BlackjackAction.STAND,
                 List.of("Keep your current hand.", "Right-click to use."));
-        assertItem(fixture, 2, Material.GOLD_INGOT, "Double", BlackjackAction.DOUBLE,
+        assertItem(fixture, BlackjackInventoryService.DOUBLE_SLOT, Material.GOLD_INGOT, "Double", BlackjackAction.DOUBLE,
                 List.of("Draw exactly one card, then stand.", "Right-click to use."));
-        assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null, List.of("Your turn", "Hand value: 11"));
+        assertItem(fixture, BlackjackInventoryService.STATUS_SLOT, Material.PAPER, "Blackjack Status", null, List.of("Your turn", "Hand value: 11"));
         for (String condition : List.of("three-cards", "finished", "doubled", "natural", "missing", "foreign-turn")) {
             fixture.session.beginRound(dev.vapee.core.activity.blackjack.card.BlackjackShoe.sixDecks(new java.util.Random(3)));
             fixture.session.beginTurn(fixture.playerId);
@@ -268,18 +268,18 @@ public final class BlackjackPresentationHarness {
                 default -> { }
             }
             inventory.refreshPlayer(fixture.player, fixture.session);
-            check(fixture.items[2] == null, "double hidden for " + condition);
+            check(fixture.items[BlackjackInventoryService.DOUBLE_SLOT] == null, "double hidden for " + condition);
             if (condition.equals("foreign-turn")) {
-                check(occupiedSlots(fixture).equals(Set.of(4, 8)), "foreign turn retains status/leave only");
-                assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+                check(occupiedSlots(fixture).equals(Set.of(BlackjackInventoryService.STATUS_SLOT, BlackjackInventoryService.LEAVE_SLOT)), "foreign turn retains status/leave only");
+                assertItem(fixture, BlackjackInventoryService.STATUS_SLOT, Material.PAPER, "Blackjack Status", null,
                         List.of("Another player's turn", "Hand value: 11"));
             }
         }
         for (BlackjackRoundPhase phase : List.of(BlackjackRoundPhase.DEALER_TURN, BlackjackRoundPhase.SETTLED)) {
             fixture.session.setRoundPhase(phase);
             inventory.refreshPlayer(fixture.player, fixture.session);
-            check(occupiedSlots(fixture).equals(Set.of(4, 8)), phase + " retains status/leave only");
-            assertItem(fixture, 4, Material.PAPER, "Blackjack Status", null,
+            check(occupiedSlots(fixture).equals(Set.of(BlackjackInventoryService.STATUS_SLOT, BlackjackInventoryService.LEAVE_SLOT)), phase + " retains status/leave only");
+            assertItem(fixture, BlackjackInventoryService.STATUS_SLOT, Material.PAPER, "Blackjack Status", null,
                     List.of(phase == BlackjackRoundPhase.DEALER_TURN ? "Dealer is playing" : "Round complete", "Hand value: 11"));
         }
         inventory.release(fixture.playerId, true);

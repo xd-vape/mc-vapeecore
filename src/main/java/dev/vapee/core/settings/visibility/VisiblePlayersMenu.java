@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
@@ -31,23 +32,40 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisiblePlayersMenu {
-    // Layout: paginated entries 0..44; empty-state marker 22.
-    // Footer: previous 45, add 46, back 48, close 49, refresh 52, next 53.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int CONTENT_SIZE = 45;
-    private static final int EMPTY_SLOT = 22;
-    public static final int PREVIOUS_SLOT = 45;
-    public static final int ADD_SLOT = 46;
-    public static final int BACK_SLOT = 48;
-    public static final int CLOSE_SLOT = 49;
-    public static final int REFRESH_SLOT = 52;
-    public static final int NEXT_SLOT = 53;
+    public enum Action { PREVIOUS, ADD, BACK, CLOSE, REFRESH, NEXT }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(
+                    0, 1, 2, 3, 4, 5, 6, 7, 8,
+                    9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
+            Map.ofEntries(
+                    Map.entry(Action.PREVIOUS, List.of(45)),
+                    Map.entry(Action.ADD, List.of(46)),
+                    Map.entry(Action.BACK, List.of(48)),
+                    Map.entry(Action.CLOSE, List.of(49)),
+                    Map.entry(Action.REFRESH, List.of(52)),
+                    Map.entry(Action.NEXT, List.of(53))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
+    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
+    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.emptySlot();
+    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
+    public static final int ADD_SLOT = DEFAULT_LAYOUT.slot(Action.ADD);
+    public static final int BACK_SLOT = DEFAULT_LAYOUT.slot(Action.BACK);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
+    public static final int NEXT_SLOT = DEFAULT_LAYOUT.slot(Action.NEXT);
 
     private static final Component TITLE = UiItems.text("Manage Visible Players", NamedTextColor.DARK_GRAY);
     private static final Comparator<Entry> ENTRY_ORDER = Comparator
             .comparing(Entry::known).reversed()
             .thenComparing(Entry::name, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(entry -> entry.id().toString());
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
 
     private final PlayerSettingsService settings;
     private final PlayerIdentityService identities;
@@ -69,6 +87,14 @@ public final class VisiblePlayersMenu {
     VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
                        MessageService messages, Function<UUID, Player> onlinePlayer,
                        InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger) {
+        this(settings, identities, messages, onlinePlayer, inventoryFactory, itemRenderer, logger, DEFAULT_LAYOUT);
+    }
+
+    VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
+                       MessageService messages, Function<UUID, Player> onlinePlayer,
+                       InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requirePaged();
         this.settings = Objects.requireNonNull(settings, "settings");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -93,38 +119,38 @@ public final class VisiblePlayersMenu {
             messages.send(viewer, "<red>Your player profile is not available.</red>");
             return;
         }
-        Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);
+        Pagination pagination = Pagination.of(entries.size(), requestedPage, layout.pageSize());
         int page = pagination.page();
         int first = pagination.fromIndex();
         int end = pagination.toIndex();
         Map<Integer, UUID> targets = new LinkedHashMap<>();
         for (int index = first; index < end; index++) {
-            targets.put(index - first, entries.get(index).id());
+            targets.put(layout.contentSlot(index - first), entries.get(index).id());
         }
 
-        VisiblePlayersHolder holder = new VisiblePlayersHolder(viewer.getUniqueId(), page, targets);
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, TITLE);
+        VisiblePlayersHolder holder = new VisiblePlayersHolder(viewer.getUniqueId(), page, targets, layout);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
         holder.bindInventory(inventory);
         for (int index = first; index < end; index++) {
-            inventory.setItem(index - first, itemRenderer.render(entryItem(entries.get(index))));
+            inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(entries.get(index))));
         }
         if (entries.isEmpty()) {
-            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
+            inventory.setItem(layout.emptySlot(), item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
                     List.of("Use Add Player to get started.")));
         }
         if (pagination.hasPrevious()) {
-            inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
+            inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
                     List.of()));
         }
-        inventory.setItem(ADD_SLOT, item(Material.LIME_DYE, "Add Player", NamedTextColor.GREEN,
+        inventory.setItem(layout.slot(Action.ADD), item(Material.LIME_DYE, "Add Player", NamedTextColor.GREEN,
                 List.of("Click to enter a known player name or UUID.")));
-        inventory.setItem(BACK_SLOT, item(Material.ARROW, "Back", NamedTextColor.YELLOW,
+        inventory.setItem(layout.slot(Action.BACK), item(Material.ARROW, "Back", NamedTextColor.YELLOW,
                 List.of("Return to Visibility Settings.")));
-        inventory.setItem(CLOSE_SLOT, item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
-        inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
+        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
+        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
                 List.of("Reload names and online status.")));
         if (pagination.hasNext()) {
-            inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW, List.of()));
+            inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next Page", NamedTextColor.YELLOW, List.of()));
         }
         var opened = viewer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) {
@@ -162,7 +188,7 @@ public final class VisiblePlayersMenu {
 
     public boolean hasNext(UUID owner, int page) {
         List<Entry> current = entries(owner);
-        return current != null && page >= 0 && Pagination.of(current.size(), page, CONTENT_SIZE).hasNext();
+        return current != null && page >= 0 && Pagination.of(current.size(), page, layout.pageSize()).hasNext();
     }
 
     public String displayName(UUID id) {

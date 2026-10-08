@@ -30,6 +30,10 @@ public final class QuestMenuFixture {
             domain.logger);
 
     public QuestMenuFixture() throws Exception {
+        this(DailyQuestMenu.DEFAULT_LAYOUT);
+    }
+
+    public QuestMenuFixture(dev.vapee.core.ui.MenuLayout<DailyQuestMenu.Action> layout) throws Exception {
         menu = new DailyQuestMenu(id -> {
             syncCalls++;
             if (syncFailure != null) throw syncFailure;
@@ -37,7 +41,7 @@ public final class QuestMenuFixture {
         }, domain.quests, domain.players, messages, id -> {
             TestPlayer player = online.get(id);
             return player != null && player.online ? player.player : null;
-        }, (holder, size, title) -> inventory(holder, size), SpecItem::new, domain.logger);
+        }, (holder, size, title) -> inventory(holder, size), SpecItem::new, domain.logger, layout);
         listener = new DailyQuestMenuListener(menu);
     }
 

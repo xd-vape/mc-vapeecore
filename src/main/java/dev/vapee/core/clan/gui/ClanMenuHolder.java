@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.MenuLayout;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
@@ -23,13 +24,17 @@ public final class ClanMenuHolder implements InventoryHolder {
     }
 
     public ClanMenuHolder(UUID owner, ClanMenuView view, int page, UUID clanId, Map<Integer, UUID> targets) {
+        this(owner, view, page, clanId, targets, ClanMenu.DEFAULT_LAYOUT.menu());
+    }
+
+    public ClanMenuHolder(UUID owner, ClanMenuView view, int page, UUID clanId, Map<Integer, UUID> targets, MenuLayout<ClanMenu.Action> layout) {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.view = Objects.requireNonNull(view, "view");
         if (page < 0) throw new IllegalArgumentException("Negative page");
         this.page = page;
         this.clanId = clanId;
         this.targets = Map.copyOf(Objects.requireNonNull(targets, "targets"));
-        if (this.targets.keySet().stream().anyMatch(slot -> slot < 0 || slot >= ClanMenu.CONTENT_SIZE))
+        if (this.targets.keySet().stream().anyMatch(slot -> !layout.isContent(slot)))
             throw new IllegalArgumentException("Target outside content slots");
     }
 

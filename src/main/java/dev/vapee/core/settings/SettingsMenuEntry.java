@@ -13,8 +13,7 @@ import java.util.function.Function;
 public record SettingsMenuEntry(int slot, int statusSlot, Function<PlayerSettings, UiItemSpec> icon,
                                 Function<PlayerSettings, UiItemSpec> status, Action action) {
     public SettingsMenuEntry {
-        if (slot < 0 || slot >= SettingsMenu.INVENTORY_SIZE || statusSlot < -1
-                || statusSlot >= SettingsMenu.INVENTORY_SIZE || slot == statusSlot) {
+        if (slot < 0 || statusSlot < -1 || slot == statusSlot) {
             throw new IllegalArgumentException("Invalid settings entry slots");
         }
         Objects.requireNonNull(icon);

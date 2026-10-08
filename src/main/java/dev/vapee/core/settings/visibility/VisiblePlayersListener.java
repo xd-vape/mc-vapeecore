@@ -71,39 +71,41 @@ public final class VisiblePlayersListener implements Listener {
         if (event.getClickedInventory() != top) return;
         ClickType click = event.getClick();
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= VisiblePlayersMenu.INVENTORY_SIZE) return;
+        if (slot < 0 || slot >= top.getSize()) return;
         if (click == ClickType.LEFT || click == ClickType.RIGHT) {
             if (navigate(player, holder, slot)) return;
         }
-        if (slot >= VisiblePlayersMenu.CONTENT_SIZE || click != ClickType.RIGHT) return;
+        if (click != ClickType.RIGHT) return;
         UUID target = holder.getTarget(slot).orElse(null);
         if (target == null) return;
         remove(player, holder, target);
     }
 
     private boolean navigate(Player player, VisiblePlayersHolder holder, int slot) {
-        switch (slot) {
-            case VisiblePlayersMenu.PREVIOUS_SLOT -> {
+        var action = menu.layout().actionAt(slot).orElse(null);
+        if (action == null) return false;
+        switch (action) {
+            case PREVIOUS -> {
                 if (holder.getPage() > 0) menu.open(player, holder.getPage() - 1);
                 return true;
             }
-            case VisiblePlayersMenu.ADD_SLOT -> {
+            case ADD -> {
                 menu.promptAdd(player);
                 return true;
             }
-            case VisiblePlayersMenu.BACK_SLOT -> {
+            case BACK -> {
                 visibilitySettingsMenu.open(player);
                 return true;
             }
-            case VisiblePlayersMenu.CLOSE_SLOT -> {
+            case CLOSE -> {
                 player.closeInventory();
                 return true;
             }
-            case VisiblePlayersMenu.REFRESH_SLOT -> {
+            case REFRESH -> {
                 menu.open(player, holder.getPage());
                 return true;
             }
-            case VisiblePlayersMenu.NEXT_SLOT -> {
+            case NEXT -> {
                 if (menu.hasNext(player.getUniqueId(), holder.getPage())) {
                     menu.open(player, holder.getPage() + 1);
                 }

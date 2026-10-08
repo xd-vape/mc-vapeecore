@@ -31,7 +31,7 @@ public final class NavigatorSecurityHarness {
 
     private static void eventProtection() throws Exception {
         var f = new NavigatorFixture();
-        f.destinations(46);
+        f.destinations(NavigatorMenu.DEFAULT_LAYOUT.pageSize() + 1);
         var owner = f.player();
         var other = f.player();
         f.menu.open(owner.player);
@@ -40,47 +40,47 @@ public final class NavigatorSecurityHarness {
         for (ClickType click : new ClickType[]{ClickType.SHIFT_LEFT, ClickType.SHIFT_RIGHT, ClickType.NUMBER_KEY,
                 ClickType.DOUBLE_CLICK, ClickType.MIDDLE, ClickType.DROP, ClickType.CONTROL_DROP,
                 ClickType.SWAP_OFFHAND, ClickType.CREATIVE, ClickType.UNKNOWN}) {
-            check(f.click(owner, active, 0, click).isCancelled() && owner.teleports == 0 && owner.open == active,
+            check(f.click(owner, active, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), click).isCancelled() && owner.teleports == 0 && owner.open == active,
                     "non-menu click is inert: " + click);
         }
-        for (int slot : new int[]{54, 60, -999, 49, 48}) {
+        for (int slot : new int[]{NavigatorMenu.INVENTORY_SIZE, NavigatorMenu.INVENTORY_SIZE + 6, -999, NavigatorMenu.PAGE_INFO_SLOT, dev.vapee.core.ui.LayoutTestSupport.unused(NavigatorMenu.DEFAULT_LAYOUT)}) {
             check(f.click(owner, active, slot, ClickType.LEFT).isCancelled() && owner.teleports == 0,
                     "bottom/outside/info/unused click cancelled: " + slot);
         }
-        check(f.click(owner, active, 54, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift transfer cancelled");
-        check(f.click(other, active, 0, ClickType.RIGHT).isCancelled() && other.teleports == 0 && other.opens == 0,
+        check(f.click(owner, active, NavigatorMenu.INVENTORY_SIZE, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift transfer cancelled");
+        check(f.click(other, active, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled() && other.teleports == 0 && other.opens == 0,
                 "foreign player cannot use owner's inventory");
-        check(f.drag(owner, active, 0).isCancelled(), "top drag cancelled");
-        check(!f.drag(owner, active, 54).isCancelled(), "active bottom-only drag preserves existing safe behavior");
-        check(f.drag(other, active, 54).isCancelled(), "foreign drag cancelled even bottom-only");
-        var unboundHolder = new NavigatorInventoryHolder(owner.id, 0, java.util.Map.of(0, "custom_000"));
-        Inventory unbound = inventory(unboundHolder, 54);
-        check(f.click(owner, unbound, 0, ClickType.LEFT).isCancelled() && f.drag(owner, unbound, 54).isCancelled(),
+        check(f.drag(owner, active, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0)).isCancelled(), "top drag cancelled");
+        check(!f.drag(owner, active, NavigatorMenu.INVENTORY_SIZE).isCancelled(), "active bottom-only drag preserves existing safe behavior");
+        check(f.drag(other, active, NavigatorMenu.INVENTORY_SIZE).isCancelled(), "foreign drag cancelled even bottom-only");
+        var unboundHolder = new NavigatorInventoryHolder(owner.id, 0, java.util.Map.of(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), "custom_000"));
+        Inventory unbound = inventory(unboundHolder, NavigatorMenu.INVENTORY_SIZE);
+        check(f.click(owner, unbound, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT).isCancelled() && f.drag(owner, unbound, NavigatorMenu.INVENTORY_SIZE).isCancelled(),
                 "unbound holder cancelled without NPE");
-        var forgedHolder = new NavigatorInventoryHolder(owner.id, 0, java.util.Map.of(0, "custom_000"));
-        Inventory forged = inventory(forgedHolder, 54);
+        var forgedHolder = new NavigatorInventoryHolder(owner.id, 0, java.util.Map.of(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), "custom_000"));
+        Inventory forged = inventory(forgedHolder, NavigatorMenu.INVENTORY_SIZE);
         forgedHolder.bindInventory(forged);
         owner.open = forged;
-        check(f.click(owner, forged, 0, ClickType.LEFT).isCancelled() && owner.teleports == 0,
+        check(f.click(owner, forged, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT).isCancelled() && owner.teleports == 0,
                 "currently open forged inventory lacks active registration");
-        Inventory mismatched = inventory(holder, 54);
+        Inventory mismatched = inventory(holder, NavigatorMenu.INVENTORY_SIZE);
         owner.open = mismatched;
-        check(f.click(owner, mismatched, 0, ClickType.RIGHT).isCancelled() && owner.teleports == 0,
+        check(f.click(owner, mismatched, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled() && owner.teleports == 0,
                 "holder binding requires exact inventory instance");
         owner.open = owner.bottom;
-        check(f.click(owner, active, 0, ClickType.LEFT).isCancelled() && owner.teleports == 0,
+        check(f.click(owner, active, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT).isCancelled() && owner.teleports == 0,
                 "active registry alone does not authorize a closed inventory");
         owner.open = active;
-        f.click(owner, active, 53, ClickType.LEFT);
+        f.click(owner, active, NavigatorMenu.NEXT_SLOT, ClickType.LEFT);
         Inventory replacement = owner.open;
         check(replacement != active && ((NavigatorInventoryHolder) replacement.getHolder()).getPage() == 1,
                 "valid next replaces page");
-        for (int slot : new int[]{0, 50, 53}) {
+        for (int slot : new int[]{NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), NavigatorMenu.CLOSE_SLOT, NavigatorMenu.NEXT_SLOT}) {
             check(f.click(owner, active, slot, ClickType.LEFT).isCancelled()
                             && owner.teleports == 0 && owner.open == replacement,
                     "old page cannot teleport, close or page: " + slot);
         }
-        check(f.drag(owner, active, 54).isCancelled(), "stale bottom drag cancelled");
+        check(f.drag(owner, active, NavigatorMenu.INVENTORY_SIZE).isCancelled(), "stale bottom drag cancelled");
         f.listener.onInventoryClose(new InventoryCloseEvent(view(owner, active)));
         check(f.menu.isActive(owner.player, replacement, (NavigatorInventoryHolder) replacement.getHolder()),
                 "old close event cannot forget current page");
@@ -110,7 +110,7 @@ public final class NavigatorSecurityHarness {
             f.menu.open(player.player);
             Inventory old = player.open;
             change.accept(player);
-            check(f.click(player, old, 0, ClickType.RIGHT).isCancelled() && player.teleports == 0
+            check(f.click(player, old, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled() && player.teleports == 0
                             && player.open == player.bottom,
                     "click-time gate denies and closes stale menu: " + gate);
             check(!f.menu.isActive(player.player, old, (NavigatorInventoryHolder) old.getHolder()),
@@ -118,7 +118,7 @@ public final class NavigatorSecurityHarness {
             reset(player, f);
             f.menu.open(player.player);
             change.accept(player);
-            check(f.drag(player, player.open, 54).isCancelled() && player.open == player.bottom,
+            check(f.drag(player, player.open, NavigatorMenu.INVENTORY_SIZE).isCancelled() && player.open == player.bottom,
                     "drag revalidates state and closes stale menu: " + gate++);
         }
         reset(player, f);
@@ -138,21 +138,21 @@ public final class NavigatorSecurityHarness {
 
     private static void staleDestinationsAndTeleport() throws Exception {
         var f = new NavigatorFixture();
-        f.destinations(46);
+        f.destinations(NavigatorMenu.DEFAULT_LAYOUT.pageSize() + 1);
         var player = f.player();
         f.menu.open(player.player, 1);
         Inventory last = player.open;
-        f.warps.setNavigatorVisible("custom_045", false);
-        f.click(player, last, 0, ClickType.LEFT);
+        f.warps.setNavigatorVisible("custom_%03d".formatted(NavigatorMenu.DEFAULT_LAYOUT.pageSize()), false);
+        f.click(player, last, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
         check(player.teleports == 0 && player.open != last
                         && ((NavigatorInventoryHolder) player.open.getHolder()).getPage() == 0,
                 "hidden stale destination does not teleport and refresh clamps last page");
         check(player.output().contains("That destination is no longer available."), "hidden controlled feedback");
-        f.warps.setNavigatorVisible("custom_045", true);
+        f.warps.setNavigatorVisible("custom_%03d".formatted(NavigatorMenu.DEFAULT_LAYOUT.pageSize()), true);
         f.menu.open(player.player, 1);
         last = player.open;
-        f.warps.removeWarp("custom_045");
-        f.click(player, last, 0, ClickType.RIGHT);
+        f.warps.removeWarp("custom_%03d".formatted(NavigatorMenu.DEFAULT_LAYOUT.pageSize()));
+        f.click(player, last, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(player.teleports == 0 && player.open != last
                         && ((NavigatorInventoryHolder) player.open.getHolder()).getPage() == 0,
                 "removed stale destination refreshes without teleport");
@@ -161,30 +161,30 @@ public final class NavigatorSecurityHarness {
         f.warps.setNavigatorOrder("custom_000", 100);
         f.warps.setWarp("custom_000", new Location(f.lobby, 321, 75, 1));
         player.teleportAccepted = false;
-        f.click(player, originalOrder, 0, ClickType.LEFT);
+        f.click(player, originalOrder, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
         check(player.teleports == 1 && player.target.getX() == 321 && player.open == originalOrder,
                 "reorder preserves slot ID and uses latest position; cancellation retains usable menu");
         check(player.output().contains("cancelled or failed") && player.fallDistance == null && player.velocity == null,
                 "cancelled teleport has controlled error and no success resets");
         f.worlds.remove(f.lobby.getName());
-        f.click(player, originalOrder, 0, ClickType.RIGHT);
+        f.click(player, originalOrder, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(player.teleports == 1 && player.open == originalOrder && player.output().contains("world is not loaded"),
                 "missing world is not loaded and menu remains usable");
         f.worlds.put(f.lobby.getName(), f.lobby);
         player.teleportAccepted = true;
-        f.click(player, originalOrder, 0, ClickType.RIGHT);
+        f.click(player, originalOrder, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(player.teleports == 2 && player.open == player.bottom
                         && player.cause == PlayerTeleportEvent.TeleportCause.PLUGIN
                         && player.fallDistance == 0F && player.velocity.lengthSquared() == 0,
                 "successful same-lobby teleport uses PLUGIN, resets movement and closes navigator");
-        f.click(player, originalOrder, 0, ClickType.LEFT);
+        f.click(player, originalOrder, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
         check(player.teleports == 2, "repeated old event after success cannot duplicate teleport");
         f.warps.setWarp("custom_000", new Location(f.outside, 111, 80, 1));
         f.warps.setNavigatorOrder("custom_000", 0);
         f.menu.open(player.player);
         player.changeWorldOnTeleport = true;
         Inventory beforeLeave = player.open;
-        f.click(player, beforeLeave, 0, ClickType.LEFT);
+        f.click(player, beforeLeave, NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
         check(player.teleports == 3 && player.currentWorld == f.outside && player.open == player.bottom
                         && !f.menu.isActive(player.player, beforeLeave, (NavigatorInventoryHolder) beforeLeave.getHolder()),
                 "visible destination may leave lobby with world-event cleanup");
@@ -225,7 +225,7 @@ public final class NavigatorSecurityHarness {
                 "cleanup empties entire registry");
         owner.failClose = false;
         f.menu.open(owner.player);
-        Inventory unrelated = inventory(null, 54);
+        Inventory unrelated = inventory(null, NavigatorMenu.INVENTORY_SIZE);
         owner.open = unrelated;
         int closed = owner.closes;
         f.menu.closeOpenInventories();

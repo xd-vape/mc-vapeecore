@@ -26,7 +26,7 @@ public final class SettingsMenuHarness {
         var p = f.player("Owner");
         f.menu.open(p.player);
         Inventory top = p.open;
-        check(top.getSize() == 54, "root uses 54 slots");
+        check(top.getSize() == SettingsMenu.DEFAULT_LAYOUT.size(), "root uses defined inventory size");
         Map<Integer, Material> features = Map.of(SCOREBOARD_SLOT, Material.MAP, SOUNDS_SLOT, Material.NOTE_BLOCK,
                 PRIVATE_MESSAGES_SLOT, Material.WRITABLE_BOOK, FRIEND_REQUESTS_SLOT, Material.PLAYER_HEAD,
                 VISIBILITY_SLOT, Material.SPYGLASS, FRIEND_PRESENCE_SLOT, Material.BELL);
@@ -55,8 +55,8 @@ public final class SettingsMenuHarness {
                         && spec(top, REFRESH_SLOT).material() == Material.CLOCK && text(top, REFRESH_SLOT).equals("Refresh"),
                 "consistent close and refresh controls");
         int populated = 0;
-        for (int slot = 0; slot < 54; slot++) if (top.getItem(slot) != null) populated++;
-        check(populated == 14 && top.getItem(4) == null, "only functional items; no filler or fake settings");
+        for (int slot = 0; slot < top.getSize(); slot++) if (top.getItem(slot) != null) populated++;
+        check(populated == 14 && java.util.stream.IntStream.range(0, top.getSize()).allMatch(slot -> top.getItem(slot) == null || f.menu.entryAt(slot).isPresent() || f.menu.layout().actionAt(slot).isPresent()), "only functional items; no filler or fake settings");
         check(text(top, FRIEND_PRESENCE_STATUS_SLOT).equals("Disabled") && spec(top, FRIEND_PRESENCE_STATUS_SLOT).material() == Material.RED_STAINED_GLASS_PANE,
                 "friend presence is visibly opt-in by default");
         f.settings.setLobbyPlayersVisible(p.id, false);

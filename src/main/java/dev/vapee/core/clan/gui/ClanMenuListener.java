@@ -49,7 +49,7 @@ public final class ClanMenuListener implements Listener {
             return;
         }
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= ClanMenu.INVENTORY_SIZE) return;
+        if (slot < 0 || slot >= top.getSize()) return;
         try {
             ClickType click = event.getClick();
             UUID currentClanId = clans.getClanOf(player.getUniqueId()).map(Clan::id).orElse(null);
@@ -59,7 +59,6 @@ public final class ClanMenuListener implements Listener {
                 return;
             }
             if (navigate(player, holder, slot, click)) return;
-            if (slot >= ClanMenu.CONTENT_SIZE) return;
             UUID target = holder.target(slot).orElse(null);
             if (target == null) return;
             mutate(player, holder, target, click);
@@ -106,30 +105,32 @@ public final class ClanMenuListener implements Listener {
     }
 
     private boolean navigate(Player player, ClanMenuHolder holder, int slot, ClickType click) {
-        if (slot == ClanMenu.ACTION_SLOT && click == ClickType.SHIFT_RIGHT) {
+        if (slot == menu.layout().slot(ClanMenu.Action.ACTION) && click == ClickType.SHIFT_RIGHT) {
             Clan clan = clans.getClanOf(player.getUniqueId()).orElse(null);
             if (clan != null && clan.ownerId().equals(player.getUniqueId())) menu.promptDisband(player);
             return true;
         }
         if (click != ClickType.LEFT && click != ClickType.RIGHT) return false;
-        switch (slot) {
-            case ClanMenu.PREVIOUS_SLOT -> {
+        var action = menu.layout().actionAt(slot).orElse(null);
+        if (action == null) return false;
+        switch (action) {
+            case PREVIOUS -> {
                 if (holder.page() > 0) menu.open(player, holder.view(), holder.page() - 1);
                 return true;
             }
-            case ClanMenu.OVERVIEW_SLOT -> { menu.open(player, ClanMenuView.OVERVIEW, 0); return true; }
-            case ClanMenu.MEMBERS_SLOT -> {
+            case OVERVIEW -> { menu.open(player, ClanMenuView.OVERVIEW, 0); return true; }
+            case MEMBERS -> {
                 if (clans.getClanOf(player.getUniqueId()).isPresent()) menu.open(player, ClanMenuView.MEMBERS, 0);
                 return true;
             }
-            case ClanMenu.INVITES_SLOT -> { menu.open(player, ClanMenuView.INVITES, 0); return true; }
-            case ClanMenu.CLOSE_SLOT -> { player.closeInventory(); return true; }
-            case ClanMenu.ACTION_SLOT -> {
+            case INVITES -> { menu.open(player, ClanMenuView.INVITES, 0); return true; }
+            case CLOSE -> { player.closeInventory(); return true; }
+            case ACTION -> {
                 if (clans.getClanOf(player.getUniqueId()).isEmpty()) menu.promptCreate(player);
                 return true;
             }
-            case ClanMenu.REFRESH_SLOT -> { menu.open(player, holder.view(), holder.page()); return true; }
-            case ClanMenu.NEXT_SLOT -> {
+            case REFRESH -> { menu.open(player, holder.view(), holder.page()); return true; }
+            case NEXT -> {
                 if (menu.hasNext(player.getUniqueId(), holder.view(), holder.page()))
                     menu.open(player, holder.view(), holder.page() + 1);
                 return true;

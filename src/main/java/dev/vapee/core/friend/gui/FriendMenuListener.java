@@ -59,7 +59,7 @@ public final class FriendMenuListener implements Listener {
         }
         ClickType click = event.getClick();
         int slot = event.getRawSlot();
-        if (slot < 0 || slot >= FriendMenu.INVENTORY_SIZE) {
+        if (slot < 0 || slot >= top.getSize()) {
             return;
         }
         try {
@@ -67,9 +67,6 @@ public final class FriendMenuListener implements Listener {
                 if (navigate(player, holder, slot)) {
                     return;
                 }
-            }
-            if (slot >= FriendMenu.CONTENT_SIZE) {
-                return;
             }
             UUID target = holder.getTarget(slot).orElse(null);
             if (target == null) {
@@ -104,38 +101,40 @@ public final class FriendMenuListener implements Listener {
     }
 
     private boolean navigate(Player player, FriendMenuHolder holder, int slot) {
-        switch (slot) {
-            case FriendMenu.PREVIOUS_SLOT -> {
+        var action = menu.layout().actionAt(slot).orElse(null);
+        if (action == null) return false;
+        switch (action) {
+            case PREVIOUS -> {
                 if (holder.getPage() > 0) {
                     menu.open(player, holder.getView(), holder.getPage() - 1);
                 }
                 return true;
             }
-            case FriendMenu.ADD_SLOT -> {
+            case ADD -> {
                 menu.promptAdd(player);
                 return true;
             }
-            case FriendMenu.FRIENDS_SLOT -> {
+            case FRIENDS -> {
                 menu.open(player, FriendMenuView.FRIENDS, 0);
                 return true;
             }
-            case FriendMenu.INCOMING_SLOT -> {
+            case INCOMING -> {
                 menu.open(player, FriendMenuView.INCOMING, 0);
                 return true;
             }
-            case FriendMenu.CLOSE_SLOT -> {
+            case CLOSE -> {
                 player.closeInventory();
                 return true;
             }
-            case FriendMenu.OUTGOING_SLOT -> {
+            case OUTGOING -> {
                 menu.open(player, FriendMenuView.OUTGOING, 0);
                 return true;
             }
-            case FriendMenu.REFRESH_SLOT -> {
+            case REFRESH -> {
                 menu.open(player, holder.getView(), holder.getPage());
                 return true;
             }
-            case FriendMenu.NEXT_SLOT -> {
+            case NEXT -> {
                 if (menu.hasNext(player.getUniqueId(), holder.getView(), holder.getPage())) {
                     menu.open(player, holder.getView(), holder.getPage() + 1);
                 }

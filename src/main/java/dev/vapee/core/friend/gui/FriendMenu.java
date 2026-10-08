@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
@@ -34,23 +35,42 @@ import java.util.logging.Logger;
 /** A focused, holder-bound view of the existing friends service. */
 public final class FriendMenu {
 
-    // Layout: paginated entries 0..44; empty-state marker 22.
-    // Footer: previous 45, add 46, friends 47, incoming 48, close 49, outgoing 50, refresh 52, next 53.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int CONTENT_SIZE = 45;
-    private static final int EMPTY_SLOT = 22;
-    public static final int PREVIOUS_SLOT = 45;
-    public static final int ADD_SLOT = 46;
-    public static final int FRIENDS_SLOT = 47;
-    public static final int INCOMING_SLOT = 48;
-    public static final int CLOSE_SLOT = 49;
-    public static final int OUTGOING_SLOT = 50;
-    public static final int REFRESH_SLOT = 52;
-    public static final int NEXT_SLOT = 53;
+    public enum Action { PREVIOUS, ADD, FRIENDS, INCOMING, CLOSE, OUTGOING, REFRESH, NEXT }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(
+                    0, 1, 2, 3, 4, 5, 6, 7, 8,
+                    9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
+            Map.ofEntries(
+                    Map.entry(Action.PREVIOUS, List.of(45)),
+                    Map.entry(Action.ADD, List.of(46)),
+                    Map.entry(Action.FRIENDS, List.of(47)),
+                    Map.entry(Action.INCOMING, List.of(48)),
+                    Map.entry(Action.CLOSE, List.of(49)),
+                    Map.entry(Action.OUTGOING, List.of(50)),
+                    Map.entry(Action.REFRESH, List.of(52)),
+                    Map.entry(Action.NEXT, List.of(53))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
+    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
+    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.emptySlot();
+    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
+    public static final int ADD_SLOT = DEFAULT_LAYOUT.slot(Action.ADD);
+    public static final int FRIENDS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIENDS);
+    public static final int INCOMING_SLOT = DEFAULT_LAYOUT.slot(Action.INCOMING);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int OUTGOING_SLOT = DEFAULT_LAYOUT.slot(Action.OUTGOING);
+    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
+    public static final int NEXT_SLOT = DEFAULT_LAYOUT.slot(Action.NEXT);
 
     private static final Comparator<Entry> ENTRY_ORDER = Comparator
             .comparing(Entry::name, String.CASE_INSENSITIVE_ORDER)
             .thenComparing(entry -> entry.id().toString());
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
 
     private final FriendService friends;
     private final PlayerIdentityService identities;
@@ -72,6 +92,14 @@ public final class FriendMenu {
     FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
                Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                ItemRenderer itemRenderer, Logger logger) {
+        this(friends, identities, messages, onlinePlayer, inventoryFactory, itemRenderer, logger, DEFAULT_LAYOUT);
+    }
+
+    FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
+               Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+               ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requirePaged();
         this.friends = Objects.requireNonNull(friends, "friends");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -94,20 +122,20 @@ public final class FriendMenu {
         }
         UUID owner = viewer.getUniqueId();
         List<Entry> entries = entries(owner, selectedView);
-        Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);
+        Pagination pagination = Pagination.of(entries.size(), requestedPage, layout.pageSize());
         int page = pagination.page();
         int first = pagination.fromIndex();
         int end = pagination.toIndex();
         Map<Integer, UUID> targets = new LinkedHashMap<>();
         for (int index = first; index < end; index++) {
-            targets.put(index - first, entries.get(index).id());
+            targets.put(layout.contentSlot(index - first), entries.get(index).id());
         }
 
-        FriendMenuHolder holder = new FriendMenuHolder(owner, selectedView, page, targets);
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, title(selectedView));
+        FriendMenuHolder holder = new FriendMenuHolder(owner, selectedView, page, targets, layout);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), title(selectedView));
         holder.bindInventory(inventory);
         for (int index = first; index < end; index++) {
-            inventory.setItem(index - first, itemRenderer.render(entryItem(selectedView, entries.get(index))));
+            inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(selectedView, entries.get(index))));
         }
         if (entries.isEmpty()) {
             String empty = switch (selectedView) {
@@ -115,27 +143,27 @@ public final class FriendMenu {
                 case INCOMING -> "No incoming requests";
                 case OUTGOING -> "No outgoing requests";
             };
-            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, empty, NamedTextColor.GRAY,
+            inventory.setItem(layout.emptySlot(), item(Material.PAPER, empty, NamedTextColor.GRAY,
                     selectedView == FriendMenuView.FRIENDS
                             ? List.of("Use /friend add <player> to get started.") : List.of()));
         }
         if (pagination.hasPrevious()) {
-            inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
+            inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
                     List.of()));
         }
-        inventory.setItem(ADD_SLOT, item(Material.LIME_DYE, "Add Friend", NamedTextColor.GREEN,
+        inventory.setItem(layout.slot(Action.ADD), item(Material.LIME_DYE, "Add Friend", NamedTextColor.GREEN,
                 List.of("Click to enter /friend add <player>.")));
-        inventory.setItem(FRIENDS_SLOT, tabItem("Friends", FriendMenuView.FRIENDS == selectedView,
+        inventory.setItem(layout.slot(Action.FRIENDS), tabItem("Friends", FriendMenuView.FRIENDS == selectedView,
                 friends.countFriends(owner) + " / " + friends.getLimits().maxFriends()));
-        inventory.setItem(INCOMING_SLOT, tabItem("Incoming Requests", FriendMenuView.INCOMING == selectedView,
+        inventory.setItem(layout.slot(Action.INCOMING), tabItem("Incoming Requests", FriendMenuView.INCOMING == selectedView,
                 Integer.toString(friends.getIncomingRequests(owner).size())));
-        inventory.setItem(CLOSE_SLOT, item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
-        inventory.setItem(OUTGOING_SLOT, tabItem("Outgoing Requests", FriendMenuView.OUTGOING == selectedView,
+        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
+        inventory.setItem(layout.slot(Action.OUTGOING), tabItem("Outgoing Requests", FriendMenuView.OUTGOING == selectedView,
                 Integer.toString(friends.getOutgoingRequests(owner).size())));
-        inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
+        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
                 List.of("Update friends, requests and online status.")));
         if (pagination.hasNext()) {
-            inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW,
+            inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next Page", NamedTextColor.YELLOW,
                     List.of()));
         }
         var opened = viewer.openInventory(inventory);
@@ -178,7 +206,7 @@ public final class FriendMenu {
     int activeCount() { return activeInventories.size(); }
 
     public boolean hasNext(UUID owner, FriendMenuView view, int page) {
-        return page >= 0 && Pagination.of(entries(owner, view).size(), page, CONTENT_SIZE).hasNext();
+        return page >= 0 && Pagination.of(entries(owner, view).size(), page, layout.pageSize()).hasNext();
     }
 
     public String displayName(UUID id) {

@@ -20,7 +20,7 @@ public final class VisibilitySettingsMenuHarness {
         fixture.visibilityMenu.open(owner.player);
         Inventory inventory = owner.open;
         VisibilitySettingsHolder holder = VisibilityMenuFixture.visibilityHolder(inventory);
-        check(inventory.getSize() == 54 && holder.getOwnerUniqueId().equals(owner.id)
+        check(inventory.getSize() == VisibilitySettingsMenu.DEFAULT_LAYOUT.size() && holder.getOwnerUniqueId().equals(owner.id)
                         && holder.getInventory() == inventory,
                 "menu binds exact owner and inventory");
         check(fixture.visibilityMenu.isActive(owner.player, inventory, holder), "opened menu is active");
@@ -73,11 +73,11 @@ public final class VisibilitySettingsMenuHarness {
                 "friends, staff and added-user toggles save independently");
         check(fixture.applyCalls == 4 && fixture.hotbarCalls == 1,
                 "every toggle applies visibility while only master refreshes hotbar");
-        for (int feature : new int[]{9, 11, 13, 15, 17}) {
-            check(owner.open.getItem(feature) != null && owner.open.getItem(feature + 9) != null,
-                    "feature has status directly below at " + feature);
+        for (int feature : new int[]{VisibilitySettingsMenu.MASTER_SLOT, VisibilitySettingsMenu.FRIENDS_SLOT, VisibilitySettingsMenu.STAFF_SLOT, VisibilitySettingsMenu.ADDED_USERS_SLOT, VisibilitySettingsMenu.GAME_PARTICIPANTS_SLOT}) {
+            check(owner.open.getItem(feature) != null && owner.open.getItem(VisibilitySettingsMenu.DEFAULT_LAYOUT.slot(VisibilitySettingsMenu.DEFAULT_LAYOUT.actionAt(feature).orElseThrow(), 1)) != null,
+                    "feature has its semantic status at " + feature);
         }
-        for (int status : new int[]{20, 22, 24}) {
+        for (int status : new int[]{VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, VisibilitySettingsMenu.STAFF_STATUS_SLOT, VisibilitySettingsMenu.ADDED_USERS_STATUS_SLOT}) {
             check(material(owner.open, status) == Material.LIME_STAINED_GLASS_PANE
                             && text(owner.open, status).equals("Enabled"), "enabled filter is green at " + status);
         }

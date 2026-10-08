@@ -30,24 +30,24 @@ public final class SettingsMenuSecurityHarness {
             check(f.click(owner, active, SCOREBOARD_SLOT, click).isCancelled() && f.repository.saves == baseline,
                     "non-menu action cannot mutate: " + click);
         }
-        for (int slot : new int[]{54, 60, -999, 0, 53}) {
+        for (int slot : new int[]{INVENTORY_SIZE, INVENTORY_SIZE + 6, -999, dev.vapee.core.ui.LayoutTestSupport.unused(SettingsMenu.DEFAULT_LAYOUT)}) {
             check(f.click(owner, active, slot, ClickType.LEFT).isCancelled() && f.repository.saves == baseline,
                     "bottom, outside and invalid slots blocked: " + slot);
         }
-        check(f.click(owner, active, 54, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift transfer cancelled");
+        check(f.click(owner, active, INVENTORY_SIZE, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift transfer cancelled");
         check(f.click(other, active, SCOREBOARD_SLOT, ClickType.RIGHT).isCancelled() && f.repository.saves == baseline,
                 "wrong viewer cannot mutate");
         var unbound = new SettingsInventoryHolder(owner.id);
-        Inventory unboundInventory = inventory(unbound, 54);
+        Inventory unboundInventory = inventory(unbound, SettingsMenu.INVENTORY_SIZE);
         check(f.click(owner, unboundInventory, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled()
                         && f.repository.saves == baseline, "unbound holder is cancelled without NPE");
         var forged = new SettingsInventoryHolder(owner.id);
-        Inventory forgedInventory = inventory(forged, 54);
+        Inventory forgedInventory = inventory(forged, SettingsMenu.INVENTORY_SIZE);
         forged.bindInventory(forgedInventory);
         owner.open = forgedInventory;
         check(f.click(owner, forgedInventory, SCOREBOARD_SLOT, ClickType.RIGHT).isCancelled()
                         && f.repository.saves == baseline, "even opened forged holder cannot mutate");
-        Inventory mismatched = inventory(holder, 54);
+        Inventory mismatched = inventory(holder, SettingsMenu.INVENTORY_SIZE);
         owner.open = mismatched;
         check(f.click(owner, mismatched, SCOREBOARD_SLOT, ClickType.LEFT).isCancelled()
                         && f.repository.saves == baseline, "holder must bind exact inventory");

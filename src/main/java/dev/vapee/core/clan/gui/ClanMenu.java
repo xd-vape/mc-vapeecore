@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
@@ -22,24 +23,60 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Holder-bound 54-slot clan views; no cached domain data or scheduler. */
+/** Holder-bound clan views; no cached domain data or scheduler. */
 public final class ClanMenu {
-    // Layout: overview name 20, member count 22, role 24; other views paginate entries 0..44.
-    // Footer: previous 45, overview 46, members 47, invites 48, close 49, action 50, refresh 52, next 53.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int CONTENT_SIZE = 45;
-    private static final int CLAN_NAME_SLOT = 20;
-    private static final int MEMBER_COUNT_SLOT = 22;
-    private static final int ROLE_SLOT = 24;
-    private static final int EMPTY_SLOT = 22;
-    public static final int PREVIOUS_SLOT = 45;
-    public static final int OVERVIEW_SLOT = 46;
-    public static final int MEMBERS_SLOT = 47;
-    public static final int INVITES_SLOT = 48;
-    public static final int CLOSE_SLOT = 49;
-    public static final int ACTION_SLOT = 50;
-    public static final int REFRESH_SLOT = 52;
-    public static final int NEXT_SLOT = 53;
+    public enum Action { PREVIOUS, OVERVIEW, MEMBERS, INVITES, CLOSE, ACTION, REFRESH, NEXT }
+    public static final Layout DEFAULT_LAYOUT = new Layout(
+            new MenuLayout<>(54,
+            List.of(
+                    0, 1, 2, 3, 4, 5, 6, 7, 8,
+                    9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
+            Map.ofEntries(
+                    Map.entry(Action.PREVIOUS, List.of(45)),
+                    Map.entry(Action.OVERVIEW, List.of(46)),
+                    Map.entry(Action.MEMBERS, List.of(47)),
+                    Map.entry(Action.INVITES, List.of(48)),
+                    Map.entry(Action.CLOSE, List.of(49)),
+                    Map.entry(Action.ACTION, List.of(50)),
+                    Map.entry(Action.REFRESH, List.of(52)),
+                    Map.entry(Action.NEXT, List.of(53)))), 20, 22, 24);
+    /** Overview displays and paged content are mutually exclusive views. */
+    public record Layout(MenuLayout<Action> menu, int clanNameSlot, int memberCountSlot, int roleSlot) {
+        public Layout {
+            Objects.requireNonNull(menu, "menu");
+            var displays = List.of(clanNameSlot, memberCountSlot, roleSlot);
+            if (new HashSet<>(displays).size() != displays.size())
+                throw new IllegalArgumentException("Duplicate clan overview display slot");
+            for (int slot : displays) {
+                MenuLayout.validateSlot(menu.size(), slot);
+                if (menu.actionAt(slot).isPresent())
+                    throw new IllegalArgumentException("Overview display collides with control: " + slot);
+            }
+        }
+    }
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.menu().size();
+    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.menu().pageSize();
+    public static final int CLAN_NAME_SLOT = DEFAULT_LAYOUT.clanNameSlot();
+    public static final int MEMBER_COUNT_SLOT = DEFAULT_LAYOUT.memberCountSlot();
+    public static final int ROLE_SLOT = DEFAULT_LAYOUT.roleSlot();
+    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.menu().emptySlot();
+    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.menu().slot(Action.PREVIOUS);
+    public static final int OVERVIEW_SLOT = DEFAULT_LAYOUT.menu().slot(Action.OVERVIEW);
+    public static final int MEMBERS_SLOT = DEFAULT_LAYOUT.menu().slot(Action.MEMBERS);
+    public static final int INVITES_SLOT = DEFAULT_LAYOUT.menu().slot(Action.INVITES);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.menu().slot(Action.CLOSE);
+    public static final int ACTION_SLOT = DEFAULT_LAYOUT.menu().slot(Action.ACTION);
+    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.menu().slot(Action.REFRESH);
+    public static final int NEXT_SLOT = DEFAULT_LAYOUT.menu().slot(Action.NEXT);
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
+    private final Layout clanLayout;
+    public Layout clanLayout() { return clanLayout; }
 
     private final ClanService clans;
     private final PlayerIdentityService identities;
@@ -57,6 +94,14 @@ public final class ClanMenu {
 
     public ClanMenu(ClanService clans, PlayerIdentityService identities, MessageService messages,
                     Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger) {
+        this(clans, identities, messages, onlinePlayer, inventoryFactory, itemRenderer, logger, DEFAULT_LAYOUT);
+    }
+
+    public ClanMenu(ClanService clans, PlayerIdentityService identities, MessageService messages,
+                    Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger, Layout menuLayout) {
+        this.clanLayout = Objects.requireNonNull(menuLayout, "layout");
+        this.layout = menuLayout.menu().requireActions(DEFAULT_LAYOUT.menu().actions());
+        this.layout.requirePaged();
         this.clans = Objects.requireNonNull(clans, "clans");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -76,44 +121,44 @@ public final class ClanMenu {
         ClanMenuView view = clan == null && requestedView == ClanMenuView.MEMBERS
                 ? ClanMenuView.OVERVIEW : requestedView;
         List<Entry> entries = entries(viewer, clan, view);
-        Pagination pagination = Pagination.of(entries.size(), requestedPage, CONTENT_SIZE);
+        Pagination pagination = Pagination.of(entries.size(), requestedPage, layout.pageSize());
         int page = pagination.page();
         int first = pagination.fromIndex();
         int end = pagination.toIndex();
         Map<Integer, UUID> targets = new LinkedHashMap<>();
-        for (int i = first; i < end; i++) targets.put(i - first, entries.get(i).id());
-        ClanMenuHolder holder = new ClanMenuHolder(viewer, view, page, clan == null ? null : clan.id(), targets);
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, title(view));
+        for (int i = first; i < end; i++) targets.put(layout.contentSlot(i - first), entries.get(i).id());
+        ClanMenuHolder holder = new ClanMenuHolder(viewer, view, page, clan == null ? null : clan.id(), targets, layout);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), title(view));
         holder.bind(inventory);
         if (view == ClanMenuView.OVERVIEW) renderOverview(inventory, viewer, clan);
-        else if (entries.isEmpty()) inventory.setItem(EMPTY_SLOT, item(Material.PAPER,
+        else if (entries.isEmpty()) inventory.setItem(layout.emptySlot(), item(Material.PAPER,
                 view == ClanMenuView.MEMBERS ? "No members" : "No invites", List.of()));
-        for (int i = first; i < end; i++) inventory.setItem(i - first, item(entries.get(i)));
-        if (pagination.hasPrevious()) inventory.setItem(PREVIOUS_SLOT, item(Material.ARROW, "Previous Page", List.of()));
-        inventory.setItem(OVERVIEW_SLOT, tab("Overview", view == ClanMenuView.OVERVIEW));
-        if (clan != null) inventory.setItem(MEMBERS_SLOT, tab("Members", view == ClanMenuView.MEMBERS));
-        inventory.setItem(INVITES_SLOT, tab("Invites", view == ClanMenuView.INVITES));
-        inventory.setItem(CLOSE_SLOT, item(Material.BARRIER, "Close", List.of()));
-        if (clan == null) inventory.setItem(ACTION_SLOT, item(Material.LIME_DYE, "Create Clan",
+        for (int i = first; i < end; i++) inventory.setItem(layout.contentSlot(i - first), item(entries.get(i)));
+        if (pagination.hasPrevious()) inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous Page", List.of()));
+        inventory.setItem(layout.slot(Action.OVERVIEW), tab("Overview", view == ClanMenuView.OVERVIEW));
+        if (clan != null) inventory.setItem(layout.slot(Action.MEMBERS), tab("Members", view == ClanMenuView.MEMBERS));
+        inventory.setItem(layout.slot(Action.INVITES), tab("Invites", view == ClanMenuView.INVITES));
+        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", List.of()));
+        if (clan == null) inventory.setItem(layout.slot(Action.ACTION), item(Material.LIME_DYE, "Create Clan",
                 List.of("Click for a command prompt.")));
-        else if (clan.ownerId().equals(viewer)) inventory.setItem(ACTION_SLOT,
+        else if (clan.ownerId().equals(viewer)) inventory.setItem(layout.slot(Action.ACTION),
                 item(Material.RED_DYE, "Disband Clan", List.of("Shift + Right-click for confirmation command.")));
-        inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", List.of("Read current clan state.")));
-        if (pagination.hasNext()) inventory.setItem(NEXT_SLOT, item(Material.ARROW, "Next Page", List.of()));
+        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", List.of("Read current clan state.")));
+        if (pagination.hasNext()) inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next Page", List.of()));
         var opened = player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) active.put(viewer, inventory);
     }
 
     private void renderOverview(Inventory inventory, UUID viewer, Clan clan) {
         if (clan == null) {
-            inventory.setItem(EMPTY_SLOT, item(Material.PAPER, "You are not in a clan",
+            inventory.setItem(layout.emptySlot(), item(Material.PAPER, "You are not in a clan",
                     List.of("Create one or review incoming invites.")));
             return;
         }
-        inventory.setItem(CLAN_NAME_SLOT, item(Material.NAME_TAG, clan.name(), List.of("Tag: " + clan.tag())));
-        inventory.setItem(MEMBER_COUNT_SLOT, item(Material.PLAYER_HEAD, "Members: " + clan.members().size()
+        inventory.setItem(clanLayout.clanNameSlot(), item(Material.NAME_TAG, clan.name(), List.of("Tag: " + clan.tag())));
+        inventory.setItem(clanLayout.memberCountSlot(), item(Material.PLAYER_HEAD, "Members: " + clan.members().size()
                 + "/" + clans.getLimits().maxMembers(), List.of("Owner: " + displayName(clan.ownerId()))));
-        inventory.setItem(ROLE_SLOT, item(Material.PAPER, "Your role: " +
+        inventory.setItem(clanLayout.roleSlot(), item(Material.PAPER, "Your role: " +
                 (clan.ownerId().equals(viewer) ? "OWNER" : "MEMBER"), List.of("Clan ID: " + clan.id())));
     }
 
@@ -186,7 +231,7 @@ public final class ClanMenu {
     int activeCount() { return active.size(); }
 
     public boolean hasNext(UUID viewer, ClanMenuView view, int page) {
-        return page >= 0 && Pagination.of(entries(viewer, clans.getClanOf(viewer).orElse(null), view).size(), page, CONTENT_SIZE).hasNext();
+        return page >= 0 && Pagination.of(entries(viewer, clans.getClanOf(viewer).orElse(null), view).size(), page, layout.pageSize()).hasNext();
     }
 
     public String displayName(UUID id) {

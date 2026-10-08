@@ -53,6 +53,10 @@ final class FriendMenuFixture {
     final FriendMenuListener listener;
 
     FriendMenuFixture() throws Exception {
+        this(FriendMenu.DEFAULT_LAYOUT);
+    }
+
+    FriendMenuFixture(dev.vapee.core.ui.MenuLayout<FriendMenu.Action> layout) throws Exception {
         var constructor = MessageService.class.getDeclaredConstructor(java.util.function.Supplier.class);
         constructor.setAccessible(true);
         messages = constructor.newInstance((java.util.function.Supplier<String>) () -> "");
@@ -86,7 +90,7 @@ final class FriendMenuFixture {
                 id -> {
                     TestPlayer player = players.get(id);
                     return player != null && player.online ? player.player : null;
-                }, this::inventory, SpecItem::new, logger());
+                }, this::inventory, SpecItem::new, logger(), layout);
         listener = new FriendMenuListener(menu, friends,
                 new FriendMessages(messages, id -> {
                     TestPlayer player = players.get(id);

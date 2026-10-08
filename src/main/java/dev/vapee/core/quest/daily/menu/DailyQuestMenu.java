@@ -1,5 +1,6 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
@@ -28,15 +29,32 @@ import java.util.logging.Logger;
 /** Focused read-only daily quest view. Controls always synchronize and rebuild from current state. */
 public final class DailyQuestMenu {
     public static final String PERMISSION = "vapeecore.quest.use";
-    // Layout: paginated quest entries 0..44; footer previous 45, page info 49, close 50, refresh 52, next 53.
-    // DailyQuestMenuListener uses these constants; entries remain read-only views.
-    public static final int SIZE = 54;
-    public static final int CONTENT_SIZE = 45;
-    public static final int PREVIOUS = 45;
-    public static final int PAGE_INFO = 49;
-    public static final int CLOSE = 50;
-    public static final int REFRESH = 52;
-    public static final int NEXT = 53;
+    public enum Action { PREVIOUS, PAGE_INFO, CLOSE, REFRESH, NEXT }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(
+                    0, 1, 2, 3, 4, 5, 6, 7, 8,
+                    9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
+            Map.ofEntries(
+                    Map.entry(Action.PREVIOUS, List.of(45)),
+                    Map.entry(Action.PAGE_INFO, List.of(49)),
+                    Map.entry(Action.CLOSE, List.of(50)),
+                    Map.entry(Action.REFRESH, List.of(52)),
+                    Map.entry(Action.NEXT, List.of(53))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int SIZE = DEFAULT_LAYOUT.size();
+    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
+    public static final int PREVIOUS = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
+    public static final int PAGE_INFO = DEFAULT_LAYOUT.slot(Action.PAGE_INFO);
+    public static final int CLOSE = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int REFRESH = DEFAULT_LAYOUT.slot(Action.REFRESH);
+    public static final int NEXT = DEFAULT_LAYOUT.slot(Action.NEXT);
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
+
     private final QuestService quests;
     private final PlayerService players;
     private final Function<UUID, DailyQuestSyncResult> sync;
@@ -65,6 +83,14 @@ public final class DailyQuestMenu {
     DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
                    MessageService messages, Function<UUID, Player> onlinePlayer,
                    InventoryFactory inventories, ItemRenderer items, Logger logger) {
+        this(sync, quests, players, messages, onlinePlayer, inventories, items, logger, DEFAULT_LAYOUT);
+    }
+
+    DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
+                   MessageService messages, Function<UUID, Player> onlinePlayer,
+                   InventoryFactory inventories, ItemRenderer items, Logger logger, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requirePaged();
         this.sync = Objects.requireNonNull(sync, "sync");
         this.quests = Objects.requireNonNull(quests, "quests");
         this.players = Objects.requireNonNull(players, "players");
@@ -108,22 +134,25 @@ public final class DailyQuestMenu {
         }
         if (!canUse(player)) return;
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
-        Pagination pagination = Pagination.of(views.size(), requestedPage, CONTENT_SIZE);
+        Pagination pagination = Pagination.of(views.size(), requestedPage, layout.pageSize());
         int page = pagination.page();
         int pages = pagination.pageCount();
-        DailyQuestInventoryHolder holder = new DailyQuestInventoryHolder(player.getUniqueId(), page);
-        Inventory inventory = inventories.create(holder, SIZE, UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
+        Map<Integer, String> targets = new LinkedHashMap<>();
+        for (int i = pagination.fromIndex(); i < pagination.toIndex(); i++)
+            targets.put(layout.contentSlot(i - pagination.fromIndex()), views.get(i).definition().id());
+        DailyQuestInventoryHolder holder = new DailyQuestInventoryHolder(player.getUniqueId(), page, targets, layout);
+        Inventory inventory = inventories.create(holder, layout.size(), UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
         holder.bind(inventory);
         int start = pagination.fromIndex();
         for (int slot = 0; slot < pagination.toIndex() - start; slot++) {
-            inventory.setItem(slot, questItem(views.get(start + slot)));
+            inventory.setItem(layout.contentSlot(slot), questItem(views.get(start + slot)));
         }
-        if (pagination.hasPrevious()) inventory.setItem(PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
-        inventory.setItem(PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
+        if (pagination.hasPrevious()) inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous page", List.of()));
+        inventory.setItem(layout.slot(Action.PAGE_INFO), item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
                 List.of("Rewards are delivered automatically.")));
-        inventory.setItem(CLOSE, item(Material.BARRIER, "Close", List.of()));
-        inventory.setItem(REFRESH, item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
-        if (pagination.hasNext()) inventory.setItem(NEXT, item(Material.ARROW, "Next page", List.of()));
+        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", List.of()));
+        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
+        if (pagination.hasNext()) inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next page", List.of()));
         var opened = player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {

@@ -93,11 +93,11 @@ public final class SettingsListener implements Listener {
         }
 
         int slot = event.getRawSlot();
-        if (slot == SettingsMenu.CLOSE_SLOT) {
+        if (slot == settingsMenu.layout().slot(SettingsMenu.Action.CLOSE)) {
             player.closeInventory();
             return;
         }
-        if (slot == SettingsMenu.REFRESH_SLOT) {
+        if (slot == settingsMenu.layout().slot(SettingsMenu.Action.REFRESH)) {
             refreshOrClose(player, topInventory);
             return;
         }

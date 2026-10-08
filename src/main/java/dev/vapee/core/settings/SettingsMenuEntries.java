@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.ui.UiItemSpec;
@@ -16,24 +17,26 @@ import java.util.function.Predicate;
 public final class SettingsMenuEntries {
     private SettingsMenuEntries() { }
 
-    public static List<SettingsMenuEntry> defaults() {
+    public static List<SettingsMenuEntry> defaults() { return defaults(SettingsMenu.DEFAULT_LAYOUT); }
+
+    public static List<SettingsMenuEntry> defaults(MenuLayout<SettingsMenu.Action> layout) {
         return List.of(
-                toggle(SettingsMenu.SCOREBOARD_SLOT, SettingsMenu.SCOREBOARD_STATUS_SLOT, Material.MAP,
+                toggle(layout.slot(SettingsMenu.Action.SCOREBOARD), layout.slot(SettingsMenu.Action.SCOREBOARD, 1), Material.MAP,
                         "Scoreboard", List.of("Show or hide the lobby scoreboard."), PlayerSettings::isScoreboardEnabled,
                         PlayerSettingsService::setScoreboardEnabled, true),
-                toggle(SettingsMenu.SOUNDS_SLOT, SettingsMenu.SOUNDS_STATUS_SLOT, Material.NOTE_BLOCK,
+                toggle(layout.slot(SettingsMenu.Action.SOUNDS), layout.slot(SettingsMenu.Action.SOUNDS, 1), Material.NOTE_BLOCK,
                         "Sounds", List.of("Enable or disable VapeeCore", "interface feedback sounds."), PlayerSettings::isSoundsEnabled,
                         PlayerSettingsService::setSoundsEnabled, false),
-                toggle(SettingsMenu.PRIVATE_MESSAGES_SLOT, SettingsMenu.PRIVATE_MESSAGES_STATUS_SLOT, Material.WRITABLE_BOOK,
+                toggle(layout.slot(SettingsMenu.Action.PRIVATE_MESSAGES), layout.slot(SettingsMenu.Action.PRIVATE_MESSAGES, 1), Material.WRITABLE_BOOK,
                         "Private Messages", List.of("Choose whether other players can send", "private messages to you."),
                         PlayerSettings::isPrivateMessagesEnabled, PlayerSettingsService::setPrivateMessagesEnabled, false),
-                toggle(SettingsMenu.FRIEND_REQUESTS_SLOT, SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT, Material.PLAYER_HEAD,
+                toggle(layout.slot(SettingsMenu.Action.FRIEND_REQUESTS), layout.slot(SettingsMenu.Action.FRIEND_REQUESTS, 1), Material.PLAYER_HEAD,
                         "Friend Requests", List.of("Choose whether other players can send", "friend requests to you."),
                         PlayerSettings::isFriendRequestsEnabled, PlayerSettingsService::setFriendRequestsEnabled, false),
-                toggle(SettingsMenu.FRIEND_PRESENCE_SLOT, SettingsMenu.FRIEND_PRESENCE_STATUS_SLOT, Material.BELL,
+                toggle(layout.slot(SettingsMenu.Action.FRIEND_PRESENCE), layout.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1), Material.BELL,
                         "Friend Presence", List.of("Notify you when friends join or leave."),
                         PlayerSettings::isFriendPresenceNotificationsEnabled, PlayerSettingsService::setFriendPresenceNotificationsEnabled, false),
-                new SettingsMenuEntry(SettingsMenu.VISIBILITY_SLOT, SettingsMenu.VISIBILITY_STATUS_SLOT,
+                new SettingsMenuEntry(layout.slot(SettingsMenu.Action.VISIBILITY), layout.slot(SettingsMenu.Action.VISIBILITY, 1),
                         current -> new UiItemSpec(Material.SPYGLASS, UiItems.text("Player Visibility", NamedTextColor.AQUA),
                                 List.of(UiItems.text("Manage which lobby players you can see.", NamedTextColor.GRAY),
                                         Component.empty(), UiItems.text("Click to open.", NamedTextColor.YELLOW))),

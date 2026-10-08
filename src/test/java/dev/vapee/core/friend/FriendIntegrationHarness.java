@@ -6,7 +6,6 @@ import dev.vapee.core.player.repository.FilePlayerRepository;
 import dev.vapee.core.player.repository.PlayerRepository;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.social.SocialService;
-import dev.vapee.core.settings.SettingsMenu;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,18 +124,14 @@ public final class FriendIntegrationHarness {
                     "privacy change does not destroy accepted friendship");
             check(friends.sendRequest(bob, charlie) == FriendResult.REQUESTS_DISABLED,
                     "disabled privacy blocks new request without persistence mutation");
-            check(SettingsMenu.FRIEND_REQUESTS_SLOT >= 0
-                            && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT == SettingsMenu.FRIEND_REQUESTS_SLOT + 9
-                            && SettingsMenu.FRIEND_REQUESTS_STATUS_SLOT < SettingsMenu.INVENTORY_SIZE
-                            && SettingsMenu.INVENTORY_SIZE == 54,
-                    "friend request setting has feature and status below in redesigned settings GUI");
-            String menuSource = Files.readString(Path.of(
-                    "src/main/java/dev/vapee/core/settings/SettingsMenuEntries.java"));
-            String listenerSource = Files.readString(Path.of(
-                    "src/main/java/dev/vapee/core/settings/SettingsMenuEntries.java"));
-            check(menuSource.contains("PlayerSettings::isFriendRequestsEnabled")
-                            && listenerSource.contains("PlayerSettingsService::setFriendRequestsEnabled"),
-                    "settings GUI displays and toggles persisted friend request privacy");
+            players.loadPlayer(charlie, "Charlie");
+            var tile = dev.vapee.core.settings.SettingsPrivacyProbe.exercise(settings, charlie);
+            check(tile.rendered(), "real settings GUI renders persisted request privacy");
+            players.unloadPlayer(charlie);
+            check(tile.iconSaved() && tile.statusSaved()
+                            && !settings.areKnownFriendRequestsEnabled(charlie).orElseThrow()
+                            && policy.evaluate(bob, charlie) == FriendRequestDecision.REQUESTS_DISABLED,
+                    "both GUI positions persist privacy and existing Friend authorization observes it");
         } finally {
             try (var files = Files.walk(directory)) {
                 for (Path path : files.sorted(Comparator.reverseOrder()).toList()) {

@@ -75,7 +75,7 @@ public final class VisibilityMenuSecurityHarness {
         fixture.visiblePlayersMenu.open(owner.player);
         Inventory visible = owner.open;
         for (ClickType click : protectedClicks()) {
-            check(fixture.visibleClick(owner, visible, 22, click).isCancelled(),
+            check(fixture.visibleClick(owner, visible, VisiblePlayersMenu.DEFAULT_LAYOUT.emptySlot(), click).isCancelled(),
                     "visible players menu cancels " + click);
         }
         check(fixture.visibleClick(owner, visible,
@@ -87,21 +87,21 @@ public final class VisibilityMenuSecurityHarness {
                 null, null, false, Map.of());
         fixture.visiblePlayersListener.onInventoryDrag(visibleDrag);
         check(visibleDrag.isCancelled(), "visible players menu cancels drag");
-        check(fixture.visibleClick(other, visible, 0, ClickType.RIGHT).isCancelled()
+        check(fixture.visibleClick(other, visible, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled()
                         && fixture.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow(),
                 "wrong viewer cannot remove mapped target");
 
-        VisiblePlayersHolder forged = new VisiblePlayersHolder(owner.id, 0, Map.of(0, target.id));
+        VisiblePlayersHolder forged = new VisiblePlayersHolder(owner.id, 0, Map.of(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), target.id));
         Inventory forgedInventory = fixture.visibleInventory(forged, VisiblePlayersMenu.INVENTORY_SIZE,
                 net.kyori.adventure.text.Component.text("Forged"));
         forged.bindInventory(forgedInventory);
-        check(fixture.visibleClick(owner, forgedInventory, 0, ClickType.RIGHT).isCancelled()
+        check(fixture.visibleClick(owner, forgedInventory, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled()
                         && fixture.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow(),
                 "forged bound target mapping cannot mutate");
-        VisiblePlayersHolder unbound = new VisiblePlayersHolder(owner.id, 0, Map.of(0, target.id));
+        VisiblePlayersHolder unbound = new VisiblePlayersHolder(owner.id, 0, Map.of(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), target.id));
         Inventory unboundInventory = fixture.visibleInventory(unbound, VisiblePlayersMenu.INVENTORY_SIZE,
                 net.kyori.adventure.text.Component.text("Unbound"));
-        check(fixture.visibleClick(owner, unboundInventory, 0, ClickType.RIGHT).isCancelled()
+        check(fixture.visibleClick(owner, unboundInventory, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled()
                         && fixture.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow(),
                 "unbound target mapping cannot mutate");
 
@@ -110,12 +110,12 @@ public final class VisibilityMenuSecurityHarness {
                 "fixture adds second target");
         fixture.visiblePlayersMenu.open(owner.player);
         VisiblePlayersHolder mapping = VisibilityMenuFixture.visibleHolder(owner.open);
-        UUID slotZero = mapping.getTarget(0).orElseThrow();
-        UUID slotOne = mapping.getTarget(1).orElseThrow();
-        var displayedZero = owner.open.getItem(0);
-        owner.open.setItem(0, owner.open.getItem(1));
-        owner.open.setItem(1, displayedZero);
-        fixture.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+        UUID slotZero = mapping.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
+        UUID slotOne = mapping.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).orElseThrow();
+        var displayedZero = owner.open.getItem(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0));
+        owner.open.setItem(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), owner.open.getItem(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)));
+        owner.open.setItem(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1), displayedZero);
+        fixture.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(!fixture.settings.isLobbyAddedVisiblePlayer(owner.id, slotZero).orElseThrow()
                         && fixture.settings.isLobbyAddedVisiblePlayer(owner.id, slotOne).orElseThrow(),
                 "server-side slot mapping wins over forged display item data");
@@ -123,7 +123,7 @@ public final class VisibilityMenuSecurityHarness {
         fixture.visiblePlayersMenu.open(owner.player);
         Inventory active = owner.open;
         fixture.visiblePlayersMenu.open(owner.player);
-        check(fixture.visibleClick(owner, active, 0, ClickType.RIGHT).isCancelled()
+        check(fixture.visibleClick(owner, active, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT).isCancelled()
                         && fixture.settings.isLobbyAddedVisiblePlayer(owner.id, slotOne).orElseThrow(),
                 "stale visible players inventory cannot mutate");
         fixture.visiblePlayersListener.onInventoryClose(new InventoryCloseEvent(fixture.view(owner, active)));
@@ -183,7 +183,7 @@ public final class VisibilityMenuSecurityHarness {
             if (list) f.visiblePlayersMenu.open(owner.player); else f.visibilityMenu.open(owner.player);
             check(owner.open != null, "grant permits visibility entry " + list);
         }
-        for (int slot : new int[]{9, 18, 11, 20, 13, 22, 15, 24, 17, 26, 31, 45, 49, 52, 54}) {
+        for (int slot : new int[]{VisibilitySettingsMenu.MASTER_SLOT, VisibilitySettingsMenu.MASTER_STATUS_SLOT, VisibilitySettingsMenu.FRIENDS_SLOT, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, VisibilitySettingsMenu.STAFF_SLOT, VisibilitySettingsMenu.STAFF_STATUS_SLOT, VisibilitySettingsMenu.ADDED_USERS_SLOT, VisibilitySettingsMenu.ADDED_USERS_STATUS_SLOT, VisibilitySettingsMenu.GAME_PARTICIPANTS_SLOT, VisibilitySettingsMenu.GAME_PARTICIPANTS_STATUS_SLOT, VisibilitySettingsMenu.MANAGE_PLAYERS_SLOT, VisibilitySettingsMenu.BACK_SLOT, VisibilitySettingsMenu.CLOSE_SLOT, VisibilitySettingsMenu.REFRESH_SLOT, VisibilitySettingsMenu.INVENTORY_SIZE}) {
             for (boolean allowed : new boolean[]{false, true}) {
                 var f = new VisibilityMenuFixture(); var owner = f.player("Actor", true);
                 f.visibilityMenu.open(owner.player); Inventory top = owner.open;
@@ -202,13 +202,13 @@ public final class VisibilityMenuSecurityHarness {
                             && owner.received.size() == 1, "visibility revocation cleans owned view once " + slot);
                     f.visibilityClick(owner, top, slot, ClickType.LEFT);
                     check(owner.closeCalls == 1 && owner.received.size() == 1, "visibility stale replay inert " + slot);
-                } else if (java.util.List.of(9, 18, 11, 20, 13, 22, 15, 24).contains(slot)) {
+                } else if (java.util.List.of(VisibilitySettingsMenu.MASTER_SLOT, VisibilitySettingsMenu.MASTER_STATUS_SLOT, VisibilitySettingsMenu.FRIENDS_SLOT, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, VisibilitySettingsMenu.STAFF_SLOT, VisibilitySettingsMenu.STAFF_STATUS_SLOT, VisibilitySettingsMenu.ADDED_USERS_SLOT, VisibilitySettingsMenu.ADDED_USERS_STATUS_SLOT).contains(slot)) {
                     check(!before.equals(after) && f.repository.saves == saves + 1 && f.applyCalls == 1,
                             "authorized visibility mutation " + slot);
                 } else check(before.equals(after) && f.repository.saves == saves, "nonmutating/unavailable visibility route " + slot);
             }
         }
-        for (int slot : new int[]{0, 45, 46, 48, 49, 52, 53, 54}) {
+        for (int slot : new int[]{VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), VisiblePlayersMenu.PREVIOUS_SLOT, VisiblePlayersMenu.ADD_SLOT, VisiblePlayersMenu.BACK_SLOT, VisiblePlayersMenu.CLOSE_SLOT, VisiblePlayersMenu.REFRESH_SLOT, VisiblePlayersMenu.NEXT_SLOT, VisiblePlayersMenu.INVENTORY_SIZE}) {
             var f = new VisibilityMenuFixture(); var owner = f.player("List", true); var target = f.player("Target", true);
             f.settings.addLobbyVisiblePlayer(owner.id, target.id);
             f.visiblePlayersMenu.open(owner.player); Inventory top = owner.open;
@@ -221,7 +221,7 @@ public final class VisibilityMenuSecurityHarness {
             f.visibleClick(owner, top, slot, ClickType.RIGHT);
             check(owner.received.size() == 1 && owner.closeCalls == 1, "visible-player replay does not spam " + slot);
             owner.permitted = true; f.visiblePlayersMenu.open(owner.player);
-            f.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+            f.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
             check(!f.settings.isLobbyAddedVisiblePlayer(owner.id, target.id).orElseThrow() && f.repository.saves == saves + 1,
                     "grant restores legitimate added-user removal " + slot);
         }
@@ -229,8 +229,8 @@ public final class VisibilityMenuSecurityHarness {
             var f = new VisibilityMenuFixture(); var owner = f.player("Foreign", true);
             if (list) f.visiblePlayersMenu.open(owner.player); else f.visibilityMenu.open(owner.player);
             Inventory top = owner.open; owner.open = owner.bottom; owner.permitted = false;
-            if (list) f.visibleClick(owner, top, 0, ClickType.RIGHT);
-            else f.visibilityClick(owner, top, 9, ClickType.LEFT);
+            if (list) f.visibleClick(owner, top, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
+            else f.visibilityClick(owner, top, VisibilitySettingsMenu.MASTER_SLOT, ClickType.LEFT);
             check(owner.closeCalls == 0 && owner.open == owner.bottom && owner.received.isEmpty(),
                     "revoked stale visibility event preserves foreign current inventory " + list);
             f.visibilityMenu.closeOpenInventories(); f.visiblePlayersMenu.closeOpenInventories();

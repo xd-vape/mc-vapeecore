@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.MenuLayout;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
@@ -19,6 +20,11 @@ public final class FriendMenuHolder implements InventoryHolder {
 
     public FriendMenuHolder(UUID ownerUniqueId, FriendMenuView view, int page,
                             Map<Integer, UUID> targetsBySlot) {
+        this(ownerUniqueId, view, page, targetsBySlot, FriendMenu.DEFAULT_LAYOUT);
+    }
+
+    public FriendMenuHolder(UUID ownerUniqueId, FriendMenuView view, int page,
+                            Map<Integer, UUID> targetsBySlot, MenuLayout<FriendMenu.Action> layout) {
         this.ownerUniqueId = Objects.requireNonNull(ownerUniqueId, "ownerUniqueId");
         this.view = Objects.requireNonNull(view, "view");
         if (page < 0) {
@@ -26,7 +32,7 @@ public final class FriendMenuHolder implements InventoryHolder {
         }
         this.page = page;
         Map<Integer, UUID> copy = Map.copyOf(Objects.requireNonNull(targetsBySlot, "targetsBySlot"));
-        if (copy.keySet().stream().anyMatch(slot -> slot < 0 || slot >= FriendMenu.CONTENT_SIZE)) {
+        if (copy.keySet().stream().anyMatch(slot -> !layout.isContent(slot))) {
             throw new IllegalArgumentException("target slot is outside menu content");
         }
         this.targetsBySlot = copy;

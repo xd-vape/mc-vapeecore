@@ -34,6 +34,10 @@ final class ClanMenuFixture {
     ClanMenuFixture() throws Exception { this(ClanLimits.defaults()); }
 
     ClanMenuFixture(ClanLimits limits) throws Exception {
+        this(limits, ClanMenu.DEFAULT_LAYOUT);
+    }
+
+    ClanMenuFixture(ClanLimits limits, ClanMenu.Layout layout) throws Exception {
         var constructor = MessageService.class.getDeclaredConstructor(Supplier.class);
         constructor.setAccessible(true);
         messages = constructor.newInstance((Supplier<String>) () -> "");
@@ -53,7 +57,7 @@ final class ClanMenuFixture {
         menu = new ClanMenu(clans, identity, messages, id -> {
             TestPlayer player = players.get(id);
             return player != null && player.online ? player.player : null;
-        }, this::inventory, SpecItem::new, logger());
+        }, this::inventory, SpecItem::new, logger(), layout);
         listener = new ClanMenuListener(menu, clans, new ClanMessages(messages, id -> {
             TestPlayer player = players.get(id);
             return player != null && player.online ? player.player : null;

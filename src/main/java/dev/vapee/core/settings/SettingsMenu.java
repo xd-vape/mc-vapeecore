@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
@@ -26,26 +27,39 @@ import java.util.logging.Logger;
 
 public final class SettingsMenu {
 
-    // Layout (zero-based slots): feature icons 10/11/12/13, matching status 19/20/21/22.
-    // Lower features 31/33, status 40/42; footer close 49, refresh 52.
-    // SettingsMenuEntries owns each tile and its paired action; listener resolves the same entries.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int SCOREBOARD_SLOT = 10;
-    public static final int SOUNDS_SLOT = 11;
-    public static final int PRIVATE_MESSAGES_SLOT = 12;
-    public static final int FRIEND_REQUESTS_SLOT = 13;
-    public static final int SCOREBOARD_STATUS_SLOT = 19;
-    public static final int SOUNDS_STATUS_SLOT = 20;
-    public static final int PRIVATE_MESSAGES_STATUS_SLOT = 21;
-    public static final int FRIEND_REQUESTS_STATUS_SLOT = 22;
-    public static final int VISIBILITY_SLOT = 31;
-    public static final int VISIBILITY_STATUS_SLOT = 40;
-    public static final int FRIEND_PRESENCE_SLOT = 33;
-    public static final int FRIEND_PRESENCE_STATUS_SLOT = 42;
-    public static final int CLOSE_SLOT = 49;
-    public static final int REFRESH_SLOT = 52;
+    public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, REFRESH }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(), -1,
+            Map.ofEntries(
+                    Map.entry(Action.SCOREBOARD, List.of(10, 19)),
+                    Map.entry(Action.SOUNDS, List.of(11, 20)),
+                    Map.entry(Action.PRIVATE_MESSAGES, List.of(12, 21)),
+                    Map.entry(Action.FRIEND_REQUESTS, List.of(13, 22)),
+                    Map.entry(Action.VISIBILITY, List.of(31, 40)),
+                    Map.entry(Action.FRIEND_PRESENCE, List.of(33, 42)),
+                    Map.entry(Action.CLOSE, List.of(49)),
+                    Map.entry(Action.REFRESH, List.of(52))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
+    public static final int SCOREBOARD_SLOT = DEFAULT_LAYOUT.slot(Action.SCOREBOARD);
+    public static final int SOUNDS_SLOT = DEFAULT_LAYOUT.slot(Action.SOUNDS);
+    public static final int PRIVATE_MESSAGES_SLOT = DEFAULT_LAYOUT.slot(Action.PRIVATE_MESSAGES);
+    public static final int FRIEND_REQUESTS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_REQUESTS);
+    public static final int SCOREBOARD_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.SCOREBOARD, 1);
+    public static final int SOUNDS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.SOUNDS, 1);
+    public static final int PRIVATE_MESSAGES_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.PRIVATE_MESSAGES, 1);
+    public static final int FRIEND_REQUESTS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_REQUESTS, 1);
+    public static final int VISIBILITY_SLOT = DEFAULT_LAYOUT.slot(Action.VISIBILITY);
+    public static final int VISIBILITY_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.VISIBILITY, 1);
+    public static final int FRIEND_PRESENCE_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_PRESENCE);
+    public static final int FRIEND_PRESENCE_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_PRESENCE, 1);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
 
     private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
 
     private final List<SettingsMenuEntry> entries;
     private final PlayerSettingsService playerSettingsService;
@@ -61,7 +75,8 @@ public final class SettingsMenu {
             PlayerSettingsService playerSettingsService,
             MessageService messageService
     ) {
-        this.entries = validateEntries(SettingsMenuEntries.defaults());
+        this.layout = DEFAULT_LAYOUT;
+        this.entries = validateEntries(SettingsMenuEntries.defaults(layout));
         Objects.requireNonNull(plugin, "plugin");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
@@ -80,6 +95,14 @@ public final class SettingsMenu {
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                  ItemRenderer itemRenderer, Logger logger, List<SettingsMenuEntry> entries) {
+        this(playerSettingsService, messageService, onlinePlayer, inventoryFactory, itemRenderer, logger, entries, DEFAULT_LAYOUT);
+    }
+
+    SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
+                 Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                 ItemRenderer itemRenderer, Logger logger, List<SettingsMenuEntry> entries, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requireFixed();
         this.entries = validateEntries(entries);
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
@@ -87,6 +110,11 @@ public final class SettingsMenu {
         this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
+    }
+
+    SettingsMenu(PlayerSettingsService settings, MessageService messages, Function<UUID, Player> online,
+                 InventoryFactory inventories, ItemRenderer items, Logger logger, MenuLayout<Action> layout) {
+        this(settings, messages, online, inventories, items, logger, SettingsMenuEntries.defaults(layout), layout);
     }
 
     public boolean open(Player player) {
@@ -103,7 +131,7 @@ public final class SettingsMenu {
         }
 
         SettingsInventoryHolder holder = new SettingsInventoryHolder(uniqueId);
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, TITLE);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
         holder.bindInventory(inventory);
         if (!refresh(validatedPlayer, inventory)) {
             validatedPlayer.closeInventory();
@@ -173,8 +201,8 @@ public final class SettingsMenu {
             validatedInventory.setItem(entry.slot(), itemRenderer.render(entry.icon().apply(settings)));
             if (entry.statusSlot() >= 0) validatedInventory.setItem(entry.statusSlot(), itemRenderer.render(entry.status().apply(settings)));
         }
-        validatedInventory.setItem(CLOSE_SLOT, createCloseItem());
-        validatedInventory.setItem(REFRESH_SLOT, itemRenderer.render(new UiItemSpec(
+        validatedInventory.setItem(layout.slot(Action.CLOSE), createCloseItem());
+        validatedInventory.setItem(layout.slot(Action.REFRESH), itemRenderer.render(new UiItemSpec(
                 Material.CLOCK, UiItems.text("Refresh", NamedTextColor.AQUA),
                 List.of(UiItems.text("Reload your current settings.", NamedTextColor.GRAY)))));
         return true;
@@ -184,9 +212,11 @@ public final class SettingsMenu {
         return entries.stream().filter(entry -> entry.matches(slot)).findFirst();
     }
 
-    private static List<SettingsMenuEntry> validateEntries(List<SettingsMenuEntry> entries) {
-        var slots = new java.util.HashSet<Integer>(List.of(CLOSE_SLOT, REFRESH_SLOT));
+    private List<SettingsMenuEntry> validateEntries(List<SettingsMenuEntry> entries) {
+        var slots = new java.util.HashSet<Integer>(List.of(layout.slot(Action.CLOSE), layout.slot(Action.REFRESH)));
         for (var entry : entries) {
+            MenuLayout.validateSlot(layout.size(), entry.slot());
+            if (entry.statusSlot() >= 0) MenuLayout.validateSlot(layout.size(), entry.statusSlot());
             if (!slots.add(entry.slot()) || entry.statusSlot() >= 0 && !slots.add(entry.statusSlot())) {
                 throw new IllegalArgumentException("Duplicate/reserved Settings tile slot");
             }

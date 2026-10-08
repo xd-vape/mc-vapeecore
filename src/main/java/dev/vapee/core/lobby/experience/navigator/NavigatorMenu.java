@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.ui.Pagination;
@@ -26,17 +27,32 @@ import java.util.logging.Logger;
 
 public final class NavigatorMenu {
 
-    // Layout: paginated warps 0..44; empty-state marker 22.
-    // Footer: previous 45, page info 49, close 50, next 53. Listener shares these constants.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int CONTENT_SIZE = 45;
-    private static final int EMPTY_SLOT = 22;
-    public static final int PREVIOUS_SLOT = 45;
-    public static final int PAGE_INFO_SLOT = 49;
-    public static final int CLOSE_SLOT = 50;
-    public static final int NEXT_SLOT = 53;
+    public enum Action { PREVIOUS, PAGE_INFO, CLOSE, NEXT }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(
+                    0, 1, 2, 3, 4, 5, 6, 7, 8,
+                    9, 10, 11, 12, 13, 14, 15, 16, 17,
+                    18, 19, 20, 21, 22, 23, 24, 25, 26,
+                    27, 28, 29, 30, 31, 32, 33, 34, 35,
+                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
+            Map.ofEntries(
+                    Map.entry(Action.PREVIOUS, List.of(45)),
+                    Map.entry(Action.PAGE_INFO, List.of(49)),
+                    Map.entry(Action.CLOSE, List.of(50)),
+                    Map.entry(Action.NEXT, List.of(53))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
+    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
+    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.emptySlot();
+    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
+    public static final int PAGE_INFO_SLOT = DEFAULT_LAYOUT.slot(Action.PAGE_INFO);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int NEXT_SLOT = DEFAULT_LAYOUT.slot(Action.NEXT);
 
     private static final Component TITLE = Component.text("Warp Navigator", NamedTextColor.DARK_GRAY);
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
 
     private final WarpService warpService;
     private final NavigatorAccessPolicy accessPolicy;
@@ -55,6 +71,14 @@ public final class NavigatorMenu {
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
                   Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                   ItemRenderer itemRenderer, Logger logger) {
+        this(warpService, accessPolicy, onlinePlayer, inventoryFactory, itemRenderer, logger, DEFAULT_LAYOUT);
+    }
+
+    NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
+                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                  ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requirePaged();
         this.warpService = Objects.requireNonNull(warpService, "warpService");
         this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
@@ -74,29 +98,29 @@ public final class NavigatorMenu {
             return false;
         }
         List<WarpPoint> warps = warpService.getNavigatorWarps();
-        Pagination pagination = Pagination.of(warps.size(), requestedPage, CONTENT_SIZE);
+        Pagination pagination = Pagination.of(warps.size(), requestedPage, layout.pageSize());
         int page = pagination.page();
         int pageCount = pagination.pageCount();
         int fromIndex = pagination.fromIndex();
         int toIndex = pagination.toIndex();
         Map<Integer, String> warpIdsBySlot = new LinkedHashMap<>();
         for (int index = fromIndex; index < toIndex; index++) {
-            warpIdsBySlot.put(index - fromIndex, warps.get(index).id());
+            warpIdsBySlot.put(layout.contentSlot(index - fromIndex), warps.get(index).id());
         }
 
         NavigatorInventoryHolder holder = new NavigatorInventoryHolder(
                 validatedPlayer.getUniqueId(),
                 page,
-                warpIdsBySlot
+                warpIdsBySlot, layout
         );
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, TITLE);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
         holder.bindInventory(inventory);
 
         for (int index = fromIndex; index < toIndex; index++) {
-            inventory.setItem(index - fromIndex, createWarpItem(warps.get(index)));
+            inventory.setItem(layout.contentSlot(index - fromIndex), createWarpItem(warps.get(index)));
         }
         if (warps.isEmpty()) {
-            inventory.setItem(EMPTY_SLOT, createItem(
+            inventory.setItem(layout.emptySlot(), createItem(
                     Material.GRAY_DYE,
                     "No Destinations Available",
                     NamedTextColor.GRAY,
@@ -104,27 +128,27 @@ public final class NavigatorMenu {
             ));
         }
         if (pagination.hasPrevious()) {
-            inventory.setItem(PREVIOUS_SLOT, createItem(
+            inventory.setItem(layout.slot(Action.PREVIOUS), createItem(
                     Material.ARROW,
                     "Previous Page",
                     NamedTextColor.YELLOW,
                     List.of()
             ));
         }
-        inventory.setItem(PAGE_INFO_SLOT, createItem(
+        inventory.setItem(layout.slot(Action.PAGE_INFO), createItem(
                 Material.PAPER,
                 "Page " + (page + 1) + "/" + pageCount,
                 NamedTextColor.AQUA,
                 List.of(warps.size() + (warps.size() == 1 ? " destination." : " destinations."))
         ));
-        inventory.setItem(CLOSE_SLOT, createItem(
+        inventory.setItem(layout.slot(Action.CLOSE), createItem(
                 Material.BARRIER,
                 "Close",
                 NamedTextColor.RED,
                 List.of()
         ));
         if (pagination.hasNext()) {
-            inventory.setItem(NEXT_SLOT, createItem(
+            inventory.setItem(layout.slot(Action.NEXT), createItem(
                     Material.ARROW,
                     "Next Page",
                     NamedTextColor.YELLOW,

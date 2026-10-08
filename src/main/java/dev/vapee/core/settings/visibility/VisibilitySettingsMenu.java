@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
 import dev.vapee.core.message.MessageService;
@@ -24,25 +25,40 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisibilitySettingsMenu {
-    // Layout: filter icons 9/11/13/15/17; status indicators 18/20/22/24/26.
-    // Manage list 31; footer back 45, close 49, refresh 52. Clicks share these constants.
-    public static final int INVENTORY_SIZE = 54;
-    public static final int MASTER_SLOT = 9;
-    public static final int FRIENDS_SLOT = 11;
-    public static final int STAFF_SLOT = 13;
-    public static final int ADDED_USERS_SLOT = 15;
-    public static final int GAME_PARTICIPANTS_SLOT = 17;
-    public static final int MASTER_STATUS_SLOT = 18;
-    public static final int FRIENDS_STATUS_SLOT = 20;
-    public static final int STAFF_STATUS_SLOT = 22;
-    public static final int ADDED_USERS_STATUS_SLOT = 24;
-    public static final int GAME_PARTICIPANTS_STATUS_SLOT = 26;
-    public static final int MANAGE_PLAYERS_SLOT = 31;
-    public static final int BACK_SLOT = 45;
-    public static final int CLOSE_SLOT = 49;
-    public static final int REFRESH_SLOT = 52;
+    public enum Action { MASTER, FRIENDS, STAFF, ADDED_USERS, GAME_PARTICIPANTS, MANAGE_PLAYERS, BACK, CLOSE, REFRESH }
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
+            List.of(), -1,
+            Map.ofEntries(
+                    Map.entry(Action.MASTER, List.of(9, 18)),
+                    Map.entry(Action.FRIENDS, List.of(11, 20)),
+                    Map.entry(Action.STAFF, List.of(13, 22)),
+                    Map.entry(Action.ADDED_USERS, List.of(15, 24)),
+                    Map.entry(Action.GAME_PARTICIPANTS, List.of(17, 26)),
+                    Map.entry(Action.MANAGE_PLAYERS, List.of(31)),
+                    Map.entry(Action.BACK, List.of(45)),
+                    Map.entry(Action.CLOSE, List.of(49)),
+                    Map.entry(Action.REFRESH, List.of(52))));
+    // Compatibility aliases describe the default only; runtime code reads the instance layout.
+    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
+    public static final int MASTER_SLOT = DEFAULT_LAYOUT.slot(Action.MASTER);
+    public static final int FRIENDS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIENDS);
+    public static final int STAFF_SLOT = DEFAULT_LAYOUT.slot(Action.STAFF);
+    public static final int ADDED_USERS_SLOT = DEFAULT_LAYOUT.slot(Action.ADDED_USERS);
+    public static final int GAME_PARTICIPANTS_SLOT = DEFAULT_LAYOUT.slot(Action.GAME_PARTICIPANTS);
+    public static final int MASTER_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.MASTER, 1);
+    public static final int FRIENDS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIENDS, 1);
+    public static final int STAFF_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.STAFF, 1);
+    public static final int ADDED_USERS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.ADDED_USERS, 1);
+    public static final int GAME_PARTICIPANTS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.GAME_PARTICIPANTS, 1);
+    public static final int MANAGE_PLAYERS_SLOT = DEFAULT_LAYOUT.slot(Action.MANAGE_PLAYERS);
+    public static final int BACK_SLOT = DEFAULT_LAYOUT.slot(Action.BACK);
+    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
+    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
 
     private static final Component TITLE = UiItems.text("Visibility Settings", NamedTextColor.DARK_GRAY);
+
+    private final MenuLayout<Action> layout;
+    public MenuLayout<Action> layout() { return layout; }
 
     private final PlayerSettingsService settings;
     private final MessageService messages;
@@ -62,6 +78,14 @@ public final class VisibilitySettingsMenu {
     VisibilitySettingsMenu(PlayerSettingsService settings, MessageService messages,
                            Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                            ItemRenderer itemRenderer, Logger logger) {
+        this(settings, messages, onlinePlayer, inventoryFactory, itemRenderer, logger, DEFAULT_LAYOUT);
+    }
+
+    VisibilitySettingsMenu(PlayerSettingsService settings, MessageService messages,
+                           Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                           ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout.requireFixed();
         this.settings = Objects.requireNonNull(settings, "settings");
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
@@ -82,7 +106,7 @@ public final class VisibilitySettingsMenu {
             return;
         }
         VisibilitySettingsHolder holder = new VisibilitySettingsHolder(viewer.getUniqueId());
-        Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, TITLE);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
         holder.bindInventory(inventory);
         render(inventory, current);
         var opened = viewer.openInventory(inventory);
@@ -125,7 +149,7 @@ public final class VisibilitySettingsMenu {
 
     private void render(Inventory inventory, PlayerSettings current) {
         var visibility = current.getVisibility();
-        inventory.setItem(MASTER_SLOT, item(Material.ENDER_EYE, "All Players", NamedTextColor.AQUA,
+        inventory.setItem(layout.slot(Action.MASTER), item(Material.ENDER_EYE, "All Players", NamedTextColor.AQUA,
                 List.of(
                         visibility.isAllPlayersVisible()
                                 ? "All lobby players are visible unless privacy rules block them."
@@ -133,49 +157,49 @@ public final class VisibilitySettingsMenu {
                         "Current: " + (visibility.isAllPlayersVisible() ? "ON" : "FILTERED"),
                         "Click to change."
                 )));
-        inventory.setItem(MASTER_STATUS_SLOT, item(
+        inventory.setItem(layout.slot(Action.MASTER, 1), item(
                 visibility.isAllPlayersVisible() ? Material.LIME_STAINED_GLASS_PANE
                         : Material.YELLOW_STAINED_GLASS_PANE,
                 visibility.isAllPlayersVisible() ? "All Players" : "Filtered",
                 visibility.isAllPlayersVisible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
                 List.of("Click to change.")));
 
-        inventory.setItem(FRIENDS_SLOT, filterItem(Material.PLAYER_HEAD, "Friends",
+        inventory.setItem(layout.slot(Action.FRIENDS), filterItem(Material.PLAYER_HEAD, "Friends",
                 visibility.isShowFriends(), List.of("Show confirmed friends while visibility is filtered.")));
-        inventory.setItem(FRIENDS_STATUS_SLOT, status(
+        inventory.setItem(layout.slot(Action.FRIENDS, 1), status(
                 visibility.isShowFriends() ? "Enabled" : "Disabled", visibility.isShowFriends()));
 
-        inventory.setItem(STAFF_SLOT, filterItem(Material.GOLDEN_HELMET, "Staff Members",
+        inventory.setItem(layout.slot(Action.STAFF), filterItem(Material.GOLDEN_HELMET, "Staff Members",
                 visibility.isShowStaff(), List.of("Show server staff while visibility is filtered.")));
-        inventory.setItem(STAFF_STATUS_SLOT, status(
+        inventory.setItem(layout.slot(Action.STAFF, 1), status(
                 visibility.isShowStaff() ? "Enabled" : "Disabled", visibility.isShowStaff()));
 
-        inventory.setItem(ADDED_USERS_SLOT, filterItem(Material.WRITABLE_BOOK, "Added Users",
+        inventory.setItem(layout.slot(Action.ADDED_USERS), filterItem(Material.WRITABLE_BOOK, "Added Users",
                 visibility.isShowAddedUsers(), List.of(
                         "Show players from your personal visible players list.",
                         "Configured users: " + visibility.getAddedPlayers().size()
                 )));
-        inventory.setItem(ADDED_USERS_STATUS_SLOT, status(
+        inventory.setItem(layout.slot(Action.ADDED_USERS, 1), status(
                 visibility.isShowAddedUsers() ? "Enabled" : "Disabled", visibility.isShowAddedUsers()));
 
-        inventory.setItem(GAME_PARTICIPANTS_SLOT, item(Material.NETHER_STAR, "Game Participants",
+        inventory.setItem(layout.slot(Action.GAME_PARTICIPANTS), item(Material.NETHER_STAR, "Game Participants",
                 NamedTextColor.GRAY, List.of(
                         "Unavailable until game/activity integration is completed.",
                         "Current: UNAVAILABLE"
                 )));
-        inventory.setItem(GAME_PARTICIPANTS_STATUS_SLOT, item(Material.GRAY_STAINED_GLASS_PANE,
+        inventory.setItem(layout.slot(Action.GAME_PARTICIPANTS, 1), item(Material.GRAY_STAINED_GLASS_PANE,
                 "Unavailable", NamedTextColor.GRAY, List.of("Game integration is not available yet.")));
 
-        inventory.setItem(MANAGE_PLAYERS_SLOT, item(Material.CHEST, "Manage Visible Players",
+        inventory.setItem(layout.slot(Action.MANAGE_PLAYERS), item(Material.CHEST, "Manage Visible Players",
                 NamedTextColor.GREEN, List.of(
                         "Add or remove players from your visible players list.",
                         "Configured users: " + visibility.getAddedPlayers().size(),
                         "Click to open."
                 )));
-        inventory.setItem(BACK_SLOT, item(Material.ARROW, "Back", NamedTextColor.YELLOW,
+        inventory.setItem(layout.slot(Action.BACK), item(Material.ARROW, "Back", NamedTextColor.YELLOW,
                 List.of("Return to Player Settings.")));
-        inventory.setItem(CLOSE_SLOT, item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
-        inventory.setItem(REFRESH_SLOT, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
+        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
+        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
                 List.of("Reload your current visibility settings.")));
     }
 

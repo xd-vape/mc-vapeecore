@@ -20,44 +20,44 @@ public final class ClanMenuSecurityHarness {
         f.menu.open(owner.player, ClanMenuView.MEMBERS, 0);
         Inventory active = owner.open;
         ClanMenuHolder holder = ClanMenuFixture.holder(active);
-        check(holder.owner().equals(owner.id) && holder.target(1).orElseThrow().equals(member.id),
+        check(holder.owner().equals(owner.id) && holder.target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1)).orElseThrow().equals(member.id),
                 "holder owner and slot mapping");
         check(f.menu.isActive(owner.player, active, holder), "exact active inventory binding");
         for (ClickType click : new ClickType[]{ClickType.LEFT, ClickType.RIGHT, ClickType.NUMBER_KEY,
                 ClickType.DOUBLE_CLICK, ClickType.SWAP_OFFHAND, ClickType.DROP,
                 ClickType.CONTROL_DROP, ClickType.CREATIVE, ClickType.MIDDLE}) {
-            check(f.click(owner, active, 1, click).isCancelled(), click + " cancelled");
+            check(f.click(owner, active, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), click).isCancelled(), click + " cancelled");
             check(f.clans.getClanOf(member.id).isPresent(), click + " does not mutate");
         }
-        check(f.click(owner, active, 0, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(owner, active, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0), ClickType.SHIFT_RIGHT).isCancelled()
                 && f.clans.getClanOf(owner.id).isPresent(), "owner entry cannot kick self");
         check(f.click(owner, active, ClanMenu.INVENTORY_SIZE, ClickType.SHIFT_LEFT).isCancelled(),
                 "bottom shift transfer cancelled");
-        check(f.click(owner, active, 100, ClickType.NUMBER_KEY).isCancelled(), "bottom hotbar swap cancelled");
+        check(f.click(owner, active, dev.vapee.core.ui.LayoutTestSupport.unused(ClanMenu.DEFAULT_LAYOUT.menu()), ClickType.NUMBER_KEY).isCancelled(), "bottom hotbar swap cancelled");
         check(f.click(owner, active, -999, ClickType.LEFT).isCancelled(), "outside click cancelled");
-        check(f.click(owner, active, 22, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(owner, active, dev.vapee.core.ui.LayoutTestSupport.emptyContent(ClanMenu.DEFAULT_LAYOUT.menu(), slot -> ClanMenuFixture.holder(active).target(slot).isPresent()), ClickType.SHIFT_RIGHT).isCancelled()
                 && f.clans.getClanOf(member.id).isPresent(), "unmapped content inert");
         InventoryDragEvent drag = new InventoryDragEvent(f.view(owner, active), null, null, false, Map.of());
         f.listener.onInventoryDrag(drag);
         check(drag.isCancelled(), "drag cancelled");
-        check(f.click(member, active, 1, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(member, active, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT).isCancelled()
                 && f.clans.getClanOf(member.id).isPresent(), "wrong viewer blocked");
         ClanMenuHolder forged = new ClanMenuHolder(owner.id, ClanMenuView.MEMBERS, 0, Map.of(1, member.id));
         Inventory forgedInventory = f.inventory(forged, ClanMenu.INVENTORY_SIZE, Component.text("Clan"));
-        check(f.click(owner, forgedInventory, 1, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(owner, forgedInventory, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT).isCancelled()
                 && !f.menu.isActive(owner.player, forgedInventory, forged), "forged holder blocked");
         ClanMenuHolder unbound = new ClanMenuHolder(owner.id, ClanMenuView.MEMBERS, 0, Map.of(1, member.id));
         Inventory unboundInventory = f.inventory(unbound, ClanMenu.INVENTORY_SIZE, Component.text("Clan"));
-        check(f.click(owner, unboundInventory, 1, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(owner, unboundInventory, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT).isCancelled()
                 && !f.menu.isActive(owner.player, unboundInventory, unbound), "unbound holder blocked");
         f.menu.open(owner.player, ClanMenuView.MEMBERS, 0);
-        check(f.click(owner, active, 1, ClickType.SHIFT_RIGHT).isCancelled()
+        check(f.click(owner, active, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT).isCancelled()
                 && f.clans.getClanOf(member.id).isPresent(), "stale prior inventory blocked");
         f.listener.onInventoryClose(new InventoryCloseEvent(f.view(owner, active)));
         check(f.menu.isActive(owner.player, owner.open, ClanMenuFixture.holder(owner.open)),
                 "old close does not clear replacement");
         owner.permitted = false;
-        f.click(owner, owner.open, 1, ClickType.SHIFT_RIGHT);
+        f.click(owner, owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT);
         check(f.clans.getClanOf(member.id).isPresent() && owner.closeCalls == 1,
                 "permission revocation blocks active menu");
         owner.permitted = true;

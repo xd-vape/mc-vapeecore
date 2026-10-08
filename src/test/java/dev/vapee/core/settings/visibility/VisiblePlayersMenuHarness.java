@@ -27,13 +27,13 @@ public final class VisiblePlayersMenuHarness {
         fixture.visiblePlayersMenu.open(owner.player);
         Inventory inventory = owner.open;
         VisiblePlayersHolder holder = VisibilityMenuFixture.visibleHolder(inventory);
-        check(inventory.getSize() == 54 && VisiblePlayersMenu.CONTENT_SIZE == 45,
-                "menu has 54 slots and 45 content slots");
+        check(inventory.getSize() == VisiblePlayersMenu.DEFAULT_LAYOUT.size() && VisiblePlayersMenu.CONTENT_SIZE == VisiblePlayersMenu.DEFAULT_LAYOUT.pageSize(),
+                "size and capacity match layout");
         check(holder.getOwnerUniqueId().equals(owner.id) && holder.getPage() == 0
                         && holder.getInventory() == inventory
                         && fixture.visiblePlayersMenu.isActive(owner.player, inventory, holder),
                 "holder binds exact owner, page and active inventory");
-        check(text(inventory, 22).equals("No added visible players") && holder.getTarget(22).isEmpty(),
+        check(text(inventory, VisiblePlayersMenu.DEFAULT_LAYOUT.emptySlot()).equals("No added visible players") && holder.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.emptySlot()).isEmpty(),
                 "empty state has no mutation target");
         check(inventory.getItem(VisiblePlayersMenu.PREVIOUS_SLOT) == null
                         && inventory.getItem(VisiblePlayersMenu.NEXT_SLOT) == null,
@@ -69,17 +69,17 @@ public final class VisiblePlayersMenuHarness {
         add(fixture, owner.id, alice.id);
         fixture.visiblePlayersMenu.open(owner.player);
         VisiblePlayersHolder holder = VisibilityMenuFixture.visibleHolder(owner.open);
-        check(holder.getTarget(0).orElseThrow().equals(alice.id)
-                        && holder.getTarget(1).orElseThrow().equals(bob.id)
-                        && holder.getTarget(2).orElseThrow().equals(unknown),
+        check(holder.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(alice.id)
+                        && holder.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).orElseThrow().equals(bob.id)
+                        && holder.getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(2)).orElseThrow().equals(unknown),
                 "known names sort case-insensitively before deterministic UUID fallback");
-        check(text(owner.open, 0).equals("alice") && text(owner.open, 1).equals("Bob")
-                        && text(owner.open, 2).equals(unknown.toString()),
+        check(text(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).equals("alice") && text(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).equals("Bob")
+                        && text(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(2)).equals(unknown.toString()),
                 "known identities use names and unknown identity uses UUID");
-        check(material(owner.open, 0) == Material.PLAYER_HEAD
-                        && lore(owner.open, 0).contains("Offline")
-                        && lore(owner.open, 1).contains("Online")
-                        && lore(owner.open, 1).contains("Right-click to remove."),
+        check(material(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)) == Material.PLAYER_HEAD
+                        && lore(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).contains("Offline")
+                        && lore(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).contains("Online")
+                        && lore(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).contains("Right-click to remove."),
                 "entry renders head, actual online status and removal gesture");
         check(VisibilityMenuFixture.visibleSpec(owner.open, 1).lore().getFirst().color()
                         .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN)
@@ -89,19 +89,19 @@ public final class VisiblePlayersMenuHarness {
 
         VisibilityMenuFixture pages = new VisibilityMenuFixture();
         var pageOwner = pages.player("PageOwner", true);
-        for (int index = 0; index < 46; index++) {
+        for (int index = 0; index < VisiblePlayersMenu.DEFAULT_LAYOUT.pageSize() + 1; index++) {
             var target = pages.player("Page" + String.format("%02d", index), false);
             add(pages, pageOwner.id, target.id);
         }
         pages.visiblePlayersMenu.open(pageOwner.player);
-        check(VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(44).isPresent()
+        check(VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlots().getLast()).isPresent()
                         && pageOwner.open.getItem(VisiblePlayersMenu.NEXT_SLOT) != null,
-                "45 entries occupy page zero and next is available");
+                "capacity entries occupy page zero and next is available");
         pages.visibleClick(pageOwner, pageOwner.open, VisiblePlayersMenu.NEXT_SLOT, ClickType.LEFT);
         check(VisibilityMenuFixture.visibleHolder(pageOwner.open).getPage() == 1
-                        && VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(0).isPresent()
-                        && VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(1).isEmpty(),
-                "page one contains only the forty-sixth entry");
+                        && VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).isPresent()
+                        && VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(1)).isEmpty(),
+                "page one contains only the entry after first-page capacity");
         check(pageOwner.open.getItem(VisiblePlayersMenu.PREVIOUS_SLOT) != null
                         && pageOwner.open.getItem(VisiblePlayersMenu.NEXT_SLOT) == null,
                 "page-one navigation is bounded");
@@ -109,7 +109,7 @@ public final class VisiblePlayersMenuHarness {
         check(VisibilityMenuFixture.visibleHolder(pageOwner.open).getPage() == 0,
                 "previous returns to page zero");
         pages.visibleClick(pageOwner, pageOwner.open, VisiblePlayersMenu.NEXT_SLOT, ClickType.LEFT);
-        UUID last = VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(0).orElseThrow();
+        UUID last = VisibilityMenuFixture.visibleHolder(pageOwner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
         pages.settings.removeLobbyVisiblePlayer(pageOwner.id, last);
         pages.visibleClick(pageOwner, pageOwner.open, VisiblePlayersMenu.REFRESH_SLOT, ClickType.LEFT);
         check(VisibilityMenuFixture.visibleHolder(pageOwner.open).getPage() == 0,
@@ -127,31 +127,31 @@ public final class VisiblePlayersMenuHarness {
         add(fixture, owner.id, first.id);
         add(fixture, owner.id, second.id);
         fixture.visiblePlayersMenu.open(owner.player);
-        UUID slotZero = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(0).orElseThrow();
-        fixture.visibleClick(owner, owner.open, 0, ClickType.LEFT);
+        UUID slotZero = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
+        fixture.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
         check(fixture.settings.isLobbyAddedVisiblePlayer(owner.id, slotZero).orElseThrow(),
                 "left click never removes an entry");
-        fixture.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+        fixture.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(!fixture.settings.isLobbyAddedVisiblePlayer(owner.id, slotZero).orElseThrow()
                         && fixture.applyCalls == 1
                         && plain(owner.received.getLast()).contains("Removed"),
                 "right click removes, applies immediately and confirms");
 
-        UUID remaining = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(0).orElseThrow();
+        UUID remaining = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
         fixture.repository.failNext = true;
         int appliesBeforeFailure = fixture.applyCalls;
-        fixture.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+        fixture.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(fixture.settings.isLobbyAddedVisiblePlayer(owner.id, remaining).orElseThrow()
                         && fixture.applyCalls == appliesBeforeFailure
                         && plain(owner.received.getLast()).contains("could not be saved"),
                 "remove save failure rolls back without visibility apply");
 
         fixture.visiblePlayersMenu.open(owner.player);
-        remaining = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(0).orElseThrow();
+        remaining = VisibilityMenuFixture.visibleHolder(owner.open).getTarget(VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
         fixture.settings.removeLobbyVisiblePlayer(owner.id, remaining);
-        fixture.visibleClick(owner, owner.open, 0, ClickType.RIGHT);
+        fixture.visibleClick(owner, owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
         check(plain(owner.received.getLast()).contains("no longer")
-                        && text(owner.open, 22).equals("No added visible players"),
+                        && text(owner.open, VisiblePlayersMenu.DEFAULT_LAYOUT.emptySlot()).equals("No added visible players"),
                 "stale target is controlled and rebuilds empty state");
     }
 

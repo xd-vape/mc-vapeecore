@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuLayout;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
@@ -16,11 +17,15 @@ public final class VisiblePlayersHolder implements InventoryHolder {
     private Inventory inventory;
 
     public VisiblePlayersHolder(UUID ownerUniqueId, int page, Map<Integer, UUID> targetsBySlot) {
+        this(ownerUniqueId, page, targetsBySlot, VisiblePlayersMenu.DEFAULT_LAYOUT);
+    }
+
+    public VisiblePlayersHolder(UUID ownerUniqueId, int page, Map<Integer, UUID> targetsBySlot, MenuLayout<VisiblePlayersMenu.Action> layout) {
         this.ownerUniqueId = Objects.requireNonNull(ownerUniqueId, "ownerUniqueId");
         if (page < 0) throw new IllegalArgumentException("page must not be negative");
         this.page = page;
         Map<Integer, UUID> copy = Map.copyOf(Objects.requireNonNull(targetsBySlot, "targetsBySlot"));
-        if (copy.keySet().stream().anyMatch(slot -> slot < 0 || slot >= VisiblePlayersMenu.CONTENT_SIZE)) {
+        if (copy.keySet().stream().anyMatch(slot -> !layout.isContent(slot))) {
             throw new IllegalArgumentException("target slot is outside menu content");
         }
         this.targetsBySlot = copy;

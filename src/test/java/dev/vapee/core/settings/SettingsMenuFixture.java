@@ -34,6 +34,10 @@ public final class SettingsMenuFixture {
     int soundCalls;
 
     SettingsMenuFixture() throws Exception {
+        this(SettingsMenu.DEFAULT_LAYOUT);
+    }
+
+    SettingsMenuFixture(dev.vapee.core.ui.MenuLayout<SettingsMenu.Action> layout) throws Exception {
         logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() {
             @Override public void publish(LogRecord record) { logs.add(record); }
@@ -46,7 +50,7 @@ public final class SettingsMenuFixture {
         menu = createMenu(settings, messages, id -> {
             TestPlayer player = online.get(id);
             return player != null && player.online ? player.player : null;
-        }, SettingsMenuFixture::inventory);
+        }, SettingsMenuFixture::inventory, layout);
         listener = createListener(menu, settings, ignored -> presentationCalls++,
                 ignored -> visibilityCalls++, ignored -> soundCalls++, messages, logger);
     }
@@ -56,6 +60,14 @@ public final class SettingsMenuFixture {
                                          java.util.function.BiFunction<SettingsInventoryHolder, Integer, Inventory> factory) {
         return new SettingsMenu(settings, messages, online,
                 (holder, size, title) -> factory.apply(holder, size), SpecItem::new, Logger.getAnonymousLogger());
+    }
+
+    public static SettingsMenu createMenu(PlayerSettingsService settings, MessageService messages,
+                                         Function<UUID, Player> online,
+                                         java.util.function.BiFunction<SettingsInventoryHolder, Integer, Inventory> factory,
+                                         dev.vapee.core.ui.MenuLayout<SettingsMenu.Action> layout) {
+        return new SettingsMenu(settings, messages, online,
+                (holder, size, title) -> factory.apply(holder, size), SpecItem::new, Logger.getAnonymousLogger(), layout);
     }
 
     public static SettingsListener createListener(SettingsMenu menu, PlayerSettingsService settings,

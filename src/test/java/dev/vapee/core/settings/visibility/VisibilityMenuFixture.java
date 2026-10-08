@@ -53,13 +53,17 @@ final class VisibilityMenuFixture {
     int settingsBackCalls;
 
     VisibilityMenuFixture() throws Exception {
+        this(VisibilitySettingsMenu.DEFAULT_LAYOUT, VisiblePlayersMenu.DEFAULT_LAYOUT);
+    }
+
+    VisibilityMenuFixture(dev.vapee.core.ui.MenuLayout<VisibilitySettingsMenu.Action> layout, dev.vapee.core.ui.MenuLayout<VisiblePlayersMenu.Action> visibleLayout) throws Exception {
         var constructor = MessageService.class.getDeclaredConstructor(java.util.function.Supplier.class);
         constructor.setAccessible(true);
         messages = constructor.newInstance((java.util.function.Supplier<String>) () -> "");
         visibilityMenu = new VisibilitySettingsMenu(settings, messages, this::onlinePlayer,
-                this::visibilityInventory, VisibilitySpecItem::new, logger());
+                this::visibilityInventory, VisibilitySpecItem::new, logger(), layout);
         visiblePlayersMenu = new VisiblePlayersMenu(settings, identities, messages, this::onlinePlayer,
-                this::visibleInventory, VisibleSpecItem::new, logger());
+                this::visibleInventory, VisibleSpecItem::new, logger(), visibleLayout);
         rootMenu = SettingsMenuFixture.createMenu(settings, messages, this::onlinePlayer,
                 (holder, size) -> inventory(holder, size));
         rootListener = SettingsMenuFixture.createListener(rootMenu, settings, ignored -> { },

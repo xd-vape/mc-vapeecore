@@ -35,6 +35,10 @@ final class NavigatorFixture {
     Component title;
 
     NavigatorFixture() throws Exception {
+        this(NavigatorMenu.DEFAULT_LAYOUT);
+    }
+
+    NavigatorFixture(dev.vapee.core.ui.MenuLayout<NavigatorMenu.Action> layout) throws Exception {
         logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() {
             public void publish(LogRecord record) { logs.add(record); }
@@ -53,7 +57,7 @@ final class NavigatorFixture {
         menu = new NavigatorMenu(warps, access,
                 id -> players.containsKey(id) ? players.get(id).player : null,
                 (holder, size, heading) -> { title = heading; return inventory(holder, size); },
-                SpecItem::new, logger);
+                SpecItem::new, logger, layout);
         var constructor = MessageService.class.getDeclaredConstructor(Supplier.class);
         constructor.setAccessible(true);
         MessageService messages = constructor.newInstance((Supplier<String>) () -> "");

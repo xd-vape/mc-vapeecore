@@ -18,7 +18,7 @@ public final class ClanMenuHarness {
         var other = f.player("Other", true);
         f.menu.open(member.player);
         check(ClanMenuFixture.holder(member.open).view() == ClanMenuView.OVERVIEW, "clanless overview");
-        check(name(member.open, 22).contains("not in a clan"), "clanless explanation");
+        check(name(member.open, ClanMenu.DEFAULT_LAYOUT.menu().emptySlot()).contains("not in a clan"), "clanless explanation");
         check(name(member.open, ClanMenu.ACTION_SLOT).contains("Create"), "create action visible");
         Inventory before = member.open;
         f.click(member, before, ClanMenu.ACTION_SLOT, ClickType.LEFT);
@@ -29,40 +29,40 @@ public final class ClanMenuHarness {
         check(f.clans.inviteMember(owner.id, member.id) == ClanResult.SUCCESS, "invite online member");
         check(f.clans.inviteMember(owner.id, offline.id) == ClanResult.SUCCESS, "invite offline member");
         f.menu.open(member.player, ClanMenuView.INVITES, 0);
-        check(ClanMenuFixture.holder(member.open).target(0).orElseThrow().equals(clanId), "incoming maps clan UUID");
-        check(name(member.open, 0).contains("Vapee Community") && name(member.open, 0).contains("VAPE"),
+        check(ClanMenuFixture.holder(member.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).orElseThrow().equals(clanId), "incoming maps clan UUID");
+        check(name(member.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).contains("Vapee Community") && name(member.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).contains("VAPE"),
                 "incoming shows name and tag");
-        f.click(member, member.open, 0, ClickType.LEFT);
+        f.click(member, member.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0), ClickType.LEFT);
         check(f.clans.getClanOf(member.id).isPresent(), "incoming left accepts");
         f.menu.open(owner.player);
-        check(name(owner.open, 20).contains("Vapee Community"), "overview name");
-        check(lore(owner.open, 20).contains("VAPE"), "overview tag");
-        check(name(owner.open, 22).contains("2/25") && lore(owner.open, 22).contains("Owner"),
+        check(name(owner.open, ClanMenu.DEFAULT_LAYOUT.clanNameSlot()).contains("Vapee Community"), "overview name");
+        check(lore(owner.open, ClanMenu.DEFAULT_LAYOUT.clanNameSlot()).contains("VAPE"), "overview tag");
+        check(name(owner.open, ClanMenu.DEFAULT_LAYOUT.memberCountSlot()).contains("2/25") && lore(owner.open, ClanMenu.DEFAULT_LAYOUT.memberCountSlot()).contains("Owner"),
                 "overview member count and owner");
-        check(name(owner.open, 24).contains("OWNER"), "overview role");
+        check(name(owner.open, ClanMenu.DEFAULT_LAYOUT.roleSlot()).contains("OWNER"), "overview role");
         f.menu.open(member.player);
-        check(name(member.open, 24).contains("MEMBER"), "member role");
+        check(name(member.open, ClanMenu.DEFAULT_LAYOUT.roleSlot()).contains("MEMBER"), "member role");
         f.menu.open(owner.player, ClanMenuView.MEMBERS, 0);
-        check(ClanMenuFixture.holder(owner.open).target(0).orElseThrow().equals(owner.id), "owner sorts first");
-        check(lore(owner.open, 1).contains("Online") && lore(owner.open, 1).contains("Shift + Right-click"),
+        check(ClanMenuFixture.holder(owner.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).orElseThrow().equals(owner.id), "owner sorts first");
+        check(lore(owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1)).contains("Online") && lore(owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1)).contains("Shift + Right-click"),
                 "member online status and owner actions");
         f.menu.open(owner.player, ClanMenuView.INVITES, 0);
-        check(ClanMenuFixture.holder(owner.open).target(0).orElseThrow().equals(offline.id),
+        check(ClanMenuFixture.holder(owner.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).orElseThrow().equals(offline.id),
                 "outgoing target maps player UUID");
-        check(lore(owner.open, 0).contains("Offline"), "offline status");
-        f.click(owner, owner.open, 0, ClickType.RIGHT);
+        check(lore(owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).contains("Offline"), "offline status");
+        f.click(owner, owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0), ClickType.RIGHT);
         check(f.clans.getOutgoingInvites(clanId).isEmpty(), "right click cancels invite");
         check(f.clans.inviteMember(owner.id, other.id) == ClanResult.SUCCESS, "invite second clanless player");
         f.menu.open(other.player, ClanMenuView.INVITES, 0);
-        f.click(other, other.open, 0, ClickType.RIGHT);
+        f.click(other, other.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0), ClickType.RIGHT);
         check(f.clans.getIncomingInvites(other.id).isEmpty(), "right click denies incoming");
         f.menu.open(owner.player, ClanMenuView.MEMBERS, 0);
-        f.click(owner, owner.open, 1, ClickType.SHIFT_LEFT);
+        f.click(owner, owner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_LEFT);
         check(f.clans.getClanOf(owner.id).orElseThrow().ownerId().equals(member.id), "shift-left transfers ownership");
         f.menu.open(member.player, ClanMenuView.MEMBERS, 0);
-        check(ClanMenuFixture.holder(member.open).target(0).orElseThrow().equals(member.id),
+        check(ClanMenuFixture.holder(member.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).orElseThrow().equals(member.id),
                 "new owner sorts first after transfer");
-        f.click(member, member.open, 1, ClickType.SHIFT_RIGHT);
+        f.click(member, member.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1), ClickType.SHIFT_RIGHT);
         check(f.clans.getClanOf(owner.id).isEmpty(), "shift-right kicks member");
         f.menu.open(member.player, ClanMenuView.MEMBERS, 40);
         check(ClanMenuFixture.holder(member.open).page() == 0, "page clamps after list shrink");
@@ -73,27 +73,27 @@ public final class ClanMenuHarness {
         var unknown = f.unknown(UUID.randomUUID());
         check(f.clans.inviteMember(member.id, unknown.id) == ClanResult.SUCCESS, "unknown UUID can be invited by domain");
         f.menu.open(member.player, ClanMenuView.INVITES, 0);
-        check(name(member.open, 0).contains(unknown.id.toString()), "unknown identity UUID fallback");
+        check(name(member.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).contains(unknown.id.toString()), "unknown identity UUID fallback");
         var pages = new ClanMenuFixture(new ClanLimits(80, 80, 80, 3, 24, 2, 8));
         var pagingOwner = pages.player("PagingOwner", true);
         check(pages.clans.createClan(pagingOwner.id, "Paging Clan", "PAGE") == ClanResult.SUCCESS,
                 "paging clan fixture");
         UUID pagingClan = pages.clans.getClanOf(pagingOwner.id).orElseThrow().id();
-        for (int i = 0; i < 47; i++) {
+        for (int i = 0; i < ClanMenu.DEFAULT_LAYOUT.menu().pageSize() + 2; i++) {
             var target = pages.player("Player" + i, false);
             check(pages.clans.inviteMember(pagingOwner.id, target.id) == ClanResult.SUCCESS
                     && pages.clans.acceptInvite(target.id, pagingClan) == ClanResult.SUCCESS,
                     "paging member " + i);
         }
         pages.menu.open(pagingOwner.player, ClanMenuView.MEMBERS, 0);
-        check(pages.menu.hasNext(pagingOwner.id, ClanMenuView.MEMBERS, 0), "46+ entries have next page");
-        check(ClanMenuFixture.holder(pagingOwner.open).target(0).orElseThrow().equals(pagingOwner.id)
-                && name(pagingOwner.open, 1).equals("Player0")
-                && name(pagingOwner.open, 2).equals("Player1"),
+        check(pages.menu.hasNext(pagingOwner.id, ClanMenuView.MEMBERS, 0), "more than one page has next page");
+        check(ClanMenuFixture.holder(pagingOwner.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0)).orElseThrow().equals(pagingOwner.id)
+                && name(pagingOwner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(1)).equals("Player0")
+                && name(pagingOwner.open, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(2)).equals("Player1"),
                 "owner first then deterministic alphabetical member sort");
         pages.click(pagingOwner, pagingOwner.open, ClanMenu.NEXT_SLOT, ClickType.LEFT);
         check(ClanMenuFixture.holder(pagingOwner.open).page() == 1
-                && ClanMenuFixture.holder(pagingOwner.open).target(2).isPresent(),
+                && ClanMenuFixture.holder(pagingOwner.open).target(ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(2)).isPresent(),
                 "next page contains remaining entries");
         pages.click(pagingOwner, pagingOwner.open, ClanMenu.PREVIOUS_SLOT, ClickType.LEFT);
         check(ClanMenuFixture.holder(pagingOwner.open).page() == 0, "previous page returns to first");
@@ -106,7 +106,7 @@ public final class ClanMenuHarness {
         pages.menu.open(pagingOwner.player, ClanMenuView.INVITES, 0);
         Inventory staleMenu = pagingOwner.open;
         pages.clans.cancelInvite(pagingOwner.id, stale.id);
-        pages.click(pagingOwner, staleMenu, 0, ClickType.RIGHT);
+        pages.click(pagingOwner, staleMenu, ClanMenu.DEFAULT_LAYOUT.menu().contentSlot(0), ClickType.RIGHT);
         check(pages.clans.getOutgoingInvites(pagingClan).isEmpty()
                 && pagingOwner.open != staleMenu, "stale invite gives controlled refresh");
         System.out.println("ClanMenuHarness passed " + checks + " checks.");
