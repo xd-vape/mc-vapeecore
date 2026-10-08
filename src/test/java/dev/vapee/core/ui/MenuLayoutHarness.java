@@ -23,7 +23,7 @@ public final class MenuLayoutHarness {
         rejects(() -> new MenuLayout<Action>(27, List.of(10), 10, Map.of(Action.CLOSE, List.of(40))), "negative control 5: out of bounds");
         rejects(() -> layout.validateTargets(List.of(0)), "target outside explicit content");
         rejects(() -> new MenuLayout<Action>(45, List.of(), -1, Map.of()).requirePaged(), "empty page capacity");
-        rejects(() -> layout.requireActions(Map.of(Action.CLOSE, List.of(8))), "missing action contract");
+        rejects(() -> new MenuLayout<Action>(45, List.of(), -1, Map.of(Action.CLOSE, List.of(1, 2))).validateActions(Set.of()), "button has multiple positions");
         var pagination = Pagination.of(13, 1, layout.pageSize());
         check(pagination.fromIndex() == 6 && pagination.toIndex() == 12 && pagination.hasNext(), "pagination uses explicit capacity");
         System.out.println("MenuLayoutHarness passed " + checks + " checks.");

@@ -33,30 +33,21 @@ import java.util.logging.Logger;
 
 public final class VisiblePlayersMenu {
     public enum Action { PREVIOUS, ADD, BACK, CLOSE, REFRESH, NEXT }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
-            List.of(
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
+            .content(List.of(
                     0, 1, 2, 3, 4, 5, 6, 7, 8,
                     9, 10, 11, 12, 13, 14, 15, 16, 17,
                     18, 19, 20, 21, 22, 23, 24, 25, 26,
                     27, 28, 29, 30, 31, 32, 33, 34, 35,
-                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
-            Map.ofEntries(
-                    Map.entry(Action.PREVIOUS, List.of(45)),
-                    Map.entry(Action.ADD, List.of(46)),
-                    Map.entry(Action.BACK, List.of(48)),
-                    Map.entry(Action.CLOSE, List.of(49)),
-                    Map.entry(Action.REFRESH, List.of(52)),
-                    Map.entry(Action.NEXT, List.of(53))));
-    // Compatibility aliases describe the default only; runtime code reads the instance layout.
-    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
-    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
-    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.emptySlot();
-    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
-    public static final int ADD_SLOT = DEFAULT_LAYOUT.slot(Action.ADD);
-    public static final int BACK_SLOT = DEFAULT_LAYOUT.slot(Action.BACK);
-    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
-    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
-    public static final int NEXT_SLOT = DEFAULT_LAYOUT.slot(Action.NEXT);
+                    36, 37, 38, 39, 40, 41, 42, 43, 44))
+            .emptyState(22)
+            .button(Action.PREVIOUS, 45)
+            .button(Action.ADD, 46)
+            .button(Action.BACK, 48)
+            .button(Action.CLOSE, 49)
+            .button(Action.REFRESH, 52)
+            .button(Action.NEXT, 53)
+            .build();
 
     private static final Component TITLE = UiItems.text("Manage Visible Players", NamedTextColor.DARK_GRAY);
     private static final Comparator<Entry> ENTRY_ORDER = Comparator
@@ -93,7 +84,7 @@ public final class VisiblePlayersMenu {
     VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
                        MessageService messages, Function<UUID, Player> onlinePlayer,
                        InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.settings = Objects.requireNonNull(settings, "settings");
         this.identities = Objects.requireNonNull(identities, "identities");
@@ -135,22 +126,22 @@ public final class VisiblePlayersMenu {
             inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(entries.get(index))));
         }
         if (entries.isEmpty()) {
-            inventory.setItem(layout.emptySlot(), item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
+            placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
                     List.of("Use Add Player to get started.")));
         }
         if (pagination.hasPrevious()) {
-            inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
+            place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
                     List.of()));
         }
-        inventory.setItem(layout.slot(Action.ADD), item(Material.LIME_DYE, "Add Player", NamedTextColor.GREEN,
+        place(inventory, Action.ADD, item(Material.LIME_DYE, "Add Player", NamedTextColor.GREEN,
                 List.of("Click to enter a known player name or UUID.")));
-        inventory.setItem(layout.slot(Action.BACK), item(Material.ARROW, "Back", NamedTextColor.YELLOW,
+        place(inventory, Action.BACK, item(Material.ARROW, "Back", NamedTextColor.YELLOW,
                 List.of("Return to Visibility Settings.")));
-        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
-        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
+        place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
+        place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
                 List.of("Reload names and online status.")));
         if (pagination.hasNext()) {
-            inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next Page", NamedTextColor.YELLOW, List.of()));
+            place(inventory, Action.NEXT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW, List.of()));
         }
         var opened = viewer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) {
@@ -245,4 +236,15 @@ public final class VisiblePlayersMenu {
     interface ItemRenderer {
         ItemStack render(UiItemSpec spec);
     }
+    private void place(Inventory inventory, Action action, ItemStack item) {
+        place(inventory, action, 0, item);
+    }
+    private void place(Inventory inventory, Action action, int position, ItemStack item) {
+        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
+    private void placeDisplay(Inventory inventory, int slot, ItemStack item) {
+        if (slot >= 0) inventory.setItem(slot, item);
+    }
+
 }

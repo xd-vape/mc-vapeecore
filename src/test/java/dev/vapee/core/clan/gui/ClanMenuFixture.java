@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.clan.*;
 import dev.vapee.core.economy.CoinWallet;
@@ -34,7 +35,7 @@ final class ClanMenuFixture {
     ClanMenuFixture() throws Exception { this(ClanLimits.defaults()); }
 
     ClanMenuFixture(ClanLimits limits) throws Exception {
-        this(limits, ClanMenu.DEFAULT_LAYOUT);
+        this(limits, MenuTestLayouts.CLAN);
     }
 
     ClanMenuFixture(ClanLimits limits, ClanMenu.Layout layout) throws Exception {

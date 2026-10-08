@@ -1,5 +1,6 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.quest.*;
@@ -30,7 +31,7 @@ public final class QuestMenuFixture {
             domain.logger);
 
     public QuestMenuFixture() throws Exception {
-        this(DailyQuestMenu.DEFAULT_LAYOUT);
+        this(MenuTestLayouts.QUEST);
     }
 
     public QuestMenuFixture(dev.vapee.core.ui.MenuLayout<DailyQuestMenu.Action> layout) throws Exception {

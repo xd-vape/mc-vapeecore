@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.gui;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.*;
 import dev.vapee.core.clan.*;
 import org.bukkit.event.inventory.ClickType;
@@ -10,7 +11,7 @@ public final class ClanLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         for (var content : List.of(LayoutTestSupport.SPARSE, LayoutTestSupport.REORDERED, LayoutTestSupport.HIGH_CONTENT)) {
-            var layout = LayoutTestSupport.paged(ClanMenu.DEFAULT_LAYOUT.menu(), content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
+            var layout = LayoutTestSupport.paged(MenuTestLayouts.CLAN.menu(), content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
             if (content == LayoutTestSupport.HIGH_CONTENT) layout = new MenuLayout<>(layout.size(), layout.contentSlots(), 40, layout.actions());
             var definition = new ClanMenu.Layout(layout, 21, 23, 25);
             var f = new ClanMenuFixture(ClanLimits.defaults(), definition); var owner = f.player("Owner", true);

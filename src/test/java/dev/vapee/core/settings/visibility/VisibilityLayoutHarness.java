@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.*;
 import org.bukkit.event.inventory.ClickType;
 import java.util.*;
@@ -8,10 +9,10 @@ import static dev.vapee.core.settings.visibility.VisibilitySettingsMenu.Action.*
 public final class VisibilityLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        var fixed = LayoutTestSupport.move(VisibilitySettingsMenu.DEFAULT_LAYOUT, 45,
+        var fixed = LayoutTestSupport.move(MenuTestLayouts.VISIBILITY, 45,
                 Map.of(MASTER, List.of(10, 43), BACK, List.of(0), CLOSE, List.of(8), REFRESH, List.of(44)));
         for (var content : List.of(LayoutTestSupport.SPARSE, LayoutTestSupport.REORDERED, LayoutTestSupport.HIGH_CONTENT)) {
-            var paged = LayoutTestSupport.paged(VisiblePlayersMenu.DEFAULT_LAYOUT, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
+            var paged = LayoutTestSupport.paged(MenuTestLayouts.VISIBLE_PLAYERS, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
             if (content == LayoutTestSupport.HIGH_CONTENT) paged = new MenuLayout<>(paged.size(), paged.contentSlots(), 40, paged.actions());
             var f = new VisibilityMenuFixture(fixed, paged); var owner = f.player("Owner", true);
             f.visibilityMenu.open(owner.player);

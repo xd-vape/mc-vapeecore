@@ -1,5 +1,6 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.quest.QuestCompletionFixture;
 import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -21,29 +22,29 @@ public final class QuestMenuSecurityHarness {
         int sync = f.syncCalls; int saves = f.domain.repository.saves;
         for (ClickType click : ClickType.values()) {
             if (click == ClickType.LEFT || click == ClickType.RIGHT) continue;
-            check(f.click(owner, active, DailyQuestMenu.REFRESH, click).isCancelled() && f.syncCalls == sync,
+            check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), click).isCancelled() && f.syncCalls == sync,
                     "non-left/right refresh control is inert: " + click);
         }
-        for (int slot : new int[]{DailyQuestMenu.DEFAULT_LAYOUT.contentSlot(0), DailyQuestMenu.DEFAULT_LAYOUT.contentSlots().getLast(), dev.vapee.core.ui.LayoutTestSupport.unused(DailyQuestMenu.DEFAULT_LAYOUT), dev.vapee.core.ui.LayoutTestSupport.unused(DailyQuestMenu.DEFAULT_LAYOUT), DailyQuestMenu.PAGE_INFO, dev.vapee.core.ui.LayoutTestSupport.unused(DailyQuestMenu.DEFAULT_LAYOUT), DailyQuestMenu.SIZE, dev.vapee.core.ui.LayoutTestSupport.unused(DailyQuestMenu.DEFAULT_LAYOUT), -999}) {
+        for (int slot : new int[]{MenuTestLayouts.QUEST.contentSlot(0), MenuTestLayouts.QUEST.contentSlots().getLast(), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.size(), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), -999}) {
             check(f.click(owner, active, slot, ClickType.LEFT).isCancelled() && f.syncCalls == sync,
                     "content, filler, info, bottom and outside cannot act: " + slot);
         }
-        check(f.click(owner, active, DailyQuestMenu.SIZE, ClickType.SHIFT_LEFT).isCancelled(), "bottom shift-transfer blocked");
-        check(f.click(other, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync, "foreign viewer cannot refresh");
+        check(f.click(owner, active, MenuTestLayouts.QUEST.size(), ClickType.SHIFT_LEFT).isCancelled(), "bottom shift-transfer blocked");
+        check(f.click(other, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync, "foreign viewer cannot refresh");
         var unbound = new DailyQuestInventoryHolder(owner.id, 0);
-        Inventory unboundInventory = inventory(unbound, DailyQuestMenu.SIZE);
-        check(f.click(owner, unboundInventory, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync,
+        Inventory unboundInventory = inventory(unbound, MenuTestLayouts.QUEST.size());
+        check(f.click(owner, unboundInventory, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync,
                 "unbound holder safely cancelled");
         var forged = new DailyQuestInventoryHolder(owner.id, 0);
-        Inventory forgedInventory = inventory(forged, DailyQuestMenu.SIZE); forged.bind(forgedInventory);
+        Inventory forgedInventory = inventory(forged, MenuTestLayouts.QUEST.size()); forged.bind(forgedInventory);
         owner.open = forgedInventory;
-        check(f.click(owner, forgedInventory, DailyQuestMenu.REFRESH, ClickType.RIGHT).isCancelled() && f.syncCalls == sync,
+        check(f.click(owner, forgedInventory, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.RIGHT).isCancelled() && f.syncCalls == sync,
                 "opened forged inventory lacks exact active registry binding");
-        Inventory mismatched = inventory(holder, DailyQuestMenu.SIZE); owner.open = mismatched;
-        check(f.click(owner, mismatched, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync,
+        Inventory mismatched = inventory(holder, MenuTestLayouts.QUEST.size()); owner.open = mismatched;
+        check(f.click(owner, mismatched, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync,
                 "real holder on mismatched inventory cannot act");
         owner.open = owner.bottom;
-        check(f.click(owner, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync,
+        check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync,
                 "active registry requires exact current top inventory");
         owner.open = active;
         for (Inventory top : new Inventory[]{active, forgedInventory, unboundInventory}) {
@@ -51,20 +52,20 @@ public final class QuestMenuSecurityHarness {
             f.listener.onInventoryDrag(drag);
             check(drag.isCancelled() && f.syncCalls == sync, "recognized drags cancel even invalid holders");
         }
-        Inventory foreign = inventory(null, DailyQuestMenu.SIZE);
-        var foreignClick = f.click(owner, foreign, DailyQuestMenu.REFRESH, ClickType.LEFT);
+        Inventory foreign = inventory(null, MenuTestLayouts.QUEST.size());
+        var foreignClick = f.click(owner, foreign, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT);
         check(!foreignClick.isCancelled() && f.syncCalls == sync, "unrelated inventory is untouched");
         owner.permission = false;
-        check(f.click(owner, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync, "revoked permission makes existing controls inert");
+        check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync, "revoked permission makes existing controls inert");
         owner.permission = true; owner.online = false;
-        check(f.click(owner, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync, "offline player cannot act");
+        check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync, "offline player cannot act");
         owner.online = true;
         f.domain.players.unloadPlayer(owner.id);
-        check(f.click(owner, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync, "unloaded profile cannot act");
+        check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync, "unloaded profile cannot act");
         f.domain.players.loadPlayer(owner.id, "Tester");
         int afterReloadSaves = f.domain.repository.saves;
         f.menu.open(owner.player, 0); Inventory replacement = owner.open; sync = f.syncCalls;
-        check(f.click(owner, active, DailyQuestMenu.REFRESH, ClickType.LEFT).isCancelled() && f.syncCalls == sync, "old page is stale after replacement");
+        check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT).isCancelled() && f.syncCalls == sync, "old page is stale after replacement");
         f.listener.onInventoryClose(new InventoryCloseEvent(view(owner, active)));
         check(f.menu.isActive(owner.player, replacement, (DailyQuestInventoryHolder) replacement.getHolder()),
                 "late old close cannot forget replacement");

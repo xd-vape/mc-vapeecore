@@ -32,8 +32,6 @@ public record MenuLayout<A extends Enum<A>>(int size, List<Integer> contentSlots
             if (actions.values().stream().anyMatch(slots -> slots.contains(emptySlot)))
                 throw new IllegalArgumentException("Empty state collides with control: " + emptySlot);
         }
-        if (!contentSlots.isEmpty() && emptySlot == -1)
-            throw new IllegalArgumentException("Paged layout requires an empty-state slot");
     }
 
     public static void validateSlot(int size, int slot) {
@@ -41,17 +39,51 @@ public record MenuLayout<A extends Enum<A>>(int size, List<Integer> contentSlots
             throw new IllegalArgumentException("Slot " + slot + " outside inventory size " + size);
     }
 
-    /** Verify menu-required actions early, including the number of positions per action. */
-    public MenuLayout<A> requireActions(Map<A, List<Integer>> required) {
-        if (!actions.keySet().equals(required.keySet()))
-            throw new IllegalArgumentException("Missing/unexpected menu actions");
-        required.forEach((action, slots) -> {
-            if (actions.get(action).size() != slots.size())
-                throw new IllegalArgumentException("Wrong number of positions for " + action);
+    /** Validate exposed placements, never require a supported action to be visible. */
+    public MenuLayout<A> validateActions(Set<A> settings) {
+        actions.forEach((action, slots) -> {
+            int maximum = settings.contains(action) ? 2 : 1;
+            if (slots.size() > maximum)
+                throw new IllegalArgumentException("Too many positions for " + action);
         });
         return this;
     }
 
+    public List<Integer> placement(A action) { return actions.getOrDefault(action, List.of()); }
+    public OptionalInt actionSlot(A action) { return actionSlot(action, 0); }
+    public OptionalInt actionSlot(A action, int position) {
+        List<Integer> slots = placement(action);
+        return position >= 0 && position < slots.size() ? OptionalInt.of(slots.get(position)) : OptionalInt.empty();
+    }
+
+    public static <A extends Enum<A>> Builder<A> builder(int size, Class<A> actionType) {
+        return new Builder<>(size, actionType);
+    }
+
+    /** Local Java authoring: omitted placements are absent from rendering and click routing. */
+    public static final class Builder<A extends Enum<A>> {
+        private final int size;
+        private final Map<A, List<Integer>> actions;
+        private List<Integer> content = List.of();
+        private int empty = -1;
+        private Builder(int size, Class<A> actionType) {
+            this.size = size;
+            this.actions = new EnumMap<>(actionType);
+        }
+        public Builder<A> button(A action, int slot) { return add(action, List.of(slot)); }
+        public Builder<A> setting(A action, int icon) { return add(action, List.of(icon)); }
+        public Builder<A> setting(A action, int icon, int status) { return add(action, List.of(icon, status)); }
+        private Builder<A> add(A action, List<Integer> slots) {
+            if (actions.putIfAbsent(Objects.requireNonNull(action), slots) != null)
+                throw new IllegalArgumentException("Duplicate action placement: " + action);
+            return this;
+        }
+        public Builder<A> content(List<Integer> slots) { content = List.copyOf(slots); return this; }
+        public Builder<A> emptyState(int slot) { empty = slot; return this; }
+        public MenuLayout<A> build() { return new MenuLayout<>(size, content, empty, actions); }
+    }
+
+    /** Strict lookup for explicitly placed fixture positions. Production rendering uses actionSlot. */
     public int slot(A action) { return slot(action, 0); }
     public int slot(A action, int position) {
         List<Integer> slots = actions.get(action);

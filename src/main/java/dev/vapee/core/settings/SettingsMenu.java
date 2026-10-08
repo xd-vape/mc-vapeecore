@@ -28,33 +28,15 @@ import java.util.logging.Logger;
 public final class SettingsMenu {
 
     public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, REFRESH }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
-            List.of(), -1,
-            Map.ofEntries(
-                    Map.entry(Action.SCOREBOARD, List.of(10, 19)),
-                    Map.entry(Action.SOUNDS, List.of(11, 20)),
-                    Map.entry(Action.PRIVATE_MESSAGES, List.of(12, 21)),
-                    Map.entry(Action.FRIEND_REQUESTS, List.of(13, 22)),
-                    Map.entry(Action.VISIBILITY, List.of(31, 40)),
-                    Map.entry(Action.FRIEND_PRESENCE, List.of(33, 42)),
-                    Map.entry(Action.CLOSE, List.of(49)),
-                    Map.entry(Action.REFRESH, List.of(52))));
-    // Compatibility aliases describe the default only; runtime code reads the instance layout.
-    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
-    public static final int SCOREBOARD_SLOT = DEFAULT_LAYOUT.slot(Action.SCOREBOARD);
-    public static final int SOUNDS_SLOT = DEFAULT_LAYOUT.slot(Action.SOUNDS);
-    public static final int PRIVATE_MESSAGES_SLOT = DEFAULT_LAYOUT.slot(Action.PRIVATE_MESSAGES);
-    public static final int FRIEND_REQUESTS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_REQUESTS);
-    public static final int SCOREBOARD_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.SCOREBOARD, 1);
-    public static final int SOUNDS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.SOUNDS, 1);
-    public static final int PRIVATE_MESSAGES_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.PRIVATE_MESSAGES, 1);
-    public static final int FRIEND_REQUESTS_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_REQUESTS, 1);
-    public static final int VISIBILITY_SLOT = DEFAULT_LAYOUT.slot(Action.VISIBILITY);
-    public static final int VISIBILITY_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.VISIBILITY, 1);
-    public static final int FRIEND_PRESENCE_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_PRESENCE);
-    public static final int FRIEND_PRESENCE_STATUS_SLOT = DEFAULT_LAYOUT.slot(Action.FRIEND_PRESENCE, 1);
-    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
-    public static final int REFRESH_SLOT = DEFAULT_LAYOUT.slot(Action.REFRESH);
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
+            .setting(Action.SCOREBOARD, 10, 19)
+            .setting(Action.SOUNDS, 11, 20)
+            .setting(Action.PRIVATE_MESSAGES, 12, 21)
+            .setting(Action.FRIEND_REQUESTS, 13, 22)
+            .setting(Action.FRIEND_PRESENCE, 14, 23)
+            .setting(Action.VISIBILITY, 16, 25)
+            .button(Action.CLOSE, 40)
+            .build();
 
     private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
 
@@ -75,7 +57,7 @@ public final class SettingsMenu {
             PlayerSettingsService playerSettingsService,
             MessageService messageService
     ) {
-        this.layout = DEFAULT_LAYOUT;
+        this.layout = DEFAULT_LAYOUT.validateActions(java.util.Set.of(Action.FRIEND_PRESENCE, Action.FRIEND_REQUESTS, Action.PRIVATE_MESSAGES, Action.SCOREBOARD, Action.SOUNDS, Action.VISIBILITY));
         this.entries = validateEntries(SettingsMenuEntries.defaults(layout));
         Objects.requireNonNull(plugin, "plugin");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
@@ -101,7 +83,7 @@ public final class SettingsMenu {
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                  ItemRenderer itemRenderer, Logger logger, List<SettingsMenuEntry> entries, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of(Action.FRIEND_PRESENCE, Action.FRIEND_REQUESTS, Action.PRIVATE_MESSAGES, Action.SCOREBOARD, Action.SOUNDS, Action.VISIBILITY));
         this.layout.requireFixed();
         this.entries = validateEntries(entries);
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
@@ -201,8 +183,8 @@ public final class SettingsMenu {
             validatedInventory.setItem(entry.slot(), itemRenderer.render(entry.icon().apply(settings)));
             if (entry.statusSlot() >= 0) validatedInventory.setItem(entry.statusSlot(), itemRenderer.render(entry.status().apply(settings)));
         }
-        validatedInventory.setItem(layout.slot(Action.CLOSE), createCloseItem());
-        validatedInventory.setItem(layout.slot(Action.REFRESH), itemRenderer.render(new UiItemSpec(
+        place(validatedInventory, Action.CLOSE, createCloseItem());
+        place(validatedInventory, Action.REFRESH, itemRenderer.render(new UiItemSpec(
                 Material.CLOCK, UiItems.text("Refresh", NamedTextColor.AQUA),
                 List.of(UiItems.text("Reload your current settings.", NamedTextColor.GRAY)))));
         return true;
@@ -213,7 +195,9 @@ public final class SettingsMenu {
     }
 
     private List<SettingsMenuEntry> validateEntries(List<SettingsMenuEntry> entries) {
-        var slots = new java.util.HashSet<Integer>(List.of(layout.slot(Action.CLOSE), layout.slot(Action.REFRESH)));
+        var slots = new java.util.HashSet<Integer>();
+        layout.actionSlot(Action.CLOSE).ifPresent(slots::add);
+        layout.actionSlot(Action.REFRESH).ifPresent(slots::add);
         for (var entry : entries) {
             MenuLayout.validateSlot(layout.size(), entry.slot());
             if (entry.statusSlot() >= 0) MenuLayout.validateSlot(layout.size(), entry.statusSlot());
@@ -241,4 +225,11 @@ public final class SettingsMenu {
     interface ItemRenderer {
         ItemStack render(UiItemSpec spec);
     }
+    private void place(Inventory inventory, Action action, ItemStack item) {
+        place(inventory, action, 0, item);
+    }
+    private void place(Inventory inventory, Action action, int position, ItemStack item) {
+        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
 }

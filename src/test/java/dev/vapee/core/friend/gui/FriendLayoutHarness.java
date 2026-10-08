@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.*;
 import dev.vapee.core.friend.FriendResult;
 import org.bukkit.event.inventory.ClickType;
@@ -10,7 +11,7 @@ public final class FriendLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         for (var content : List.of(LayoutTestSupport.SPARSE, LayoutTestSupport.REORDERED, LayoutTestSupport.HIGH_CONTENT)) {
-            var layout = LayoutTestSupport.paged(FriendMenu.DEFAULT_LAYOUT, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
+            var layout = LayoutTestSupport.paged(MenuTestLayouts.FRIEND, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
             if (content == LayoutTestSupport.HIGH_CONTENT) layout = new MenuLayout<>(layout.size(), layout.contentSlots(), 40, layout.actions());
             var f = new FriendMenuFixture(layout); var owner = f.player("Owner", true);
             f.menu.open(owner.player);

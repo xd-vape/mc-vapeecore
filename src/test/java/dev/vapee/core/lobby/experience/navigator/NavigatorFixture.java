@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.lobby.player.LobbyPlayerMode;
 import dev.vapee.core.lobby.warp.*;
@@ -35,7 +36,7 @@ final class NavigatorFixture {
     Component title;
 
     NavigatorFixture() throws Exception {
-        this(NavigatorMenu.DEFAULT_LAYOUT);
+        this(MenuTestLayouts.NAVIGATOR);
     }
 
     NavigatorFixture(dev.vapee.core.ui.MenuLayout<NavigatorMenu.Action> layout) throws Exception {

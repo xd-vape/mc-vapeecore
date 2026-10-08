@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import org.bukkit.event.inventory.ClickType;
 
 /** Layout edits must move the displayed icon and the production click action together. */
@@ -10,15 +11,15 @@ public final class SettingsLayoutAlignmentHarness {
         var owner = fixture.player("Layout");
         fixture.menu.open(owner.player);
         var inventory = owner.open;
-        var icon = inventory.getItem(SettingsMenu.SCOREBOARD_SLOT);
+        var icon = inventory.getItem(MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD));
         check(icon != null, "scoreboard icon occupies the named layout slot");
-        check(SettingsMenuFixture.spec(inventory, SettingsMenu.SCOREBOARD_SLOT).material() == org.bukkit.Material.MAP, "layout slot renders scoreboard icon");
+        check(SettingsMenuFixture.spec(inventory, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD)).material() == org.bukkit.Material.MAP, "layout slot renders scoreboard icon");
         int saves = fixture.repository.saves;
         check(fixture.settings.isScoreboardEnabled(owner.id).orElseThrow(), "initial scoreboard preference");
-        fixture.click(owner, inventory, SettingsMenu.SCOREBOARD_SLOT, ClickType.LEFT);
+        fixture.click(owner, inventory, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD), ClickType.LEFT);
         check(!fixture.settings.isScoreboardEnabled(owner.id).orElseThrow() && fixture.repository.saves == saves + 1,
                 "rendered icon dispatches the current production action");
-        fixture.click(owner, inventory, SettingsMenu.SCOREBOARD_STATUS_SLOT, ClickType.RIGHT);
+        fixture.click(owner, inventory, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD, 1), ClickType.RIGHT);
         check(fixture.settings.isScoreboardEnabled(owner.id).orElseThrow() && fixture.repository.saves == saves + 2,
                 "matching status slot dispatches same feature");
         check(owner.open == inventory && owner.opens == 1, "layout actions update the same bound inventory");

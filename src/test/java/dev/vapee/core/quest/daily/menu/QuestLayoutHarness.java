@@ -1,5 +1,6 @@
 package dev.vapee.core.quest.daily.menu;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.*;
 import org.bukkit.event.inventory.ClickType;
 import java.util.*;
@@ -10,7 +11,7 @@ public final class QuestLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         for (var content : List.of(LayoutTestSupport.SPARSE, LayoutTestSupport.REORDERED, LayoutTestSupport.HIGH_CONTENT)) {
-            var layout = LayoutTestSupport.paged(DailyQuestMenu.DEFAULT_LAYOUT, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
+            var layout = LayoutTestSupport.paged(MenuTestLayouts.QUEST, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
             if (content == LayoutTestSupport.HIGH_CONTENT) layout = new MenuLayout<>(layout.size(), layout.contentSlots(), 40, layout.actions());
             var f = new QuestMenuFixture(layout); var owner = f.player();
             var definitions = new ArrayList<dev.vapee.core.quest.QuestDefinition>();

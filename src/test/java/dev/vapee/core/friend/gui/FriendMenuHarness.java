@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.friend.FriendLimits;
 import dev.vapee.core.friend.FriendMessages;
 import dev.vapee.core.friend.FriendRelation;
@@ -34,37 +35,37 @@ public final class FriendMenuHarness {
         fixture.menu.open(owner.player);
         Inventory inventory = owner.open;
         FriendMenuHolder holder = FriendMenuFixture.holder(inventory);
-        check(inventory.getSize() == FriendMenu.DEFAULT_LAYOUT.size() && FriendMenu.CONTENT_SIZE == FriendMenu.DEFAULT_LAYOUT.pageSize(), "inventory size and capacity match layout");
+        check(inventory.getSize() == MenuTestLayouts.FRIEND.size() && MenuTestLayouts.FRIEND.pageSize() == MenuTestLayouts.FRIEND.pageSize(), "inventory size and capacity match layout");
         check(holder.getOwnerUniqueId().equals(owner.id) && holder.getView() == FriendMenuView.FRIENDS
                 && holder.getPage() == 0 && holder.getInventory() == inventory,
                 "holder binds exact inventory, owner, default view and page zero");
         check(fixture.menu.isActive(owner.player, inventory, holder), "new inventory is active");
-        check(text(inventory, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No friends yet") && holder.getTarget(FriendMenu.DEFAULT_LAYOUT.emptySlot()).isEmpty(),
+        check(text(inventory, MenuTestLayouts.FRIEND.emptySlot()).contains("No friends yet") && holder.getTarget(MenuTestLayouts.FRIEND.emptySlot()).isEmpty(),
                 "empty friends view has informational item without target");
-        check(inventory.getItem(FriendMenu.PREVIOUS_SLOT) == null
-                && inventory.getItem(FriendMenu.NEXT_SLOT) == null, "empty view has no page buttons");
-        check(text(inventory, FriendMenu.FRIENDS_SLOT).contains("Friends")
-                && lore(inventory, FriendMenu.FRIENDS_SLOT).contains("0 / 100"), "friends tab shows live count and limit");
+        check(inventory.getItem(MenuTestLayouts.FRIEND.slot(FriendMenu.Action.PREVIOUS)) == null
+                && inventory.getItem(MenuTestLayouts.FRIEND.slot(FriendMenu.Action.NEXT)) == null, "empty view has no page buttons");
+        check(text(inventory, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.FRIENDS)).contains("Friends")
+                && lore(inventory, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.FRIENDS)).contains("0 / 100"), "friends tab shows live count and limit");
 
-        fixture.click(owner, inventory, FriendMenu.INCOMING_SLOT, ClickType.LEFT);
+        fixture.click(owner, inventory, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.INCOMING), ClickType.LEFT);
         check(FriendMenuFixture.holder(owner.open).getView() == FriendMenuView.INCOMING
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No incoming requests"), "incoming tab and empty state");
-        fixture.click(owner, owner.open, FriendMenu.OUTGOING_SLOT, ClickType.LEFT);
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No incoming requests"), "incoming tab and empty state");
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.OUTGOING), ClickType.LEFT);
         check(FriendMenuFixture.holder(owner.open).getView() == FriendMenuView.OUTGOING
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No outgoing requests"), "outgoing tab and empty state");
-        fixture.click(owner, owner.open, FriendMenu.FRIENDS_SLOT, ClickType.LEFT);
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No outgoing requests"), "outgoing tab and empty state");
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.FRIENDS), ClickType.LEFT);
         check(FriendMenuFixture.holder(owner.open).getView() == FriendMenuView.FRIENDS, "friends tab returns to friends");
         Inventory beforeRefresh = owner.open;
-        fixture.click(owner, beforeRefresh, FriendMenu.REFRESH_SLOT, ClickType.LEFT);
+        fixture.click(owner, beforeRefresh, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.REFRESH), ClickType.LEFT);
         check(owner.open != beforeRefresh && FriendMenuFixture.holder(owner.open).getPage() == 0,
                 "refresh renders a new live inventory");
-        fixture.click(owner, owner.open, FriendMenu.ADD_SLOT, ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.ADD), ClickType.LEFT);
         check(owner.closeCalls == 1 && owner.open == owner.bottom,
                 "add friend closes the menu without a text-capture system");
         check(owner.received.stream().anyMatch(FriendMenuHarness::hasSuggestCommand),
                 "add prompt suggests /friend add with an Adventure click event");
         fixture.menu.open(owner.player);
-        fixture.click(owner, owner.open, FriendMenu.CLOSE_SLOT, ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.CLOSE), ClickType.LEFT);
         check(owner.closeCalls == 2, "close button closes menu");
     }
 
@@ -80,49 +81,49 @@ public final class FriendMenuHarness {
         fixture.menu.open(owner.player);
         Inventory inventory = owner.open;
         FriendMenuHolder holder = FriendMenuFixture.holder(inventory);
-        check(holder.getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(alice.id)
-                && holder.getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).orElseThrow().equals(bob.id)
-                && holder.getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(2)).orElseThrow().equals(missing),
+        check(holder.getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(alice.id)
+                && holder.getTarget(MenuTestLayouts.FRIEND.contentSlot(1)).orElseThrow().equals(bob.id)
+                && holder.getTarget(MenuTestLayouts.FRIEND.contentSlot(2)).orElseThrow().equals(missing),
                 "friends sort by case-insensitive name with deterministic UUID fallback");
-        check(FriendMenuFixture.spec(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).spec.material() == Material.PLAYER_HEAD
-                && FriendMenuFixture.spec(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).spec.material() == Material.PLAYER_HEAD,
+        check(FriendMenuFixture.spec(inventory, MenuTestLayouts.FRIEND.contentSlot(0)).spec.material() == Material.PLAYER_HEAD
+                && FriendMenuFixture.spec(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).spec.material() == Material.PLAYER_HEAD,
                 "friend entries use generic player heads without skin lookups");
-        check(lore(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).contains("Offline") && lore(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).contains("Online"),
+        check(lore(inventory, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Offline") && lore(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Online"),
                 "status uses actual online player rather than known identity");
-        check(text(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(2)).equals(missing.toString()), "missing identity renders literal UUID fallback");
-        check(lore(inventory, FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).contains("Shift + Right-click to remove"),
+        check(text(inventory, MenuTestLayouts.FRIEND.contentSlot(2)).equals(missing.toString()), "missing identity renders literal UUID fallback");
+        check(lore(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Shift + Right-click to remove"),
                 "friend removal gesture is clearly explained");
         fixture.limits.set(new FriendLimits(55, 25, 25));
         bob.online = false;
-        fixture.click(owner, inventory, FriendMenu.REFRESH_SLOT, ClickType.LEFT);
-        check(lore(owner.open, FriendMenu.FRIENDS_SLOT).contains("3 / 55")
-                        && lore(owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).contains("Offline"),
+        fixture.click(owner, inventory, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.REFRESH), ClickType.LEFT);
+        check(lore(owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.FRIENDS)).contains("3 / 55")
+                        && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Offline"),
                 "refresh reads reloaded friend limit, count and actual online status");
 
         FriendMenuFixture pages = new FriendMenuFixture();
         var pageOwner = pages.player("PageOwner", true);
-        for (int index = 0; index < FriendMenu.DEFAULT_LAYOUT.pageSize() + 1; index++) {
+        for (int index = 0; index < MenuTestLayouts.FRIEND.pageSize() + 1; index++) {
             var target = pages.player("Page" + String.format("%02d", index), false);
             befriend(pages, pageOwner.id, target.id);
         }
         pages.menu.open(pageOwner.player);
-        check(FriendMenuFixture.holder(pageOwner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlots().getLast()).isPresent()
-                && pageOwner.open.getItem(FriendMenu.NEXT_SLOT) != null,
+        check(FriendMenuFixture.holder(pageOwner.open).getTarget(MenuTestLayouts.FRIEND.contentSlots().getLast()).isPresent()
+                && pageOwner.open.getItem(MenuTestLayouts.FRIEND.slot(FriendMenu.Action.NEXT)) != null,
                 "capacity entries fit page zero and next is active");
-        pages.click(pageOwner, pageOwner.open, FriendMenu.NEXT_SLOT, ClickType.LEFT);
+        pages.click(pageOwner, pageOwner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.NEXT), ClickType.LEFT);
         check(FriendMenuFixture.holder(pageOwner.open).getPage() == 1
-                && FriendMenuFixture.holder(pageOwner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).isPresent()
-                && FriendMenuFixture.holder(pageOwner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(1)).isEmpty(),
+                && FriendMenuFixture.holder(pageOwner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).isPresent()
+                && FriendMenuFixture.holder(pageOwner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(1)).isEmpty(),
                 "page one contains the entry after first-page capacity only");
-        check(pageOwner.open.getItem(FriendMenu.PREVIOUS_SLOT) != null
-                && pageOwner.open.getItem(FriendMenu.NEXT_SLOT) == null, "page one navigation is bounded");
-        pages.click(pageOwner, pageOwner.open, FriendMenu.PREVIOUS_SLOT, ClickType.LEFT);
+        check(pageOwner.open.getItem(MenuTestLayouts.FRIEND.slot(FriendMenu.Action.PREVIOUS)) != null
+                && pageOwner.open.getItem(MenuTestLayouts.FRIEND.slot(FriendMenu.Action.NEXT)) == null, "page one navigation is bounded");
+        pages.click(pageOwner, pageOwner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.PREVIOUS), ClickType.LEFT);
         check(FriendMenuFixture.holder(pageOwner.open).getPage() == 0,
                 "previous button returns to page zero");
-        pages.click(pageOwner, pageOwner.open, FriendMenu.NEXT_SLOT, ClickType.LEFT);
-        UUID last = FriendMenuFixture.holder(pageOwner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow();
+        pages.click(pageOwner, pageOwner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.NEXT), ClickType.LEFT);
+        UUID last = FriendMenuFixture.holder(pageOwner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow();
         pages.friends.removeFriend(pageOwner.id, last);
-        pages.click(pageOwner, pageOwner.open, FriendMenu.REFRESH_SLOT, ClickType.LEFT);
+        pages.click(pageOwner, pageOwner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.REFRESH), ClickType.LEFT);
         check(FriendMenuFixture.holder(pageOwner.open).getPage() == 0,
                 "refresh clamps a vanished last page to page zero");
         pages.menu.open(pageOwner.player, FriendMenuView.FRIENDS, -100);
@@ -137,7 +138,7 @@ public final class FriendMenuHarness {
         befriend(ties, tieOwner.id, later);
         befriend(ties, tieOwner.id, earlier);
         ties.menu.open(tieOwner.player);
-        check(FriendMenuFixture.holder(tieOwner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(earlier),
+        check(FriendMenuFixture.holder(tieOwner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(earlier),
                 "case-insensitive name ties are broken by UUID, never hash order");
 
         FriendMenuFixture literal = new FriendMenuFixture();
@@ -145,9 +146,9 @@ public final class FriendMenuHarness {
         var markup = literal.player("<red>Safe</red>", false);
         befriend(literal, literalOwner.id, markup.id);
         literal.menu.open(literalOwner.player);
-        check(text(literalOwner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).equals("<red>Safe</red>")
+        check(text(literalOwner.open, MenuTestLayouts.FRIEND.contentSlot(0)).equals("<red>Safe</red>")
                         && net.kyori.adventure.text.format.NamedTextColor.AQUA.equals(
-                        FriendMenuFixture.spec(literalOwner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).spec.name().color()),
+                        FriendMenuFixture.spec(literalOwner.open, MenuTestLayouts.FRIEND.contentSlot(0)).spec.name().color()),
                 "player-controlled names remain literal Components, not MiniMessage");
     }
 
@@ -159,72 +160,72 @@ public final class FriendMenuHarness {
         var dana = fixture.player("Dana", false);
         befriend(fixture, owner.id, bob.id);
         fixture.menu.open(owner.player);
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(fixture.friends.getRelation(owner.id, bob.id) == FriendRelation.FRIENDS,
                 "ordinary friend click cannot remove a friendship");
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.SHIFT_RIGHT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.SHIFT_RIGHT);
         check(fixture.friends.getRelation(owner.id, bob.id) == FriendRelation.NONE
                 && last(owner).contains("Removed friend Bob")
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No friends"),
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No friends"),
                 "shift-right removes and refreshes friends view");
 
         fixture.friends.sendRequest(charlie.id, owner.id);
         fixture.menu.open(owner.player, FriendMenuView.INCOMING, 0);
-        check(FriendMenuFixture.holder(owner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(charlie.id)
-                && lore(owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).contains("Left-click to accept")
-                && lore(owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).contains("Right-click to decline"),
+        check(FriendMenuFixture.holder(owner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(charlie.id)
+                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Left-click to accept")
+                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Right-click to decline"),
                 "incoming request maps sender UUID and documents both actions");
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(fixture.friends.getRelation(owner.id, charlie.id) == FriendRelation.FRIENDS
                 && last(owner).contains("now friends with Charlie")
                 && last(charlie).contains("accepted your friend request")
                 && charlie.received.size() == 1
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No incoming"),
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No incoming"),
                 "accept confirms, notifies online sender once and refreshes");
 
         fixture.friends.sendRequest(bob.id, owner.id);
         fixture.menu.open(owner.player, FriendMenuView.INCOMING, 0);
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.RIGHT);
         check(fixture.friends.getRelation(owner.id, bob.id) == FriendRelation.NONE
-                && last(owner).contains("declined") && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No incoming"),
+                && last(owner).contains("declined") && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No incoming"),
                 "right click declines and refreshes without notifying sender");
 
         fixture.friends.sendRequest(owner.id, dana.id);
         fixture.menu.open(owner.player, FriendMenuView.OUTGOING, 0);
-        check(FriendMenuFixture.holder(owner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(dana.id)
-                && lore(owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).contains("Click to cancel request."),
+        check(FriendMenuFixture.holder(owner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(dana.id)
+                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Click to cancel request."),
                 "outgoing request maps recipient UUID");
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.RIGHT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.RIGHT);
         check(fixture.friends.getRelation(owner.id, dana.id) == FriendRelation.NONE
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No outgoing"), "outgoing request can be cancelled");
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No outgoing"), "outgoing request can be cancelled");
 
         fixture.friends.sendRequest(bob.id, owner.id);
         fixture.menu.open(owner.player, FriendMenuView.INCOMING, 0);
         fixture.friends.denyRequest(owner.id, bob.id);
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(last(owner).contains("No matching friend request")
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No incoming"),
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No incoming"),
                 "stale incoming request is reported and refreshed");
         fixture.friends.sendRequest(owner.id, dana.id);
         fixture.menu.open(owner.player, FriendMenuView.OUTGOING, 0);
         fixture.friends.cancelRequest(owner.id, dana.id);
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(last(owner).contains("No matching friend request")
-                && text(owner.open, FriendMenu.DEFAULT_LAYOUT.emptySlot()).contains("No outgoing"),
+                && text(owner.open, MenuTestLayouts.FRIEND.emptySlot()).contains("No outgoing"),
                 "stale outgoing request is reported and refreshed");
         befriend(fixture, owner.id, bob.id);
         fixture.menu.open(owner.player);
         fixture.friends.removeFriend(owner.id, bob.id);
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.SHIFT_RIGHT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.SHIFT_RIGHT);
         check(last(owner).contains("not friends")
                         && fixture.friends.getRelation(owner.id, charlie.id) == FriendRelation.FRIENDS
-                        && FriendMenuFixture.holder(owner.open).getTarget(FriendMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals(charlie.id),
+                        && FriendMenuFixture.holder(owner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(charlie.id),
                 "stale friendship is not falsely reported as removed");
 
         fixture.friends.sendRequest(bob.id, owner.id);
         fixture.menu.open(owner.player, FriendMenuView.INCOMING, 0);
         fixture.repository.failNext = true;
-        fixture.click(owner, owner.open, FriendMenu.DEFAULT_LAYOUT.contentSlot(0), ClickType.LEFT);
+        fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(fixture.friends.getRelation(owner.id, bob.id) == FriendRelation.INCOMING_REQUEST
                 && owner.open == owner.bottom && last(owner).contains("could not be updated"),
                 "persistence failure retains state, closes GUI and gives controlled error");

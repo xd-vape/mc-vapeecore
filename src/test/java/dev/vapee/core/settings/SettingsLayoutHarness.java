@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.LayoutTestSupport;
 import org.bukkit.event.inventory.ClickType;
 import java.util.*;
@@ -9,7 +10,7 @@ import static dev.vapee.core.settings.SettingsMenuFixture.*;
 public final class SettingsLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        var layout = LayoutTestSupport.move(SettingsMenu.DEFAULT_LAYOUT, 45,
+        var layout = LayoutTestSupport.move(MenuTestLayouts.SETTINGS, 45,
                 Map.of(SCOREBOARD, List.of(10, 43), CLOSE, List.of(8), REFRESH, List.of(44)));
         var f = new SettingsMenuFixture(layout); var owner = f.player("LayoutOwner");
         check(f.menu.open(owner.player) && owner.open.getSize() == layout.size(), "45-slot layout opens");

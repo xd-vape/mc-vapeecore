@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.*;
 import org.bukkit.event.inventory.ClickType;
 import java.util.*;
@@ -9,7 +10,7 @@ public final class NavigatorLayoutHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
         for (var content : List.of(LayoutTestSupport.SPARSE, LayoutTestSupport.REORDERED, LayoutTestSupport.HIGH_CONTENT)) {
-            var layout = LayoutTestSupport.paged(NavigatorMenu.DEFAULT_LAYOUT, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
+            var layout = LayoutTestSupport.paged(MenuTestLayouts.NAVIGATOR, content == LayoutTestSupport.HIGH_CONTENT ? 54 : 45, content);
             if (content == LayoutTestSupport.HIGH_CONTENT) layout = new MenuLayout<>(layout.size(), layout.contentSlots(), 40, layout.actions());
             var f = new NavigatorFixture(layout); var owner = f.player();
             check(f.menu.open(owner.player) && owner.open.getSize() == layout.size() && owner.open.getItem(layout.emptySlot()) != null, "empty alternative layout");

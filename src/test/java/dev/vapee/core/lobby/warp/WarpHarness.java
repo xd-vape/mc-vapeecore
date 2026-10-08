@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.warp;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.lobby.experience.navigator.NavigatorInventoryHolder;
 import dev.vapee.core.lobby.experience.navigator.NavigatorMenu;
 import org.bukkit.Location;
@@ -180,18 +181,18 @@ public final class WarpHarness {
     private static void testNavigatorHolderAndPaginationContract() throws Exception {
         UUID owner = UUID.randomUUID();
         Map<Integer, String> mapping = new LinkedHashMap<>();
-        mapping.put(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0), "totally-custom-destination");
-        mapping.put(NavigatorMenu.DEFAULT_LAYOUT.contentSlots().getLast(), "zeta");
-        NavigatorInventoryHolder holder = new NavigatorInventoryHolder(owner, 2, mapping);
+        mapping.put(MenuTestLayouts.NAVIGATOR.contentSlot(0), "totally-custom-destination");
+        mapping.put(MenuTestLayouts.NAVIGATOR.contentSlots().getLast(), "zeta");
+        NavigatorInventoryHolder holder = new NavigatorInventoryHolder(owner, 2, mapping, MenuTestLayouts.NAVIGATOR);
         check(holder.getOwnerUniqueId().equals(owner), "navigator holder owns one player");
         check(holder.getPage() == 2, "navigator holder stores page");
-        check(holder.getWarpId(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(0)).orElseThrow().equals("totally-custom-destination"),
+        check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.contentSlot(0)).orElseThrow().equals("totally-custom-destination"),
                 "navigator maps slot to arbitrary warp id");
-        check(holder.getWarpId(NavigatorMenu.DEFAULT_LAYOUT.contentSlot(1)).isEmpty(), "unmapped navigator slot has no destination");
-        check(NavigatorMenu.INVENTORY_SIZE == NavigatorMenu.DEFAULT_LAYOUT.size() && NavigatorMenu.CONTENT_SIZE == NavigatorMenu.DEFAULT_LAYOUT.pageSize(),
-                "navigator size and capacity match its default definition");
-        check(!NavigatorMenu.DEFAULT_LAYOUT.isContent(NavigatorMenu.PREVIOUS_SLOT)
-                        && NavigatorMenu.NEXT_SLOT < NavigatorMenu.INVENTORY_SIZE,
+        check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.contentSlot(1)).isEmpty(), "unmapped navigator slot has no destination");
+        check(mapping.keySet().stream().allMatch(MenuTestLayouts.NAVIGATOR::isContent),
+                "navigator fixture targets belong to declared content positions");
+        check(!MenuTestLayouts.NAVIGATOR.isContent(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS))
+                        && MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT) < MenuTestLayouts.NAVIGATOR.size(),
                 "pagination controls are outside content slots");
 
         AtomicReference<NavigatorInventoryHolder> holderReference = new AtomicReference<>(holder);

@@ -28,26 +28,19 @@ import java.util.logging.Logger;
 public final class NavigatorMenu {
 
     public enum Action { PREVIOUS, PAGE_INFO, CLOSE, NEXT }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
-            List.of(
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
+            .content(List.of(
                     0, 1, 2, 3, 4, 5, 6, 7, 8,
                     9, 10, 11, 12, 13, 14, 15, 16, 17,
                     18, 19, 20, 21, 22, 23, 24, 25, 26,
                     27, 28, 29, 30, 31, 32, 33, 34, 35,
-                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
-            Map.ofEntries(
-                    Map.entry(Action.PREVIOUS, List.of(45)),
-                    Map.entry(Action.PAGE_INFO, List.of(49)),
-                    Map.entry(Action.CLOSE, List.of(50)),
-                    Map.entry(Action.NEXT, List.of(53))));
-    // Compatibility aliases describe the default only; runtime code reads the instance layout.
-    public static final int INVENTORY_SIZE = DEFAULT_LAYOUT.size();
-    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
-    public static final int EMPTY_SLOT = DEFAULT_LAYOUT.emptySlot();
-    public static final int PREVIOUS_SLOT = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
-    public static final int PAGE_INFO_SLOT = DEFAULT_LAYOUT.slot(Action.PAGE_INFO);
-    public static final int CLOSE_SLOT = DEFAULT_LAYOUT.slot(Action.CLOSE);
-    public static final int NEXT_SLOT = DEFAULT_LAYOUT.slot(Action.NEXT);
+                    36, 37, 38, 39, 40, 41, 42, 43, 44))
+            .emptyState(22)
+            .button(Action.PREVIOUS, 45)
+            .button(Action.PAGE_INFO, 49)
+            .button(Action.CLOSE, 50)
+            .button(Action.NEXT, 53)
+            .build();
 
     private static final Component TITLE = Component.text("Warp Navigator", NamedTextColor.DARK_GRAY);
 
@@ -77,7 +70,7 @@ public final class NavigatorMenu {
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
                   Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                   ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.warpService = Objects.requireNonNull(warpService, "warpService");
         this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
@@ -120,7 +113,7 @@ public final class NavigatorMenu {
             inventory.setItem(layout.contentSlot(index - fromIndex), createWarpItem(warps.get(index)));
         }
         if (warps.isEmpty()) {
-            inventory.setItem(layout.emptySlot(), createItem(
+            placeDisplay(inventory, layout.emptySlot(), createItem(
                     Material.GRAY_DYE,
                     "No Destinations Available",
                     NamedTextColor.GRAY,
@@ -128,27 +121,27 @@ public final class NavigatorMenu {
             ));
         }
         if (pagination.hasPrevious()) {
-            inventory.setItem(layout.slot(Action.PREVIOUS), createItem(
+            place(inventory, Action.PREVIOUS, createItem(
                     Material.ARROW,
                     "Previous Page",
                     NamedTextColor.YELLOW,
                     List.of()
             ));
         }
-        inventory.setItem(layout.slot(Action.PAGE_INFO), createItem(
+        place(inventory, Action.PAGE_INFO, createItem(
                 Material.PAPER,
                 "Page " + (page + 1) + "/" + pageCount,
                 NamedTextColor.AQUA,
                 List.of(warps.size() + (warps.size() == 1 ? " destination." : " destinations."))
         ));
-        inventory.setItem(layout.slot(Action.CLOSE), createItem(
+        place(inventory, Action.CLOSE, createItem(
                 Material.BARRIER,
                 "Close",
                 NamedTextColor.RED,
                 List.of()
         ));
         if (pagination.hasNext()) {
-            inventory.setItem(layout.slot(Action.NEXT), createItem(
+            place(inventory, Action.NEXT, createItem(
                     Material.ARROW,
                     "Next Page",
                     NamedTextColor.YELLOW,
@@ -246,4 +239,15 @@ public final class NavigatorMenu {
     interface ItemRenderer {
         ItemStack render(UiItemSpec spec);
     }
+    private void place(Inventory inventory, Action action, ItemStack item) {
+        place(inventory, action, 0, item);
+    }
+    private void place(Inventory inventory, Action action, int position, ItemStack item) {
+        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
+    private void placeDisplay(Inventory inventory, int slot, ItemStack item) {
+        if (slot >= 0) inventory.setItem(slot, item);
+    }
+
 }

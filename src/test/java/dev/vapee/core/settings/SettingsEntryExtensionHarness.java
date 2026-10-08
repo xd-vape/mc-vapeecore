@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItems;
 import org.bukkit.Material;
 import org.bukkit.event.inventory.ClickType;
@@ -12,15 +13,15 @@ public final class SettingsEntryExtensionHarness {
     public static void main(String[] args) throws Exception {
         var f = new SettingsMenuFixture(); var player = f.player("SyntheticTile");
         int[] calls = {0};
-        var free = java.util.stream.IntStream.range(0, SettingsMenu.DEFAULT_LAYOUT.size())
-                .filter(slot -> SettingsMenu.DEFAULT_LAYOUT.actionAt(slot).isEmpty()).limit(2).toArray();
+        var free = java.util.stream.IntStream.range(0, MenuTestLayouts.SETTINGS.size())
+                .filter(slot -> MenuTestLayouts.SETTINGS.actionAt(slot).isEmpty()).limit(2).toArray();
         var entry = new SettingsMenuEntry(free[0], free[1],
                 current -> UiItems.literal(Material.DIAMOND, "Synthetic", net.kyori.adventure.text.format.NamedTextColor.AQUA, List.of()),
                 current -> UiItems.literal(Material.EMERALD, "Synthetic Status", net.kyori.adventure.text.format.NamedTextColor.GREEN, List.of()),
                 (viewer, current, context) -> { calls[0]++; return SettingsMenuEntry.Result.OPENED; });
-        var entries = new ArrayList<>(SettingsMenuEntries.defaults()); entries.add(entry);
+        var entries = new ArrayList<>(SettingsMenuEntries.defaults(MenuTestLayouts.SETTINGS)); entries.add(entry);
         var menu = new SettingsMenu(f.settings, f.messages, id -> f.online.get(id).player,
-                (holder, size, title) -> SettingsMenuFixture.inventory(holder, size), spec -> new Item(spec), f.logger, entries);
+                (holder, size, title) -> SettingsMenuFixture.inventory(holder, size), spec -> new Item(spec), f.logger, entries, MenuTestLayouts.SETTINGS);
         var listener = SettingsMenuFixture.createListener(menu, f.settings, p -> f.presentationCalls++, p -> f.visibilityCalls++, p -> f.soundCalls++, f.messages, f.logger);
         check(menu.open(player.player), "synthetic fixture opens actual menu"); var inventory = player.open;
         check(inventory.getItem(entry.slot()) instanceof Item item && item.spec.material() == Material.DIAMOND, "entry rendered at its only declared icon slot");
@@ -40,7 +41,7 @@ public final class SettingsEntryExtensionHarness {
         entries.add(entry);
         try { new SettingsMenu(f.settings,f.messages,id -> null,(h,size,t) -> null,spec -> null,f.logger,entries); throw new AssertionError("duplicate accepted"); }
         catch (IllegalArgumentException expected) { checks++; }
-        check(SettingsMenuEntries.defaults().size() == 6, "no invented production setting");
+        check(SettingsMenuEntries.defaults(MenuTestLayouts.SETTINGS).size() == 6, "no invented production setting");
         System.out.println("SettingsEntryExtensionHarness passed " + checks + " checks.");
     }
     private static final class Item extends org.bukkit.inventory.ItemStack {

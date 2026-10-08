@@ -30,27 +30,20 @@ import java.util.logging.Logger;
 public final class DailyQuestMenu {
     public static final String PERMISSION = "vapeecore.quest.use";
     public enum Action { PREVIOUS, PAGE_INFO, CLOSE, REFRESH, NEXT }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = new MenuLayout<>(54,
-            List.of(
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
+            .content(List.of(
                     0, 1, 2, 3, 4, 5, 6, 7, 8,
                     9, 10, 11, 12, 13, 14, 15, 16, 17,
                     18, 19, 20, 21, 22, 23, 24, 25, 26,
                     27, 28, 29, 30, 31, 32, 33, 34, 35,
-                    36, 37, 38, 39, 40, 41, 42, 43, 44), 22,
-            Map.ofEntries(
-                    Map.entry(Action.PREVIOUS, List.of(45)),
-                    Map.entry(Action.PAGE_INFO, List.of(49)),
-                    Map.entry(Action.CLOSE, List.of(50)),
-                    Map.entry(Action.REFRESH, List.of(52)),
-                    Map.entry(Action.NEXT, List.of(53))));
-    // Compatibility aliases describe the default only; runtime code reads the instance layout.
-    public static final int SIZE = DEFAULT_LAYOUT.size();
-    public static final int CONTENT_SIZE = DEFAULT_LAYOUT.pageSize();
-    public static final int PREVIOUS = DEFAULT_LAYOUT.slot(Action.PREVIOUS);
-    public static final int PAGE_INFO = DEFAULT_LAYOUT.slot(Action.PAGE_INFO);
-    public static final int CLOSE = DEFAULT_LAYOUT.slot(Action.CLOSE);
-    public static final int REFRESH = DEFAULT_LAYOUT.slot(Action.REFRESH);
-    public static final int NEXT = DEFAULT_LAYOUT.slot(Action.NEXT);
+                    36, 37, 38, 39, 40, 41, 42, 43, 44))
+            .emptyState(22)
+            .button(Action.PREVIOUS, 45)
+            .button(Action.PAGE_INFO, 49)
+            .button(Action.CLOSE, 50)
+            .button(Action.REFRESH, 52)
+            .button(Action.NEXT, 53)
+            .build();
 
     private final MenuLayout<Action> layout;
     public MenuLayout<Action> layout() { return layout; }
@@ -89,7 +82,7 @@ public final class DailyQuestMenu {
     DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
                    MessageService messages, Function<UUID, Player> onlinePlayer,
                    InventoryFactory inventories, ItemRenderer items, Logger logger, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").requireActions(DEFAULT_LAYOUT.actions());
+        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.sync = Objects.requireNonNull(sync, "sync");
         this.quests = Objects.requireNonNull(quests, "quests");
@@ -147,12 +140,12 @@ public final class DailyQuestMenu {
         for (int slot = 0; slot < pagination.toIndex() - start; slot++) {
             inventory.setItem(layout.contentSlot(slot), questItem(views.get(start + slot)));
         }
-        if (pagination.hasPrevious()) inventory.setItem(layout.slot(Action.PREVIOUS), item(Material.ARROW, "Previous page", List.of()));
-        inventory.setItem(layout.slot(Action.PAGE_INFO), item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
+        if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
+        place(inventory, Action.PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
                 List.of("Rewards are delivered automatically.")));
-        inventory.setItem(layout.slot(Action.CLOSE), item(Material.BARRIER, "Close", List.of()));
-        inventory.setItem(layout.slot(Action.REFRESH), item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
-        if (pagination.hasNext()) inventory.setItem(layout.slot(Action.NEXT), item(Material.ARROW, "Next page", List.of()));
+        place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", List.of()));
+        place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
+        if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, "Next page", List.of()));
         var opened = player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {
@@ -218,4 +211,11 @@ public final class DailyQuestMenu {
         Inventory create(DailyQuestInventoryHolder holder, int size, Component title);
     }
     @FunctionalInterface interface ItemRenderer { ItemStack render(UiItemSpec spec); }
+    private void place(Inventory inventory, Action action, ItemStack item) {
+        place(inventory, action, 0, item);
+    }
+    private void place(Inventory inventory, Action action, int position, ItemStack item) {
+        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
 }

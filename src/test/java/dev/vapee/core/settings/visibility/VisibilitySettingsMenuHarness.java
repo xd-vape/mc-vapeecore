@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.event.inventory.ClickType;
@@ -20,86 +21,86 @@ public final class VisibilitySettingsMenuHarness {
         fixture.visibilityMenu.open(owner.player);
         Inventory inventory = owner.open;
         VisibilitySettingsHolder holder = VisibilityMenuFixture.visibilityHolder(inventory);
-        check(inventory.getSize() == VisibilitySettingsMenu.DEFAULT_LAYOUT.size() && holder.getOwnerUniqueId().equals(owner.id)
+        check(inventory.getSize() == MenuTestLayouts.VISIBILITY.size() && holder.getOwnerUniqueId().equals(owner.id)
                         && holder.getInventory() == inventory,
                 "menu binds exact owner and inventory");
         check(fixture.visibilityMenu.isActive(owner.player, inventory, holder), "opened menu is active");
-        check(text(inventory, VisibilitySettingsMenu.MASTER_SLOT).equals("All Players")
-                        && lore(inventory, VisibilitySettingsMenu.MASTER_SLOT).contains("Current: ON"),
+        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).equals("All Players")
+                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: ON"),
                 "master feature renders enabled state");
-        check(material(inventory, VisibilitySettingsMenu.MASTER_STATUS_SLOT)
+        check(material(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1))
                         == Material.LIME_STAINED_GLASS_PANE
-                        && text(inventory, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("All Players")
+                        && text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1)).equals("All Players")
                         && VisibilityMenuFixture.visibilitySpec(inventory,
-                        VisibilitySettingsMenu.MASTER_STATUS_SLOT).name().color()
+                        MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1)).name().color()
                         .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN),
                 "master status pane is enabled");
-        check(text(inventory, VisibilitySettingsMenu.FRIENDS_SLOT).equals("Friends")
-                        && text(inventory, VisibilitySettingsMenu.STAFF_SLOT).equals("Staff Members")
-                        && text(inventory, VisibilitySettingsMenu.ADDED_USERS_SLOT).equals("Added Users"),
+        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS)).equals("Friends")
+                        && text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.STAFF)).equals("Staff Members")
+                        && text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.ADDED_USERS)).equals("Added Users"),
                 "friends, staff and added-user features render");
-        check(lore(inventory, VisibilitySettingsMenu.ADDED_USERS_SLOT).contains("Configured users: 1")
-                        && lore(inventory, VisibilitySettingsMenu.FRIENDS_SLOT)
+        check(lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.ADDED_USERS)).contains("Configured users: 1")
+                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS))
                         .contains("Used while All Players is filtered."),
                 "filter lore explains count and filtered-mode behavior");
-        check(material(inventory, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT)
+        check(material(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS, 1))
                         == Material.RED_STAINED_GLASS_PANE,
                 "disabled filter uses red status pane");
-        check(text(inventory, VisibilitySettingsMenu.GAME_PARTICIPANTS_STATUS_SLOT).equals("Unavailable")
-                        && material(inventory, VisibilitySettingsMenu.GAME_PARTICIPANTS_STATUS_SLOT)
+        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.GAME_PARTICIPANTS, 1)).equals("Unavailable")
+                        && material(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.GAME_PARTICIPANTS, 1))
                         == Material.GRAY_STAINED_GLASS_PANE,
                 "game participants are visibly unavailable");
-        check(text(inventory, VisibilitySettingsMenu.MANAGE_PLAYERS_SLOT).equals("Manage Visible Players"),
+        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS)).equals("Manage Visible Players"),
                 "manage visible players button renders");
 
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.MASTER_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER), ClickType.LEFT);
         check(!fixture.settings.areLobbyPlayersVisible(owner.id).orElseThrow()
                         && fixture.applyCalls == 1 && fixture.hotbarCalls == 1,
                 "master toggle saves, applies visibility and refreshes hotbar");
-        check(lore(owner.open, VisibilitySettingsMenu.MASTER_SLOT).contains("Current: FILTERED")
-                        && text(owner.open, VisibilitySettingsMenu.MASTER_STATUS_SLOT).equals("Filtered")
-                        && material(owner.open, VisibilitySettingsMenu.MASTER_STATUS_SLOT)
+        check(lore(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: FILTERED")
+                        && text(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1)).equals("Filtered")
+                        && material(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1))
                         == Material.YELLOW_STAINED_GLASS_PANE
                         && VisibilityMenuFixture.visibilitySpec(owner.open,
-                        VisibilitySettingsMenu.MASTER_STATUS_SLOT).name().color()
+                        MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1)).name().color()
                         .equals(net.kyori.adventure.text.format.NamedTextColor.YELLOW),
                 "master filtered state renders accurately");
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, ClickType.RIGHT);
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.STAFF_SLOT, ClickType.LEFT);
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.ADDED_USERS_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS, 1), ClickType.RIGHT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.STAFF), ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.ADDED_USERS), ClickType.LEFT);
         check(fixture.settings.areLobbyFriendsVisible(owner.id).orElseThrow()
                         && fixture.settings.areLobbyStaffVisible(owner.id).orElseThrow()
                         && fixture.settings.areLobbyAddedUsersVisible(owner.id).orElseThrow(),
                 "friends, staff and added-user toggles save independently");
         check(fixture.applyCalls == 4 && fixture.hotbarCalls == 1,
                 "every toggle applies visibility while only master refreshes hotbar");
-        for (int feature : new int[]{VisibilitySettingsMenu.MASTER_SLOT, VisibilitySettingsMenu.FRIENDS_SLOT, VisibilitySettingsMenu.STAFF_SLOT, VisibilitySettingsMenu.ADDED_USERS_SLOT, VisibilitySettingsMenu.GAME_PARTICIPANTS_SLOT}) {
-            check(owner.open.getItem(feature) != null && owner.open.getItem(VisibilitySettingsMenu.DEFAULT_LAYOUT.slot(VisibilitySettingsMenu.DEFAULT_LAYOUT.actionAt(feature).orElseThrow(), 1)) != null,
+        for (int feature : new int[]{MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.STAFF), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.ADDED_USERS), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.GAME_PARTICIPANTS)}) {
+            check(owner.open.getItem(feature) != null && owner.open.getItem(MenuTestLayouts.VISIBILITY.slot(MenuTestLayouts.VISIBILITY.actionAt(feature).orElseThrow(), 1)) != null,
                     "feature has its semantic status at " + feature);
         }
-        for (int status : new int[]{VisibilitySettingsMenu.FRIENDS_STATUS_SLOT, VisibilitySettingsMenu.STAFF_STATUS_SLOT, VisibilitySettingsMenu.ADDED_USERS_STATUS_SLOT}) {
+        for (int status : new int[]{MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.FRIENDS, 1), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.STAFF, 1), MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.ADDED_USERS, 1)}) {
             check(material(owner.open, status) == Material.LIME_STAINED_GLASS_PANE
                             && text(owner.open, status).equals("Enabled"), "enabled filter is green at " + status);
         }
         int soundsBeforeUnavailable = owner.soundCalls;
         boolean gameBefore = fixture.settings.areLobbyGameParticipantsVisible(owner.id).orElseThrow();
         fixture.visibilityClick(owner, owner.open,
-                VisibilitySettingsMenu.GAME_PARTICIPANTS_STATUS_SLOT, ClickType.LEFT);
+                MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.GAME_PARTICIPANTS, 1), ClickType.LEFT);
         check(fixture.settings.areLobbyGameParticipantsVisible(owner.id).orElseThrow() == gameBefore
                         && owner.soundCalls == soundsBeforeUnavailable
                         && plain(owner.received.getLast()).contains("game integration"),
                 "unavailable game option does not mutate or play success sound");
 
         Inventory beforeRefresh = owner.open;
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.REFRESH_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.REFRESH), ClickType.LEFT);
         check(owner.open != beforeRefresh && fixture.applyCalls == 4, "refresh rebuilds without mutation");
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.MANAGE_PLAYERS_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS), ClickType.LEFT);
         check(owner.open.getHolder() instanceof VisiblePlayersHolder, "manage button opens visible players menu");
         fixture.visibilityMenu.open(owner.player);
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.BACK_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.BACK), ClickType.LEFT);
         check(fixture.settingsBackCalls == 1, "back returns to player settings");
         fixture.visibilityMenu.open(owner.player);
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.CLOSE_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.CLOSE), ClickType.LEFT);
         check(owner.closeCalls == 1, "close button closes menu");
 
         fixture.visibilityMenu.open(owner.player);
@@ -107,7 +108,7 @@ public final class VisibilitySettingsMenuHarness {
         int appliesBeforeFailure = fixture.applyCalls;
         int soundsBeforeFailure = owner.soundCalls;
         fixture.repository.failNext = true;
-        fixture.visibilityClick(owner, owner.open, VisibilitySettingsMenu.MASTER_SLOT, ClickType.LEFT);
+        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER), ClickType.LEFT);
         check(fixture.settings.areLobbyPlayersVisible(owner.id).orElseThrow() == previous
                         && fixture.applyCalls == appliesBeforeFailure
                         && owner.soundCalls == soundsBeforeFailure,

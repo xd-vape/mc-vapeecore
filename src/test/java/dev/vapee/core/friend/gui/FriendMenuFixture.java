@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.gui;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.friend.FriendLimits;
@@ -53,7 +54,7 @@ final class FriendMenuFixture {
     final FriendMenuListener listener;
 
     FriendMenuFixture() throws Exception {
-        this(FriendMenu.DEFAULT_LAYOUT);
+        this(MenuTestLayouts.FRIEND);
     }
 
     FriendMenuFixture(dev.vapee.core.ui.MenuLayout<FriendMenu.Action> layout) throws Exception {

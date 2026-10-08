@@ -10,33 +10,35 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.UUID;
 import java.util.function.Predicate;
 
-/** One list of real Settings tiles, including their feature-owned state mutations. */
+/** Supported feature definitions. The menu layout alone selects visible icons and optional status. */
 public final class SettingsMenuEntries {
     private SettingsMenuEntries() { }
 
     public static List<SettingsMenuEntry> defaults() { return defaults(SettingsMenu.DEFAULT_LAYOUT); }
 
     public static List<SettingsMenuEntry> defaults(MenuLayout<SettingsMenu.Action> layout) {
-        return List.of(
-                toggle(layout.slot(SettingsMenu.Action.SCOREBOARD), layout.slot(SettingsMenu.Action.SCOREBOARD, 1), Material.MAP,
+        Map<SettingsMenu.Action, Definition> definitions = Map.ofEntries(
+                Map.entry(SettingsMenu.Action.SCOREBOARD, toggle(Material.MAP,
                         "Scoreboard", List.of("Show or hide the lobby scoreboard."), PlayerSettings::isScoreboardEnabled,
-                        PlayerSettingsService::setScoreboardEnabled, true),
-                toggle(layout.slot(SettingsMenu.Action.SOUNDS), layout.slot(SettingsMenu.Action.SOUNDS, 1), Material.NOTE_BLOCK,
+                        PlayerSettingsService::setScoreboardEnabled, true)),
+                Map.entry(SettingsMenu.Action.SOUNDS, toggle(Material.NOTE_BLOCK,
                         "Sounds", List.of("Enable or disable VapeeCore", "interface feedback sounds."), PlayerSettings::isSoundsEnabled,
-                        PlayerSettingsService::setSoundsEnabled, false),
-                toggle(layout.slot(SettingsMenu.Action.PRIVATE_MESSAGES), layout.slot(SettingsMenu.Action.PRIVATE_MESSAGES, 1), Material.WRITABLE_BOOK,
+                        PlayerSettingsService::setSoundsEnabled, false)),
+                Map.entry(SettingsMenu.Action.PRIVATE_MESSAGES, toggle(Material.WRITABLE_BOOK,
                         "Private Messages", List.of("Choose whether other players can send", "private messages to you."),
-                        PlayerSettings::isPrivateMessagesEnabled, PlayerSettingsService::setPrivateMessagesEnabled, false),
-                toggle(layout.slot(SettingsMenu.Action.FRIEND_REQUESTS), layout.slot(SettingsMenu.Action.FRIEND_REQUESTS, 1), Material.PLAYER_HEAD,
+                        PlayerSettings::isPrivateMessagesEnabled, PlayerSettingsService::setPrivateMessagesEnabled, false)),
+                Map.entry(SettingsMenu.Action.FRIEND_REQUESTS, toggle(Material.PLAYER_HEAD,
                         "Friend Requests", List.of("Choose whether other players can send", "friend requests to you."),
-                        PlayerSettings::isFriendRequestsEnabled, PlayerSettingsService::setFriendRequestsEnabled, false),
-                toggle(layout.slot(SettingsMenu.Action.FRIEND_PRESENCE), layout.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1), Material.BELL,
+                        PlayerSettings::isFriendRequestsEnabled, PlayerSettingsService::setFriendRequestsEnabled, false)),
+                Map.entry(SettingsMenu.Action.FRIEND_PRESENCE, toggle(Material.BELL,
                         "Friend Presence", List.of("Notify you when friends join or leave."),
-                        PlayerSettings::isFriendPresenceNotificationsEnabled, PlayerSettingsService::setFriendPresenceNotificationsEnabled, false),
-                new SettingsMenuEntry(layout.slot(SettingsMenu.Action.VISIBILITY), layout.slot(SettingsMenu.Action.VISIBILITY, 1),
+                        PlayerSettings::isFriendPresenceNotificationsEnabled, PlayerSettingsService::setFriendPresenceNotificationsEnabled, false)),
+                Map.entry(SettingsMenu.Action.VISIBILITY, new Definition(
                         current -> new UiItemSpec(Material.SPYGLASS, UiItems.text("Player Visibility", NamedTextColor.AQUA),
                                 List.of(UiItems.text("Manage which lobby players you can see.", NamedTextColor.GRAY),
                                         Component.empty(), UiItems.text("Click to open.", NamedTextColor.YELLOW))),
@@ -47,12 +49,18 @@ public final class SettingsMenuEntries {
                         (player, current, context) -> {
                             context.visibilityMenuOpener().accept(player);
                             return SettingsMenuEntry.Result.OPENED;
-                        }));
+                        })));
+        return definitions.entrySet().stream().filter(entry -> !layout.placement(entry.getKey()).isEmpty())
+                .map(entry -> {
+                    Definition feature = entry.getValue();
+                    return new SettingsMenuEntry(layout.placement(entry.getKey()).getFirst(),
+                            layout.actionSlot(entry.getKey(), 1).orElse(-1), feature.icon(), feature.status(), feature.action());
+                }).toList();
     }
 
-    private static SettingsMenuEntry toggle(int slot, int statusSlot, Material material, String name, List<String> description,
+    private static Definition toggle(Material material, String name, List<String> description,
                                              Predicate<PlayerSettings> enabled, ToggleSetter setter, boolean refreshPresentation) {
-        return new SettingsMenuEntry(slot, statusSlot,
+        return new Definition(
                 current -> {
                     List<Component> lore = new ArrayList<>();
                     description.forEach(line -> lore.add(UiItems.text(line, NamedTextColor.GRAY)));
@@ -70,6 +78,9 @@ public final class SettingsMenuEntries {
                     return SettingsMenuEntry.Result.SAVED;
                 });
     }
+    private record Definition(Function<PlayerSettings, UiItemSpec> icon, Function<PlayerSettings, UiItemSpec> status,
+                              SettingsMenuEntry.Action action) { }
+
     @FunctionalInterface private interface ToggleSetter {
         boolean save(PlayerSettingsService settings, UUID owner, boolean value);
     }

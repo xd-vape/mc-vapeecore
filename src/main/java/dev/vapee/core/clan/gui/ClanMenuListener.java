@@ -105,7 +105,7 @@ public final class ClanMenuListener implements Listener {
     }
 
     private boolean navigate(Player player, ClanMenuHolder holder, int slot, ClickType click) {
-        if (slot == menu.layout().slot(ClanMenu.Action.ACTION) && click == ClickType.SHIFT_RIGHT) {
+        if (menu.layout().actionAt(slot).orElse(null) == ClanMenu.Action.ACTION && click == ClickType.SHIFT_RIGHT) {
             Clan clan = clans.getClanOf(player.getUniqueId()).orElse(null);
             if (clan != null && clan.ownerId().equals(player.getUniqueId())) menu.promptDisband(player);
             return true;

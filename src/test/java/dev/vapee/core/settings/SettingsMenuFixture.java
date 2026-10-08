@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.CorePlayer;
@@ -34,7 +35,7 @@ public final class SettingsMenuFixture {
     int soundCalls;
 
     SettingsMenuFixture() throws Exception {
-        this(SettingsMenu.DEFAULT_LAYOUT);
+        this(MenuTestLayouts.SETTINGS);
     }
 
     SettingsMenuFixture(dev.vapee.core.ui.MenuLayout<SettingsMenu.Action> layout) throws Exception {
@@ -59,7 +60,7 @@ public final class SettingsMenuFixture {
                                          Function<UUID, Player> online,
                                          java.util.function.BiFunction<SettingsInventoryHolder, Integer, Inventory> factory) {
         return new SettingsMenu(settings, messages, online,
-                (holder, size, title) -> factory.apply(holder, size), SpecItem::new, Logger.getAnonymousLogger());
+                (holder, size, title) -> factory.apply(holder, size), SpecItem::new, Logger.getAnonymousLogger(), MenuTestLayouts.SETTINGS);
     }
 
     public static SettingsMenu createMenu(PlayerSettingsService settings, MessageService messages,

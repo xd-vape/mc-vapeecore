@@ -1,5 +1,6 @@
 package dev.vapee.core.settings;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.experience.LobbyItemListener;
@@ -87,7 +88,7 @@ public final class SettingsHotbarSecurityHarness {
                     "granted legitimate hotbar path opens real SettingsMenu");
             check(sounds[0] == 1 && f.repository.saves == saves, "legitimate hotbar sound without preference save");
             owner.permitted = false; var retained = owner.open;
-            f.click(owner, retained, SettingsMenu.SCOREBOARD_SLOT, org.bukkit.event.inventory.ClickType.LEFT);
+            f.click(owner, retained, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD), org.bukkit.event.inventory.ClickType.LEFT);
             check(f.repository.saves == saves && f.menu.activeCount() == 0 && owner.closes == 1,
                     "hotbar-opened settings also denies retained revoked action");
             for (var hand : new EquipmentSlot[]{EquipmentSlot.HAND, EquipmentSlot.OFF_HAND}) {

@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.ui.MenuTestLayouts;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.message.MessageService;
@@ -53,7 +54,7 @@ final class VisibilityMenuFixture {
     int settingsBackCalls;
 
     VisibilityMenuFixture() throws Exception {
-        this(VisibilitySettingsMenu.DEFAULT_LAYOUT, VisiblePlayersMenu.DEFAULT_LAYOUT);
+        this(MenuTestLayouts.VISIBILITY, MenuTestLayouts.VISIBLE_PLAYERS);
     }
 
     VisibilityMenuFixture(dev.vapee.core.ui.MenuLayout<VisibilitySettingsMenu.Action> layout, dev.vapee.core.ui.MenuLayout<VisiblePlayersMenu.Action> visibleLayout) throws Exception {
