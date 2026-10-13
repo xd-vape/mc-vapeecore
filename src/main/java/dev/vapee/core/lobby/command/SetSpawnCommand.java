@@ -1,5 +1,7 @@
 package dev.vapee.core.lobby.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.Location;
@@ -41,7 +43,7 @@ public final class SetSpawnCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to set spawn.</red>");
+            messageService.send(sender, tr("spawn.set-denied"));
             return true;
         }
         if (args.length != 0) {
@@ -49,7 +51,7 @@ public final class SetSpawnCommand implements TabExecutor {
             return true;
         }
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can use this command.</red>");
+            messageService.send(sender, tr("common.player-only.message"));
             return true;
         }
 
@@ -57,11 +59,11 @@ public final class SetSpawnCommand implements TabExecutor {
             saveSpawn.accept(player.getLocation());
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save lobby spawn for " + player.getUniqueId() + ".", exception);
-            messageService.send(player, "<red>The lobby spawn could not be saved.</red>");
+            messageService.send(player, tr("spawn.save-failed"));
             return true;
         }
 
-        messageService.send(player, "<green>Lobby spawn has been set.</green>");
+        messageService.send(player, tr("spawn.saved"));
         return true;
     }
 
@@ -76,11 +78,9 @@ public final class SetSpawnCommand implements TabExecutor {
     }
 
     private void sendInvalidUsage(CommandSender sender) {
-        messageService.send(sender, net.kyori.adventure.text.Component.text(
-                        "Invalid usage.", net.kyori.adventure.text.format.NamedTextColor.RED)
+        messageService.send(sender, tr("common.invalid-usage").color(net.kyori.adventure.text.format.NamedTextColor.RED)
                 .append(net.kyori.adventure.text.Component.newline())
-                .append(net.kyori.adventure.text.Component.text(
-                        "Use: ", net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                .append(tr("common.use").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
                 .append(net.kyori.adventure.text.Component.text(
                         "/setspawn", net.kyori.adventure.text.format.NamedTextColor.AQUA)));
     }

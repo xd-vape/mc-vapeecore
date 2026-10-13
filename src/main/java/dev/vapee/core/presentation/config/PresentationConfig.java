@@ -29,21 +29,21 @@ public final class PresentationConfig {
     private static final String RESOURCE_NAME = "presentation.yml";
     private static final int MAX_SCOREBOARD_LINES = 15;
     private static final List<String> DEFAULT_SCOREBOARD_LINES = List.of(
-            "<gray>Coins:</gray>",
+            "<i18n:presentation.sidebar.coins>",
             "<gold><coins></gold> ",
             "",
-            "<gray>Rank:</gray>",
+            "<i18n:presentation.sidebar.rank>",
             "<rank>",
             "",
-            "<gray>Playtime:</gray>",
+            "<i18n:presentation.sidebar.playtime>",
             "<blue><playtime></blue>"
     );
     private static final List<String> DEFAULT_TABLIST_HEADER = List.of(
             "<aqua><bold><server></bold></aqua>",
-            "<gray>The place to meet new friends, hang out and play games together!</gray>"
+            "<i18n:presentation.tablist.tagline>"
     );
     private static final List<String> DEFAULT_TABLIST_FOOTER = List.of(
-            "<gray>you dont need to pay for extra features!</gray>"
+            "<i18n:presentation.tablist.footer>"
     );
 
     private final Supplier<InputStream> defaultResourceSupplier;

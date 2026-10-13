@@ -23,16 +23,16 @@ public final class LobbyItemRegistrations {
     public static void register(LobbyItemRegistry registry, Supplier<NavigatorMenu> navigator,
                                 Supplier<SettingsMenu> settings, Supplier<FriendMenu> friends,
                                 Supplier<VisibilityLobbyItemAction> visibility) {
-        var nav = appearance(Material.COMPASS, "<aqua>Warp Navigator",
-                List.of("<gray>Right-click to open the warp navigator."), false);
-        var visible = appearance(Material.LIME_DYE, "<green>Players: Visible",
-                List.of("<gray>Right-click to use your visibility filters."), false);
-        var filtered = appearance(Material.GRAY_DYE, "<gray>Players: Filtered",
-                List.of("<gray>Right-click to show all lobby players."), false);
-        var preferences = appearance(Material.COMPARATOR, "<yellow>Settings",
-                List.of("<gray>Right-click to open your settings."), false);
-        var friend = appearance(Material.PLAYER_HEAD, "<aqua>Freunde",
-                List.of("<gray>Verwalte deine Freunde", "", "<yellow>Klicke zum Öffnen"), true);
+        var nav = appearance(Material.COMPASS, "<i18n:lobby.navigator.name>",
+                List.of("<i18n:lobby.navigator.lore>"), false);
+        var visible = appearance(Material.LIME_DYE, "<i18n:lobby.visibility.name>",
+                List.of("<i18n:lobby.visibility.lore>"), false);
+        var filtered = appearance(Material.GRAY_DYE, "<i18n:lobby.visibility.filtered-name>",
+                List.of("<i18n:lobby.visibility.filtered-lore>"), false);
+        var preferences = appearance(Material.COMPARATOR, "<i18n:lobby.settings.name>",
+                List.of("<i18n:lobby.settings.lore>"), false);
+        var friend = appearance(Material.PLAYER_HEAD, "<i18n:lobby.friends.name>",
+                List.of("<i18n:lobby.friends.lore>", "", "<i18n:lobby.friends.open>"), true);
 
         registry.register("navigator", new LobbyItemDefinition(true, 0, nav, nav), new NavigatorLobbyItemAction(navigator));
         registry.register("visibility", new LobbyItemDefinition(true, 4, visible, filtered),
@@ -58,6 +58,6 @@ public final class LobbyItemRegistrations {
         return new LobbyItemDefinition.Appearance(material, text(name), lore.stream().map(LobbyItemRegistrations::text).toList(), self);
     }
     private static Component text(String value) {
-        return MiniMessage.miniMessage().deserialize(value).decoration(TextDecoration.ITALIC, false);
+        return MiniMessage.miniMessage().deserialize(value, dev.vapee.core.i18n.Translations.tagResolver()).decoration(TextDecoration.ITALIC, false);
     }
 }

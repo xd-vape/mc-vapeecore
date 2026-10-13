@@ -18,6 +18,21 @@ public final class UiItems {
                 .decoration(TextDecoration.ITALIC, false);
     }
 
+    public static Component text(Component value, NamedTextColor color) {
+        return Objects.requireNonNull(value).applyFallbackStyle(net.kyori.adventure.text.format.Style.style(color))
+                .decoration(TextDecoration.ITALIC, false);
+    }
+
+    public static UiItemSpec localize(UiItemSpec spec, dev.vapee.core.message.MessageService messages,
+                                     net.kyori.adventure.audience.Audience viewer) {
+        return new UiItemSpec(spec.material(), messages.localize(viewer, spec.name()),
+                spec.lore().stream().map(line -> messages.localize(viewer, line)).toList());
+    }
+
+    public static UiItemSpec literal(Material material, Component name, NamedTextColor color, List<Component> lore) {
+        return new UiItemSpec(material, text(name, color), lore.stream().map(line -> text(line, NamedTextColor.GRAY)).toList());
+    }
+
     /** Convenience for menus whose literal lore lines are all gray. */
     public static UiItemSpec literal(Material material, String name, NamedTextColor color, List<String> lore) {
         return new UiItemSpec(material, text(name, color),

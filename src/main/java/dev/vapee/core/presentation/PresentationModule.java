@@ -32,6 +32,9 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
     private final JavaPlugin plugin;
     private final ConfigService configService;
     private final MessageService messageService;
+    private final java.util.function.Consumer<org.bukkit.entity.Player> localeChanges = player -> {
+        if (this.presentationService != null) this.presentationService.updatePlayer(player);
+    };
     private final PermissionModule permissionModule;
     private final RankModule rankModule;
     private final PlayerModule playerModule;
@@ -151,6 +154,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
         presentationService = newPresentationService;
         presentationListener = newPresentationListener;
         updateTask = newUpdateTask;
+        messageService.localization().addLocaleListener(localeChanges);
 
         if (newPresentationConfig.isEnabled()) {
             plugin.getLogger().info("Presentation module enabled with an update interval of "
@@ -163,6 +167,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
 
     @Override
     public void disable() {
+        messageService.localization().removeLocaleListener(localeChanges);
         if (updateTask != null) {
             updateTask.cancel();
         }

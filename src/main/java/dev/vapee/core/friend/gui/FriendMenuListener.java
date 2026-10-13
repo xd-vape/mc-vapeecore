@@ -1,5 +1,7 @@
 package dev.vapee.core.friend.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.friend.FriendMessages;
 import dev.vapee.core.friend.FriendResult;
 import dev.vapee.core.friend.FriendService;
@@ -56,7 +58,7 @@ public final class FriendMenuListener implements Listener {
         if (!player.hasPermission(FriendCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
             if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
-            messages.send(player, "<red>You do not have permission to use friends.</red>");
+            messages.send(player, tr("friends.menu.denied"));
             return;
         }
         if (event.getClickedInventory() != top) {
@@ -101,7 +103,7 @@ public final class FriendMenuListener implements Listener {
             logger.log(Level.SEVERE, "Could not process friend menu action for " + player.getUniqueId() + ".",
                     exception);
             player.closeInventory();
-            messages.send(player, "<red>The friends data could not be updated. Please try again.</red>");
+            messages.send(player, tr("friends.menu.update-failed"));
         }
     }
 

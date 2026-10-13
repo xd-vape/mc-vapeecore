@@ -1,5 +1,7 @@
 package dev.vapee.core.identity.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.format.PlaytimeFormatter;
 import dev.vapee.core.identity.PlayerProfile;
 import dev.vapee.core.identity.PlayerProfileLookupResult;
@@ -58,8 +60,7 @@ public final class ProfileCommand implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, Component.text("You do not have permission to use this command.",
-                    NamedTextColor.RED));
+            messageService.send(sender, tr("common.command-denied").color(NamedTextColor.RED));
             return true;
         }
         if (args.length > 1) {
@@ -70,8 +71,7 @@ public final class ProfileCommand implements TabExecutor {
             PlayerProfileLookupResult result;
             if (args.length == 0) {
                 if (!(sender instanceof Player player)) {
-                    messageService.send(sender, Component.text("Specify a player: /profile <player|uuid>",
-                            NamedTextColor.YELLOW));
+                    messageService.send(sender, tr("profile.specify").color(NamedTextColor.YELLOW));
                     return true;
                 }
                 result = profileService.getProfile(player.getUniqueId())
@@ -86,15 +86,12 @@ public final class ProfileCommand implements TabExecutor {
             }
             switch (result.status()) {
                 case FOUND -> sendProfile(sender, result.profile().orElseThrow());
-                case NOT_FOUND -> messageService.send(sender, Component.text(
-                        "This player is not known to VapeeCore.", NamedTextColor.RED));
-                case AMBIGUOUS -> messageService.send(sender, Component.text(
-                        "Multiple stored players use that name. Use the UUID.", NamedTextColor.YELLOW));
+                case NOT_FOUND -> messageService.send(sender, tr("common.player-unknown").color(NamedTextColor.RED));
+                case AMBIGUOUS -> messageService.send(sender, tr("profile.ambiguous").color(NamedTextColor.YELLOW));
             }
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not read a player profile.", exception);
-            messageService.send(sender, Component.text(
-                    "The player profile could not be read. Check the server log.", NamedTextColor.RED));
+            messageService.send(sender, tr("profile.failed").color(NamedTextColor.RED));
         }
         return true;
     }
@@ -114,28 +111,27 @@ public final class ProfileCommand implements TabExecutor {
     }
 
     private void usage(CommandSender sender) {
-        messageService.send(sender, Component.text("Use: /profile [player|uuid]", NamedTextColor.YELLOW));
+        messageService.send(sender, tr("profile.usage").color(NamedTextColor.YELLOW));
     }
 
     private void sendProfile(CommandSender sender, PlayerProfile profile) {
-        messageService.send(sender, Component.text("Profile", NamedTextColor.GOLD));
-        line(sender, "Player: ", Component.text(profile.identity().name()));
-        line(sender, "Status: ", Component.text(profile.online() ? "Online" : "Offline"));
-        line(sender, "Rank: ", profile.online()
+        messageService.send(sender, tr("profile.title").color(NamedTextColor.GOLD));
+        line(sender, "profile.player", Component.text(profile.identity().name()));
+        line(sender, "profile.status", profile.online() ? tr("common.online") : tr("common.offline"));
+        line(sender, "profile.rank", profile.online()
                 ? profile.rank().map(rank -> rank.displayComponent())
-                        .orElse(Component.text("Unavailable"))
-                : Component.text("Unavailable while offline"));
-        line(sender, "Coins: ", Component.text(String.format(Locale.US, "%,d", profile.coins())));
-        line(sender, "Playtime: ", Component.text(profile.playtimeTicks().isPresent()
-                ? PlaytimeFormatter.formatTicks(profile.playtimeTicks().getAsLong())
-                : "Unavailable while offline"));
-        line(sender, "First Join: ", Component.text(DATE_FORMAT.format(
+                        .orElse(tr("common.unavailable"))
+                : tr("profile.offline-unavailable"));
+        line(sender, "profile.coins", Component.text(String.format(Locale.US, "%,d", profile.coins())));
+        line(sender, "profile.playtime", profile.playtimeTicks().isPresent()
+                ? Component.text(PlaytimeFormatter.formatTicks(profile.playtimeTicks().getAsLong())) : tr("profile.offline-unavailable"));
+        line(sender, "profile.first-join", Component.text(DATE_FORMAT.format(
                 profile.identity().firstJoin().atZone(zone))));
-        line(sender, "Last Join: ", Component.text(DATE_FORMAT.format(
+        line(sender, "profile.last-join", Component.text(DATE_FORMAT.format(
                 profile.identity().lastJoin().atZone(zone))));
     }
 
     private void line(CommandSender sender, String label, Component value) {
-        messageService.send(sender, Component.text(label, NamedTextColor.GRAY).append(value));
+        messageService.send(sender, tr(label, java.util.Map.of("value", value)).color(NamedTextColor.GRAY));
     }
 }

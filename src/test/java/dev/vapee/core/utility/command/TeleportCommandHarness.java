@@ -184,8 +184,8 @@ public final class TeleportCommandHarness {
                 check(f.steve.calls == (allowed ? 1 : 0) && f.alex.calls == 0 && f.self.calls == 0,
                         "protect moved source only " + a + " -> " + t + " " + java.util.Arrays.toString(tokens));
                 if (!allowed) check(f.last().equals(t == null || a == null && tl >= 0
-                        ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
-                        : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "no teleport hierarchy bypass");
+                        ? dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)
+                        : dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)), "no teleport hierarchy bypass");
                 check(f.complete(f.self.player, "").contains("Alex"), "higher destination first token never filtered");
                 check(f.complete(f.self.player, "Steve", "").contains("Alex"),
                         "destination suggestions never filtered by source or destination staff level");
@@ -216,11 +216,11 @@ public final class TeleportCommandHarness {
         f.staff.groups.put(f.self.id, "admin"); f.staff.groups.put(f.steve.id, "owner");
         f.activity.add(f.steve.id);
         run(f, f.self.player, "Steve", "Alex");
-        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE),
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)),
                 "OP/state bypass not hierarchy bypass before activity");
         f.staff.fail = true;
         run(f, f.self.player, "Steve", "Alex");
-        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE),
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)),
                 "loaded lookup exception no external teleport");
         f.self.permissions.remove(TeleportCommand.OTHERS_PERMISSION);
         int reads = f.staff.reads;
@@ -230,7 +230,7 @@ public final class TeleportCommandHarness {
                 new Class<?>[]{CommandSender.class}, (proxy, method, values) -> method.getName().equals("hasPermission")
                         ? true : defaultValue(method.getReturnType()));
         run(f, unsupported, "Steve", "Alex");
-        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE),
+        check(f.steve.calls == 0 && f.last().equals(dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)),
                 "unsupported TP sender never moves source");
         check(f.complete(unsupported, "").isEmpty(), "unsupported source completion empty");
     }
@@ -260,7 +260,7 @@ public final class TeleportCommandHarness {
                 () -> players.stream().map(state -> state.player).toList(), ignored -> 20);
         private final TeleportCommand command = new TeleportCommand(service, this::lookup,
                 () -> players.stream().filter(state -> state.online).map(state -> state.player).toList(),
-                () -> List.of(world, nether), activity::contains, (sender, message) -> output.add(message), staff.guard);
+                () -> List.of(world, nether), activity::contains, (sender, message) -> output.add(dev.vapee.core.i18n.I18nTestSupport.render(sender, message)), staff.guard);
 
         private Player lookup(String name) {
             return players.stream().filter(state -> state.online && state.name.equalsIgnoreCase(name))

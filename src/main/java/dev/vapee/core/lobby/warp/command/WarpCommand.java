@@ -1,5 +1,7 @@
 package dev.vapee.core.lobby.warp.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
 import dev.vapee.core.command.help.CommandHelpRenderer;
@@ -21,6 +23,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.logging.Level;
@@ -33,29 +36,29 @@ public final class WarpCommand implements TabExecutor {
             "help", "set", "remove", "list", "info", "name", "icon", "show", "hide", "order"
     );
     private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
-            "Warp Administration",
+            tr("warp.help.title"),
             null,
             List.of(
-                    new CommandHelpSection("Create & Edit", List.of(
-                            new CommandHelpEntry("/warp set <id>", "Creates a warp or updates its location."),
+                    new CommandHelpSection(tr("warp.help.section.create-edit"), List.of(
+                            new CommandHelpEntry("/warp set <id>", tr("warp.help.warp.set.description")),
                             new CommandHelpEntry("/warp name <id> <display name...>",
-                                    "Changes the navigator display name."),
+                                    tr("warp.help.warp.name.name.description")),
                             new CommandHelpEntry("/warp icon <id> <material>",
-                                    "Changes the navigator item icon.")
+                                    tr("warp.help.warp.icon.description"))
                     )),
-                    new CommandHelpSection("Information", List.of(
-                            new CommandHelpEntry("/warp info <id>", "Shows warp details."),
-                            new CommandHelpEntry("/warp list", "Lists all configured warps.")
+                    new CommandHelpSection(tr("blackjack.help.section.information"), List.of(
+                            new CommandHelpEntry("/warp info <id>", tr("warp.help.warp.info.description")),
+                            new CommandHelpEntry("/warp list", tr("warp.help.warp.list.description"))
                     )),
-                    new CommandHelpSection("Management", List.of(
-                            new CommandHelpEntry("/warp show <id>", "Shows a destination in the navigator only."),
-                            new CommandHelpEntry("/warp hide <id>", "Hides a destination from the navigator only."),
+                    new CommandHelpSection(tr("blackjack.help.section.management"), List.of(
+                            new CommandHelpEntry("/warp show <id>", tr("warp.help.warp.show.description")),
+                            new CommandHelpEntry("/warp hide <id>", tr("warp.help.warp.hide.description")),
                             new CommandHelpEntry("/warp order <id> <order>",
-                                    "Sets navigator order (0-2147483647; lower comes first)."),
-                            new CommandHelpEntry("/warp remove <id>", "Permanently removes a warp.")
+                                    tr("warp.help.warp.order.description")),
+                            new CommandHelpEntry("/warp remove <id>", tr("warp.help.warp.remove.description"))
                     ))
             ),
-            "Use /warp info <id> to review a warp before changing it."
+            tr("warp.help.footer")
     );
 
     private final Logger logger;
@@ -88,7 +91,7 @@ public final class WarpCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to configure warps.</red>");
+            messageService.send(sender, tr("warp.denied"));
             return true;
         }
         if (args.length == 0) {
@@ -118,7 +121,7 @@ public final class WarpCommand implements TabExecutor {
             }
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not update warp configuration.", exception);
-            messageService.send(sender, "<red>The warp configuration could not be saved. Check the server log.</red>");
+            messageService.send(sender, tr("warp.save-failed"));
         }
         return true;
     }
@@ -162,7 +165,7 @@ public final class WarpCommand implements TabExecutor {
             if (args.length != 2) {
                 sendInvalidUsage(sender, "/warp set <id>");
             } else {
-                messageService.send(sender, "<red>Only players can set warp positions.</red>");
+                messageService.send(sender, tr("warp.player-only"));
             }
             return;
         }
@@ -183,9 +186,7 @@ public final class WarpCommand implements TabExecutor {
         }
         WarpResult result = warpService.removeWarp(args[1]);
         if (result == WarpResult.SUCCESS) {
-            messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
-                    .append(Component.text(args[1].toLowerCase(Locale.ROOT), NamedTextColor.WHITE))
-                    .append(Component.text("' removed.", NamedTextColor.GREEN)));
+            messageService.send(sender, tr("warp.removed", Map.of("id", Component.text(args[1].toLowerCase(Locale.ROOT), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         } else {
             sendResult(sender, result);
         }
@@ -198,7 +199,7 @@ public final class WarpCommand implements TabExecutor {
         }
         List<WarpPoint> warps = warpService.getWarps();
         if (warps.isEmpty()) {
-            messageService.send(sender, "<yellow>No warps are configured.</yellow>");
+            messageService.send(sender, tr("warp.empty"));
             return;
         }
         messageService.send(sender, listMessage(warps));
@@ -225,11 +226,7 @@ public final class WarpCommand implements TabExecutor {
         WarpResult result = warpService.setDisplayName(args[1], String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
         if (result == WarpResult.SUCCESS) {
             WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
-            messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
-                    .append(Component.text(warp.id(), NamedTextColor.WHITE))
-                    .append(Component.text("' display name changed to '", NamedTextColor.GREEN))
-                    .append(Component.text(warp.displayName(), NamedTextColor.WHITE))
-                    .append(Component.text("'.", NamedTextColor.GREEN)));
+            messageService.send(sender, tr("warp.renamed", Map.of("id", Component.text(warp.id(), NamedTextColor.WHITE), "name", Component.text(warp.displayName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         } else {
             sendResult(sender, result);
         }
@@ -244,11 +241,7 @@ public final class WarpCommand implements TabExecutor {
         WarpResult result = warpService.setIcon(args[1], material);
         if (result == WarpResult.SUCCESS) {
             WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
-            messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
-                    .append(Component.text(warp.id(), NamedTextColor.WHITE))
-                    .append(Component.text("' icon changed to ", NamedTextColor.GREEN))
-                    .append(Component.text(warp.icon().name(), NamedTextColor.WHITE))
-                    .append(Component.text(".", NamedTextColor.GREEN)));
+            messageService.send(sender, tr("warp.icon-changed", Map.of("id", Component.text(warp.id(), NamedTextColor.WHITE), "material", Component.text(warp.icon().name(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         } else {
             sendResult(sender, result);
         }
@@ -265,10 +258,7 @@ public final class WarpCommand implements TabExecutor {
             return;
         }
         WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
-        messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
-                .append(Component.text(warp.id(), NamedTextColor.WHITE))
-                .append(Component.text(visible ? "' is visible in the navigator." : "' is hidden from the navigator.",
-                        NamedTextColor.GREEN)));
+        messageService.send(sender, tr(visible ? "warp.shown" : "warp.hidden", Map.of("id", Component.text(warp.id(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
     }
 
     private void order(CommandSender sender, String[] args) {
@@ -287,9 +277,7 @@ public final class WarpCommand implements TabExecutor {
             return;
         }
         WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
-        messageService.send(sender, Component.text("Warp '", NamedTextColor.GREEN)
-                .append(Component.text(warp.id(), NamedTextColor.WHITE))
-                .append(Component.text("' navigator order is " + warp.navigation().order() + ".", NamedTextColor.GREEN)));
+        messageService.send(sender, tr("warp.order-changed", Map.of("id", Component.text(warp.id(), NamedTextColor.WHITE), "order", Component.text(warp.navigation().order()))).color(NamedTextColor.GREEN));
     }
 
     static Integer parseOrder(String input) {
@@ -304,44 +292,40 @@ public final class WarpCommand implements TabExecutor {
     }
 
     private void sendResult(CommandSender sender, WarpResult result) {
-        String message = switch (result) {
-            case INVALID_ID -> "<red>Warp IDs must match [a-z0-9_-]+.</red>";
-            case INVALID_NAME -> "<red>The display name must not be blank.</red>";
-            case INVALID_ICON -> "<red>The specified material cannot be displayed as an item.</red>";
-            case INVALID_ORDER -> "<red>Navigator order must be an integer from 0 to 2147483647.</red>";
-            case NOT_FOUND -> "<red>That warp does not exist.</red>";
-            case NOT_NAVIGABLE -> "<red>That destination is no longer available.</red>";
-            case PLAYER_OFFLINE -> "<red>The player is no longer online.</red>";
-            case WORLD_NOT_LOADED -> "<red>The warp world is not loaded.</red>";
-            case TELEPORT_FAILED -> "<red>The teleport was cancelled or failed.</red>";
+        Component message = switch (result) {
+            case INVALID_ID -> tr("warp.result.INVALID_ID");
+            case INVALID_NAME -> tr("warp.result.INVALID_NAME");
+            case INVALID_ICON -> tr("warp.result.INVALID_ICON");
+            case INVALID_ORDER -> tr("warp.result.INVALID_ORDER");
+            case NOT_FOUND -> tr("warp.result.NOT_FOUND");
+            case NOT_NAVIGABLE -> tr("warp.result.NOT_NAVIGABLE");
+            case PLAYER_OFFLINE -> tr("warp.result.PLAYER_OFFLINE");
+            case WORLD_NOT_LOADED -> tr("warp.result.WORLD_NOT_LOADED");
+            case TELEPORT_FAILED -> tr("warp.result.TELEPORT_FAILED");
             case SUCCESS -> throw new IllegalArgumentException("Success is not an error result");
         };
         messageService.send(sender, message);
     }
 
     private void sendUnknown(CommandSender sender, String subcommand) {
-        messageService.send(sender, Component.text("Unknown subcommand '", NamedTextColor.RED)
-                .append(Component.text(subcommand, NamedTextColor.WHITE))
-                .append(Component.text("'.", NamedTextColor.RED))
+        messageService.send(sender, tr("warp.unknown", Map.of("command", Component.text(subcommand, NamedTextColor.WHITE))).color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/warp help", NamedTextColor.AQUA)));
     }
 
     private void sendInvalidUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private static Component setSuccessMessage(WarpPoint warp, boolean existed) {
         String id = warp.id();
-        Component message = Component.text("Warp '", NamedTextColor.GREEN)
-                .append(Component.text(id, NamedTextColor.WHITE))
-                .append(Component.text(existed ? "' location updated." : "' created.", NamedTextColor.GREEN))
+        Component message = tr(existed ? "warp.location-updated" : "warp.created", Map.of("id", Component.text(id, NamedTextColor.WHITE))).color(NamedTextColor.GREEN)
                 .append(Component.newline())
-                .append(Component.text("Location: ", NamedTextColor.YELLOW))
+                .append(tr("warp.label.location").color(NamedTextColor.YELLOW))
                 .append(Component.text(warp.position().worldName() + " @ "
                         + coordinate(warp.position().x()) + ", "
                         + coordinate(warp.position().y()) + ", "
@@ -350,7 +334,7 @@ public final class WarpCommand implements TabExecutor {
             String nameCommand = "/warp name " + id + " <display name>";
             String iconCommand = "/warp icon " + id + " <material>";
             message = message.append(Component.newline())
-                    .append(Component.text("Next: ", NamedTextColor.YELLOW))
+                    .append(tr("warp.label.next").color(NamedTextColor.YELLOW))
                     .append(Component.text(nameCommand, NamedTextColor.AQUA)
                             .clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand(nameCommand)))
                     .append(Component.newline())
@@ -361,45 +345,39 @@ public final class WarpCommand implements TabExecutor {
     }
 
     private static Component listMessage(List<WarpPoint> warps) {
-        Component output = Component.text("Configured Warps", NamedTextColor.GOLD)
+        Component output = tr("warp.list.title").color(NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(Component.text(warps.size() + " warp(s) configured.", NamedTextColor.GRAY));
+                .append(tr("warp.list.count", Map.of("count", Component.text(warps.size()))).color(NamedTextColor.GRAY));
         for (WarpPoint warp : warps) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.DARK_GRAY))
                     .append(Component.text(warp.id(), NamedTextColor.AQUA))
-                    .append(Component.text(" • " + (warp.navigation().visible() ? "Visible" : "Hidden")
-                            + " • order " + warp.navigation().order(), NamedTextColor.GRAY));
+                    .append(tr("warp.list.entry", Map.of("visibility", tr(warp.navigation().visible() ? "warp.visible" : "warp.hidden-state"), "order", Component.text(warp.navigation().order()))).color(NamedTextColor.GRAY));
         }
         return output;
     }
 
     private static Component infoMessage(WarpPoint warp) {
-        return Component.text("Warp • ", NamedTextColor.GOLD)
+        return tr("warp.heading-prefix").color(NamedTextColor.GOLD)
                 .append(Component.text(warp.id(), NamedTextColor.AQUA))
                 .append(Component.newline())
-                .append(label("Display Name: ")).append(Component.text(warp.displayName(), NamedTextColor.WHITE))
+                .append(tr("warp.label.display-name").color(NamedTextColor.GRAY)).append(Component.text(warp.displayName(), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Icon: ")).append(Component.text(warp.icon().name(), NamedTextColor.WHITE))
+                .append(tr("warp.label.icon").color(NamedTextColor.GRAY)).append(Component.text(warp.icon().name(), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Navigator: ")).append(Component.text(
-                        warp.navigation().visible() ? "Visible" : "Hidden", NamedTextColor.WHITE))
+                .append(tr("warp.label.navigator").color(NamedTextColor.GRAY)).append(tr(warp.navigation().visible() ? "warp.visible" : "warp.hidden-state").color(NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Order: ")).append(Component.text(warp.navigation().order(), NamedTextColor.WHITE))
+                .append(tr("warp.label.order").color(NamedTextColor.GRAY)).append(Component.text(warp.navigation().order(), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("World: ")).append(Component.text(warp.position().worldName(), NamedTextColor.WHITE))
+                .append(tr("warp.label.world").color(NamedTextColor.GRAY)).append(Component.text(warp.position().worldName(), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Position: ")).append(Component.text(
+                .append(tr("warp.label.position").color(NamedTextColor.GRAY)).append(Component.text(
                         coordinate(warp.position().x()) + ", " + coordinate(warp.position().y()) + ", "
                                 + coordinate(warp.position().z()), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Rotation: ")).append(Component.text(
+                .append(tr("warp.label.rotation").color(NamedTextColor.GRAY)).append(Component.text(
                         coordinate(warp.position().yaw()) + " / " + coordinate(warp.position().pitch()),
                         NamedTextColor.WHITE));
-    }
-
-    private static Component label(String text) {
-        return Component.text(text, NamedTextColor.GRAY);
     }
 
     private static String coordinate(double value) {

@@ -1,5 +1,7 @@
 package dev.vapee.core.settings;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
@@ -24,28 +26,28 @@ public final class SettingsMenuEntries {
     public static List<SettingsMenuEntry> defaults(MenuLayout<SettingsMenu.Action> layout) {
         Map<SettingsMenu.Action, Definition> definitions = Map.ofEntries(
                 Map.entry(SettingsMenu.Action.SCOREBOARD, toggle(Material.MAP,
-                        "Scoreboard", List.of("Show or hide the lobby scoreboard."), PlayerSettings::isScoreboardEnabled,
+                        tr("settings.scoreboard.name"), List.of(tr("settings.scoreboard.hint")), PlayerSettings::isScoreboardEnabled,
                         PlayerSettingsService::setScoreboardEnabled, true)),
                 Map.entry(SettingsMenu.Action.SOUNDS, toggle(Material.NOTE_BLOCK,
-                        "Sounds", List.of("Enable or disable VapeeCore", "interface feedback sounds."), PlayerSettings::isSoundsEnabled,
+                        tr("settings.sounds.name"), List.of(tr("settings.sounds.hint-one"), tr("settings.sounds.hint-two")), PlayerSettings::isSoundsEnabled,
                         PlayerSettingsService::setSoundsEnabled, false)),
                 Map.entry(SettingsMenu.Action.PRIVATE_MESSAGES, toggle(Material.WRITABLE_BOOK,
-                        "Private Messages", List.of("Choose whether other players can send", "private messages to you."),
+                        tr("settings.private-messages.name"), List.of(tr("settings.friend-requests.hint-one"), tr("settings.private-messages.hint-two")),
                         PlayerSettings::isPrivateMessagesEnabled, PlayerSettingsService::setPrivateMessagesEnabled, false)),
                 Map.entry(SettingsMenu.Action.FRIEND_REQUESTS, toggle(Material.PLAYER_HEAD,
-                        "Friend Requests", List.of("Choose whether other players can send", "friend requests to you."),
+                        tr("settings.friend-requests.name"), List.of(tr("settings.friend-requests.hint-one"), tr("settings.friend-requests.hint-two")),
                         PlayerSettings::isFriendRequestsEnabled, PlayerSettingsService::setFriendRequestsEnabled, false)),
                 Map.entry(SettingsMenu.Action.FRIEND_PRESENCE, toggle(Material.BELL,
-                        "Friend Presence", List.of("Notify you when friends join or leave."),
+                        tr("settings.friend-presence.name"), List.of(tr("settings.friend-presence.hint")),
                         PlayerSettings::isFriendPresenceNotificationsEnabled, PlayerSettingsService::setFriendPresenceNotificationsEnabled, false)),
                 Map.entry(SettingsMenu.Action.VISIBILITY, new Definition(
-                        current -> new UiItemSpec(Material.SPYGLASS, UiItems.text("Player Visibility", NamedTextColor.AQUA),
-                                List.of(UiItems.text("Manage which lobby players you can see.", NamedTextColor.GRAY),
-                                        Component.empty(), UiItems.text("Click to open.", NamedTextColor.YELLOW))),
+                        current -> new UiItemSpec(Material.SPYGLASS, UiItems.text(tr("settings.visibility.name"), NamedTextColor.AQUA),
+                                List.of(UiItems.text(tr("settings.visibility.hint"), NamedTextColor.GRAY),
+                                        Component.empty(), UiItems.text(tr("common.click-open"), NamedTextColor.YELLOW))),
                         current -> new UiItemSpec(current.isLobbyPlayersVisible() ? Material.LIME_STAINED_GLASS_PANE : Material.YELLOW_STAINED_GLASS_PANE,
-                                UiItems.text(current.isLobbyPlayersVisible() ? "All Players" : "Filtered",
+                                UiItems.text(current.isLobbyPlayersVisible() ? tr("visibility.all-players") : tr("common.filtered"),
                                         current.isLobbyPlayersVisible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
-                                List.of(UiItems.text("Click to open visibility settings.", NamedTextColor.GRAY))),
+                                List.of(UiItems.text(tr("settings.visibility.open-hint"), NamedTextColor.GRAY))),
                         (player, current, context) -> {
                             context.visibilityMenuOpener().accept(player);
                             return SettingsMenuEntry.Result.OPENED;
@@ -58,20 +60,20 @@ public final class SettingsMenuEntries {
                 }).toList();
     }
 
-    private static Definition toggle(Material material, String name, List<String> description,
+    private static Definition toggle(Material material, Component name, List<Component> description,
                                              Predicate<PlayerSettings> enabled, ToggleSetter setter, boolean refreshPresentation) {
         return new Definition(
                 current -> {
                     List<Component> lore = new ArrayList<>();
                     description.forEach(line -> lore.add(UiItems.text(line, NamedTextColor.GRAY)));
                     lore.add(Component.empty());
-                    lore.add(UiItems.text(enabled.test(current) ? "Click to disable." : "Click to enable.", NamedTextColor.YELLOW));
+                    lore.add(UiItems.text(enabled.test(current) ? tr("common.click-disable") : tr("common.click-enable"), NamedTextColor.YELLOW));
                     return new UiItemSpec(material, UiItems.text(name, NamedTextColor.AQUA), lore);
                 }, current -> {
                     boolean on = enabled.test(current);
                     return new UiItemSpec(on ? Material.LIME_STAINED_GLASS_PANE : Material.RED_STAINED_GLASS_PANE,
-                            UiItems.text(on ? "Enabled" : "Disabled", on ? NamedTextColor.GREEN : NamedTextColor.RED),
-                            List.of(UiItems.text(on ? "Click to disable." : "Click to enable.", NamedTextColor.GRAY)));
+                            UiItems.text(on ? tr("common.enabled") : tr("common.disabled"), on ? NamedTextColor.GREEN : NamedTextColor.RED),
+                            List.of(UiItems.text(on ? tr("common.click-disable") : tr("common.click-enable"), NamedTextColor.GRAY)));
                 }, (player, current, context) -> {
                     if (!setter.save(context.settings(), player.getUniqueId(), !enabled.test(current))) return SettingsMenuEntry.Result.UNAVAILABLE;
                     if (refreshPresentation) context.presentationRefresh().accept(player);

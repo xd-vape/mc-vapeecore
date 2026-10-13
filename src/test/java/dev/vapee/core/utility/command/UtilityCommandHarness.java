@@ -576,8 +576,8 @@ public final class UtilityCommandHarness {
                 check(allowed ? target.writes + actor.writes > 0 : target.writes + actor.writes == 0,
                         commands.get(index).getClass().getSimpleName() + " real side effects " + actorGroup + " -> " + targetGroup);
                 if (!allowed) check(f.last().equals(targetGroup == null || actorGroup == null && tl >= 0
-                        ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
-                        : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "safe staff denial");
+                        ? dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)
+                        : dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)), "safe staff denial");
                 String[] completion = index == 1 ? new String[]{"5", ""} : index == 2
                         ? new String[]{"creative", ""} : new String[]{""};
                 check(commands.get(index).onTabComplete(actor.player, null, "staff", completion).contains("Target") == allowed,
@@ -594,7 +594,7 @@ public final class UtilityCommandHarness {
             f.activityPlayers.add(target.id); f.buildPlayers.add(target.id);
             List<TabExecutor> commands = staffCommands(f);
             commands.get(index).onCommand(actor.player, null, "staff", staffArguments(index, "Target"));
-            check(f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)
+            check(f.last().equals(dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE))
                     && target.writes + actor.writes == 0, "hierarchy before Activity/BUILD/open/mutation " + index);
             actor.permissions.clear();
             int reads = f.staff.reads;
@@ -640,7 +640,7 @@ public final class UtilityCommandHarness {
         target.writes = 0; actor.writes = 0;
         for (int index = 0; index < 8; index++) {
             staffCommands(f).get(index).onCommand(actor.player, null, "exception", staffArguments(index, "Target"));
-            check(f.last().equals(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)
+            check(f.last().equals(dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE))
                     && actor.writes + target.writes == 0, "loaded lookup exception no effect " + index);
         }
         // Ping is intentionally a non-sensitive read, even for unavailable/protected staff.
@@ -743,7 +743,7 @@ public final class UtilityCommandHarness {
         private final List<MutablePlayer> players = new ArrayList<>();
         private final Set<UUID> buildPlayers = new HashSet<>();
         private final Set<UUID> activityPlayers = new HashSet<>();
-        private final BiConsumer<CommandSender, Component> messages = (sender, component) -> output.add(component);
+        private final BiConsumer<CommandSender, Component> messages = (sender, component) -> output.add(dev.vapee.core.i18n.I18nTestSupport.render(sender, component));
         private final UtilityService service = new UtilityService(
                 () -> true,
                 this::onlinePlayers,

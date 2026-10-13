@@ -1,5 +1,7 @@
 package dev.vapee.core.visibility;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.item.LobbyItemAction;
 import dev.vapee.core.lobby.item.LobbyItemDefinition;
@@ -61,7 +63,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
 
         Optional<Boolean> currentValue = playerSettingsService.areLobbyPlayersVisible(uniqueId);
         if (currentValue.isEmpty()) {
-            messageService.send(player, "<red>Your player profile is not available.</red>");
+            messageService.send(player, tr("common.profile-unavailable.message"));
             return;
         }
 
@@ -70,11 +72,11 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
             saved = playerSettingsService.setLobbyPlayersVisible(uniqueId, !currentValue.get());
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save lobby visibility setting for " + uniqueId + ".", exception);
-            messageService.send(player, "<red>Your visibility setting could not be saved. Please try again.</red>");
+            messageService.send(player, tr("visibility.save-failed"));
             return;
         }
         if (!saved) {
-            messageService.send(player, "<red>Your player profile is not available.</red>");
+            messageService.send(player, tr("common.profile-unavailable.message"));
             return;
         }
 

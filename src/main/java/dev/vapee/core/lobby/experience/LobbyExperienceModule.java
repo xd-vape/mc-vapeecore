@@ -40,7 +40,7 @@ public final class LobbyExperienceModule implements CoreModule {
     private final VisibilityModule visibilityModule;
     private final ActivityModule activityModule;
     private final MessageService messageService;
-    private VisibilityLobbyItemAction visibilityAction;
+    private final java.util.function.Consumer<Player> localeChanges = this::refreshLocaleItems;    private VisibilityLobbyItemAction visibilityAction;
 
     private NavigatorMenu navigatorMenu;
     private LobbyExperienceListener experienceListener;
@@ -89,7 +89,7 @@ public final class LobbyExperienceModule implements CoreModule {
         VisibilityService newVisibilityService = visibilityModule.getVisibilityService();
         NavigatorAccessPolicy newAccessPolicy = new NavigatorAccessPolicy(newPlayerService, newLobbyService,
                 lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
-        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy);
+        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy, messageService);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
                 plugin,
                 newLobbyService,
@@ -124,6 +124,7 @@ public final class LobbyExperienceModule implements CoreModule {
             newNavigatorMenu.startUpdates();
             visibilityAction = newVisibilityAction;
             registry.activate();
+            messageService.localization().addLocaleListener(localeChanges);
             experienceListener = newExperienceListener;
             itemListener = newItemListener;
             navigatorListener = newNavigatorListener;
@@ -180,7 +181,13 @@ public final class LobbyExperienceModule implements CoreModule {
         }
     }
 
+    private void refreshLocaleItems(Player player) {
+        if (navigatorMenu != null && navigatorMenu.canAccess(player) && lobbyModule.getItemRegistry().isActive())
+            lobbyModule.getLobbyItemService().applyLobbyItems(player);
+    }
+
     private void cleanupRuntime(NavigatorMenu activeNavigatorMenu) {
+        messageService.localization().removeLocaleListener(localeChanges);
         if (activeNavigatorMenu != null) {
             try {
                 activeNavigatorMenu.shutdown();

@@ -21,6 +21,7 @@ import java.util.logging.*;
 
 /** Local support dispatches real close handlers and retains exact inventory identity. */
 public final class SettingsMenuFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
     final MemoryRepository repository = new MemoryRepository();
     final Logger logger = Logger.getAnonymousLogger();
     final List<LogRecord> logs = new ArrayList<>();
@@ -48,10 +49,11 @@ public final class SettingsMenuFixture {
         var constructor = MessageService.class.getDeclaredConstructor(java.util.function.Supplier.class);
         constructor.setAccessible(true);
         messages = constructor.newInstance((java.util.function.Supplier<String>) () -> "");
-        menu = createMenu(settings, messages, id -> {
+        menu = new SettingsMenu(settings, messages, id -> {
             TestPlayer player = online.get(id);
             return player != null && player.online ? player.player : null;
-        }, SettingsMenuFixture::inventory, layout);
+        }, (holder, size, title) -> { Inventory result = inventory(holder, size); titles.put(result, title); return result; },
+                SpecItem::new, logger, layout);
         listener = createListener(menu, settings, ignored -> presentationCalls++,
                 ignored -> visibilityCalls++, ignored -> soundCalls++, messages, logger);
     }
@@ -130,6 +132,7 @@ public final class SettingsMenuFixture {
     static String plain(Component value) { return PlainTextComponentSerializer.plainText().serialize(value); }
 
     final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         final UUID id;
         final Inventory bottom = inventory(null, 36);
         final List<Component> received = new ArrayList<>();
@@ -145,6 +148,7 @@ public final class SettingsMenuFixture {
             this.id = id;
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "isOnline" -> online;
                 case "hasPermission" -> permitted;
                 case "openInventory" -> {

@@ -37,6 +37,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 final class VisibilityMenuFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
     final MemoryRepository repository = new MemoryRepository();
     final PlayerService players = new PlayerService(repository, logger());
     final PlayerSettingsService settings = new PlayerSettingsService(players);
@@ -107,11 +108,11 @@ final class VisibilityMenuFixture {
     }
 
     Inventory visibilityInventory(VisibilitySettingsHolder holder, int size, Component title) {
-        return inventory(holder, size);
+        Inventory result = inventory(holder, size); titles.put(result, title); return result;
     }
 
     Inventory visibleInventory(VisiblePlayersHolder holder, int size, Component title) {
-        return inventory(holder, size);
+        Inventory result = inventory(holder, size); titles.put(result, title); return result;
     }
 
     Inventory inventory(InventoryHolder holder, int size) {
@@ -188,6 +189,7 @@ final class VisibilityMenuFixture {
     }
 
     final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         final UUID id;
         final String name;
         final Player player;
@@ -205,6 +207,7 @@ final class VisibilityMenuFixture {
             this.online = online;
             this.player = proxy(Player.class, (method, arguments) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "getName" -> name;
                 case "isOnline" -> this.online;
                 case "hasPermission" -> permitted;

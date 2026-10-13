@@ -38,40 +38,40 @@ items:
     enabled: true
     slot: 0
     material: COMPASS
-    name: "<aqua>Warp Navigator</aqua>"
+    name: "<i18n:lobby.navigator.name>"
     lore:
-      - "<gray>Right-click to open the warp navigator.</gray>"
+      - "<i18n:lobby.navigator.lore>"
     head-owner: none
   visibility:
     enabled: true
     slot: 4
     material: LIME_DYE
-    name: "<green>Players: Visible</green>"
+    name: "<i18n:lobby.visibility.name>"
     lore:
-      - "<gray>Right-click to use your visibility filters.</gray>"
+      - "<i18n:lobby.visibility.lore>"
     head-owner: none
     # Presentation when the persisted master visibility switch is off. The action remains the same.
     filtered:
       material: GRAY_DYE
-      name: "<gray>Players: Filtered</gray>"
+      name: "<i18n:lobby.visibility.filtered-name>"
       lore:
-        - "<gray>Right-click to show all lobby players.</gray>"
+        - "<i18n:lobby.visibility.filtered-lore>"
       head-owner: none
   settings:
     enabled: true
     slot: 8
     material: COMPARATOR
-    name: "<yellow>Settings</yellow>"
+    name: "<i18n:lobby.settings.name>"
     lore:
-      - "<gray>Right-click to open your settings.</gray>"
+      - "<i18n:lobby.settings.lore>"
     head-owner: none
   friends:
     enabled: true
     slot: 1
     material: PLAYER_HEAD
     head-owner: self
-    name: "<aqua>Freunde"
+    name: "<i18n:lobby.friends.name>"
     lore:
-      - "<gray>Verwalte deine Freunde"
+      - "<i18n:lobby.friends.lore>"
       - ""
-      - "<yellow>Klicke zum Öffnen"
+      - "<i18n:lobby.friends.open>"

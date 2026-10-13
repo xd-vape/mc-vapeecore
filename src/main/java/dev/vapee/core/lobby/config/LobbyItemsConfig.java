@@ -90,22 +90,45 @@ public final class LobbyItemsConfig {
             if (parsed != null && parsed.isItem() && !parsed.isAir()) material = parsed;
             else warn(logger, path + ".material", "expected non-air item material; using " + material);
         }
-        Component name = fallback.name();
+        Map<String, Component> names = fallback.localizedNames();
         Object nameValue = yaml.get(path + ".name");
-        if (nameValue instanceof String text) name = parse(text, name, path + ".name", logger);
-        else if (nameValue != null) warn(logger, path + ".name", "expected MiniMessage string; using default");
-        List<Component> lore = fallback.lore();
+        if (nameValue != null) {
+            try {
+                Object values = nameValue instanceof org.bukkit.configuration.ConfigurationSection section ? section.getValues(false) : nameValue;
+                var localized = dev.vapee.core.i18n.LocalizedText.parse(values);
+                Map<String, Component> parsed = new LinkedHashMap<>();
+                localized.values().forEach((language, value) -> parsed.put(language, text(value)));
+                names = Map.copyOf(parsed);
+            } catch (RuntimeException exception) { warn(logger, path + ".name", "expected MiniMessage string or language map with en; using default"); }
+        }
+        Map<String, List<Component>> loreByLanguage = fallback.localizedLore();
         Object loreValue = yaml.get(path + ".lore");
-        if (loreValue instanceof List<?> lines && lines.stream().allMatch(String.class::isInstance)) {
-            try { lore = lines.stream().map(line -> text((String) line)).toList(); }
-            catch (RuntimeException malformed) { warn(logger, path + ".lore", "invalid MiniMessage; using default"); }
-        } else if (loreValue != null) warn(logger, path + ".lore", "expected list of MiniMessage strings; using default");
+        if (loreValue != null) {
+            try {
+                Object values = loreValue instanceof org.bukkit.configuration.ConfigurationSection section ? section.getValues(false) : loreValue;
+                var parsed = new LinkedHashMap<String, List<Component>>();
+                if (values instanceof List<?> list) parsed.put("en", lines(list));
+                else if (values instanceof Map<?, ?> map) {
+                    map.forEach((key, list) -> {
+                        if (!(key instanceof String language) || !(list instanceof List<?> entries)) throw new IllegalArgumentException("Invalid lore language map");
+                        parsed.put(language.toLowerCase(java.util.Locale.ROOT), lines(entries));
+                    });
+                } else throw new IllegalArgumentException("Invalid lore");
+                if (!parsed.containsKey("en")) throw new IllegalArgumentException("Lore requires en fallback");
+                loreByLanguage = Map.copyOf(parsed);
+            } catch (RuntimeException exception) { warn(logger, path + ".lore", "expected MiniMessage list or language map with en; using default"); }
+        }
         boolean selfHead = fallback.selfHead();
         Object headValue = yaml.get(path + ".head-owner");
         if (headValue instanceof String owner && (owner.equalsIgnoreCase("self") || owner.equalsIgnoreCase("none"))) {
             selfHead = owner.equalsIgnoreCase("self");
         } else if (headValue != null) warn(logger, path + ".head-owner", "expected self or none; using default");
-        return new Appearance(material, name, lore, selfHead);
+        return new Appearance(material, names.get("en"), loreByLanguage.get("en"), selfHead, names, loreByLanguage);
+    }
+
+    private static List<Component> lines(List<?> values) {
+        if (values.stream().anyMatch(value -> !(value instanceof String))) throw new IllegalArgumentException("Lore lines must be strings");
+        return values.stream().map(value -> text((String) value)).toList();
     }
 
     private static Component parse(String value, Component fallback, String path, Logger logger) {
@@ -115,7 +138,7 @@ public final class LobbyItemsConfig {
 
     private static Component text(String value) {
         // Standard MiniMessage supports implicit style closing, including the operator examples.
-        return TEXT.deserialize(value).decoration(TextDecoration.ITALIC, false);
+        return TEXT.deserialize(value, dev.vapee.core.i18n.Translations.tagResolver()).decoration(TextDecoration.ITALIC, false);
     }
 
     private static void warn(Logger logger, String path, String reason) {

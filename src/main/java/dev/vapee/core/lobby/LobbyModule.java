@@ -59,7 +59,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
                 plugin,
                 newLobbyService,
                 itemRegistry,
-                newLobbyConfig::getItems
+                newLobbyConfig::getItems, messageService.localization()
         );
         LobbyMessageService newLobbyMessageService = new LobbyMessageService(
                 plugin,

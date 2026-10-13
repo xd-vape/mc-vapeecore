@@ -1,5 +1,7 @@
 package dev.vapee.core.clan.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.clan.*;
 import dev.vapee.core.clan.command.ClanCommand;
 import dev.vapee.core.message.MessageService;
@@ -50,7 +52,7 @@ public final class ClanMenuListener implements Listener {
                 || event.getClickedInventory() != top) return;
         if (!player.hasPermission(ClanCommand.PERMISSION)) {
             player.closeInventory();
-            messages.send(player, Component.text("You do not have permission to use clans.", NamedTextColor.RED));
+            messages.send(player, tr("clans.menu.denied").color(NamedTextColor.RED));
             return;
         }
         int slot = event.getRawSlot();
@@ -59,7 +61,7 @@ public final class ClanMenuListener implements Listener {
             ClickType click = event.getClick();
             UUID currentClanId = clans.getClanOf(player.getUniqueId()).map(Clan::id).orElse(null);
             if (!Objects.equals(holder.clanId().orElse(null), currentClanId)) {
-                messages.send(player, Component.text("Your clan state changed. The menu was refreshed.", NamedTextColor.YELLOW));
+                messages.send(player, tr("clans.menu.changed").color(NamedTextColor.YELLOW));
                 menu.open(player, holder.view(), 0);
                 return;
             }
@@ -70,7 +72,7 @@ public final class ClanMenuListener implements Listener {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process clan menu action for player " + player.getUniqueId(), exception);
             player.closeInventory();
-            messages.send(player, Component.text("The clan data could not be updated. Please try again.", NamedTextColor.RED));
+            messages.send(player, tr("clans.menu.update-failed").color(NamedTextColor.RED));
         }
     }
 

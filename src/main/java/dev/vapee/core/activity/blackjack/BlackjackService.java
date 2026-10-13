@@ -1,5 +1,7 @@
 package dev.vapee.core.activity.blackjack;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.ActivityLeaveReason;
 import dev.vapee.core.activity.ActivityResult;
 import dev.vapee.core.activity.ActivityService;
@@ -39,7 +41,7 @@ public final class BlackjackService {
     private final TableAccess tableAccess;
     private final SeatAccess seatAccess;
     private final Function<UUID, Player> onlinePlayerLookup;
-    private final BiConsumer<Player, String> messageSender;
+    private final BiConsumer<Player, net.kyori.adventure.text.Component> messageSender;
     private final TaskScheduler taskScheduler;
     private final Supplier<BlackjackShoe> shoeSupplier;
     private final Predicate<UUID> buildModeCheck;
@@ -82,7 +84,7 @@ public final class BlackjackService {
             TableAccess tableAccess,
             SeatAccess seatAccess,
             Function<UUID, Player> onlinePlayerLookup,
-            BiConsumer<Player, String> messageSender,
+            BiConsumer<Player, net.kyori.adventure.text.Component> messageSender,
             TaskScheduler taskScheduler,
             Supplier<BlackjackShoe> shoeSupplier,
             Logger logger
@@ -106,7 +108,7 @@ public final class BlackjackService {
             TableAccess tableAccess,
             SeatAccess seatAccess,
             Function<UUID, Player> onlinePlayerLookup,
-            BiConsumer<Player, String> messageSender,
+            BiConsumer<Player, net.kyori.adventure.text.Component> messageSender,
             TaskScheduler taskScheduler,
             Supplier<BlackjackShoe> shoeSupplier,
             Predicate<UUID> buildModeCheck,
@@ -121,7 +123,7 @@ public final class BlackjackService {
             TableAccess tableAccess,
             SeatAccess seatAccess,
             Function<UUID, Player> onlinePlayerLookup,
-            BiConsumer<Player, String> messageSender,
+            BiConsumer<Player, net.kyori.adventure.text.Component> messageSender,
             TaskScheduler taskScheduler,
             Supplier<BlackjackShoe> shoeSupplier,
             Predicate<UUID> buildModeCheck,
@@ -161,7 +163,7 @@ public final class BlackjackService {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         String validatedTableId = Objects.requireNonNull(tableId, "tableId");
         if (buildModeCheck.test(validatedPlayer.getUniqueId())) {
-            send(validatedPlayer, "<red>You cannot join blackjack while build mode is enabled.</red>");
+            send(validatedPlayer, tr("blackjack.join.build"));
             return Optional.empty();
         }
         Optional<ActivitySession> currentActivity = activityService.getSessionForPlayer(validatedPlayer.getUniqueId());
@@ -171,34 +173,34 @@ public final class BlackjackService {
                 if (blackjackSession.getVenue().id().equals(validatedTableId)) {
                     return Optional.of(blackjackSession);
                 }
-                send(validatedPlayer, "<red>You are already seated at another blackjack table.</red>");
+                send(validatedPlayer, tr("blackjack.join.other-table"));
                 return Optional.empty();
             }
-            send(validatedPlayer, "<red>You are already participating in another activity.</red>");
+            send(validatedPlayer, tr("blackjack.join.other-activity"));
             return Optional.empty();
         }
 
         Optional<BlackjackTableDefinition> optionalDefinition = tableAccess.getDefinition(validatedTableId);
         Optional<BlackjackSession> optionalSession = tableAccess.getSession(validatedTableId);
         if (optionalDefinition.isEmpty() || optionalSession.isEmpty()) {
-            send(validatedPlayer, "<red>This blackjack table is not available.</red>");
+            send(validatedPlayer, tr("blackjack.join.unavailable"));
             return Optional.empty();
         }
         BlackjackTableDefinition definition = optionalDefinition.get();
         BlackjackSession session = optionalSession.get();
         if (session.getState() != ActivityState.AVAILABLE) {
-            send(validatedPlayer, "<red>This blackjack round is already in progress.</red>");
+            send(validatedPlayer, tr("blackjack.join.running"));
             return Optional.empty();
         }
         if (session.getParticipantCount() >= definition.capacity()) {
-            send(validatedPlayer, "<red>This blackjack table is full.</red>");
+            send(validatedPlayer, tr("blackjack.join.full"));
             return Optional.empty();
         }
         boolean reserved = seatNumber == null
                 ? seatAccess.reserveLowestFreeSeat(definition, validatedPlayer.getUniqueId())
                 : seatAccess.reserveSeat(definition, seatNumber, validatedPlayer.getUniqueId());
         if (!reserved) {
-            send(validatedPlayer, "<red>This blackjack table is full.</red>");
+            send(validatedPlayer, tr("blackjack.join.full"));
             return Optional.empty();
         }
         ActivityResult joinResult = activityService.joinSession(validatedPlayer, session.getSessionId());
@@ -218,7 +220,7 @@ public final class BlackjackService {
                     + " at blackjack table '" + validatedTableId + "'.", exception);
             activityService.leaveCurrentSession(validatedPlayer, ActivityLeaveReason.ERROR);
             seatAccess.releaseSeat(validatedPlayer.getUniqueId());
-            send(validatedPlayer, "<red>You could not be seated at this blackjack table.</red>");
+            send(validatedPlayer, tr("blackjack.join.failed"));
             return Optional.empty();
         }
         refresh(session);
@@ -254,7 +256,7 @@ public final class BlackjackService {
         }
         ActivityResult result = activityService.activateSession(session.getSessionId());
         if (result != ActivityResult.SUCCESS) {
-            send(validatedPlayer, "<red>The blackjack round could not be started.</red>");
+            send(validatedPlayer, tr("blackjack.round.start-failed"));
         }
         return result;
     }
@@ -300,7 +302,7 @@ public final class BlackjackService {
         BlackjackPlayerRound playerRound = session.requirePlayerRound(validatedPlayer.getUniqueId());
         if (playerRound.isFinished() || playerRound.isDoubledDown()
                 || playerRound.getHand().size() != 2 || playerRound.getHand().isBlackjack()) {
-            send(validatedPlayer, "<yellow>You can only double on your first two cards.</yellow>");
+            send(validatedPlayer, tr("blackjack.round.double-invalid"));
             return ActivityResult.INVALID_STATE;
         }
         session.cancelTurnTimeout();
@@ -449,7 +451,7 @@ public final class BlackjackService {
         if (getSessionForPlayer(player).isEmpty()) {
             return ActivityResult.NOT_PARTICIPANT;
         }
-        send(player, "<yellow>It is not your turn.</yellow>");
+        send(player, tr("blackjack.round.not-turn"));
         return ActivityResult.INVALID_STATE;
     }
 
@@ -497,7 +499,7 @@ public final class BlackjackService {
 
             Player player = onlinePlayerLookup.apply(expectedPlayerId);
             if (player != null) {
-                send(player, "<yellow>Your turn timed out. You automatically stood.</yellow>");
+                send(player, tr("blackjack.round.timeout"));
             }
             session.requirePlayerRound(expectedPlayerId).finish();
             advanceTurn(session);
@@ -507,7 +509,7 @@ public final class BlackjackService {
         if (announce) {
             Player player = onlinePlayerLookup.apply(expectedPlayerId);
             if (player != null) {
-                send(player, "<aqua>It is your turn. You have 20 seconds.</aqua>");
+                send(player, tr("blackjack.round.turn"));
             }
         }
     }
@@ -587,26 +589,26 @@ public final class BlackjackService {
     }
 
     private void sendJoinFailure(Player player, ActivityResult result) {
-        String message = switch (result) {
-            case PLAYER_ALREADY_IN_ACTIVITY -> "<red>You are already participating in another activity.</red>";
-            case SESSION_NOT_AVAILABLE, INVALID_STATE -> "<red>This blackjack round is already in progress.</red>";
-            case SESSION_FULL -> "<red>This blackjack table is full.</red>";
-            default -> "<red>This blackjack table is currently unavailable.</red>";
+        net.kyori.adventure.text.Component message = switch (result) {
+            case PLAYER_ALREADY_IN_ACTIVITY -> tr("blackjack.join.other-activity");
+            case SESSION_NOT_AVAILABLE, INVALID_STATE -> tr("blackjack.join.running");
+            case SESSION_FULL -> tr("blackjack.join.full");
+            default -> tr("blackjack.join.current-unavailable");
         };
         send(player, message);
     }
 
-    private void send(Player player, String message) {
+    private void send(Player player, net.kyori.adventure.text.Component message) {
         messageSender.accept(Objects.requireNonNull(player, "player"), Objects.requireNonNull(message, "message"));
     }
 
-    private String outcomeMessage(BlackjackOutcome outcome) {
+    private net.kyori.adventure.text.Component outcomeMessage(BlackjackOutcome outcome) {
         return switch (outcome) {
-            case BLACKJACK -> "<gold>Blackjack!</gold>";
-            case WIN -> "<green>You win.</green>";
-            case PUSH -> "<yellow>Push.</yellow>";
-            case LOSS -> "<red>Dealer wins.</red>";
-            case BUST -> "<red>Bust.</red>";
+            case BLACKJACK -> tr("blackjack.result.BLACKJACK");
+            case WIN -> tr("blackjack.result.WIN");
+            case PUSH -> tr("blackjack.result.PUSH");
+            case LOSS -> tr("blackjack.result.LOSS");
+            case BUST -> tr("blackjack.result.BUST");
         };
     }
 

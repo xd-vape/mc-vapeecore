@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
@@ -93,11 +95,11 @@ public final class FlyCommand implements TabExecutor {
         Player target;
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to change your flight state.");
+                error(sender, tr("utility.fly.denied-self"));
                 return true;
             }
             target = player;
@@ -112,8 +114,8 @@ public final class FlyCommand implements TabExecutor {
             String permission = self ? PERMISSION : OTHERS_PERMISSION;
             if (!sender.hasPermission(permission)) {
                 error(sender, self
-                        ? "You do not have permission to change your flight state."
-                        : "You do not have permission to change another player's flight state.");
+                        ? tr("utility.fly.denied-self")
+                        : tr("utility.fly.denied-other"));
                 return true;
             }
         }
@@ -122,30 +124,28 @@ public final class FlyCommand implements TabExecutor {
 
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
-                    ? "You cannot use this command while participating in an activity."
-                    : "That player is participating in an activity.");
+                    ? tr("common.activity-self")
+                    : tr("common.activity-target"));
             return true;
         }
         if (buildCheck.test(target.getUniqueId())) {
-            error(sender, "Flight is controlled by build mode while the player is in BUILD.");
+            error(sender, tr("utility.fly.build"));
             return true;
         }
         GameMode gameMode = target.getGameMode();
         if (gameMode == GameMode.CREATIVE || gameMode == GameMode.SPECTATOR) {
             utilityService.clearManagedFlight(target);
-            error(sender, "Flight is controlled by the player's current game mode.");
+            error(sender, tr("utility.fly.game-mode"));
             return true;
         }
 
         boolean enabled = utilityService.toggleFlight(target);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component message = Component.text("Flight " + (enabled ? "enabled" : "disabled"), NamedTextColor.GREEN);
-        if (!self) {
-            message = message.append(Component.text(" for ", NamedTextColor.GREEN))
-                    .append(Component.text(target.getName(), NamedTextColor.WHITE));
-        }
-        messageSender.accept(sender, message.append(Component.text(".", NamedTextColor.GREEN)));
+        Component state = tr(enabled ? "common.enabled-lower" : "common.disabled-lower");
+        Component message = self ? tr("utility.fly.self", java.util.Map.of("state", state))
+                : tr("utility.fly.other", java.util.Map.of("state", state, "player", Component.text(target.getName(), NamedTextColor.WHITE)));
+        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -170,19 +170,17 @@ public final class FlyCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/fly [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

@@ -1,5 +1,7 @@
 package dev.vapee.core.utility;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
@@ -42,13 +44,17 @@ public final class InvseeService implements Listener {
     private final BooleanSupplier primaryThreadCheck;
     private final Function<UUID, Player> playerLookup;
     private final InventoryFactory inventoryFactory;
+    private final java.util.function.BiFunction<Player, Component, Component> localizer;
     private final Map<UUID, ActiveView> activeViews = new HashMap<>();
 
     public InvseeService(JavaPlugin plugin) {
+        this(plugin, new dev.vapee.core.message.MessageService(() -> "", dev.vapee.core.i18n.LocalizationService.bundled(plugin.getLogger())));
+    }
+    public InvseeService(JavaPlugin plugin, dev.vapee.core.message.MessageService messages) {
         this(
                 Objects.requireNonNull(plugin, "plugin").getServer()::isPrimaryThread,
                 plugin.getServer()::getPlayer,
-                (holder, size, title) -> plugin.getServer().createInventory(holder, size, title)
+                (holder, size, title) -> plugin.getServer().createInventory(holder, size, title), messages::localize
         );
     }
 
@@ -57,6 +63,12 @@ public final class InvseeService implements Listener {
             Function<UUID, Player> playerLookup,
             InventoryFactory inventoryFactory
     ) {
+        this(primaryThreadCheck, playerLookup, inventoryFactory,
+                dev.vapee.core.i18n.LocalizationService.bundled(java.util.logging.Logger.getLogger(InvseeService.class.getName()))::render);
+    }
+    InvseeService(BooleanSupplier primaryThreadCheck, Function<UUID, Player> playerLookup,
+                  InventoryFactory inventoryFactory, java.util.function.BiFunction<Player, Component, Component> localizer) {
+        this.localizer = Objects.requireNonNull(localizer);
         this.primaryThreadCheck = Objects.requireNonNull(primaryThreadCheck, "primaryThreadCheck");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
@@ -70,9 +82,8 @@ public final class InvseeService implements Listener {
         UUID viewerId = validatedViewer.getUniqueId();
         UUID targetId = validatedTarget.getUniqueId();
         InvseeInventoryHolder holder = new InvseeInventoryHolder(viewerId, targetId);
-        Component title = Component.text("Inventory: ", NamedTextColor.DARK_GRAY)
-                .append(Component.text(validatedTarget.getName(), NamedTextColor.WHITE))
-                .append(Component.text(" (read-only)", NamedTextColor.GRAY));
+        Component title = localizer.apply(validatedViewer, tr("utility.invsee.title", Map.of("player", Component.text(validatedTarget.getName(), NamedTextColor.WHITE)))
+                .color(NamedTextColor.DARK_GRAY));
         Inventory inventory = inventoryFactory.create(holder, INVENTORY_SIZE, title);
         holder.bindInventory(inventory);
         copySnapshot(validatedTarget.getInventory(), inventory);

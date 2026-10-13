@@ -61,7 +61,7 @@ public final class UtilityModule implements CoreModule {
         logger = plugin.getLogger();
         serviceFactory = () -> new UtilityService(plugin);
         listenerFactory = service -> new UtilityListener(plugin, service);
-        invseeFactory = () -> new InvseeService(plugin);
+        invseeFactory = () -> new InvseeService(plugin, messageService);
         commandRegistration = (newUtilityService, newInvseeService, register) -> {
             LobbyService lobbyService = lobbyModule.getLobbyService();
             LobbyPlayerStateService lobbyPlayerStateService = lobbyModule.getLobbyPlayerStateService();

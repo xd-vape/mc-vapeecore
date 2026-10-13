@@ -157,13 +157,13 @@ public final class PresentationRenderer {
         Component renderedTablistFooter = renderMultiline(currentState.tablistFooter(), placeholders);
 
         return new RenderedPresentation(
-                renderedScoreboardTitle,
-                renderedScoreboardLines,
-                renderedTablistName,
-                renderedTablistHeader,
-                renderedTablistFooter,
-                renderTemplate(currentState.nametagPrefix(), placeholders),
-                renderTemplate(currentState.nametagSuffix(), placeholders),
+                messageService.localize(player, renderedScoreboardTitle),
+                renderedScoreboardLines.stream().map(line -> messageService.localize(player, line)).toList(),
+                messageService.localization().render(Locale.ENGLISH, renderedTablistName),
+                messageService.localize(player, renderedTablistHeader),
+                messageService.localize(player, renderedTablistFooter),
+                messageService.localization().render(Locale.ENGLISH, renderTemplate(currentState.nametagPrefix(), placeholders)),
+                messageService.localization().render(Locale.ENGLISH, renderTemplate(currentState.nametagSuffix(), placeholders)),
                 nativeTeamColor(rankInfo)
         );
     }

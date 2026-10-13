@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
@@ -31,7 +33,7 @@ public final class BuildCommand implements TabExecutor {
     private final BuildStateAccess buildStateAccess;
     private final Predicate<UUID> activityCheck;
     private final Consumer<Player> managedFlightCleanup;
-    private final BiConsumer<CommandSender, String> messageSender;
+    private final BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender;
 
     public BuildCommand(
             JavaPlugin plugin,
@@ -57,7 +59,7 @@ public final class BuildCommand implements TabExecutor {
             BuildStateAccess buildStateAccess,
             Predicate<UUID> activityCheck,
             Consumer<Player> managedFlightCleanup,
-            BiConsumer<CommandSender, String> messageSender
+            BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender
     ) {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.lobbyWorldCheck = Objects.requireNonNull(lobbyWorldCheck, "lobbyWorldCheck");
@@ -75,46 +77,46 @@ public final class BuildCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            send(sender, "<red>This command can only be used by a player.</red>");
+            send(sender, tr("utility.build.player-only"));
             return true;
         }
         if (!player.hasPermission(PERMISSION)) {
-            send(player, "<red>You do not have permission to use build mode.</red>");
+            send(player, tr("utility.build.denied"));
             return true;
         }
         if (args.length != 0) {
-            send(player, "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <aqua>/build</aqua>");
+            send(player, tr("utility.build.usage"));
             return true;
         }
 
         try {
             if (buildStateAccess.isBuildMode(player.getUniqueId())) {
                 buildStateAccess.exitBuildMode(player);
-                send(player, "<green>Build mode disabled.</green>");
+                send(player, tr("utility.build.disabled"));
                 return true;
             }
             if (!lobbyWorldCheck.test(player)) {
-                send(player, "<red>Build mode can only be enabled in the lobby world.</red>");
+                send(player, tr("utility.build.world"));
                 return true;
             }
             if (activityCheck.test(player.getUniqueId())) {
                 send(
                         player,
-                        "<red>You cannot enter build mode while participating in an activity.</red>"
+                        tr("utility.build.activity")
                 );
                 return true;
             }
 
             managedFlightCleanup.accept(player);
             buildStateAccess.enterBuildMode(player);
-            send(player, "<green>Build mode enabled.</green>");
+            send(player, tr("utility.build.enabled"));
         } catch (RuntimeException exception) {
             logger.log(
                     Level.SEVERE,
                     "Could not toggle lobby build mode for " + player.getUniqueId() + ".",
                     exception
             );
-            send(player, "<red>Build mode could not be changed. Check the server log.</red>");
+            send(player, tr("utility.build.failed"));
         }
         return true;
     }
@@ -129,7 +131,7 @@ public final class BuildCommand implements TabExecutor {
         return List.of();
     }
 
-    private void send(CommandSender sender, String message) {
+    private void send(CommandSender sender, net.kyori.adventure.text.Component message) {
         messageSender.accept(sender, message);
     }
 

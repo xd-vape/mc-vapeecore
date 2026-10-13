@@ -24,6 +24,7 @@ public final class LobbyItemService {
     public static final int SETTINGS_SLOT = 8;
 
     private final JavaPlugin plugin;
+    private final dev.vapee.core.i18n.LocalizationService localization;
     private final LobbyService lobbyService;
     private final LobbyItemRegistry registry;
     private final NamespacedKey lobbyItemKey;
@@ -31,6 +32,11 @@ public final class LobbyItemService {
 
     public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService, LobbyItemRegistry registry,
                             Supplier<Map<String, LobbyItemDefinition>> definitions) {
+        this(plugin, lobbyService, registry, definitions, dev.vapee.core.i18n.LocalizationService.bundled(java.util.logging.Logger.getLogger(LobbyItemService.class.getName())));
+    }
+    public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService, LobbyItemRegistry registry,
+                            Supplier<Map<String, LobbyItemDefinition>> definitions, dev.vapee.core.i18n.LocalizationService localization) {
+        this.localization = Objects.requireNonNull(localization);
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
         this.registry = Objects.requireNonNull(registry, "registry");
@@ -139,8 +145,8 @@ public final class LobbyItemService {
         var appearance = Objects.requireNonNull(entry.presentation().apply(player, definition));
         ItemStack item = new ItemStack(appearance.material());
         ItemMeta meta = item.getItemMeta();
-        meta.displayName(appearance.name());
-        meta.lore(appearance.lore());
+        meta.displayName(localization.render(player, appearance.name(localization.locale(player))));
+        meta.lore(appearance.lore(localization.locale(player)).stream().map(line -> localization.render(player, line)).toList());
         if (appearance.selfHead() && meta instanceof SkullMeta skull) {
             // Uses the already available online-player profile; never completes/fetches profiles or textures.
             skull.setPlayerProfile(player.getPlayerProfile());

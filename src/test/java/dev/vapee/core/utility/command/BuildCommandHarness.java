@@ -30,7 +30,7 @@ public final class BuildCommandHarness {
                 state,
                 ignored -> participating.get(),
                 ignored -> flightCleanupCount[0]++,
-                (sender, message) -> messages.add(message)
+                (sender, message) -> messages.add(dev.vapee.core.i18n.I18nTestSupport.text(sender, message))
         );
 
         CommandSender console = proxy(CommandSender.class, (method, arguments) -> defaultValue(method.getReturnType()));

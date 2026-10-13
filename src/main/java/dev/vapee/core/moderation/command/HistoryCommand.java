@@ -1,5 +1,7 @@
 package dev.vapee.core.moderation.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.moderation.*;
 import net.kyori.adventure.text.Component;
@@ -16,11 +18,11 @@ public final class HistoryCommand extends AbstractModerationCommand {
 
     @Override protected boolean validArguments(CommandSender sender, String[] args) {
         if (args.length == 0 || args.length > 2) {
-            usage(sender, args.length == 0 ? "Missing player." : "Too many arguments."); return false;
+            usage(sender, args.length == 0 ? tr("common.missing-player") : tr("moderation.too-many-args")); return false;
         }
         try { page(args); return true; }
         catch (IllegalArgumentException exception) {
-            usage(sender, "Page must be a positive whole number."); return false;
+            usage(sender, tr("moderation.page-invalid")); return false;
         }
     }
 
@@ -34,24 +36,24 @@ public final class HistoryCommand extends AbstractModerationCommand {
 
     @Override protected void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
         List<ModerationRecord> history = context.service().getHistory(target.uniqueId());
-        if (history.isEmpty()) { context.send(sender, "No moderation history for " + target.name() + "."); return; }
+        if (history.isEmpty()) { context.send(sender, tr("moderation.history.empty", java.util.Map.of("player", Component.text(target.name())))); return; }
         int pages = (history.size() - 1) / PAGE_SIZE + 1;
         int page = page(args);
-        if (page > pages) { context.send(sender, "Page does not exist. Available pages: 1–" + pages + "."); return; }
-        context.send(sender, "Moderation history for " + target.name() + " • Page " + page + "/" + pages);
+        if (page > pages) { context.send(sender, tr("moderation.history.page-missing", java.util.Map.of("pages", Component.text(pages)))); return; }
+        context.send(sender, tr("moderation.history.heading", java.util.Map.of("player", Component.text(target.name()), "page", Component.text(page), "pages", Component.text(pages))));
         int offset = (page - 1) * PAGE_SIZE;
         Instant now = context.clock().instant();
         for (ModerationRecord record : history.subList(offset, offset + Math.min(history.size() - offset, PAGE_SIZE))) {
             context.messages().send(sender, ModerationComponents.historyEntry(record, now, context::actorName));
         }
         Component navigation = Component.empty();
-        if (page > 1) navigation = navigation.append(navigation("Previous", target, page - 1));
-        if (page < pages) navigation = navigation.append(Component.space()).append(navigation("Next", target, page + 1));
+        if (page > 1) navigation = navigation.append(navigation(tr("moderation.history.previous"), target, page - 1));
+        if (page < pages) navigation = navigation.append(Component.space()).append(navigation(tr("moderation.history.next"), target, page + 1));
         if (pages > 1) context.messages().send(sender, navigation);
     }
 
-    private Component navigation(String text, PlayerIdentity target, int page) {
-        return Component.text(text, NamedTextColor.AQUA)
+    private Component navigation(Component text, PlayerIdentity target, int page) {
+        return text.color(NamedTextColor.AQUA)
                 .clickEvent(ClickEvent.suggestCommand("/history " + target.uniqueId() + " " + page));
     }
 }

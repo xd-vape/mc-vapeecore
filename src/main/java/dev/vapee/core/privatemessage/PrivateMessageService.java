@@ -1,5 +1,7 @@
 package dev.vapee.core.privatemessage;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.privatemessage.config.PrivateMessageConfig;
@@ -25,6 +27,8 @@ import java.util.logging.Logger;
 public final class PrivateMessageService {
 
     private final Server server;
+    private final dev.vapee.core.i18n.LocalizationService localization;
+    private final java.util.function.BiConsumer<Player, Component> delivery;
     private final PlayerSettingsService playerSettingsService;
     private final SocialService socialService;
     private final TemplateDeserializer templateDeserializer;
@@ -57,7 +61,7 @@ public final class PrivateMessageService {
                 Objects.requireNonNull(messageService, "messageService")::deserialize,
                 logger,
                 Objects.requireNonNull(privateMessageConfig, "privateMessageConfig").getConfigFile(),
-                privateMessageConfig.getState(), senderMuted
+                privateMessageConfig.getState(), senderMuted, messageService.localization(), messageService::sendRaw
         );
     }
 
@@ -77,6 +81,15 @@ public final class PrivateMessageService {
     PrivateMessageService(Server server, PlayerSettingsService playerSettingsService, SocialService socialService,
                           TemplateDeserializer templateDeserializer, Logger logger, Path configFile,
                           PrivateMessageConfig.State initialConfigState, Predicate<UUID> senderMuted) {
+        this(server, playerSettingsService, socialService, templateDeserializer, logger, configFile, initialConfigState, senderMuted,
+                dev.vapee.core.i18n.LocalizationService.bundled(logger), null);
+    }
+    PrivateMessageService(Server server, PlayerSettingsService playerSettingsService, SocialService socialService,
+                          TemplateDeserializer templateDeserializer, Logger logger, Path configFile,
+                          PrivateMessageConfig.State initialConfigState, Predicate<UUID> senderMuted,
+                          dev.vapee.core.i18n.LocalizationService localization, java.util.function.BiConsumer<Player, Component> delivery) {
+        this.localization = Objects.requireNonNull(localization);
+        this.delivery = delivery == null ? (player, component) -> player.sendMessage(localization.render(player, component)) : delivery;
         this.server = Objects.requireNonNull(server, "server");
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.socialService = Objects.requireNonNull(socialService, "socialService");
@@ -130,15 +143,15 @@ public final class PrivateMessageService {
         Component recipientName = Objects.requireNonNull(validatedRecipient.displayName(), "recipient display name");
         RenderedMessages renderedMessages = renderMessages(
                 currentState,
-                senderUniqueId,
-                recipientUniqueId,
+                validatedSender,
+                validatedRecipient,
                 senderName,
                 recipientName,
                 message
         );
 
-        validatedSender.sendMessage(renderedMessages.outgoing());
-        validatedRecipient.sendMessage(renderedMessages.incoming());
+        delivery.accept(validatedSender, renderedMessages.outgoing());
+        delivery.accept(validatedRecipient, renderedMessages.incoming());
 
         lastConversationPartners.put(senderUniqueId, recipientUniqueId);
         lastConversationPartners.put(recipientUniqueId, senderUniqueId);
@@ -182,12 +195,12 @@ public final class PrivateMessageService {
                 validatedState.enabled(),
                 validateTemplate(
                         "format.outgoing",
-                        validatedState.outgoingFormat(),
+                        validatedState.outgoingText(),
                         PrivateMessageConfig.DEFAULT_OUTGOING_FORMAT
                 ),
                 validateTemplate(
                         "format.incoming",
-                        validatedState.incomingFormat(),
+                        validatedState.incomingText(),
                         PrivateMessageConfig.DEFAULT_INCOMING_FORMAT
                 )
         );
@@ -216,6 +229,11 @@ public final class PrivateMessageService {
         return validatedMessage;
     }
 
+    private dev.vapee.core.i18n.LocalizedText validateTemplate(String path, dev.vapee.core.i18n.LocalizedText texts, String fallback) {
+        var validated = new java.util.LinkedHashMap<String, String>();
+        texts.values().forEach((language, value) -> validated.put(language, validateTemplate(path + "." + language, value, fallback)));
+        return new dev.vapee.core.i18n.LocalizedText(validated);
+    }
     private String validateTemplate(String path, String template, String fallback) {
         try {
             strictMiniMessage.deserialize(template, emptyPlaceholders());
@@ -233,8 +251,8 @@ public final class PrivateMessageService {
 
     private RenderedMessages renderMessages(
             RuntimeState currentState,
-            UUID senderUniqueId,
-            UUID recipientUniqueId,
+            Player sender,
+            Player recipient,
             Component senderName,
             Component recipientName,
             Component message
@@ -242,18 +260,20 @@ public final class PrivateMessageService {
         TagResolver placeholders = TagResolver.resolver(
                 Placeholder.component("sender", senderName),
                 Placeholder.component("recipient", recipientName),
-                Placeholder.component("message", message)
+                Placeholder.component("message", message),
+                Placeholder.component("outgoing", tr("private-messages.outgoing", Map.of("recipient", recipientName, "message", message))),
+                Placeholder.component("incoming", tr("private-messages.incoming", Map.of("sender", senderName, "message", message)))
         );
 
         try {
             return new RenderedMessages(
-                    templateDeserializer.deserialize(currentState.outgoingFormat(), placeholders),
-                    templateDeserializer.deserialize(currentState.incomingFormat(), placeholders)
+                    templateDeserializer.deserialize(currentState.outgoingText().resolve(localization.locale(sender)), placeholders),
+                    templateDeserializer.deserialize(currentState.incomingText().resolve(localization.locale(recipient)), placeholders)
             );
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
-                    "Could not render a private message from " + senderUniqueId + " to " + recipientUniqueId
+                    "Could not render a private message from " + sender.getUniqueId() + " to " + recipient.getUniqueId()
                             + "; using safe component fallbacks.",
                     exception
             );
@@ -262,22 +282,16 @@ public final class PrivateMessageService {
     }
 
     private RenderedMessages fallback(Component senderName, Component recipientName, Component message) {
-        Component outgoing = Component.text("[You → ", NamedTextColor.DARK_GRAY)
-                .append(recipientName)
-                .append(Component.text("] ", NamedTextColor.DARK_GRAY))
-                .append(message.color(NamedTextColor.WHITE));
-        Component incoming = Component.text("[", NamedTextColor.DARK_GRAY)
-                .append(senderName)
-                .append(Component.text(" → You] ", NamedTextColor.DARK_GRAY))
-                .append(message.color(NamedTextColor.WHITE));
-        return new RenderedMessages(outgoing, incoming);
+        return new RenderedMessages(tr("private-messages.outgoing", Map.of("recipient", recipientName, "message", message)),
+                tr("private-messages.incoming", Map.of("sender", senderName, "message", message)));
     }
 
     private TagResolver emptyPlaceholders() {
         return TagResolver.resolver(
                 Placeholder.component("sender", Component.empty()),
                 Placeholder.component("recipient", Component.empty()),
-                Placeholder.component("message", Component.empty())
+                Placeholder.component("message", Component.empty()),
+                Placeholder.component("outgoing", Component.empty()), Placeholder.component("incoming", Component.empty())
         );
     }
 
@@ -286,12 +300,13 @@ public final class PrivateMessageService {
         Component deserialize(String template, TagResolver placeholders);
     }
 
-    public record RuntimeState(boolean enabled, String outgoingFormat, String incomingFormat) {
-
-        public RuntimeState {
-            Objects.requireNonNull(outgoingFormat, "outgoingFormat");
-            Objects.requireNonNull(incomingFormat, "incomingFormat");
+    public record RuntimeState(boolean enabled, dev.vapee.core.i18n.LocalizedText outgoingText, dev.vapee.core.i18n.LocalizedText incomingText) {
+        public RuntimeState { Objects.requireNonNull(outgoingText); Objects.requireNonNull(incomingText); }
+        public RuntimeState(boolean enabled, String outgoing, String incoming) {
+            this(enabled, dev.vapee.core.i18n.LocalizedText.literal(outgoing), dev.vapee.core.i18n.LocalizedText.literal(incoming));
         }
+        public String outgoingFormat() { return outgoingText.english(); }
+        public String incomingFormat() { return incomingText.english(); }
     }
 
     private record RenderedMessages(Component outgoing, Component incoming) {

@@ -1,5 +1,7 @@
 package dev.vapee.core.settings.visibility;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.lobby.item.LobbyItemService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.settings.command.SettingsCommand;
@@ -73,7 +75,7 @@ public final class VisibilitySettingsListener implements Listener {
         if (!player.hasPermission(SettingsCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
             if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
-            messages.send(player, "<red>You do not have permission to use settings.</red>");
+            messages.send(player, tr("settings.use-denied"));
             return;
         }
         if (event.getClickedInventory() != top) return;
@@ -90,7 +92,7 @@ public final class VisibilitySettingsListener implements Listener {
             case REFRESH -> menu.refreshActive(player.getUniqueId());
             case MANAGE_PLAYERS -> visiblePlayersMenu.open(player);
             case GAME_PARTICIPANTS -> messages.send(player,
-                    "<yellow>This visibility option will become available with game integration.</yellow>");
+                    tr("visibility.game-future"));
             case MASTER ->
                     toggle(player, Toggle.MASTER);
             case FRIENDS ->
@@ -124,7 +126,7 @@ public final class VisibilitySettingsListener implements Listener {
             };
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save visibility settings for " + owner + ".", exception);
-            messages.send(player, "<red>Your visibility setting could not be saved. Please try again.</red>");
+            messages.send(player, tr("visibility.save-failed"));
             menu.refreshActive(player.getUniqueId());
             return;
         }
@@ -140,7 +142,7 @@ public final class VisibilitySettingsListener implements Listener {
             logger.log(Level.WARNING, "Could not immediately apply visibility settings for " + owner + ".",
                     exception);
             messages.send(player,
-                    "<yellow>Your setting was saved but could not be applied immediately.</yellow>");
+                    tr("visibility.apply-failed"));
         }
         menu.refreshActive(player.getUniqueId());
         soundFeedback.accept(player);
@@ -171,7 +173,7 @@ public final class VisibilitySettingsListener implements Listener {
 
     private void unavailable(Player player) {
         player.closeInventory();
-        messages.send(player, "<red>Your player profile is not available.</red>");
+        messages.send(player, tr("common.profile-unavailable.message"));
     }
 
     private static void playFeedbackSound(Player player, PlayerSettingsService settings, Logger logger) {

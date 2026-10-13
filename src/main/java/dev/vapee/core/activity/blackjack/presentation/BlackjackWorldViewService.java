@@ -1,5 +1,7 @@
 package dev.vapee.core.activity.blackjack.presentation;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.ActivityState;
 import dev.vapee.core.activity.blackjack.BlackjackPlayerRoundView;
 import dev.vapee.core.activity.blackjack.BlackjackOutcome;
@@ -41,6 +43,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
     private static final int DEALER_CARDS_PER_LINE = 4;
 
     private final JavaPlugin plugin;
+    private final dev.vapee.core.i18n.LocalizationService localization;
     private final WorldDisplayService displayService;
     private final BlackjackTableService tableService;
     private final BlackjackService blackjackService;
@@ -48,6 +51,11 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
 
     public BlackjackWorldViewService(JavaPlugin plugin, WorldDisplayService displayService,
                                      BlackjackTableService tableService, BlackjackService blackjackService) {
+        this(plugin, displayService, tableService, blackjackService, dev.vapee.core.i18n.LocalizationService.bundled(java.util.logging.Logger.getLogger(BlackjackWorldViewService.class.getName())));
+    }
+    public BlackjackWorldViewService(JavaPlugin plugin, WorldDisplayService displayService, BlackjackTableService tableService,
+                                     BlackjackService blackjackService, dev.vapee.core.i18n.LocalizationService localization) {
+        this.localization = Objects.requireNonNull(localization);
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.displayService = Objects.requireNonNull(displayService, "displayService");
         this.tableService = Objects.requireNonNull(tableService, "tableService");
@@ -149,12 +157,12 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                 displayService.remove(key);
             }
             if (displayService.getHandle(key).isPresent()) {
-                boolean alive = displayService.updateText(key, spec.text());
+                boolean alive = displayService.updateText(key, localization.render(java.util.Locale.ENGLISH, spec.text()));
                 if (alive) alive = displayService.teleport(key, spec.location());
                 if (alive) continue;
             }
             if (displayService.getHandle(key).isEmpty()) {
-                displayService.createText(key, spec.location(), spec.text(), display -> configure(display, spec));
+                displayService.createText(key, spec.location(), localization.render(java.util.Locale.ENGLISH, spec.text()), display -> configure(display, spec));
             }
         }
         Map<String, DisplayStyle> styles = new HashMap<>();
@@ -176,22 +184,15 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
     }
 
     private Component statusText(BlackjackSession session) {
-        String detail;
-        if (session.getState() == ActivityState.AVAILABLE) {
-            detail = idleStatusText(session.getParticipantCount(), blackjackService.getTableCapacity(session));
-        } else if (session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS) {
-            detail = session.getCurrentTurnPlayer()
-                    .map(playerId -> blackjackService.getPlayerName(playerId) + "'s turn")
-                    .orElse("Player turn");
-        } else if (session.getRoundPhase() == BlackjackRoundPhase.DEALER_TURN) {
-            detail = "Dealer";
-        } else if (session.getRoundPhase() == BlackjackRoundPhase.SETTLED) {
-            detail = "Round complete";
-        } else {
-            detail = "Table available";
-        }
-        String status = "Blackjack\n" + detail;
-        return Component.text(status, NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true);
+        Component detail;
+        if (session.getState() == ActivityState.AVAILABLE) detail = Component.text(idleStatusText(session.getParticipantCount(), blackjackService.getTableCapacity(session)));
+        else if (session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS) detail = session.getCurrentTurnPlayer()
+                .map(playerId -> tr("blackjack.world.player-turn", Map.of("player", Component.text(blackjackService.getPlayerName(playerId)))))
+                .orElseGet(() -> tr("blackjack.world.player-turn-empty"));
+        else if (session.getRoundPhase() == BlackjackRoundPhase.DEALER_TURN) detail = tr("blackjack.world.dealer");
+        else if (session.getRoundPhase() == BlackjackRoundPhase.SETTLED) detail = tr("blackjack.state.complete");
+        else detail = tr("blackjack.state.available");
+        return Component.text("Blackjack").append(Component.newline()).append(detail).color(NamedTextColor.GOLD).decoration(TextDecoration.BOLD, true);
     }
 
     private static String idleStatusText(int participants, int capacity) {
@@ -242,8 +243,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
                 ? cards.getFirst().rank().getValue()
                 : validated.value();
         return output.append(Component.newline())
-                .append(Component.text("Dealer • ", NamedTextColor.GOLD))
-                .append(Component.text(value, NamedTextColor.WHITE));
+                .append(tr("blackjack.world.dealer-label", Map.of("value", Component.text(value, NamedTextColor.WHITE))).color(NamedTextColor.GOLD));
     }
 
     private Component resultText(BlackjackOutcome outcome) {
@@ -253,7 +253,7 @@ public final class BlackjackWorldViewService implements BlackjackTableService.Li
             case PUSH -> NamedTextColor.YELLOW;
             case LOSS, BUST -> NamedTextColor.RED;
         };
-        return Component.text(outcome.name(), color).decoration(TextDecoration.BOLD, true);
+        return tr("blackjack.world.outcome." + outcome.name()).color(color).decoration(TextDecoration.BOLD, true);
     }
 
     private static Color background(DisplayStyle style) {

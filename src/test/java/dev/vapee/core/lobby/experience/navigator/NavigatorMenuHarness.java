@@ -47,7 +47,7 @@ public final class NavigatorMenuHarness {
         }
         check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)).isEmpty() && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)) == null && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT)) != null,
                 "first page shows only next control");
-        check(plain(spec(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals((count - 1) + " destinations.") && text(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).equals("Page 1/2"),
+        check(plain(spec(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals((count - 1) + " destinations.") && text(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).equals("Page 1 / 2"),
                 "page count includes only visible destinations");
         f.click(player, first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT), ClickType.RIGHT);
         Inventory second = player.open;

@@ -81,7 +81,7 @@ public final class ModerationModule implements CoreModule {
         try {
             loaded = new ModerationService(repositoryFactory.get(), clock, idSupplier, nextProjection::publish);
             ModerationCommandContext context = contextFactory.apply(loaded).withRuntime(feedbackScheduler, nextActive::get);
-            newListener = new ModerationLoginListener(loaded, context.logger());
+            newListener = new ModerationLoginListener(loaded, context.logger(), context.messages().localization());
             newChatListener = new ModerationMuteChatListener(nextProjection, feedbackScheduler,
                     context.onlinePlayer(), context.messages(), context.logger());
             hooks.install("warn", new WarnCommand(context));

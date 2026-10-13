@@ -12,7 +12,7 @@ public final class QuestProgressReporterHarness {
         UUID id = f.load();
         f.quests.replaceAssignments(id, List.of("z", "a"));
         List<Component> messages = new ArrayList<>();
-        QuestProgressReporter reporter = new QuestProgressReporter(f.quests, (player, message) -> messages.add(message), f.logger);
+        QuestProgressReporter reporter = new QuestProgressReporter(f.quests, (player, message) -> messages.add(dev.vapee.core.i18n.I18nTestSupport.render(net.kyori.adventure.audience.Audience.empty(), message)), f.logger);
         reporter.report(id, QuestProgressKey.of("test:key"), 1);
         check(messages.isEmpty(), "partial progress stays quiet");
         QuestProgressResult result = reporter.report(id, QuestProgressKey.of("test:key"), Long.MAX_VALUE);

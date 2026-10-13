@@ -1,5 +1,7 @@
 package dev.vapee.core.quest.daily.menu;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -98,6 +100,8 @@ public final class DailyQuestMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventories;
     private final ItemRenderer items;
+    private Player renderingFor;
+    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Logger logger;
     private final Map<UUID, Inventory> active = new HashMap<>();
 
@@ -140,18 +144,19 @@ public final class DailyQuestMenu {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventories = Objects.requireNonNull(inventories, "inventories");
-        this.items = Objects.requireNonNull(items, "items");
+        Objects.requireNonNull(items, "items");
+        this.items = spec -> items.render(UiItems.localize(spec, this.messages, renderingFor));
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void open(Player player, int requestedPage) {
         Objects.requireNonNull(player, "player");
         if (!player.hasPermission(PERMISSION)) {
-            deny(player, "You do not have permission to view quests.");
+            deny(player, tr("daily-quests.denied"));
             return;
         }
         if (!player.isOnline() || players.getPlayer(player.getUniqueId()).isEmpty()) {
-            deny(player, "Your player profile is not available.");
+            deny(player, tr("common.profile-unavailable"));
             return;
         }
         DailyQuestSyncResult result;
@@ -159,23 +164,25 @@ public final class DailyQuestMenu {
             result = rerenderInventory == null ? sync.apply(player.getUniqueId()) : DailyQuestSyncResult.CURRENT;
         } catch (RuntimeException exception) {
             logger.log(Level.WARNING, "Daily quest preparation failed for " + player.getUniqueId(), exception);
-            deny(player, "Your daily quests could not be prepared. Please try again later.");
+            deny(player, tr("daily-quests.prepare-failed"));
             return;
         }
         switch (result) {
-            case DISABLED -> { deny(player, "Daily quests are currently disabled."); return; }
-            case NO_DEFINITIONS -> { deny(player, "No daily quests are currently configured."); return; }
-            case PLAYER_NOT_LOADED -> { deny(player, "Your player profile is not available."); return; }
+            case DISABLED -> { deny(player, tr("daily-quests.disabled")); return; }
+            case NO_DEFINITIONS -> { deny(player, tr("daily-quests.no-definitions")); return; }
+            case PLAYER_NOT_LOADED -> { deny(player, tr("common.profile-unavailable")); return; }
             case ASSIGNMENT_FAILED -> {
                 // DailyQuestService records the specific assignment failure and its player UUID.
                 logger.warning("Daily quest menu preparation returned ASSIGNMENT_FAILED for " + player.getUniqueId());
-                deny(player, "Your daily quests could not be prepared. Please try again later."); return;
+                deny(player, tr("daily-quests.prepare-failed")); return;
             }
             case BLOCKED_PENDING_REWARD -> messages.send(player,
-                    Component.text("A previous quest reward is still pending.", NamedTextColor.YELLOW));
+                    tr("daily-quests.previous-pending").color(NamedTextColor.YELLOW));
             case CURRENT, INITIALIZED, ROTATED -> { }
         }
         if (!canUse(player)) return;
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
         Pagination pagination = Pagination.of(views.size(), requestedPage, pageSize());
         int page = pagination.page();
@@ -191,26 +198,27 @@ public final class DailyQuestMenu {
             existing.beginRender(holder); holder = existing;
             for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
         } else {
-            inventory = inventories.create(holder, layout.size(), UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
+            inventory = inventories.create(holder, layout.size(), messages.localize(player, UiItems.text(tr("daily-quests.title"), NamedTextColor.DARK_GRAY)));
             holder.bind(inventory);
         }
         int start = pagination.fromIndex();
         for (int slot = 0; slot < pagination.toIndex() - start; slot++) {
             inventory.setItem(contentSlots.get(slot), questItem(views.get(start + slot)));
         }
-        if (views.isEmpty() && layout.emptySlot() >= 0) inventory.setItem(layout.emptySlot(), item(Material.PAPER, "No daily quests", List.of()));
-        if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
-        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
-                List.of("Rewards are delivered automatically.")));
-        place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", List.of()));
-        place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
-        if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, "Next page", List.of()));
+        if (views.isEmpty() && layout.emptySlot() >= 0) inventory.setItem(layout.emptySlot(), item(Material.PAPER, tr("daily-quests.empty"), List.of()));
+        if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, tr("common.previous-page"), List.of()));
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.BOOK, tr("common.page", Map.of("current", Component.text(page + 1), "total", Component.text(pages))),
+                List.of(tr("daily-quests.auto-rewards"))));
+        place(inventory, Action.CLOSE, item(Material.BARRIER, tr("common.close"), List.of()));
+        place(inventory, Action.REFRESH, item(Material.CLOCK, tr("common.refresh"), List.of(tr("daily-quests.refresh-hint"))));
+        if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, tr("common.next-page"), List.of()));
         holder.finishRender();
         var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {
             active.put(player.getUniqueId(), inventory);
         }
+        } finally { renderingFor = previousViewer; }
     }
 
     public boolean isActive(Player player, Inventory inventory, DailyQuestInventoryHolder holder) {
@@ -243,10 +251,10 @@ public final class DailyQuestMenu {
         } finally { active.clear(); }
     }
 
-    private void deny(Player player, String reason) {
+    private void deny(Player player, Component reason) {
         Inventory previous = active.remove(player.getUniqueId());
         if (previous != null && player.getOpenInventory().getTopInventory() == previous) player.closeInventory();
-        messages.send(player, Component.text(reason, NamedTextColor.RED));
+        messages.send(player, reason.color(NamedTextColor.RED));
     }
 
     private ItemStack questItem(QuestView view) {
@@ -254,17 +262,17 @@ public final class DailyQuestMenu {
         boolean pending = view.status() == QuestStatus.REWARD_PENDING;
         NamedTextColor color = completed ? NamedTextColor.GREEN : pending ? NamedTextColor.YELLOW : NamedTextColor.AQUA;
         List<Component> lore = new ArrayList<>();
-        lore.add(UiItems.text(view.definition().description(), NamedTextColor.GRAY));
-        lore.add(UiItems.text("Progress: " + view.currentProgress() + " / " + view.target(), NamedTextColor.WHITE));
-        lore.add(UiItems.text("Reward: " + view.definition().rewardCoins() + " Coins", NamedTextColor.GOLD));
-        lore.add(UiItems.text(completed ? "Completed" : pending ? "Reward Pending" : "In Progress", color));
-        if (completed) lore.add(UiItems.text("Your reward has already been delivered.", NamedTextColor.GRAY));
-        else if (pending) lore.add(UiItems.text("Your reward will be retried automatically.", NamedTextColor.YELLOW));
+        lore.add(UiItems.text(view.definition().descriptionText().resolve(messages.localization().locale(renderingFor)), NamedTextColor.GRAY));
+        lore.add(UiItems.text(tr("daily-quests.progress", Map.of("current", Component.text(view.currentProgress()), "target", Component.text(view.target()))), NamedTextColor.WHITE));
+        lore.add(UiItems.text(tr("daily-quests.reward", Map.of("coins", Component.text(view.definition().rewardCoins()))), NamedTextColor.GOLD));
+        lore.add(UiItems.text(completed ? tr("daily-quests.status.completed") : pending ? tr("daily-quests.status.pending") : tr("daily-quests.status.active"), color));
+        if (completed) lore.add(UiItems.text(tr("daily-quests.reward-delivered"), NamedTextColor.GRAY));
+        else if (pending) lore.add(UiItems.text(tr("daily-quests.reward-retry"), NamedTextColor.YELLOW));
         return items.render(new UiItemSpec(completed ? Material.LIME_DYE : pending ? Material.GOLD_INGOT : Material.PAPER,
-                UiItems.text(view.definition().name(), color), List.copyOf(lore)));
+                UiItems.text(view.definition().nameText().resolve(messages.localization().locale(renderingFor)), color), List.copyOf(lore)));
     }
 
-    private ItemStack item(Material material, String name, List<String> lore) {
+    private ItemStack item(Material material, Component name, List<Component> lore) {
         return items.render(UiItems.literal(material, name, NamedTextColor.AQUA, lore));
     }
     @FunctionalInterface interface InventoryFactory {
@@ -296,9 +304,11 @@ public final class DailyQuestMenu {
     }
 
     public void startUpdates() {
+        messages.localization().addLocaleListener(localeChanges);
         if (!observingChanges) { quests.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
+        messages.localization().removeLocaleListener(localeChanges);
         if (observingChanges) { quests.removeChangeListener(committedChanges); observingChanges = false; }
     }
     public void shutdown() { stopUpdates(); closeOpenInventories(); }

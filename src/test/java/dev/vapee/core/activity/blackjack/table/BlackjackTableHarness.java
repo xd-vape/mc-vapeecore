@@ -556,7 +556,7 @@ public final class BlackjackTableHarness {
             constructor.setAccessible(true);
             return constructor.newInstance(activity, tableProxy, seatProxy,
                     (Function<UUID, Player>) ignored -> null,
-                    (BiConsumer<Player, String>) (player, message) -> { },
+                    (BiConsumer<Player, net.kyori.adventure.text.Component>) (player, message) -> { },
                     schedulerProxy,
                     (Supplier<BlackjackShoe>) () -> new BlackjackShoe(6, new java.util.Random(1L)),
                     logger);

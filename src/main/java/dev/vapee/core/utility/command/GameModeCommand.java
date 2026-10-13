@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyService;
@@ -99,18 +101,18 @@ public final class GameModeCommand implements TabExecutor {
         }
         GameMode gameMode = parseGameMode(args[0]);
         if (gameMode == null) {
-            error(sender, "Game mode must be survival, creative, adventure or spectator.");
+            error(sender, tr("utility.game-mode.invalid"));
             return true;
         }
 
         Player target;
         if (args.length == 1) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to change your game mode.");
+                error(sender, tr("utility.game-mode.denied-self"));
                 return true;
             }
             target = player;
@@ -124,8 +126,8 @@ public final class GameModeCommand implements TabExecutor {
                     && player.getUniqueId().equals(target.getUniqueId());
             if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
                 error(sender, self
-                        ? "You do not have permission to change your game mode."
-                        : "You do not have permission to change another player's game mode.");
+                        ? tr("utility.game-mode.denied-self")
+                        : tr("utility.game-mode.denied-other"));
                 return true;
             }
         }
@@ -134,29 +136,25 @@ public final class GameModeCommand implements TabExecutor {
 
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
-                    ? "You cannot use this command while participating in an activity."
-                    : "That player is participating in an activity.");
+                    ? tr("common.activity-self")
+                    : tr("common.activity-target"));
             return true;
         }
         if (buildCheck.test(target.getUniqueId())) {
-            error(sender, "Exit build mode before changing the player's game mode.");
+            error(sender, tr("utility.game-mode.build"));
             return true;
         }
 
         utilityService.setGameMode(target, gameMode);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component message = self
-                ? Component.text("Game mode changed to " + displayName(gameMode) + ".", NamedTextColor.GREEN)
-                : Component.text(target.getName(), NamedTextColor.WHITE)
-                        .append(Component.text("'s game mode changed to " + displayName(gameMode) + ".",
-                                NamedTextColor.GREEN));
+        Component mode = tr("utility.game-mode." + gameMode.name().toLowerCase(java.util.Locale.ROOT));
+        Component message = (self ? tr("utility.game-mode.self", java.util.Map.of("mode", mode))
+                : tr("utility.game-mode.other", java.util.Map.of("mode", mode, "player", Component.text(target.getName(), NamedTextColor.WHITE))))
+                .color(NamedTextColor.GREEN);
         messageSender.accept(sender, message);
         if (gameMode == GameMode.CREATIVE && lobbyWorldCheck.test(target)) {
-            messageSender.accept(sender, Component.text(
-                    "Lobby protection remains active. Use /build to enable building.",
-                    NamedTextColor.YELLOW
-            ));
+            messageSender.accept(sender, tr("utility.game-mode.lobby").color(NamedTextColor.YELLOW));
         }
         return true;
     }
@@ -204,19 +202,17 @@ public final class GameModeCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/gamemode <mode> [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

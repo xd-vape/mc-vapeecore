@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
@@ -86,18 +88,16 @@ public final class FeedCommand implements TabExecutor {
 
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
-                    ? "You cannot use this command while participating in an activity."
-                    : "That player is participating in an activity.");
+                    ? tr("common.activity-self")
+                    : tr("common.activity-target"));
             return true;
         }
         utilityService.feed(target);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
         messageSender.accept(sender, self
-                ? Component.text("Fed.", NamedTextColor.GREEN)
-                : Component.text("Fed ", NamedTextColor.GREEN)
-                        .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                        .append(Component.text(".", NamedTextColor.GREEN)));
+                ? tr("utility.feed.self").color(NamedTextColor.GREEN)
+                : tr("utility.feed.other", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -108,11 +108,11 @@ public final class FeedCommand implements TabExecutor {
         }
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return null;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to feed yourself.");
+                error(sender, tr("utility.feed.denied-self"));
                 return null;
             }
             return player;
@@ -126,8 +126,8 @@ public final class FeedCommand implements TabExecutor {
                 && player.getUniqueId().equals(target.getUniqueId());
         if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
             error(sender, self
-                    ? "You do not have permission to feed yourself."
-                    : "You do not have permission to feed another player.");
+                    ? tr("utility.feed.denied-self")
+                    : tr("utility.feed.denied-other"));
             return null;
         }
         return target;
@@ -154,19 +154,17 @@ public final class FeedCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/feed [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

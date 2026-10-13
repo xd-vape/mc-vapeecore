@@ -5,6 +5,7 @@ import dev.vapee.core.lobby.item.LobbyItemDefinition;
 import dev.vapee.core.lobby.item.LobbyItemRegistry;
 import dev.vapee.core.lobby.item.LobbyItemRegistrations;
 import dev.vapee.core.config.ConfigFiles;
+import dev.vapee.core.i18n.LocalizedText;
 import dev.vapee.core.config.ConfigValues;
 import dev.vapee.core.persistence.SafeFileWriter;
 import net.kyori.adventure.text.Component;
@@ -244,18 +245,22 @@ public final class LobbyConfig {
         }
 
         boolean enabled = readBoolean(configuration, path + ".enabled");
-        String format = defaultFormat;
+        LocalizedText formats = LocalizedText.literal(defaultFormat);
         if (configuration.contains(path + ".format")) {
             Object value = configuration.get(path + ".format");
-            if (value instanceof String stringValue) {
-                format = validateMessageFormat(path + ".format", stringValue, defaultFormat);
-            } else {
+            if (value instanceof org.bukkit.configuration.ConfigurationSection section) value = section.getValues(false);
+            try {
+                LocalizedText parsed = LocalizedText.parse(value);
+                var validated = new java.util.LinkedHashMap<String, String>();
+                parsed.values().forEach((language, template) -> validated.put(language,
+                        validateMessageFormat(path + ".format." + language, template, defaultFormat)));
+                formats = new LocalizedText(validated);
+            } catch (IllegalArgumentException exception) {
                 logger.warning("Invalid lobby setting '" + path + ".format' in " + configFile
-                        + ": expected a string; using the internal fallback. The file was left unchanged."
-                );
+                        + ": expected a string or language map with en fallback; using internal fallback. File unchanged.");
             }
         }
-        return new MessageSettings(enabled, format);
+        return new MessageSettings(enabled, formats);
     }
 
     private String validateMessageFormat(String path, String format, String defaultFormat) {
@@ -269,7 +274,7 @@ public final class LobbyConfig {
         try {
             strictMiniMessage.deserialize(
                     format,
-                    Placeholder.component("name", Component.empty())
+                    Placeholder.component("name", Component.empty()), dev.vapee.core.i18n.Translations.tagResolver()
             );
             return format;
         } catch (RuntimeException exception) {
@@ -448,10 +453,14 @@ public final class LobbyConfig {
         }
     }
 
-    public record MessageSettings(boolean enabled, String format) {
+    public record MessageSettings(boolean enabled, LocalizedText formats) {
+
+        public MessageSettings(boolean enabled, String format) { this(enabled, LocalizedText.literal(format)); }
+        public String format() { return formats.english(); }
+        public boolean perRecipient() { return formats.values().size() > 1 || formats.values().values().stream().anyMatch(value -> value.contains("<i18n:")); }
 
         public MessageSettings {
-            format = Objects.requireNonNull(format, "format");
+            formats = Objects.requireNonNull(formats, "formats");
         }
     }
 }

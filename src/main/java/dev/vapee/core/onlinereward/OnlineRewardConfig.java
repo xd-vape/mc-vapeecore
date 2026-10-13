@@ -18,8 +18,7 @@ public record OnlineRewardConfig(
     public static final long DEFAULT_INTERVAL_MINUTES = 60L;
     public static final long DEFAULT_COINS = 250L;
     public static final boolean DEFAULT_MESSAGE_ENABLED = true;
-    public static final String DEFAULT_MESSAGE_FORMAT = "<green>You received <gold><coins> Coins</gold> "
-            + "for <yellow><minutes> minutes</yellow> of playtime.</green>";
+    public static final String DEFAULT_MESSAGE_FORMAT = "<reward>";
     public static final long TICKS_PER_MINUTE = 20L * 60L;
 
     private static final MiniMessage STRICT_MINI_MESSAGE = MiniMessage.builder().strict(true).build();
@@ -27,7 +26,8 @@ public record OnlineRewardConfig(
             Placeholder.unparsed("coins", "0"),
             Placeholder.unparsed("minutes", "0"),
             Placeholder.unparsed("intervals", "0"),
-            Placeholder.unparsed("balance", "0")
+            Placeholder.unparsed("balance", "0"),
+            Placeholder.component("reward", net.kyori.adventure.text.Component.empty())
     );
 
     public OnlineRewardConfig {

@@ -1,5 +1,7 @@
 package dev.vapee.core.player;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.message.MessageService;
 import org.bukkit.event.EventHandler;
@@ -37,14 +39,12 @@ public final class PlayerListener implements Listener {
             logger.severe("Core player " + event.getPlayer().getUniqueId()
                     + " could not be loaded and will be disconnected: " + exception.getMessage()
             );
-            event.getPlayer().kick(messageService.deserialize(
-                    "<red>Your player data could not be loaded. Please contact a server administrator.</red>"
-            ));
+            event.getPlayer().kick(messageService.localize(event.getPlayer(), tr("core.player-data-failed")));
             return;
         }
 
         if (configService.isDebugEnabled()) {
-            messageService.send(event.getPlayer(), "<yellow>VapeeCore development build active.</yellow>");
+            messageService.send(event.getPlayer(), tr("core.development"));
         }
     }
 

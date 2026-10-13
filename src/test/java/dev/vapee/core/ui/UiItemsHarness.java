@@ -39,7 +39,7 @@ public final class UiItemsHarness {
                 UiItems.text("<blue>B", NamedTextColor.GRAY))), "literal factory preserves order, blanks, color and decoration");
         check(Arrays.stream(UiItemSpec.class.getRecordComponents()).map(c -> c.getName()).toList()
                 .equals(List.of("material", "name", "lore")), "spec has no domain metadata or action authority");
-        rejects(NullPointerException.class, () -> UiItems.text(null, NamedTextColor.GRAY), "null text");
+        rejects(NullPointerException.class, () -> UiItems.text((String) null, NamedTextColor.GRAY), "null text");
         rejects(NullPointerException.class, () -> UiItems.text("A", null), "null color");
         System.out.println("UiItemsHarness passed " + checks + " checks.");
     }

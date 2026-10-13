@@ -1,12 +1,13 @@
 package dev.vapee.core.quest;
 
 import java.util.Objects;
+import dev.vapee.core.i18n.LocalizedText;
 import java.util.regex.Pattern;
 
 public record QuestDefinition(
         String id,
-        String name,
-        String description,
+        LocalizedText nameText,
+        LocalizedText descriptionText,
         QuestProgressKey progressKey,
         long target,
         long rewardCoins
@@ -16,8 +17,9 @@ public record QuestDefinition(
 
     public QuestDefinition {
         id = requireValidId(id);
-        name = requireVisibleText(name, "name");
-        description = requireVisibleText(description, "description");
+        Objects.requireNonNull(nameText, "nameText"); Objects.requireNonNull(descriptionText, "descriptionText");
+        nameText.values().values().forEach(value -> requireVisibleText(value, "name"));
+        descriptionText.values().values().forEach(value -> requireVisibleText(value, "description"));
         Objects.requireNonNull(progressKey, "progressKey");
         if (target <= 0L) {
             throw new IllegalArgumentException("Quest target must be positive");
@@ -26,6 +28,12 @@ public record QuestDefinition(
             throw new IllegalArgumentException("Quest reward coins must be positive");
         }
     }
+
+    public QuestDefinition(String id, String name, String description, QuestProgressKey progressKey, long target, long rewardCoins) {
+        this(id, LocalizedText.literal(name), LocalizedText.literal(description), progressKey, target, rewardCoins);
+    }
+    public String name() { return nameText.english(); }
+    public String description() { return descriptionText.english(); }
 
     static String requireValidId(String id) {
         if (id == null || !ID_PATTERN.matcher(id).matches()) {

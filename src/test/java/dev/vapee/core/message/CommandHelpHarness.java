@@ -63,7 +63,7 @@ public final class CommandHelpHarness {
                 ),
                 "A footer."
         );
-        check(page.sections().get(0).title().equals("First"), "section order is retained");
+        check(page.sections().get(0).title().equals(Component.text("First")), "section order is retained");
         check(page.sections().get(0).entries().get(0).syntax().equals("/warp set <id>"),
                 "entry order is retained");
         expectUnsupported(() -> page.sections().add(new CommandHelpSection("No", List.of())),
@@ -186,11 +186,11 @@ public final class CommandHelpHarness {
     private static void testBlackjackAndWarpHelp() throws Exception {
         CommandHelpPage main = page(BlackjackCommand.class, "MAIN_HELP_PAGE");
         CommandHelpPage setup = page(BlackjackCommand.class, "SETUP_HELP_PAGE");
-        check(main.sections().size() == 1 && main.sections().get(0).title().equals("Table Setup"),
+        check(main.sections().size() == 1 && dev.vapee.core.i18n.I18nTestSupport.english(main.sections().get(0).title()).equals("Table Setup"),
                 "blackjack root help is structured");
         String mainText = render(main);
         check(!mainText.contains("create|delete|pos1"), "blackjack root has no pipe-chain usage");
-        check(setup.sections().stream().map(CommandHelpSection::title).toList()
+        check(setup.sections().stream().map(section -> dev.vapee.core.i18n.I18nTestSupport.english(section.title())).toList()
                         .equals(List.of("Create & Configure", "Management", "Information")),
                 "blackjack setup sections have the required order");
         check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 14,
@@ -208,7 +208,7 @@ public final class CommandHelpHarness {
                 new Class<?>[]{String.class},
                 "casino-1"
         );
-        String workflowText = PLAIN.serialize(workflow);
+        String workflowText = dev.vapee.core.i18n.I18nTestSupport.english(workflow);
         check(workflowText.contains("Blackjack table 'casino-1' created.")
                         && workflowText.contains("1. Build the physical table in the world.")
                         && workflowText.contains("2. Create its disabled configuration draft:")
@@ -226,7 +226,7 @@ public final class CommandHelpHarness {
         check(hasClickAction(workflow, ClickEvent.Action.SUGGEST_COMMAND)
                         && !hasClickAction(workflow, ClickEvent.Action.RUN_COMMAND),
                 "blackjack create workflow is suggest-only");
-        String invalid = PLAIN.serialize(invokeComponent(
+        String invalid = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
                 BlackjackCommand.class,
                 "invalidDefinitionMessage",
                 new Class<?>[]{String.class, List.class},
@@ -238,7 +238,7 @@ public final class CommandHelpHarness {
                         && invalid.contains("At least one seat")
                         && invalid.contains("/blackjack setup info casino-1"),
                 "blackjack validation output explains missing setup and the next check");
-        String missingTable = PLAIN.serialize(invokeComponent(
+        String missingTable = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
                 BlackjackCommand.class,
                 "missingTableMessage",
                 new Class<?>[]{String.class},
@@ -254,7 +254,7 @@ public final class CommandHelpHarness {
                 "blackjack display setup accepts world-space collision bounds");
 
         CommandHelpPage warp = page(WarpCommand.class, "HELP_PAGE");
-        check(warp.sections().stream().map(CommandHelpSection::title).toList()
+        check(warp.sections().stream().map(section -> dev.vapee.core.i18n.I18nTestSupport.english(section.title())).toList()
                         .equals(List.of("Create & Edit", "Information", "Management")),
                 "warp help sections have the required order");
         String warpText = render(warp);
@@ -281,14 +281,14 @@ public final class CommandHelpHarness {
                 casino,
                 true
         );
-        check(PLAIN.serialize(created).contains("Warp 'casino' created.")
-                        && PLAIN.serialize(created).contains("world @ 100.5, 65.0, 100.5")
-                        && PLAIN.serialize(created).contains("/warp name casino <display name>"),
+        check(dev.vapee.core.i18n.I18nTestSupport.english(created).contains("Warp 'casino' created.")
+                        && dev.vapee.core.i18n.I18nTestSupport.english(created).contains("world @ 100.5, 65.0, 100.5")
+                        && dev.vapee.core.i18n.I18nTestSupport.english(created).contains("/warp name casino <display name>"),
                 "warp creation output includes location and next steps");
-        check(PLAIN.serialize(updated).contains("Warp 'casino' location updated.")
-                        && !PLAIN.serialize(updated).contains("Next:"),
+        check(dev.vapee.core.i18n.I18nTestSupport.english(updated).contains("Warp 'casino' location updated.")
+                        && !dev.vapee.core.i18n.I18nTestSupport.english(updated).contains("Next:"),
                 "warp update output is distinguished from creation");
-        String info = PLAIN.serialize(invokeComponent(
+        String info = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
                 WarpCommand.class,
                 "infoMessage",
                 new Class<?>[]{WarpPoint.class},
@@ -303,7 +303,7 @@ public final class CommandHelpHarness {
                 Material.ENDER_PEARL,
                 new WarpPosition("world", 0.0, 64.0, 0.0, 0.0F, 0.0F)
         );
-        String list = PLAIN.serialize(invokeComponent(
+        String list = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
                 WarpCommand.class,
                 "listMessage",
                 new Class<?>[]{List.class},
@@ -504,7 +504,7 @@ public final class CommandHelpHarness {
         }
 
         private String singleText() {
-            return PLAIN.serialize(singleComponent());
+            return dev.vapee.core.i18n.I18nTestSupport.english(singleComponent());
         }
     }
 }

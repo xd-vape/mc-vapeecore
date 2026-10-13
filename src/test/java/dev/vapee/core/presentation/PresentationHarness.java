@@ -112,10 +112,26 @@ public final class PresentationHarness {
         check(true, "strict presentation validation recognizes rank_name and playtime");
 
         serverNameColors();
+        personalLanguages();
 
         System.out.println("PresentationHarness passed " + checks + " checks.");
     }
 
+
+    private static void personalLanguages() throws Exception {
+        try (var f = new PresentationFixture()) {
+            var german = f.player("GermanViewer"); german.locale = java.util.Locale.GERMANY;
+            var english = f.player("EnglishViewer");
+            var renderer = f.renderer(ignored -> Optional.empty());
+            var de = renderer.render(german.player); var en = renderer.render(english.player);
+            check(de.scoreboardLines().stream().map(PLAIN::serialize).anyMatch("Rang:"::equals)
+                    && en.scoreboardLines().stream().map(PLAIN::serialize).anyMatch("Rank:"::equals), "own sidebar labels follow each viewer's current language");
+            check(!PLAIN.serialize(de.tablistHeader()).equals(PLAIN.serialize(en.tablistHeader()))
+                    && PLAIN.serialize(de.tablistFooter()).contains("nicht")
+                    && PLAIN.serialize(en.tablistFooter()).contains("don't"), "personal header/footer independently localized");
+            check(PLAIN.serialize(de.tablistName()).equals("GermanViewer") && PLAIN.serialize(en.tablistName()).equals("EnglishViewer"), "player names remain literal identities");
+        }
+    }
 
     private static void serverNameColors() throws Exception {
         try (var f = new PresentationFixture()) {

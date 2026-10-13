@@ -11,17 +11,14 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import dev.vapee.core.i18n.LocalizedText;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public final class PrivateMessageConfig {
 
-    public static final String DEFAULT_OUTGOING_FORMAT =
-            "<dark_gray>[</dark_gray><gray>You</gray><dark_gray> → </dark_gray>"
-                    + "<recipient><dark_gray>]</dark_gray> <white><message></white>";
-    public static final String DEFAULT_INCOMING_FORMAT =
-            "<dark_gray>[</dark_gray><sender><dark_gray> → </dark_gray><gray>You</gray>"
-                    + "<dark_gray>]</dark_gray> <white><message></white>";
+    public static final String DEFAULT_OUTGOING_FORMAT = "<outgoing>";
+    public static final String DEFAULT_INCOMING_FORMAT = "<incoming>";
 
     private static final String RESOURCE_NAME = "private-messages.yml";
 
@@ -89,8 +86,14 @@ public final class PrivateMessageConfig {
         ));
     }
 
-    private String readFormat(YamlConfiguration configuration, String path, String fallback) {
-        return ConfigValues.nonBlankString(configuration.get(path), fallback, () -> warnInvalidFormat(path));
+    private LocalizedText readFormat(YamlConfiguration configuration, String path, String fallback) {
+        Object value = configuration.get(path);
+        if (value instanceof org.bukkit.configuration.ConfigurationSection section) value = section.getValues(false);
+        try {
+            var text = LocalizedText.parse(value);
+            if (text.values().values().stream().anyMatch(String::isBlank)) throw new IllegalArgumentException("Blank format");
+            return text;
+        } catch (IllegalArgumentException exception) { warnInvalidFormat(path); return LocalizedText.literal(fallback); }
     }
 
     private void warnInvalidFormat(String path) {
@@ -117,15 +120,11 @@ public final class PrivateMessageConfig {
         return new IllegalStateException("Could not " + operation + " at " + configFile + ".", cause);
     }
 
-    public record State(boolean enabled, String outgoingFormat, String incomingFormat) {
-
-        public State {
-            Objects.requireNonNull(outgoingFormat, "outgoingFormat");
-            Objects.requireNonNull(incomingFormat, "incomingFormat");
-        }
-
-        private static State defaults() {
-            return new State(true, DEFAULT_OUTGOING_FORMAT, DEFAULT_INCOMING_FORMAT);
-        }
+    public record State(boolean enabled, LocalizedText outgoingText, LocalizedText incomingText) {
+        public State { Objects.requireNonNull(outgoingText); Objects.requireNonNull(incomingText); }
+        public State(boolean enabled, String outgoing, String incoming) { this(enabled, LocalizedText.literal(outgoing), LocalizedText.literal(incoming)); }
+        public String outgoingFormat() { return outgoingText.english(); }
+        public String incomingFormat() { return incomingText.english(); }
+        public static State defaults() { return new State(true, DEFAULT_OUTGOING_FORMAT, DEFAULT_INCOMING_FORMAT); }
     }
 }

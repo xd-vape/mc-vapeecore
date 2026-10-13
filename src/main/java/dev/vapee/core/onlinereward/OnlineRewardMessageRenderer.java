@@ -1,5 +1,7 @@
 package dev.vapee.core.onlinereward;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -68,7 +70,10 @@ final class OnlineRewardMessageRenderer {
                 Placeholder.unparsed(
                         "balance",
                         Long.toString(validatedResult.resultingBalance().orElseThrow())
-                )
+                ),
+                Placeholder.component("reward", tr("rewards.online.granted", java.util.Map.of(
+                        "coins", net.kyori.adventure.text.Component.text(validatedResult.coinsGranted()),
+                        "minutes", net.kyori.adventure.text.Component.text(validatedResult.rewardedMinutes()))))
         );
     }
 

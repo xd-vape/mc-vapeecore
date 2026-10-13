@@ -1,5 +1,8 @@
 package dev.vapee.core.moderation.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+import net.kyori.adventure.text.Component;
+
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.moderation.*;
 import org.bukkit.command.CommandSender;
@@ -11,13 +14,13 @@ public final class UnbanCommand extends AbstractModerationCommand {
 
     @Override protected boolean validArguments(CommandSender sender, String[] args) {
         if (args.length >= 1) return true;
-        usage(sender, "Missing player."); return false;
+        usage(sender, tr("common.missing-player")); return false;
     }
 
     @Override protected void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
         String reason = reason(args, 1);
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().revokeBan(target.uniqueId(), actor, reason.isBlank() ? Optional.empty() : Optional.of(reason)));
-        if (record != null) context.send(sender, "Unbanned " + target.name() + ".");
+        if (record != null) context.send(sender, tr("moderation.unban.saved", java.util.Map.of("player", Component.text(target.name()))));
     }
 }

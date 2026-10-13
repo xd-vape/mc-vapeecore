@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
@@ -87,18 +89,18 @@ public final class SpeedCommand implements TabExecutor {
         }
         int level = parseLevel(args[0]);
         if (level == -1) {
-            error(sender, "Speed must be a whole number between 1 and 10.");
+            error(sender, tr("utility.speed.invalid"));
             return true;
         }
 
         Player target;
         if (args.length == 1) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to change your speed.");
+                error(sender, tr("utility.speed.denied-self"));
                 return true;
             }
             target = player;
@@ -112,8 +114,8 @@ public final class SpeedCommand implements TabExecutor {
                     && player.getUniqueId().equals(target.getUniqueId());
             if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
                 error(sender, self
-                        ? "You do not have permission to change your speed."
-                        : "You do not have permission to change another player's speed.");
+                        ? tr("utility.speed.denied-self")
+                        : tr("utility.speed.denied-other"));
                 return true;
             }
         }
@@ -122,21 +124,18 @@ public final class SpeedCommand implements TabExecutor {
 
         if (activityCheck.test(target.getUniqueId())) {
             error(sender, target.equals(sender)
-                    ? "You cannot use this command while participating in an activity."
-                    : "That player is participating in an activity.");
+                    ? tr("common.activity-self")
+                    : tr("common.activity-target"));
             return true;
         }
 
         UtilitySpeedResult result = utilityService.setSpeed(target, level);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component message = Component.text(result.type().displayName() + " speed", NamedTextColor.GREEN);
-        if (!self) {
-            message = message.append(Component.text(" for ", NamedTextColor.GREEN))
-                    .append(Component.text(target.getName(), NamedTextColor.WHITE));
-        }
-        messageSender.accept(sender, message
-                .append(Component.text(" set to " + level + "/10.", NamedTextColor.GREEN)));
+        Component type = tr("utility.speed." + result.type().name().toLowerCase(java.util.Locale.ROOT));
+        Component message = self ? tr("utility.speed.self", java.util.Map.of("type", type, "level", Component.text(level)))
+                : tr("utility.speed.other", java.util.Map.of("type", type, "level", Component.text(level), "player", Component.text(target.getName(), NamedTextColor.WHITE)));
+        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -179,19 +178,17 @@ public final class SpeedCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/speed <1-10> [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

@@ -359,7 +359,10 @@ public final class BlackjackPresentationHarness {
         var method = BlackjackWorldViewService.class.getDeclaredMethod(
                 "dealerDisplays", BlackjackHandView.class, boolean.class);
         method.setAccessible(true);
-        return (Map<String, Component>) method.invoke(null, BlackjackHandView.from(hand), hidden);
+        Map<String, Component> templates = (Map<String, Component>) method.invoke(null, BlackjackHandView.from(hand), hidden);
+        var resolved = new java.util.HashMap<String, Component>();
+        templates.forEach((key, value) -> resolved.put(key, dev.vapee.core.i18n.I18nTestSupport.render(net.kyori.adventure.audience.Audience.empty(), value)));
+        return Map.copyOf(resolved);
     }
 
     private static void assertDealerLocation(

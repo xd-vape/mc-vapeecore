@@ -1,5 +1,8 @@
 package dev.vapee.core.moderation.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+import net.kyori.adventure.text.Component;
+
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.moderation.*;
 import org.bukkit.command.CommandSender;
@@ -11,7 +14,7 @@ public final class UnmuteCommand extends AbstractModerationCommand {
 
     @Override protected boolean validArguments(CommandSender sender, String[] args) {
         if (args.length >= 1) return true;
-        usage(sender, "Missing player."); return false;
+        usage(sender, tr("common.missing-player")); return false;
     }
 
     @Override protected void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
@@ -19,7 +22,7 @@ public final class UnmuteCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target, () -> context.service().revokeMute(target.uniqueId(), actor,
                 reason.isBlank() ? Optional.empty() : Optional.of(reason)));
         if (record == null) return;
-        context.send(sender, "Unmuted " + target.name() + ".");
+        context.send(sender, tr("moderation.unmute.saved", java.util.Map.of("player", Component.text(target.name()))));
         context.notifyMute(sender, actor, target, record, true);
     }
 }

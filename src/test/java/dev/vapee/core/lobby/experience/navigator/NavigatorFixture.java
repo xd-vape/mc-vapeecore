@@ -23,6 +23,7 @@ import java.util.logging.*;
 
 /** Real menu/listener execution with exact inventory identities and close-event dispatch. */
 final class NavigatorFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
     final Logger logger = Logger.getAnonymousLogger();
     final List<LogRecord> logs = new ArrayList<>();
     final Map<UUID, TestPlayer> players = new LinkedHashMap<>();
@@ -34,6 +35,7 @@ final class NavigatorFixture {
     final NavigatorMenu menu;
     final NavigatorListener listener;
     Component title;
+    final MessageService messages;
 
     NavigatorFixture() throws Exception {
         this(MenuTestLayouts.NAVIGATOR);
@@ -55,13 +57,13 @@ final class NavigatorFixture {
         access = new NavigatorAccessPolicy(id -> players.get(id) != null && players.get(id).loaded,
                 candidate -> candidate == lobby, id -> players.get(id).mode,
                 id -> players.get(id).participating);
-        menu = new NavigatorMenu(warps, access,
-                id -> players.containsKey(id) ? players.get(id).player : null,
-                (holder, size, heading) -> { title = heading; return inventory(holder, size); },
-                SpecItem::new, logger, layout);
         var constructor = MessageService.class.getDeclaredConstructor(Supplier.class);
         constructor.setAccessible(true);
-        MessageService messages = constructor.newInstance((Supplier<String>) () -> "");
+        messages = constructor.newInstance((Supplier<String>) () -> "");
+        menu = new NavigatorMenu(warps, access,
+                id -> players.containsKey(id) ? players.get(id).player : null,
+                (holder, size, heading) -> { title = heading; Inventory result = inventory(holder, size); titles.put(result, heading); return result; },
+                SpecItem::new, logger, layout, messages);
         listener = new NavigatorListener(warps, messages, menu);
     }
 
@@ -133,6 +135,7 @@ final class NavigatorFixture {
     static String plain(Component component) { return PlainTextComponentSerializer.plainText().serialize(component); }
 
     final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         final UUID id = UUID.randomUUID();
         final Inventory bottom = inventory(null, 36);
         final List<Component> received = new ArrayList<>();
@@ -159,6 +162,7 @@ final class NavigatorFixture {
         TestPlayer() {
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "isOnline" -> online;
                 case "getWorld" -> currentWorld;
                 case "openInventory" -> {

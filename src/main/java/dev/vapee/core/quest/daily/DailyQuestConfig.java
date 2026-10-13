@@ -163,8 +163,8 @@ public final class DailyQuestConfig {
             try {
                 definitions.add(new QuestDefinition(
                         id,
-                        requiredString(entry, path, "name"),
-                        requiredString(entry, path, "description"),
+                        requiredLocalizedText(entry, path, "name"),
+                        requiredLocalizedText(entry, path, "description"),
                         QuestProgressKey.of(requiredString(entry, path, "progress-key")),
                         requiredPositiveLong(entry, path, "target"),
                         requiredPositiveLong(entry, path, "reward-coins")
@@ -174,6 +174,13 @@ public final class DailyQuestConfig {
             }
         }
         return List.copyOf(definitions);
+    }
+
+    private dev.vapee.core.i18n.LocalizedText requiredLocalizedText(ConfigurationSection entry, String path, String key) {
+        Object value = entry.get(key);
+        if (value instanceof ConfigurationSection section) value = section.getValues(false);
+        try { return dev.vapee.core.i18n.LocalizedText.parse(value); }
+        catch (IllegalArgumentException exception) { throw invalid(path + "." + key, exception.getMessage()); }
     }
 
     private String requiredString(ConfigurationSection entry, String path, String key) {

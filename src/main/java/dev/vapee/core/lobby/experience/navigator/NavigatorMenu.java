@@ -1,5 +1,7 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -47,23 +49,31 @@ public final class NavigatorMenu {
             .button(Action.NEXT, 53)
             .build();
 
-    private static final Component TITLE = Component.text("Warp Navigator", NamedTextColor.DARK_GRAY);
+    private static final Component TITLE = tr("navigator.title").color(NamedTextColor.DARK_GRAY);
 
     private final MenuLayout<Action> layout;
     public MenuLayout<Action> layout() { return layout; }
 
     private final WarpService warpService;
+    private final dev.vapee.core.message.MessageService messageService;
     private final NavigatorAccessPolicy accessPolicy;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private Player renderingFor;
+    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Function<UUID, Player> onlinePlayer;
     private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
 
     public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy) {
-        this(warpService, accessPolicy, Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
+        this(plugin, warpService, accessPolicy, new dev.vapee.core.message.MessageService(() -> "",
+                dev.vapee.core.i18n.LocalizationService.bundled(plugin.getLogger())));
+    }
+    public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy,
+                         dev.vapee.core.message.MessageService messages) {
+        this(warpService, accessPolicy, plugin.getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                UiItems::render, plugin.getLogger());
+                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT, messages);
     }
 
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
@@ -75,13 +85,22 @@ public final class NavigatorMenu {
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
                   Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                   ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this(warpService, accessPolicy, onlinePlayer, inventoryFactory, itemRenderer, logger, menuLayout,
+                new dev.vapee.core.message.MessageService(() -> "", dev.vapee.core.i18n.LocalizationService.bundled(logger)));
+    }
+    NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
+                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                  ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout,
+                  dev.vapee.core.message.MessageService messages) {
+        this.messageService = Objects.requireNonNull(messages);
         this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.warpService = Objects.requireNonNull(warpService, "warpService");
         this.accessPolicy = Objects.requireNonNull(accessPolicy, "accessPolicy");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
-        this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.itemRenderer = spec -> itemRenderer.render(UiItems.localize(spec, this.messageService, renderingFor));
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -90,6 +109,8 @@ public final class NavigatorMenu {
     }
 
     public boolean open(Player player, int requestedPage) {
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         if (!canAccess(validatedPlayer)) {
             close(validatedPlayer);
@@ -117,7 +138,7 @@ public final class NavigatorMenu {
             existing.beginRender(holder); holder = existing;
             for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
         } else {
-            inventory = inventoryFactory.create(holder, layout.size(), TITLE);
+            inventory = inventoryFactory.create(holder, layout.size(), messageService.localize(validatedPlayer, TITLE));
             holder.bindInventory(inventory);
         }
 
@@ -127,7 +148,7 @@ public final class NavigatorMenu {
         if (warps.isEmpty()) {
             placeDisplay(inventory, layout.emptySlot(), createItem(
                     Material.GRAY_DYE,
-                    "No Destinations Available",
+                    tr("navigator.empty"),
                     NamedTextColor.GRAY,
                     List.of()
             ));
@@ -135,27 +156,27 @@ public final class NavigatorMenu {
         if (pagination.hasPrevious()) {
             place(inventory, Action.PREVIOUS, createItem(
                     Material.ARROW,
-                    "Previous Page",
+                    tr("common.previous-page"),
                     NamedTextColor.YELLOW,
                     List.of()
             ));
         }
         if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, createItem(
                 Material.PAPER,
-                "Page " + (page + 1) + "/" + pageCount,
+                tr("common.page", java.util.Map.of("current", Component.text(page+1), "total", Component.text(pageCount))),
                 NamedTextColor.AQUA,
-                List.of(warps.size() + (warps.size() == 1 ? " destination." : " destinations."))
+                List.of(tr(warps.size() == 1 ? "navigator.count.one" : "navigator.count.many", java.util.Map.of("count", Component.text(warps.size()))))
         ));
         place(inventory, Action.CLOSE, createItem(
                 Material.BARRIER,
-                "Close",
+                tr("common.close"),
                 NamedTextColor.RED,
                 List.of()
         ));
         if (pagination.hasNext()) {
             place(inventory, Action.NEXT, createItem(
                     Material.ARROW,
-                    "Next Page",
+                    tr("common.next-page"),
                     NamedTextColor.YELLOW,
                     List.of()
             ));
@@ -172,14 +193,16 @@ public final class NavigatorMenu {
             return true;
         }
         return false;
+
+        } finally { renderingFor = previousViewer; }
     }
 
     private ItemStack createWarpItem(WarpPoint warp) {
         return createItem(
                 warp.icon(),
-                warp.displayName(),
+                Component.text(warp.displayName()),
                 NamedTextColor.AQUA,
-                List.of("Click to teleport.")
+                List.of(tr("navigator.teleport-hint"))
         );
     }
 
@@ -236,9 +259,9 @@ public final class NavigatorMenu {
 
     private ItemStack createItem(
             Material material,
-            String name,
+            Component name,
             NamedTextColor nameColor,
-            List<String> loreLines
+            List<Component> loreLines
     ) {
         return itemRenderer.render(UiItems.literal(material, name, nameColor, loreLines));
     }
@@ -281,9 +304,11 @@ public final class NavigatorMenu {
     }
 
     public void startUpdates() {
+        messageService.localization().addLocaleListener(localeChanges);
         if (!observingChanges) { warpService.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
+        messageService.localization().removeLocaleListener(localeChanges);
         if (observingChanges) { warpService.removeChangeListener(committedChanges); observingChanges = false; }
     }
     public void shutdown() { stopUpdates(); closeOpenInventories(); }

@@ -1,5 +1,7 @@
 package dev.vapee.core.quest;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -17,6 +19,7 @@ public final class QuestProgressReporter {
     private final QuestService quests;
     private final BiConsumer<UUID, Component> feedback;
     private final Logger logger;
+    private final Function<UUID, java.util.Locale> audienceLocale;
     private boolean feedbackEnabled = true;
 
     public QuestProgressReporter(QuestService quests, MessageService messages,
@@ -24,12 +27,17 @@ public final class QuestProgressReporter {
         this(quests, (id, message) -> {
             Player player = onlinePlayer.apply(id);
             if (player != null && player.isOnline()) messages.send(player, message);
-        }, logger);
+        }, id -> messages.localization().locale(onlinePlayer.apply(id)), logger);
         Objects.requireNonNull(messages, "messages");
         Objects.requireNonNull(onlinePlayer, "onlinePlayer");
     }
 
     QuestProgressReporter(QuestService quests, BiConsumer<UUID, Component> feedback, Logger logger) {
+        this(quests, feedback, id -> java.util.Locale.ENGLISH, logger);
+    }
+
+    QuestProgressReporter(QuestService quests, BiConsumer<UUID, Component> feedback, Function<UUID, java.util.Locale> audienceLocale, Logger logger) {
+        this.audienceLocale = Objects.requireNonNull(audienceLocale);
         this.quests = Objects.requireNonNull(quests, "quests");
         this.feedback = Objects.requireNonNull(feedback, "feedback");
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -44,15 +52,12 @@ public final class QuestProgressReporter {
             boolean reached = result.reachedQuestIds().contains(id);
             boolean completed = result.completedQuestIds().contains(id);
             if (!completed && !(reached && result.rewardPendingQuestIds().contains(id))) continue;
-            Component message = Component.text(completed && !reached
-                            ? "Quest reward delivered: " : "Daily quest complete: ", NamedTextColor.GREEN)
-                    .append(Component.text(view.definition().name(), NamedTextColor.WHITE))
-                    .append(Component.newline())
-                    .append(Component.text(completed
-                            ? "+" + view.definition().rewardCoins() + " Coins"
-                            : "Your reward is pending and will be retried.",
-                            completed ? NamedTextColor.GOLD : NamedTextColor.YELLOW));
             try {
+                String keyName = !completed ? "quests.feedback.pending"
+                        : reached ? "quests.feedback.complete" : "quests.feedback.delivered";
+                Component message = tr(keyName, java.util.Map.of(
+                        "quest", Component.text(view.definition().nameText().resolve(audienceLocale.apply(playerId)), NamedTextColor.WHITE),
+                        "coins", Component.text(view.definition().rewardCoins())));
                 feedback.accept(playerId, message);
             } catch (RuntimeException exception) {
                 logger.log(Level.WARNING, "Quest feedback failed for " + playerId + " quest " + id

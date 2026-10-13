@@ -17,12 +17,20 @@ import java.util.logging.Logger;
 public final class ModerationLoginListener implements Listener {
     private final Function<UUID, Optional<ModerationRecord>> activeBan;
     private final Logger logger;
+    private final dev.vapee.core.i18n.LocalizationService localization;
 
     public ModerationLoginListener(ModerationService service, Logger logger) {
         this(Objects.requireNonNull(service)::getActiveBan, logger);
     }
 
+    public ModerationLoginListener(ModerationService service, Logger logger, dev.vapee.core.i18n.LocalizationService localization) {
+        this(service::getActiveBan, logger, localization);
+    }
     ModerationLoginListener(Function<UUID, Optional<ModerationRecord>> activeBan, Logger logger) {
+        this(activeBan, logger, dev.vapee.core.i18n.LocalizationService.bundled(logger));
+    }
+    private ModerationLoginListener(Function<UUID, Optional<ModerationRecord>> activeBan, Logger logger, dev.vapee.core.i18n.LocalizationService localization) {
+        this.localization = Objects.requireNonNull(localization);
         this.activeBan = Objects.requireNonNull(activeBan);
         this.logger = Objects.requireNonNull(logger);
     }
@@ -34,7 +42,7 @@ public final class ModerationLoginListener implements Listener {
     }
 
     Optional<Component> rejection(UUID playerId) {
-        try { return activeBan.apply(playerId).map(ModerationComponents::banScreen); }
+        try { return activeBan.apply(playerId).map(record -> localization.render(java.util.Locale.ENGLISH, ModerationComponents.banScreen(record))); }
         catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not query login ban [target=" + playerId + "]", exception);
             return Optional.empty(); // No fabricated ban; preserves any pre-existing event rejection.

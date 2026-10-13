@@ -1,5 +1,7 @@
 package dev.vapee.core.friend.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -76,6 +78,8 @@ public final class FriendMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private Player renderingFor;
+    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
 
@@ -103,7 +107,8 @@ public final class FriendMenu {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
-        this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.itemRenderer = spec -> itemRenderer.render(UiItems.localize(spec, this.messages, renderingFor));
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -112,10 +117,12 @@ public final class FriendMenu {
     }
 
     public boolean open(Player player, FriendMenuView view, int requestedPage) {
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
         Player viewer = Objects.requireNonNull(player, "player");
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
         if (!viewer.hasPermission(FriendCommand.PERMISSION)) {
-            messages.send(viewer, "<red>You do not have permission to use friends.</red>");
+            messages.send(viewer, tr("friends.denied").color(NamedTextColor.RED));
             return false;
         }
         UUID owner = viewer.getUniqueId();
@@ -136,40 +143,40 @@ public final class FriendMenu {
             existing.beginRender(holder); holder = existing;
             for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
         } else {
-            inventory = inventoryFactory.create(holder, layout.size(), title(selectedView));
+            inventory = inventoryFactory.create(holder, layout.size(), messages.localize(viewer, title(selectedView)));
             holder.bindInventory(inventory);
         }
         for (int index = first; index < end; index++) {
             inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(selectedView, entries.get(index))));
         }
         if (entries.isEmpty()) {
-            String empty = switch (selectedView) {
-                case FRIENDS -> "No friends yet";
-                case INCOMING -> "No incoming requests";
-                case OUTGOING -> "No outgoing requests";
+            Component empty = switch (selectedView) {
+                case FRIENDS -> tr("friends.empty");
+                case INCOMING -> tr("friends.incoming-empty");
+                case OUTGOING -> tr("friends.outgoing-empty");
             };
             placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, empty, NamedTextColor.GRAY,
                     selectedView == FriendMenuView.FRIENDS
-                            ? List.of("Use /friend add <player> to get started.") : List.of()));
+                            ? List.of(tr("friends.empty-hint")) : List.of()));
         }
-        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, "Page " + (pagination.page() + 1) + "/" + pagination.pageCount(), NamedTextColor.AQUA, List.of()));
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, tr("common.page", java.util.Map.of("current", Component.text(pagination.page()+1), "total", Component.text(pagination.pageCount()))), NamedTextColor.AQUA, List.of()));
         if (pagination.hasPrevious()) {
-            place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
+            place(inventory, Action.PREVIOUS, item(Material.ARROW, tr("common.previous-page"), NamedTextColor.YELLOW,
                     List.of()));
         }
-        place(inventory, Action.ADD, item(Material.LIME_DYE, "Add Friend", NamedTextColor.GREEN,
-                List.of("Click to enter /friend add <player>.")));
-        place(inventory, Action.FRIENDS, tabItem("Friends", FriendMenuView.FRIENDS == selectedView,
+        place(inventory, Action.ADD, item(Material.LIME_DYE, tr("friends.add-name"), NamedTextColor.GREEN,
+                List.of(tr("friends.add-hint"))));
+        place(inventory, Action.FRIENDS, tabItem(tr("friends.title"), FriendMenuView.FRIENDS == selectedView,
                 friends.countFriends(owner) + " / " + friends.getLimits().maxFriends()));
-        place(inventory, Action.INCOMING, tabItem("Incoming Requests", FriendMenuView.INCOMING == selectedView,
+        place(inventory, Action.INCOMING, tabItem(tr("friends.incoming-tab"), FriendMenuView.INCOMING == selectedView,
                 Integer.toString(friends.getIncomingRequests(owner).size())));
-        place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", NamedTextColor.RED, List.of()));
-        place(inventory, Action.OUTGOING, tabItem("Outgoing Requests", FriendMenuView.OUTGOING == selectedView,
+        place(inventory, Action.CLOSE, item(Material.BARRIER, tr("common.close"), NamedTextColor.RED, List.of()));
+        place(inventory, Action.OUTGOING, tabItem(tr("friends.outgoing-tab"), FriendMenuView.OUTGOING == selectedView,
                 Integer.toString(friends.getOutgoingRequests(owner).size())));
-        place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", NamedTextColor.AQUA,
-                List.of("Update friends, requests and online status.")));
+        place(inventory, Action.REFRESH, item(Material.CLOCK, tr("common.refresh"), NamedTextColor.AQUA,
+                List.of(tr("friends.refresh-hint"))));
         if (pagination.hasNext()) {
-            place(inventory, Action.NEXT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW,
+            place(inventory, Action.NEXT, item(Material.ARROW, tr("common.next-page"), NamedTextColor.YELLOW,
                     List.of()));
         }
         holder.finishRender();
@@ -179,6 +186,8 @@ public final class FriendMenu {
             return true;
         }
         return false;
+
+        } finally { renderingFor = previousViewer; }
     }
 
     public boolean isActive(Player viewer, Inventory inventory, FriendMenuHolder holder) {
@@ -224,9 +233,9 @@ public final class FriendMenu {
 
     public void promptAdd(Player player) {
         player.closeInventory();
-        messages.send(player, Component.text("Click here to enter /friend add ", NamedTextColor.GREEN)
+        messages.send(player, tr("friends.add-prompt").color(NamedTextColor.GREEN)
                 .clickEvent(ClickEvent.suggestCommand("/friend add "))
-                .hoverEvent(HoverEvent.showText(Component.text("Click to enter a player name."))));
+                .hoverEvent(HoverEvent.showText(tr("friends.add-prompt-hover"))));
     }
 
     private List<Entry> entries(UUID owner, FriendMenuView view) {
@@ -245,31 +254,31 @@ public final class FriendMenu {
     }
 
     private UiItemSpec entryItem(FriendMenuView view, Entry entry) {
-        List<String> lore = switch (view) {
-            case FRIENDS -> List.of(entry.online() ? "Online" : "Offline",
-                    "Shift + Right-click to remove");
-            case INCOMING -> List.of(entry.online() ? "Online" : "Offline",
-                    "Left-click to accept", "Right-click to decline");
-            case OUTGOING -> List.of(entry.online() ? "Online" : "Offline", "Click to cancel request.");
+        List<Component> lore = switch (view) {
+            case FRIENDS -> List.of(entry.online() ? tr("common.online") : tr("common.offline"),
+                    tr("friends.remove-hint"));
+            case INCOMING -> List.of(entry.online() ? tr("common.online") : tr("common.offline"),
+                    tr("friends.accept-hint"), tr("friends.deny-hint"));
+            case OUTGOING -> List.of(entry.online() ? tr("common.online") : tr("common.offline"), tr("friends.cancel-hint"));
         };
-        return UiItems.literal(Material.PLAYER_HEAD, entry.name(), NamedTextColor.AQUA, lore);
+        return UiItems.literal(Material.PLAYER_HEAD, Component.text(entry.name()), NamedTextColor.AQUA, lore);
     }
 
-    private ItemStack tabItem(String name, boolean active, String count) {
+    private ItemStack tabItem(Component name, boolean active, String count) {
         return itemRenderer.render(UiItems.literal(active ? Material.LIME_DYE : Material.GRAY_DYE, name,
                 active ? NamedTextColor.GREEN : NamedTextColor.WHITE,
-                List.of(count, active ? "Selected" : "Click to open")));
+                List.of(Component.text(count), active ? tr("common.selected") : tr("common.click-open-short"))));
     }
 
-    private ItemStack item(Material material, String name, NamedTextColor color, List<String> lore) {
+    private ItemStack item(Material material, Component name, NamedTextColor color, List<Component> lore) {
         return itemRenderer.render(UiItems.literal(material, name, color, lore));
     }
 
     private static Component title(FriendMenuView view) {
         return UiItems.text(switch (view) {
-            case FRIENDS -> "Friends";
-            case INCOMING -> "Friends • Incoming";
-            case OUTGOING -> "Friends • Outgoing";
+            case FRIENDS -> tr("friends.title");
+            case INCOMING -> tr("friends.incoming-title");
+            case OUTGOING -> tr("friends.outgoing-title");
         }, NamedTextColor.DARK_GRAY);
     }
 
@@ -313,9 +322,11 @@ public final class FriendMenu {
     }
 
     public void startUpdates() {
+        messages.localization().addLocaleListener(localeChanges);
         if (!observingChanges) { friends.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
+        messages.localization().removeLocaleListener(localeChanges);
         if (observingChanges) { friends.removeChangeListener(committedChanges); observingChanges = false; }
     }
     public void shutdown() { stopUpdates(); closeOpenInventories(); }

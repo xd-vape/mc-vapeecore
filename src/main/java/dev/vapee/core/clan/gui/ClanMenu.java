@@ -1,5 +1,7 @@
 package dev.vapee.core.clan.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -82,6 +84,8 @@ public final class ClanMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private Player renderingFor;
+    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Logger logger;
     private final Map<UUID, Inventory> active = new HashMap<>();
 
@@ -105,13 +109,16 @@ public final class ClanMenu {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
-        this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.itemRenderer = spec -> itemRenderer.render(UiItems.localize(spec, this.messages, renderingFor));
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void open(Player player) { open(player, ClanMenuView.OVERVIEW, 0); }
 
     public void open(Player player, ClanMenuView requestedView, int requestedPage) {
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
         Objects.requireNonNull(player, "player");
         Objects.requireNonNull(requestedView, "requestedView");
         UUID viewer = player.getUniqueId();
@@ -132,41 +139,41 @@ public final class ClanMenu {
             existing.beginRender(holder); holder = existing;
             for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
         } else {
-            inventory = inventoryFactory.create(holder, layout.size(), title(view));
+            inventory = inventoryFactory.create(holder, layout.size(), messages.localize(player, title(view)));
             holder.bind(inventory);
         }
         if (view == ClanMenuView.OVERVIEW) renderOverview(inventory, viewer, clan);
         else if (entries.isEmpty()) placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER,
-                view == ClanMenuView.MEMBERS ? "No members" : "No invites", List.of()));
+                view == ClanMenuView.MEMBERS ? tr("clan.empty-members") : tr("clan.empty-invites"), List.of()));
         for (int i = first; i < end; i++) inventory.setItem(layout.contentSlot(i - first), item(entries.get(i)));
-        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, "Page " + (pagination.page() + 1) + "/" + pagination.pageCount(), List.of()));
-        if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous Page", List.of()));
-        place(inventory, Action.OVERVIEW, tab("Overview", view == ClanMenuView.OVERVIEW));
-        if (clan != null) place(inventory, Action.MEMBERS, tab("Members", view == ClanMenuView.MEMBERS));
-        place(inventory, Action.INVITES, tab("Invites", view == ClanMenuView.INVITES));
-        place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", List.of()));
-        if (clan == null) place(inventory, Action.ACTION, item(Material.LIME_DYE, "Create Clan",
-                List.of("Click for a command prompt.")));
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, tr("common.page", java.util.Map.of("current", Component.text(pagination.page()+1), "total", Component.text(pagination.pageCount()))), List.of()));
+        if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, tr("common.previous-page"), List.of()));
+        place(inventory, Action.OVERVIEW, tab(tr("clan.overview-tab"), view == ClanMenuView.OVERVIEW));
+        if (clan != null) place(inventory, Action.MEMBERS, tab(tr("clan.members-tab"), view == ClanMenuView.MEMBERS));
+        place(inventory, Action.INVITES, tab(tr("clan.invites-tab"), view == ClanMenuView.INVITES));
+        place(inventory, Action.CLOSE, item(Material.BARRIER, tr("common.close"), List.of()));
+        if (clan == null) place(inventory, Action.ACTION, item(Material.LIME_DYE, tr("clan.create-name"),
+                List.of(tr("clan.create-hint"))));
         else if (clan.ownerId().equals(viewer)) place(inventory, Action.ACTION,
-                item(Material.RED_DYE, "Disband Clan", List.of("Shift + Right-click for confirmation command.")));
-        place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", List.of("Read current clan state.")));
-        if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, "Next Page", List.of()));
+                item(Material.RED_DYE, tr("clan.disband-name"), List.of(tr("clan.disband-hint"))));
+        place(inventory, Action.REFRESH, item(Material.CLOCK, tr("common.refresh"), List.of(tr("clan.refresh-hint"))));
+        if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, tr("common.next-page"), List.of()));
         holder.finishRender();
         var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) active.put(viewer, inventory);
+
+        } finally { renderingFor = previousViewer; }
     }
 
     private void renderOverview(Inventory inventory, UUID viewer, Clan clan) {
         if (clan == null) {
-            placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, "You are not in a clan",
-                    List.of("Create one or review incoming invites.")));
+            placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, tr("clan.no-clan"),
+                    List.of(tr("clan.no-clan-hint"))));
             return;
         }
-        placeDisplay(inventory, clanLayout.clanNameSlot(), item(Material.NAME_TAG, clan.name(), List.of("Tag: " + clan.tag())));
-        placeDisplay(inventory, clanLayout.memberCountSlot(), item(Material.PLAYER_HEAD, "Members: " + clan.members().size()
-                + "/" + clans.getLimits().maxMembers(), List.of("Owner: " + displayName(clan.ownerId()))));
-        placeDisplay(inventory, clanLayout.roleSlot(), item(Material.PAPER, "Your role: " +
-                (clan.ownerId().equals(viewer) ? "OWNER" : "MEMBER"), List.of("Clan ID: " + clan.id())));
+        placeDisplay(inventory, clanLayout.clanNameSlot(), item(Material.NAME_TAG, Component.text(clan.name()), List.of(tr("clan.tag", java.util.Map.of("tag", Component.text(clan.tag()))))));
+        placeDisplay(inventory, clanLayout.memberCountSlot(), item(Material.PLAYER_HEAD, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size()), "maximum", Component.text(clans.getLimits().maxMembers()))), List.of(tr("clan.owner", java.util.Map.of("player", Component.text(displayName(clan.ownerId())))))));
+        placeDisplay(inventory, clanLayout.roleSlot(), item(Material.PAPER, tr("clan.role", java.util.Map.of("role", tr(clan.ownerId().equals(viewer) ? "clan.role.owner" : "clan.role.member"))), List.of(tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString()))))));
     }
 
     private List<Entry> entries(UUID viewer, Clan clan, ClanMenuView view) {
@@ -177,10 +184,10 @@ public final class ClanMenu {
                 UUID id = member.playerId();
                 String name = displayName(id);
                 boolean online = isOnline(id);
-                List<String> lore = new ArrayList<>(List.of(member.role().name(), online ? "Online" : "Offline"));
+                List<Component> lore = new ArrayList<>(List.of(tr(member.role() == ClanRole.OWNER ? "clan.role.owner" : "clan.role.member"), online ? tr("common.online") : tr("common.offline")));
                 if (clan.ownerId().equals(viewer) && !id.equals(viewer)) {
-                    lore.add("Shift + Right-click to kick");
-                    lore.add("Shift + Left-click to transfer ownership");
+                    lore.add(tr("clan.kick-hint"));
+                    lore.add(tr("clan.transfer-hint"));
                 }
                 entries.add(new Entry(id, name, Material.PLAYER_HEAD, lore, member.role() == ClanRole.OWNER ? 0 : 1));
             }
@@ -192,8 +199,8 @@ public final class ClanMenu {
                 Clan source = clans.getClan(invite.clanId()).orElse(null);
                 if (source == null) continue;
                 entries.add(new Entry(source.id(), source.name() + " [" + source.tag() + "]",
-                        Material.PAPER, List.of("Members: " + source.members().size(),
-                        "Left-click to accept", "Right-click to deny"), 0));
+                        Material.PAPER, List.of(tr("clan.member-count", java.util.Map.of("count", Component.text(source.members().size()))),
+                        tr("clan.accept-hint"), tr("clan.deny-hint")), 0));
             }
             entries.sort(Comparator.comparing(Entry::name, String.CASE_INSENSITIVE_ORDER)
                     .thenComparing(entry -> entry.id().toString()));
@@ -201,7 +208,7 @@ public final class ClanMenu {
             for (ClanInvite invite : clans.getOutgoingInvites(clan.id())) {
                 UUID id = invite.recipient();
                 entries.add(new Entry(id, displayName(id), Material.PLAYER_HEAD,
-                        List.of(isOnline(id) ? "Online" : "Offline", "Right-click to cancel"), 0));
+                        List.of(isOnline(id) ? tr("common.online") : tr("common.offline"), tr("clan.cancel-hint")), 0));
             }
             entries.sort(Comparator.comparing(Entry::name, String.CASE_INSENSITIVE_ORDER)
                     .thenComparing(entry -> entry.id().toString()));
@@ -248,16 +255,16 @@ public final class ClanMenu {
 
     public void promptCreate(Player player) {
         player.closeInventory();
-        messages.send(player, Component.text("Click here to enter /clan create ", NamedTextColor.GREEN)
+        messages.send(player, tr("clan.create-prompt").color(NamedTextColor.GREEN)
                 .clickEvent(ClickEvent.suggestCommand("/clan create TAG Clan Name"))
-                .hoverEvent(HoverEvent.showText(Component.text("Click to edit the clan tag and name."))));
+                .hoverEvent(HoverEvent.showText(tr("clan.create-hover"))));
     }
 
     public void promptDisband(Player player) {
         player.closeInventory();
-        messages.send(player, Component.text("Click to enter /clan disband confirm", NamedTextColor.RED)
+        messages.send(player, tr("clan.disband-prompt").color(NamedTextColor.RED)
                 .clickEvent(ClickEvent.suggestCommand("/clan disband confirm"))
-                .hoverEvent(HoverEvent.showText(Component.text("This permanently deletes the clan."))));
+                .hoverEvent(HoverEvent.showText(tr("clan.disband-hover"))));
     }
 
     private boolean isOnline(UUID id) {
@@ -265,24 +272,24 @@ public final class ClanMenu {
         return (id.equals(presenceTarget) ? presenceOnline : player != null && player.isOnline());
     }
 
-    private ItemStack tab(String label, boolean selected) {
+    private ItemStack tab(Component label, boolean selected) {
         return item(selected ? Material.LIME_DYE : Material.GRAY_DYE, label,
-                List.of(selected ? "Selected" : "Click to open"));
+                List.of(selected ? tr("common.selected") : tr("common.click-open-short")));
     }
 
-    private ItemStack item(Entry entry) { return item(entry.material(), entry.name(), entry.lore()); }
-    private ItemStack item(Material material, String name, List<String> lore) {
+    private ItemStack item(Entry entry) { return item(entry.material(), Component.text(entry.name()), entry.lore()); }
+    private ItemStack item(Material material, Component name, List<Component> lore) {
         return itemRenderer.render(UiItems.literal(material, name, NamedTextColor.AQUA, lore));
     }
     private static Component title(ClanMenuView view) {
         return UiItems.text(switch (view) {
-            case OVERVIEW -> "Clan";
-            case MEMBERS -> "Clan • Members";
-            case INVITES -> "Clan • Invites";
+            case OVERVIEW -> tr("clan.title");
+            case MEMBERS -> tr("clan.members-title");
+            case INVITES -> tr("clan.invites-title");
         }, NamedTextColor.DARK_GRAY);
     }
 
-    private record Entry(UUID id, String name, Material material, List<String> lore, int order) { }
+    private record Entry(UUID id, String name, Material material, List<Component> lore, int order) { }
     @FunctionalInterface public interface InventoryFactory {
         Inventory create(ClanMenuHolder holder, int size, Component title);
     }
@@ -316,9 +323,11 @@ public final class ClanMenu {
     }
 
     public void startUpdates() {
+        messages.localization().addLocaleListener(localeChanges);
         if (!observingChanges) { clans.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
+        messages.localization().removeLocaleListener(localeChanges);
         if (observingChanges) { clans.removeChangeListener(committedChanges); observingChanges = false; }
     }
     public void shutdown() { stopUpdates(); closeOpenInventories(); }

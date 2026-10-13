@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.InvseeService;
@@ -75,11 +77,11 @@ public final class InvseeCommand implements TabExecutor {
             return true;
         }
         if (!(sender instanceof Player viewer)) {
-            error(sender, "This command can only be used by a player because it opens an inventory.");
+            error(sender, tr("common.inventory-player-only"));
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            error(sender, "You do not have permission to inspect inventories.");
+            error(sender, tr("utility.invsee.denied"));
             return true;
         }
 
@@ -91,13 +93,10 @@ public final class InvseeCommand implements TabExecutor {
         if (!staffTargetGuard.authorize(sender, target, "invsee", messageSender)) return true;
 
         if (invseeService.openSnapshot(viewer, target) == null) {
-            error(sender, "The read-only inventory snapshot could not be opened.");
+            error(sender, tr("utility.invsee.failed"));
             return true;
         }
-        messageSender.accept(sender, Component.text("Opened a read-only inventory snapshot for ",
-                        NamedTextColor.GREEN)
-                .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                .append(Component.text(".", NamedTextColor.GREEN)));
+        messageSender.accept(sender, tr("utility.invsee.opened", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -116,19 +115,17 @@ public final class InvseeCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/invsee <player>", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

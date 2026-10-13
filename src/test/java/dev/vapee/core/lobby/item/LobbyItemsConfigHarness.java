@@ -115,8 +115,10 @@ public final class LobbyItemsConfigHarness {
                 default -> null;
             });
             var profile = proxy(com.destroystokyo.paper.profile.PlayerProfile.class, (name, args1) -> null);
+            var locale = new AtomicReference<>(java.util.Locale.US);
             Player player = proxy(Player.class, (name, args1) -> switch (name) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale.get();
                 case "getWorld" -> world;
                 case "getInventory" -> inventory;
                 case "getPlayerProfile" -> profile;
@@ -126,13 +128,28 @@ public final class LobbyItemsConfigHarness {
             var registry = new LobbyItemRegistry();
             var visibility = new AtomicReference<dev.vapee.core.visibility.VisibilityLobbyItemAction>();
             LobbyItemRegistrations.register(registry, () -> null, () -> null, () -> null, visibility::get);
-            var service = new LobbyItemService(plugin, lobby, registry, current::get);
+            var localization = dev.vapee.core.i18n.LocalizationService.bundled(logger);
+            var service = new LobbyItemService(plugin, lobby, registry, current::get, localization);
             visibility.set(new dev.vapee.core.visibility.VisibilityLobbyItemAction(plugin, lobby, service,
                     allocate(dev.vapee.core.visibility.VisibilityService.class), settings,
                     allocate(dev.vapee.core.message.MessageService.class), ignored -> { }, ignored -> true));
             service.applyLobbyItems(player);
             for (var type : defaults.keySet()) check(service.getItemId(storage[defaults.get(type).slot()]).orElseThrow().equals(type), "default PDC identity " + type);
             check(countOwned(service, storage) == 4, "exact four initial owned items");
+            current.set(read("items:\n  friends:\n    enabled: true\n    slot: 6\n    material: PLAYER_HEAD\n    head-owner: self\n    name: {en: '<aqua>Custom Friends', de: '<aqua>Eigene Freunde'}\n    lore: {en: ['English lore'], de: ['Deutsche Lore']}\n", logger));
+            service.applyLobbyItems(player);
+            check(plain(storage[6].getItemMeta().displayName()).equals("Custom Friends"), "English locale reaches actual managed head");
+            java.util.function.Consumer<Player> changed = service::applyLobbyItems;
+            localization.addLocaleListener(changed);
+            localization.localeChanged(player, java.util.Locale.GERMANY);
+            check(plain(storage[6].getItemMeta().displayName()).equals("Eigene Freunde")
+                    && plain(storage[6].getItemMeta().lore().getFirst()).equals("Deutsche Lore"), "locale event updates actual hotbar name/lore before client getter changes");
+            check(((SkullMeta) storage[6].getItemMeta()).getPlayerProfile() == profile
+                    && service.getItemId(storage[6]).orElseThrow().equals("friends") && countOwned(service, storage) == 1,
+                    "localized player head retains skin, stable PDC feature ID and no duplicates");
+            localization.removeLocaleListener(changed);
+            current.set(defaults); service.applyLobbyItems(player);
+
             current.set(read("items:\n  navigator:\n    material: CLOCK\n", logger));
             service.applyLobbyItems(player);
             check(storage[0].getType() == Material.CLOCK && service.getItemId(storage[0]).orElseThrow().equals("navigator"),
@@ -169,7 +186,7 @@ public final class LobbyItemsConfigHarness {
     private static Map<String, LobbyItemDefinition> read(String source, Logger logger) throws Exception {
         var yaml = new YamlConfiguration(); yaml.loadFromString(source); return LobbyItemsConfig.read(yaml, logger);
     }
-    private static String plain(Component component) { return PlainTextComponentSerializer.plainText().serialize(component); }
+    private static String plain(Component component) { return dev.vapee.core.i18n.I18nTestSupport.english(component); }
     private static void check(boolean value, String label) { checks++; if (!value) throw new AssertionError(label); }
     private static Object unsafe() throws Exception { var f = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe"); f.setAccessible(true); return f.get(null); }
     static <T> T allocate(Class<T> type) throws Exception { Object unsafe = unsafe(); return type.cast(unsafe.getClass().getMethod("allocateInstance", Class.class).invoke(unsafe, type)); }
@@ -193,7 +210,7 @@ public final class LobbyItemsConfigHarness {
     }
     @FunctionalInterface interface Call { Object run(String name, Object[] args); }
 
-    static void installRegistries() throws Exception {
+    public static void installRegistries() throws Exception {
         var access = proxy(io.papermc.paper.registry.RegistryAccess.class, (name, args) -> {
             if (!name.equals("getRegistry")) return null;
             boolean items = args[0].toString().contains("item");

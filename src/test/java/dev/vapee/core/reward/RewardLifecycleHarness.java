@@ -64,8 +64,8 @@ public final class RewardLifecycleHarness {
             check(position > previousPosition, module + " has the required module-order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 27,
-                "VapeeCore registers exactly twenty-seven modules");
+        check(count(coreSource, "moduleManager.register(") == 28,
+                "VapeeCore registers exactly twenty-eight modules");
         check(coreSource.indexOf("economyModule = new EconomyModule")
                         < coreSource.indexOf("rewardModule = new RewardModule")
                         && coreSource.indexOf("rewardModule = new RewardModule")
@@ -76,7 +76,7 @@ public final class RewardLifecycleHarness {
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
                 "RewardModule remains after Economy and before OnlineReward and Quest consumers");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                        "List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,\n"
                                 + "                        presentationModule, dailyQuestModule)"
                 ),
                 "reload adds DailyQuest after the existing five participants");

@@ -1,5 +1,7 @@
 package dev.vapee.core.settings.visibility;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.AddedVisiblePlayerResult;
@@ -70,7 +72,7 @@ public final class VisiblePlayersListener implements Listener {
         if (!player.hasPermission(SettingsCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
             if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
-            messages.send(player, "<red>You do not have permission to use settings.</red>");
+            messages.send(player, tr("settings.use-denied"));
             return;
         }
         if (event.getClickedInventory() != top) return;
@@ -130,7 +132,7 @@ public final class VisiblePlayersListener implements Listener {
             result = settings.removeLobbyVisiblePlayer(owner, target);
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not remove visible player for " + owner + ".", exception);
-            messages.send(player, "<red>Your visible players list could not be saved. Please try again.</red>");
+            messages.send(player, tr("visible-players.save-failed"));
             menu.refreshActive(player.getUniqueId());
             return;
         }
@@ -142,14 +144,12 @@ public final class VisiblePlayersListener implements Listener {
                     logger.log(Level.WARNING, "Could not immediately apply visible players for " + owner + ".",
                             exception);
                 }
-                messages.send(player, Component.text("Removed ", NamedTextColor.GREEN)
-                        .append(Component.text(menu.displayName(target), NamedTextColor.WHITE))
-                        .append(Component.text(" from your visible players list.", NamedTextColor.GREEN)));
+                messages.send(player, tr("visible-players.removed", java.util.Map.of("player", Component.text(menu.displayName(target), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
                 menu.refreshActive(player.getUniqueId());
                 soundFeedback.accept(player);
             }
             case NOT_ADDED -> {
-                messages.send(player, "<yellow>That player is no longer in your visible players list.</yellow>");
+                messages.send(player, tr("visible-players.no-longer-added"));
                 menu.refreshActive(player.getUniqueId());
             }
             case OWNER_NOT_LOADED -> unavailable(player);
@@ -184,7 +184,7 @@ public final class VisiblePlayersListener implements Listener {
 
     private void unavailable(Player player) {
         player.closeInventory();
-        messages.send(player, "<red>Your player profile is not available.</red>");
+        messages.send(player, tr("common.profile-unavailable.message"));
     }
 
     private static void playFeedbackSound(Player player, PlayerSettingsService settings, Logger logger) {

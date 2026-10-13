@@ -47,6 +47,7 @@ public final class VapeeCore extends JavaPlugin {
 
     private ConfigService configService;
     private MessageService messageService;
+    private dev.vapee.core.i18n.LocalizationModule localizationModule;
     private CommandHelpRenderer commandHelpRenderer;
     private ModuleManager moduleManager;
     private PermissionModule permissionModule;
@@ -83,7 +84,8 @@ public final class VapeeCore extends JavaPlugin {
         configService = new ConfigService(this);
         configService.load();
 
-        messageService = new MessageService(configService);
+        localizationModule = new dev.vapee.core.i18n.LocalizationModule(this);
+        messageService = new MessageService(configService, localizationModule.service());
         commandHelpRenderer = new CommandHelpRenderer(messageService);
         moduleManager = new ModuleManager(getLogger());
 
@@ -164,6 +166,7 @@ public final class VapeeCore extends JavaPlugin {
                 friendModule,
                 messageService
         );
+        moduleManager.register(localizationModule);
         moduleManager.register(permissionModule);
         moduleManager.register(rankModule);
         moduleManager.register(playerModule);
@@ -195,7 +198,7 @@ public final class VapeeCore extends JavaPlugin {
 
         ReloadService reloadService = new ReloadService(
                 getLogger(),
-                List.of(configService, lobbyModule, chatModule, privateMessageModule,
+                List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,
                         presentationModule, dailyQuestModule)
         );
         registerCommands(

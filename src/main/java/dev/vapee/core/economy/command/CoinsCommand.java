@@ -1,5 +1,7 @@
 package dev.vapee.core.economy.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
@@ -37,19 +39,19 @@ public final class CoinsCommand implements TabExecutor {
     private static final String BASE_PERMISSION = "vapeecore.economy.coins";
     private static final String ADMIN_PERMISSION = "vapeecore.economy.admin";
     private static final List<String> ADMIN_ACTIONS = List.of("get", "add", "remove", "set");
-    private static final CommandHelpPage HELP_PAGE = new CommandHelpPage("Coins", List.of(
-            new CommandHelpSection("Player", List.of(
-                    new CommandHelpEntry("/coins", "Shows your current coin balance.", BASE_PERMISSION)
+    private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(tr("economy.help.title"), List.of(
+            new CommandHelpSection(tr("economy.help.section.player"), List.of(
+                    new CommandHelpEntry("/coins", tr("core.help.coins.description"), BASE_PERMISSION)
             )),
-            new CommandHelpSection("Administration", List.of(
+            new CommandHelpSection(tr("core.help.section.administration"), List.of(
                     new CommandHelpEntry("/coins get <player|uuid>",
-                            "Shows a known online or offline player's balance.", ADMIN_PERMISSION),
+                            tr("economy.help.coins.get.description"), ADMIN_PERMISSION),
                     new CommandHelpEntry("/coins add <player|uuid> <amount>",
-                            "Adds coins; the target must be online.", ADMIN_PERMISSION),
+                            tr("economy.help.coins.add.description"), ADMIN_PERMISSION),
                     new CommandHelpEntry("/coins remove <player|uuid> <amount>",
-                            "Removes coins; the target must be online.", ADMIN_PERMISSION),
+                            tr("economy.help.coins.remove.description"), ADMIN_PERMISSION),
                     new CommandHelpEntry("/coins set <player|uuid> <amount>",
-                            "Sets a balance; the target must be online.", ADMIN_PERMISSION)
+                            tr("economy.help.coins.set.description"), ADMIN_PERMISSION)
             ))
     ));
 
@@ -96,10 +98,9 @@ public final class CoinsCommand implements TabExecutor {
             return true;
         }
         if (!ADMIN_ACTIONS.contains(action)) {
-            messageService.send(sender, Component.text("Unknown coins command: ", NamedTextColor.RED)
-                    .append(Component.text(args[0], NamedTextColor.WHITE))
+            messageService.send(sender, tr("economy.unknown-command", java.util.Map.of("command", Component.text(args[0], NamedTextColor.WHITE))).color(NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(Component.text("Use /coins help to view available commands.", NamedTextColor.YELLOW)));
+                    .append(tr("economy.help-hint").color(NamedTextColor.YELLOW)));
             return true;
         }
         if (!sender.hasPermission(ADMIN_PERMISSION)) {
@@ -143,7 +144,7 @@ public final class CoinsCommand implements TabExecutor {
 
     private void sendOwnBalance(CommandSender sender) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can view their own coin balance.</red>");
+            messageService.send(sender, tr("economy.player-only"));
             return;
         }
         OptionalLong balance = economyService.getCoins(player.getUniqueId());
@@ -151,13 +152,12 @@ public final class CoinsCommand implements TabExecutor {
             sendPlayerNotLoaded(sender, player.getName());
             return;
         }
-        messageService.send(sender, Component.text("Coins: ", NamedTextColor.GRAY)
-                .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
+        messageService.send(sender, tr("economy.balance", java.util.Map.of("balance", Component.text(format(balance.getAsLong()), NamedTextColor.WHITE))).color(NamedTextColor.GRAY));
     }
 
     private void handleGet(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendUsage(sender, args.length == 1 ? "Missing player." : null, "/coins get <player|uuid>");
+            sendUsage(sender, args.length == 1 ? tr("common.missing-player") : null, "/coins get <player|uuid>");
             return;
         }
         Target target = resolve(sender, args[1]);
@@ -168,8 +168,7 @@ public final class CoinsCommand implements TabExecutor {
                 sendUnknownTarget(sender);
                 return;
             }
-            messageService.send(sender, Component.text(target.name() + "'s coins: ", NamedTextColor.GRAY)
-                    .append(Component.text(format(balance.getAsLong()), NamedTextColor.WHITE)));
+            messageService.send(sender, tr("economy.target-balance", java.util.Map.of("player", Component.text(target.name()), "balance", Component.text(format(balance.getAsLong()), NamedTextColor.WHITE))).color(NamedTextColor.GRAY));
         } catch (RuntimeException exception) {
             logReadFailure(sender, target.id().toString(), exception);
         }
@@ -182,7 +181,7 @@ public final class CoinsCommand implements TabExecutor {
                 Set<UUID> ids = playerService.findKnownIdsByName(input);
                 if (ids.size() > 1) {
                     messageService.send(sender,
-                            "<red>That name is ambiguous. Use the player's UUID.</red>");
+                            tr("economy.ambiguous"));
                     return null;
                 }
                 if (ids.isEmpty()) {
@@ -212,8 +211,8 @@ public final class CoinsCommand implements TabExecutor {
 
     private void handleMutation(CommandSender sender, String[] args, Mutation mutation) {
         if (args.length != 3) {
-            String missing = args.length == 1 ? "Missing player and amount."
-                    : args.length == 2 ? "Missing amount." : null;
+            Component missing = args.length == 1 ? tr("economy.missing-player-amount")
+                    : args.length == 2 ? tr("economy.missing-amount") : null;
             sendUsage(sender, missing, "/coins " + mutation.name().toLowerCase(Locale.ROOT)
                     + " <player|uuid> <amount>");
             return;
@@ -222,10 +221,7 @@ public final class CoinsCommand implements TabExecutor {
         if (target == null) return;
         Player online = server.getPlayer(target.id());
         if (online == null || !online.isOnline()) {
-            messageService.send(sender, Component.text(target.name(), NamedTextColor.WHITE)
-                    .append(Component.text(
-                            " is known, but coin changes currently require the player to be online.",
-                            NamedTextColor.RED)));
+            messageService.send(sender, tr("economy.offline-mutation", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
             return;
         }
         if (!staffTargetGuard.authorize(sender, online, "coins " + mutation.name(), messageService::send)) return;
@@ -247,7 +243,7 @@ public final class CoinsCommand implements TabExecutor {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not persist coin admin mutation [actor=" + actor(sender)
                     + ", target=" + target.id() + ", action=" + mutation + "]", exception);
-            messageService.send(sender, "<red>The coin balance could not be saved. Please try again.</red>");
+            messageService.send(sender, tr("economy.save-failed"));
             return;
         }
         switch (result) {
@@ -265,34 +261,23 @@ public final class CoinsCommand implements TabExecutor {
             }
             case PLAYER_NOT_LOADED -> sendPlayerNotLoaded(sender, target.name());
             case INSUFFICIENT_FUNDS -> messageService.send(sender,
-                    Component.text(target.name(), NamedTextColor.WHITE)
-                            .append(Component.text(" does not have enough coins.", NamedTextColor.RED)));
+                    tr("economy.insufficient", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
             case BALANCE_OVERFLOW -> messageService.send(sender,
-                    "<red>The resulting coin balance would be too large.</red>");
+                    tr("economy.overflow"));
         }
     }
 
     private void sendMutationSuccess(CommandSender sender, Target target, long amount,
                                      Mutation mutation, long balance) {
-        String text = switch (mutation) {
-            case ADD -> "Added " + format(amount) + " coins to " + target.name()
-                    + ". New balance: " + format(balance) + ".";
-            case REMOVE -> "Removed " + format(amount) + " coins from " + target.name()
-                    + ". New balance: " + format(balance) + ".";
-            case SET -> "Set " + target.name() + "'s coin balance to " + format(balance) + ".";
-        };
-        messageService.send(sender, Component.text(text, NamedTextColor.GREEN));
+        String key = "economy.admin." + mutation.name().toLowerCase(Locale.ROOT);
+        messageService.send(sender, tr(key, java.util.Map.of("player", Component.text(target.name()),
+                "amount", Component.text(format(amount)), "balance", Component.text(format(balance)))).color(NamedTextColor.GREEN));
     }
 
     private void notifyTarget(Player target, long amount, Mutation mutation, long balance) {
-        String text = switch (mutation) {
-            case ADD -> "Your coin balance increased by " + format(amount)
-                    + ". New balance: " + format(balance) + ".";
-            case REMOVE -> format(amount) + " coins were removed from your balance. New balance: "
-                    + format(balance) + ".";
-            case SET -> "Your coin balance was set to " + format(balance) + ".";
-        };
-        messageService.send(target, Component.text(text, NamedTextColor.GREEN));
+        String key = "economy.notice." + mutation.name().toLowerCase(Locale.ROOT);
+        messageService.send(target, tr(key, java.util.Map.of("amount", Component.text(format(amount)),
+                "balance", Component.text(format(balance)))).color(NamedTextColor.GREEN));
     }
 
     private static String actor(CommandSender sender) {
@@ -306,34 +291,33 @@ public final class CoinsCommand implements TabExecutor {
             if (!zeroAllowed && amount == 0L) throw new NumberFormatException();
             return amount;
         } catch (NumberFormatException exception) {
-            messageService.send(sender, Component.text("The amount must be "
-                    + (zeroAllowed ? "a non-negative" : "a positive") + " whole number.", NamedTextColor.RED));
+            messageService.send(sender, tr(zeroAllowed ? "economy.amount.non-negative" : "economy.amount.positive").color(NamedTextColor.RED));
             return null;
         }
     }
 
     private void sendPlayerNotLoaded(CommandSender sender, String name) {
-        messageService.send(sender, Component.text("Player data for " + name + " is not loaded.", NamedTextColor.RED));
+        messageService.send(sender, tr("economy.not-loaded", java.util.Map.of("player", Component.text(name))).color(NamedTextColor.RED));
     }
 
     private void sendUnknownTarget(CommandSender sender) {
-        messageService.send(sender, "<red>This player is not known to VapeeCore.</red>");
+        messageService.send(sender, tr("economy.unknown"));
     }
 
     private void logReadFailure(CommandSender sender, String target, RuntimeException exception) {
         logger.log(Level.SEVERE, "Could not read coin target [actor=" + actor(sender)
                 + ", target=" + target + "]", exception);
-        messageService.send(sender, "<red>Player coin data could not be read. Please try again.</red>");
+        messageService.send(sender, tr("economy.read-failed"));
     }
 
     private void sendDenied(CommandSender sender) {
-        messageService.send(sender, "<red>You do not have permission to use this command.</red>");
+        messageService.send(sender, tr("economy.denied"));
     }
 
-    private void sendUsage(CommandSender sender, String error, String syntax) {
+    private void sendUsage(CommandSender sender, Component error, String syntax) {
         Component message = error == null ? Component.empty()
-                : Component.text(error, NamedTextColor.RED).append(Component.newline());
-        messageService.send(sender, message.append(Component.text("Usage: ", NamedTextColor.YELLOW))
+                : error.color(NamedTextColor.RED).append(Component.newline());
+        messageService.send(sender, message.append(tr("common.usage").color(NamedTextColor.YELLOW))
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 

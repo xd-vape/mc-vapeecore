@@ -1,5 +1,7 @@
 package dev.vapee.core.moderation.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.IdentityCommandArgument;
@@ -44,8 +46,8 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                 clock, logger, hierarchy, scheduler, enabled);
     }
 
-    public void send(CommandSender sender, String text) {
-        messages.send(sender, Component.text(text, NamedTextColor.YELLOW));
+    public void send(CommandSender sender, Component text) {
+        messages.send(sender, text.color(NamedTextColor.YELLOW));
     }
 
     Player online(UUID id) {
@@ -105,10 +107,10 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                     ModerationRecord record, boolean ban) {
         try {
             Player player = online(target.uniqueId());
-            if (player != null) player.kick(ban ? ModerationComponents.banScreen(record) : ModerationComponents.kickScreen(record));
+            if (player != null) player.kick(messages.localize(player, ban ? ModerationComponents.banScreen(record) : ModerationComponents.kickScreen(record)));
         } catch (RuntimeException exception) {
             failure(ban ? "BAN_DISCONNECT" : "KICK_DISCONNECT", actor, target.uniqueId().toString(), exception);
-            send(sender, (ban ? "Ban" : "Kick record") + " was saved, but the online player could not be disconnected.");
+            send(sender, tr(ban ? "moderation.ban.disconnect-failed" : "moderation.kick.disconnect-failed"));
         }
     }
 
@@ -120,7 +122,7 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                     : ModerationComponents.muteNotice(record));
         } catch (RuntimeException exception) {
             failure(removed ? "UNMUTE_NOTIFY" : "MUTE_NOTIFY", actor, target.uniqueId().toString(), exception);
-            send(sender, (removed ? "Unmute" : "Mute") + " was saved, but the online player could not be notified.");
+            send(sender, tr(removed ? "moderation.unmute.notify-failed" : "moderation.mute.notify-failed"));
         }
     }
 }

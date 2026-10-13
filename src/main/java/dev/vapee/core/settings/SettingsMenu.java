@@ -1,5 +1,7 @@
 package dev.vapee.core.settings;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -41,7 +43,7 @@ public final class SettingsMenu {
             .button(Action.CLOSE, 40)
             .build();
 
-    private static final Component TITLE = Component.text("Player Settings", NamedTextColor.DARK_GRAY);
+    private static final Component TITLE = tr("settings.title").color(NamedTextColor.DARK_GRAY);
 
     private final MenuLayout<Action> layout;
     public MenuLayout<Action> layout() { return layout; }
@@ -51,6 +53,8 @@ public final class SettingsMenu {
     private final MessageService messageService;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
+    private Player renderingFor; // Scoped to one synchronous render, never an authority or locale cache.
     private final Function<UUID, Player> onlinePlayer;
     private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
@@ -60,15 +64,10 @@ public final class SettingsMenu {
             PlayerSettingsService playerSettingsService,
             MessageService messageService
     ) {
-        this.layout = DEFAULT_LAYOUT.validateActions(java.util.Set.of(Action.FRIEND_PRESENCE, Action.FRIEND_REQUESTS, Action.PRIVATE_MESSAGES, Action.SCOREBOARD, Action.SOUNDS, Action.VISIBILITY));
-        this.entries = validateEntries(SettingsMenuEntries.defaults(layout));
-        Objects.requireNonNull(plugin, "plugin");
-        this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
-        this.messageService = Objects.requireNonNull(messageService, "messageService");
-        this.inventoryFactory = (holder, size, title) -> plugin.getServer().createInventory(holder, size, title);
-        this.itemRenderer = UiItems::render;
-        this.logger = plugin.getLogger();
-        this.onlinePlayer = plugin.getServer()::getPlayer;
+        this(playerSettingsService, messageService,
+                Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
+                (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
+                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT);
     }
 
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
@@ -92,7 +91,8 @@ public final class SettingsMenu {
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.inventoryFactory = Objects.requireNonNull(inventoryFactory, "inventoryFactory");
-        this.itemRenderer = Objects.requireNonNull(itemRenderer, "itemRenderer");
+        Objects.requireNonNull(itemRenderer, "itemRenderer");
+        this.itemRenderer = spec -> itemRenderer.render(UiItems.localize(spec, this.messageService, renderingFor));
         this.logger = Objects.requireNonNull(logger, "logger");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
     }
@@ -105,22 +105,22 @@ public final class SettingsMenu {
     public boolean open(Player player) {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
         if (!validatedPlayer.hasPermission(SettingsCommand.PERMISSION)) {
-            messageService.send(validatedPlayer, "<red>You do not have permission to use settings.</red>");
+            messageService.send(validatedPlayer, tr("settings.denied").color(NamedTextColor.RED));
             return false;
         }
         UUID uniqueId = validatedPlayer.getUniqueId();
         if (playerSettingsService.getSettings(uniqueId).isEmpty()) {
             validatedPlayer.closeInventory();
-            messageService.send(validatedPlayer, "<red>Your player profile is not available.</red>");
+            messageService.send(validatedPlayer, tr("common.profile-unavailable").color(NamedTextColor.RED));
             return false;
         }
 
         SettingsInventoryHolder holder = new SettingsInventoryHolder(uniqueId);
-        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
+        Inventory inventory = inventoryFactory.create(holder, layout.size(), messageService.localize(validatedPlayer, TITLE));
         holder.bindInventory(inventory);
         if (!refresh(validatedPlayer, inventory)) {
             validatedPlayer.closeInventory();
-            messageService.send(validatedPlayer, "<red>Your player profile is not available.</red>");
+            messageService.send(validatedPlayer, tr("common.profile-unavailable").color(NamedTextColor.RED));
             return false;
         }
         var opened = validatedPlayer.openInventory(inventory);
@@ -181,6 +181,9 @@ public final class SettingsMenu {
             return false;
         }
 
+        Player previousViewer = renderingFor;
+        renderingFor = validatedPlayer;
+        try {
         PlayerSettings settings = optionalSettings.get();
         for (var entry : entries) {
             validatedInventory.setItem(entry.slot(), itemRenderer.render(entry.icon().apply(settings)));
@@ -188,9 +191,10 @@ public final class SettingsMenu {
         }
         place(validatedInventory, Action.CLOSE, createCloseItem());
         place(validatedInventory, Action.REFRESH, itemRenderer.render(new UiItemSpec(
-                Material.CLOCK, UiItems.text("Refresh", NamedTextColor.AQUA),
-                List.of(UiItems.text("Reload your current settings.", NamedTextColor.GRAY)))));
+                Material.CLOCK, UiItems.text(tr("common.refresh"), NamedTextColor.AQUA),
+                List.of(UiItems.text(tr("settings.refresh-hint"), NamedTextColor.GRAY)))));
         return true;
+        } finally { renderingFor = previousViewer; }
     }
 
     public Optional<SettingsMenuEntry> entryAt(int slot) {
@@ -214,7 +218,7 @@ public final class SettingsMenu {
     private ItemStack createCloseItem() {
         return itemRenderer.render(new UiItemSpec(
                 Material.BARRIER,
-                UiItems.text("Close", NamedTextColor.RED),
+                UiItems.text(tr("common.close"), NamedTextColor.RED),
                 List.of()
         ));
     }
@@ -236,9 +240,11 @@ public final class SettingsMenu {
     }
 
     public void startUpdates() {
+        messageService.localization().addLocaleListener(localeChanges);
         if (!observingChanges) { playerSettingsService.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
+        messageService.localization().removeLocaleListener(localeChanges);
         if (observingChanges) { playerSettingsService.removeChangeListener(committedChanges); observingChanges = false; }
     }
     public void shutdown() { stopUpdates(); closeOpenInventories(); }

@@ -26,7 +26,7 @@ public final class VisibilitySettingsMenuHarness {
                 "menu binds exact owner and inventory");
         check(fixture.visibilityMenu.isActive(owner.player, inventory, holder), "opened menu is active");
         check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).equals("All Players")
-                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: ON"),
+                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: Enabled"),
                 "master feature renders enabled state");
         check(material(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1))
                         == Material.LIME_STAINED_GLASS_PANE
@@ -57,7 +57,7 @@ public final class VisibilitySettingsMenuHarness {
         check(!fixture.settings.areLobbyPlayersVisible(owner.id).orElseThrow()
                         && fixture.applyCalls == 1 && fixture.hotbarCalls == 1,
                 "master toggle saves, applies visibility and refreshes hotbar");
-        check(lore(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: FILTERED")
+        check(lore(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: Filtered")
                         && text(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1)).equals("Filtered")
                         && material(owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1))
                         == Material.YELLOW_STAINED_GLASS_PANE

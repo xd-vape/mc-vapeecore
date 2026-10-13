@@ -1,5 +1,7 @@
 package dev.vapee.core.rank.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.rank.RankInfo;
 import dev.vapee.core.rank.RankService;
@@ -44,27 +46,24 @@ public final class RanksCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to view ranks.</red>");
+            messageService.send(sender, tr("rank.denied"));
             return true;
         }
         if (args.length != 0) {
-            messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+            messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                    .append(tr("common.use").color(NamedTextColor.YELLOW))
                     .append(Component.text("/ranks", NamedTextColor.AQUA)));
             return true;
         }
 
         RankService.RankTrackResult result = rankService.getPublicRanks();
         if (result.status() == RankService.RankTrackStatus.MISSING_TRACK) {
-            messageService.send(sender, Component.text(
-                    "The configured LuckPerms rank track '" + result.trackName() + "' does not exist.",
-                    NamedTextColor.RED
-            ));
+            messageService.send(sender, tr("rank.track-missing", java.util.Map.of("track", Component.text(result.trackName()))).color(NamedTextColor.RED));
             return true;
         }
         if (result.ranks().isEmpty()) {
-            messageService.send(sender, "<yellow>No public ranks are configured yet.</yellow>");
+            messageService.send(sender, tr("rank.empty"));
             return true;
         }
 
@@ -96,7 +95,7 @@ public final class RanksCommand implements TabExecutor {
     ) {
         Component output = Component.empty().color(NamedTextColor.GOLD)
                 .append(MiniMessage.miniMessage().deserialize(serverName))
-                .append(Component.text(" • Ranks"));
+                .append(tr("ranks.heading-suffix"));
         for (int index = 0; index < ranks.size(); index++) {
             RankInfo rank = ranks.get(index);
             output = output.append(Component.newline())
@@ -104,7 +103,7 @@ public final class RanksCommand implements TabExecutor {
                     .append(Component.text((index + 1) + ". ", NamedTextColor.GRAY))
                     .append(rank.displayComponent());
             if (currentRankId.filter(rank.id()::equals).isPresent()) {
-                output = output.append(Component.text(" • You", NamedTextColor.AQUA));
+                output = output.append(tr("ranks.self-suffix").color(NamedTextColor.AQUA));
             }
             if (rank.description().isPresent()) {
                 output = output.append(Component.newline())

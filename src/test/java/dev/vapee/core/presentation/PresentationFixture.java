@@ -154,6 +154,7 @@ public final class PresentationFixture implements AutoCloseable {
     }
 
     public final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         public final UUID id;
         public final Player player;
         public Component name, header, footer;
@@ -172,6 +173,7 @@ public final class PresentationFixture implements AutoCloseable {
                 case "getName" -> vanillaName;
                 case "displayName" -> Component.text(vanillaName);
                 case "getStatistic" -> 0;
+                case "locale" -> locale;
                 case "getWorld" -> currentWorld;
                 case "isOnline" -> online;
                 case "hasPermission" -> false;
