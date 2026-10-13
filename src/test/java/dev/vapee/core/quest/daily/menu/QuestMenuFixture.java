@@ -35,6 +35,10 @@ public final class QuestMenuFixture {
     }
 
     public QuestMenuFixture(dev.vapee.core.ui.MenuLayout<DailyQuestMenu.Action> layout) throws Exception {
+        this(DailyQuestMenu.Layout.uniform(layout));
+    }
+
+    public QuestMenuFixture(DailyQuestMenu.Layout layout) throws Exception {
         menu = new DailyQuestMenu(id -> {
             syncCalls++;
             if (syncFailure != null) throw syncFailure;

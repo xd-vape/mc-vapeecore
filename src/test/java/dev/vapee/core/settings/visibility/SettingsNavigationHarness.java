@@ -22,14 +22,15 @@ public final class SettingsNavigationHarness {
         f.visibilityClick(p, p.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.BACK), ClickType.LEFT);
         check(p.open.getHolder() instanceof SettingsInventoryHolder, "visibility back opens root");
         Inventory root = p.open;
-        f.rootClick(p, root, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.REFRESH), ClickType.RIGHT);
+        f.rootMenu.refreshActive(p.id);
         check(p.open == root, "root refresh stays in exact inventory");
         f.rootClick(p, root, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.VISIBILITY, 1), ClickType.RIGHT);
         Inventory visibility = p.open;
         check(visibility.getHolder() instanceof VisibilitySettingsHolder, "root status opens visibility");
-        f.visibilityClick(p, visibility, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.REFRESH), ClickType.LEFT);
-        check(p.open != visibility && p.open.getHolder() instanceof VisibilitySettingsHolder,
+        f.visibilityMenu.refreshActive(p.id);
+        check(p.open == visibility && p.open.getHolder() instanceof VisibilitySettingsHolder,
                 "visibility refresh stays in visibility view");
+        f.visibilityMenu.open(p.player); // Deliberate new binding for the stale-inventory guard.
         f.visibilityClick(p, visibility, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER), ClickType.LEFT);
         check(f.repository.saves == saves, "stale visibility cannot toggle after refresh");
         visibility = p.open;
@@ -38,8 +39,8 @@ public final class SettingsNavigationHarness {
         check(manage.getHolder() instanceof VisiblePlayersHolder, "visibility opens manage players");
         f.visibilityClick(p, visibility, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.BACK), ClickType.LEFT);
         check(p.open == manage, "stale visibility cannot navigate after opening manage");
-        f.visibleClick(p, manage, MenuTestLayouts.VISIBLE_PLAYERS.slot(VisiblePlayersMenu.Action.REFRESH), ClickType.RIGHT);
-        check(p.open != manage && p.open.getHolder() instanceof VisiblePlayersHolder,
+        f.visiblePlayersMenu.refreshActive(p.id);
+        check(p.open == manage && p.open.getHolder() instanceof VisiblePlayersHolder,
                 "manage refresh stays in correct view");
         f.visibleClick(p, p.open, MenuTestLayouts.VISIBLE_PLAYERS.slot(VisiblePlayersMenu.Action.BACK), ClickType.LEFT);
         check(p.open.getHolder() instanceof VisibilitySettingsHolder, "manage back opens visibility");

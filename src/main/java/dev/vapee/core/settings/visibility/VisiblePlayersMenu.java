@@ -32,7 +32,15 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisiblePlayersMenu {
-    public enum Action { PREVIOUS, ADD, BACK, CLOSE, REFRESH, NEXT }
+    private UUID presenceTarget;
+    private boolean presenceOnline;
+
+    private final dev.vapee.core.player.settings.PlayerSettingsChangeListener committedChanges = this::refreshActive;
+    private boolean observingChanges;
+
+    private Inventory rerenderInventory;
+
+    public enum Action { PREVIOUS, ADD, BACK, CLOSE, PAGE_INFO, REFRESH, NEXT }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
             .content(List.of(
                     0, 1, 2, 3, 4, 5, 6, 7, 8,
@@ -45,7 +53,8 @@ public final class VisiblePlayersMenu {
             .button(Action.ADD, 46)
             .button(Action.BACK, 48)
             .button(Action.CLOSE, 49)
-            .button(Action.REFRESH, 52)
+
+            .button(Action.PAGE_INFO, 52)
             .button(Action.NEXT, 53)
             .build();
 
@@ -120,8 +129,15 @@ public final class VisiblePlayersMenu {
         }
 
         VisiblePlayersHolder holder = new VisiblePlayersHolder(viewer.getUniqueId(), page, targets, layout);
-        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
-        holder.bindInventory(inventory);
+        Inventory inventory;
+        if (rerenderInventory != null && rerenderInventory.getHolder() instanceof VisiblePlayersHolder existing) {
+            inventory = rerenderInventory;
+            existing.beginRender(holder); holder = existing;
+            for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
+        } else {
+            inventory = inventoryFactory.create(holder, layout.size(), TITLE);
+            holder.bindInventory(inventory);
+        }
         for (int index = first; index < end; index++) {
             inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(entries.get(index))));
         }
@@ -129,6 +145,7 @@ public final class VisiblePlayersMenu {
             placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, "No added visible players", NamedTextColor.GRAY,
                     List.of("Use Add Player to get started.")));
         }
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, "Page " + (pagination.page() + 1) + "/" + pagination.pageCount(), NamedTextColor.AQUA, List.of()));
         if (pagination.hasPrevious()) {
             place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous Page", NamedTextColor.YELLOW,
                     List.of()));
@@ -143,7 +160,8 @@ public final class VisiblePlayersMenu {
         if (pagination.hasNext()) {
             place(inventory, Action.NEXT, item(Material.ARROW, "Next Page", NamedTextColor.YELLOW, List.of()));
         }
-        var opened = viewer.openInventory(inventory);
+        holder.finishRender();
+        var opened = inventory == rerenderInventory ? viewer.getOpenInventory() : viewer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) {
             activeInventories.put(viewer.getUniqueId(), inventory);
         }
@@ -207,7 +225,7 @@ public final class VisiblePlayersMenu {
             var identity = identities.findById(id);
             Player online = onlinePlayer.apply(id);
             result.add(new Entry(id, identity.map(PlayerIdentity::name).orElse(id.toString()),
-                    identity.isPresent(), online != null && online.isOnline()));
+                    identity.isPresent(), (id.equals(presenceTarget) ? presenceOnline : online != null && online.isOnline())));
         }
         result.sort(ENTRY_ORDER);
         return List.copyOf(result);
@@ -240,11 +258,43 @@ public final class VisiblePlayersMenu {
         place(inventory, action, 0, item);
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
-        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+        layout.actionSlot(action, position).ifPresent(slot -> { inventory.setItem(slot, item); ((VisiblePlayersHolder) inventory.getHolder()).recordAction(slot, action); });
     }
 
     private void placeDisplay(Inventory inventory, int slot, ItemStack item) {
         if (slot >= 0) inventory.setItem(slot, item);
+    }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = activeInventories.get(owner);
+        if (inventory == null || rerenderInventory != null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof VisiblePlayersHolder holder) || !isActive(player, inventory, holder)) {
+            activeInventories.remove(owner, inventory); return;
+        }
+        if (!player.hasPermission(dev.vapee.core.settings.command.SettingsCommand.PERMISSION) || settings.getSettings(owner).isEmpty()) { activeInventories.remove(owner, inventory); player.closeInventory(); return; }
+        try { rerenderInventory = inventory; open(player, holder.getPage()); }
+        catch (RuntimeException exception) {
+            activeInventories.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not update VisiblePlayersMenu for " + owner, exception);
+        } finally { rerenderInventory = null; }
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { settings.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { settings.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void targetPresenceChanged(UUID target, boolean online) {
+        presenceTarget = target; presenceOnline = online;
+        try { for (UUID owner : java.util.List.copyOf(activeInventories.keySet())) {
+            if (!owner.equals(target) && (settings.getLobbyAddedVisiblePlayers(owner).map(ids -> ids.contains(target)).orElse(false))) refreshActive(owner);
+        } } finally { presenceTarget = null; }
     }
 
 }

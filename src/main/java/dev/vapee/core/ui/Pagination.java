@@ -20,6 +20,7 @@ public record Pagination(int page, int pageCount, int fromIndex, int toIndex) {
         return new Pagination(page, pageCount, from, to);
     }
 
+    public boolean hasMultiplePages() { return pageCount > 1; }
     public boolean hasPrevious() { return page > 0; }
     public boolean hasNext() { return page < pageCount - 1; }
 }

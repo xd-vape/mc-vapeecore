@@ -56,7 +56,7 @@ public final class FriendLifecycleHarness {
                         && source.contains("command.setTabCompleter(null)")
                         && source.contains("HandlerList.unregisterAll(listener)")
                         && source.contains("HandlerList.unregisterAll(friendMenuListener)")
-                        && source.contains("friendMenu.closeOpenInventories()")
+                        && source.contains("friendMenu.shutdown()") && source.contains("menu.startUpdates()")
                         && source.contains("friendService = null")
                         && source.contains("requireNonNull(friendService"),
                 "disable and failed enable clean up GUI, listener and command");

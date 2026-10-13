@@ -92,8 +92,8 @@ public final class VisibilitySettingsMenuHarness {
                 "unavailable game option does not mutate or play success sound");
 
         Inventory beforeRefresh = owner.open;
-        fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.REFRESH), ClickType.LEFT);
-        check(owner.open != beforeRefresh && fixture.applyCalls == 4, "refresh rebuilds without mutation");
+        fixture.visibilityMenu.refreshActive(owner.id);
+        check(owner.open == beforeRefresh && fixture.applyCalls == 4, "internal rerender preserves inventory without mutation");
         fixture.visibilityClick(owner, owner.open, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS), ClickType.LEFT);
         check(owner.open.getHolder() instanceof VisiblePlayersHolder, "manage button opens visible players menu");
         fixture.visibilityMenu.open(owner.player);

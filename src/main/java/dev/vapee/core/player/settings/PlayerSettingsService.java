@@ -11,6 +11,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 public final class PlayerSettingsService {
+    private final java.util.Set<PlayerSettingsChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+
 
     private final PlayerService playerService;
 
@@ -146,6 +148,7 @@ public final class PlayerSettingsService {
             visibility.removePlayer(checkedTarget);
             throw exception;
         }
+        notifyChanged(checkedOwner);
         return result;
     }
 
@@ -163,6 +166,7 @@ public final class PlayerSettingsService {
             visibility.addPlayer(checkedOwner, checkedTarget);
             throw exception;
         }
+        notifyChanged(checkedOwner);
         return result;
     }
 
@@ -203,6 +207,19 @@ public final class PlayerSettingsService {
             update.accept(settings, previousValue);
             throw exception;
         }
+        notifyChanged(validatedUniqueId);
         return true;
     }
+    public void addChangeListener(PlayerSettingsChangeListener listener) { changeListeners.add(Objects.requireNonNull(listener)); }
+    public void removeChangeListener(PlayerSettingsChangeListener listener) { changeListeners.remove(listener); }
+    private void notifyChanged(UUID owner) {
+        for (var listener : java.util.List.copyOf(changeListeners)) {
+            try { listener.onSettingsCommitted(owner); }
+            catch (RuntimeException exception) {
+                java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Committed state observer failed; domain commit is retained.", exception);
+            }
+        }
+    }
+
 }

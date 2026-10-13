@@ -11,6 +11,8 @@ import java.util.function.Supplier;
 
 /** Main-thread-owned clan domain service; no Bukkit, scheduler or concurrent state. */
 public final class ClanService {
+    private final java.util.Set<ClanChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+
     private final ClanRepository repository;
     private final Supplier<ClanLimits> limitsSupplier;
     private final Clock clock;
@@ -278,7 +280,43 @@ public final class ClanService {
 
     private void persist(List<Clan> clans, List<ClanInvite> invites) {
         ClanSnapshot next = new ClanSnapshot(clans, invites);
+        ClanSnapshot previous = state;
         repository.save(next);
         state = next;
+        if (!changeListeners.isEmpty()) {
+            java.util.Set<UUID> affected = new java.util.HashSet<>();
+            var before = new java.util.HashMap<UUID, Clan>(); var after = new java.util.HashMap<UUID, Clan>();
+            previous.clans().forEach(clan -> before.put(clan.id(), clan)); next.clans().forEach(clan -> after.put(clan.id(), clan));
+            var ids = new java.util.HashSet<>(before.keySet()); ids.addAll(after.keySet());
+            var changedClans = new java.util.HashSet<UUID>();
+            for (UUID id : ids) if (!Objects.equals(before.get(id), after.get(id))) {
+                changedClans.add(id);
+                if (before.containsKey(id)) before.get(id).members().forEach(member -> affected.add(member.playerId()));
+                if (after.containsKey(id)) after.get(id).members().forEach(member -> affected.add(member.playerId()));
+            }
+            // Incoming invitation displays include the source clan's name, tag and member count.
+            for (var invite : previous.invites()) if (changedClans.contains(invite.clanId())) affected.add(invite.recipient());
+            for (var invite : next.invites()) if (changedClans.contains(invite.clanId())) affected.add(invite.recipient());
+            var changedInvites = new java.util.HashSet<>(previous.invites());
+            for (var invite : next.invites()) if (!changedInvites.add(invite)) changedInvites.remove(invite);
+            for (var invite : changedInvites) {
+                affected.add(invite.recipient());
+                Clan source = after.getOrDefault(invite.clanId(), before.get(invite.clanId()));
+                if (source != null) affected.add(source.ownerId());
+            }
+            if (!affected.isEmpty()) notifyChanged(java.util.Set.copyOf(affected));
+        }
     }
+    public void addChangeListener(ClanChangeListener listener) { changeListeners.add(Objects.requireNonNull(listener)); }
+    public void removeChangeListener(ClanChangeListener listener) { changeListeners.remove(listener); }
+    private void notifyChanged(java.util.Set<UUID> affected) {
+        for (var listener : java.util.List.copyOf(changeListeners)) {
+            try { listener.onClansChanged(affected); }
+            catch (RuntimeException exception) {
+                java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Committed state observer failed; domain commit is retained.", exception);
+            }
+        }
+    }
+
 }

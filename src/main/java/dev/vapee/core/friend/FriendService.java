@@ -16,6 +16,8 @@ import java.util.function.Supplier;
  * player references, scheduling, or concurrent collections.
  */
 public final class FriendService {
+    private final java.util.Set<FriendChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+
 
     private final FriendRepository repository;
     private final Supplier<FriendLimits> limitsSupplier;
@@ -323,9 +325,23 @@ public final class FriendService {
                 new ArrayList<>(nextFriendships.values()),
                 new ArrayList<>(nextRequests.values())
         );
+        var previousFriendships = friendships;
+        var previousRequests = requests;
         repository.save(snapshot);
         friendships = Map.copyOf(nextFriendships);
         requests = Map.copyOf(nextRequests);
+        if (!changeListeners.isEmpty()) {
+            Set<UUID> affected = new java.util.HashSet<>();
+            var pairs = new java.util.HashSet<>(previousFriendships.keySet()); pairs.addAll(friendships.keySet());
+            for (var pair : pairs) if (!Objects.equals(previousFriendships.get(pair), friendships.get(pair))) {
+                affected.add(pair.playerA()); affected.add(pair.playerB());
+            }
+            var keys = new java.util.HashSet<>(previousRequests.keySet()); keys.addAll(requests.keySet());
+            for (var key : keys) if (!Objects.equals(previousRequests.get(key), requests.get(key))) {
+                affected.add(key.sender()); affected.add(key.recipient());
+            }
+            if (!affected.isEmpty()) notifyChanged(Set.copyOf(affected));
+        }
     }
 
     private record RequestKey(UUID sender, UUID recipient) {
@@ -338,4 +354,16 @@ public final class FriendService {
             return new RequestKey(recipient, sender);
         }
     }
+    public void addChangeListener(FriendChangeListener listener) { changeListeners.add(Objects.requireNonNull(listener)); }
+    public void removeChangeListener(FriendChangeListener listener) { changeListeners.remove(listener); }
+    private void notifyChanged(Set<UUID> affected) {
+        for (var listener : java.util.List.copyOf(changeListeners)) {
+            try { listener.onFriendsChanged(affected); }
+            catch (RuntimeException exception) {
+                java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Committed state observer failed; domain commit is retained.", exception);
+            }
+        }
+    }
+
 }

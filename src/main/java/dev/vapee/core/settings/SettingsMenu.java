@@ -26,6 +26,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class SettingsMenu {
+    private final dev.vapee.core.player.settings.PlayerSettingsChangeListener committedChanges = this::refreshActive;
+    private boolean observingChanges;
+
 
     public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, REFRESH }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
@@ -230,6 +233,33 @@ public final class SettingsMenu {
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
         layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { playerSettingsService.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { playerSettingsService.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = activeInventories.get(owner);
+        if (inventory == null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof SettingsInventoryHolder holder) || !isActive(player, inventory, holder)) {
+            activeInventories.remove(owner, inventory); return;
+        }
+        if (!player.hasPermission(SettingsCommand.PERMISSION) || playerSettingsService.getSettings(owner).isEmpty()) {
+            activeInventories.remove(owner, inventory); player.closeInventory(); return;
+        }
+        try { if (!refresh(player, inventory)) player.closeInventory(); }
+        catch (RuntimeException exception) {
+            activeInventories.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not rerender SettingsMenu for " + owner, exception);
+        }
     }
 
 }

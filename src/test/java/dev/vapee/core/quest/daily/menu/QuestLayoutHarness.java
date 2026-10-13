@@ -15,13 +15,13 @@ public final class QuestLayoutHarness {
             if (content == LayoutTestSupport.HIGH_CONTENT) layout = new MenuLayout<>(layout.size(), layout.contentSlots(), 40, layout.actions());
             var f = new QuestMenuFixture(layout); var owner = f.player();
             var definitions = new ArrayList<dev.vapee.core.quest.QuestDefinition>();
-            for (int i = 0; i < layout.pageSize() + 1; i++) definitions.add(definition("q%03d".formatted(i), "future:event", 100, 1));
+            for (int i = 0; i < f.menu.pageSize() + 1; i++) definitions.add(definition("q%03d".formatted(i), "future:event", 100, 1));
             f.domain.registry.replaceAll(definitions);
             f.menu.open(owner.player, 0); var first = owner.open;
             var holder = (DailyQuestInventoryHolder) first.getHolder();
             check(first.getSize() == layout.size(), "alternative inventory size");
             var expected = f.domain.quests.getActiveQuests(owner.id).orElseThrow();
-            for (int i = 0; i < layout.pageSize(); i++) check(holder.target(layout.contentSlot(i)).orElseThrow().equals(expected.get(i).definition().id()) && first.getItem(layout.contentSlot(i)) != null, "read-only quest ID mapping at actual slot");
+            for (int i = 0; i < f.menu.pageSize(); i++) check(holder.target(layout.contentSlot(i)).orElseThrow().equals(expected.get(i).definition().id()) && first.getItem(layout.contentSlot(i)) != null, "read-only quest ID mapping at actual slot");
             var state = f.domain.players.getPlayer(owner.id).orElseThrow().getQuestState().snapshot();
             int sync = f.syncCalls, saves = f.domain.repository.saves;
             f.click(owner, first, layout.contentSlot(0), ClickType.LEFT);

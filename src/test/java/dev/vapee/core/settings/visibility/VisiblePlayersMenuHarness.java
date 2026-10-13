@@ -52,9 +52,9 @@ public final class VisiblePlayersMenuHarness {
                 "back opens visibility settings menu");
         fixture.visiblePlayersMenu.open(owner.player);
         Inventory beforeRefresh = owner.open;
-        fixture.visibleClick(owner, owner.open, MenuTestLayouts.VISIBLE_PLAYERS.slot(VisiblePlayersMenu.Action.REFRESH), ClickType.LEFT);
-        check(owner.open != beforeRefresh && VisibilityMenuFixture.visibleHolder(owner.open).getPage() == 0,
-                "refresh rebuilds current page");
+        fixture.visiblePlayersMenu.refreshActive(owner.id);
+        check(owner.open == beforeRefresh && VisibilityMenuFixture.visibleHolder(owner.open).getPage() == 0,
+                "internal rerender updates current page in place");
         fixture.visibleClick(owner, owner.open, MenuTestLayouts.VISIBLE_PLAYERS.slot(VisiblePlayersMenu.Action.CLOSE), ClickType.LEFT);
         check(owner.closeCalls == 2, "close button closes menu");
     }

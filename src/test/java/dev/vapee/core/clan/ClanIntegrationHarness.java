@@ -74,7 +74,7 @@ public final class ClanIntegrationHarness {
                     "  vapeecore.clan.use:\n    description: Allows using the clan system\n    default: true"),
                     "single clan permission defaults true");
             String moduleSource = Files.readString(Path.of("src/main/java/dev/vapee/core/clan/ClanModule.java"));
-            check(moduleSource.contains("closeOpenInventories") && moduleSource.contains("HandlerList.unregisterAll")
+            check(moduleSource.contains("shutdown()") && moduleSource.contains("nextMenu.startUpdates()") && moduleSource.contains("HandlerList.unregisterAll")
                     && moduleSource.contains("setTabCompleter(null)"), "module lifecycle cleanup");
             check(!moduleSource.contains("runTask") && !moduleSource.contains("ReloadParticipant"),
                     "no scheduler or seventh reload participant");

@@ -56,9 +56,9 @@ public final class FriendMenuHarness {
         fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.FRIENDS), ClickType.LEFT);
         check(FriendMenuFixture.holder(owner.open).getView() == FriendMenuView.FRIENDS, "friends tab returns to friends");
         Inventory beforeRefresh = owner.open;
-        fixture.click(owner, beforeRefresh, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.REFRESH), ClickType.LEFT);
-        check(owner.open != beforeRefresh && FriendMenuFixture.holder(owner.open).getPage() == 0,
-                "refresh renders a new live inventory");
+        fixture.menu.refreshActive(owner.id);
+        check(owner.open == beforeRefresh && FriendMenuFixture.holder(owner.open).getPage() == 0,
+                "internal refresh rerenders the current owned inventory");
         fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.slot(FriendMenu.Action.ADD), ClickType.LEFT);
         check(owner.closeCalls == 1 && owner.open == owner.bottom,
                 "add friend closes the menu without a text-capture system");

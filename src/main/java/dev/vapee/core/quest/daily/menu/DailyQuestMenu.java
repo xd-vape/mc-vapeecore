@@ -28,22 +28,65 @@ import java.util.logging.Logger;
 
 /** Focused read-only daily quest view. Controls always synchronize and rebuild from current state. */
 public final class DailyQuestMenu {
+    private final dev.vapee.core.quest.QuestChangeListener committedChanges = this::refreshActive;
+    private boolean observingChanges;
+
+    private Inventory rerenderInventory;
+
     public static final String PERMISSION = "vapeecore.quest.use";
     public enum Action { PREVIOUS, PAGE_INFO, CLOSE, REFRESH, NEXT }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
-            .content(List.of(
-                    0, 1, 2, 3, 4, 5, 6, 7, 8,
-                    9, 10, 11, 12, 13, 14, 15, 16, 17,
-                    18, 19, 20, 21, 22, 23, 24, 25, 26,
-                    27, 28, 29, 30, 31, 32, 33, 34, 35,
-                    36, 37, 38, 39, 40, 41, 42, 43, 44))
-            .emptyState(22)
-            .button(Action.PREVIOUS, 45)
-            .button(Action.PAGE_INFO, 49)
-            .button(Action.CLOSE, 50)
-            .button(Action.REFRESH, 52)
-            .button(Action.NEXT, 53)
-            .build();
+    public static final Layout DEFAULT_LAYOUT = Layout.adaptive(
+            MenuLayout.builder(54, Action.class)
+                    .emptyState(22)
+                    .button(Action.PREVIOUS, 45)
+                    .button(Action.PAGE_INFO, 49)
+                    .button(Action.CLOSE, 50)
+                    .button(Action.NEXT, 53)
+                    .build(),
+            Map.of(1, List.of(13),
+                    2, List.of(11, 15),
+                    3, List.of(11, 13, 15),
+                    4, List.of(10, 12, 14, 16),
+                    5, List.of(9, 11, 13, 15, 17)));
+
+    /** Feature-local arrangements; different row counts are exclusive render states. */
+    public record Layout(MenuLayout<Action> menu, Map<Integer, List<Integer>> arrangements) {
+        public Layout {
+            Objects.requireNonNull(menu); menu.requirePaged();
+            var copy = new TreeMap<Integer, List<Integer>>();
+            arrangements.forEach((count, slots) -> copy.put(count, List.copyOf(slots)));
+            int maximum = copy.isEmpty() ? 0 : copy.lastKey();
+            if (maximum < 1 || maximum > 5 || copy.size() != maximum)
+                throw new IllegalArgumentException("DailyQuest needs complete arrangements for 1..capacity (at most 5)");
+            for (int count = 1; count <= maximum; count++) {
+                var slots = copy.get(count);
+                if (slots == null || slots.size() != count || new HashSet<>(slots).size() != count)
+                    throw new IllegalArgumentException("Invalid DailyQuest arrangement for " + count);
+                menu.validateTargets(slots);
+            }
+            arrangements = Collections.unmodifiableMap(copy);
+        }
+        public int pageSize() { return arrangements.size(); }
+        public List<Integer> slots(int visibleCount) {
+            if (visibleCount == 0) return List.of();
+            var slots = arrangements.get(visibleCount);
+            if (slots == null) throw new IllegalArgumentException("Invalid visible quest count: " + visibleCount);
+            return slots;
+        }
+        public static Layout adaptive(MenuLayout<Action> controls, Map<Integer, List<Integer>> rows) {
+            var union = rows.values().stream().flatMap(List::stream).distinct().sorted().toList();
+            return new Layout(new MenuLayout<>(controls.size(), union, controls.emptySlot(), controls.actions()), rows);
+        }
+        public static Layout uniform(MenuLayout<Action> menu) {
+            var rows = new LinkedHashMap<Integer, List<Integer>>();
+            for (int count = 1; count <= Math.min(5, menu.pageSize()); count++)
+                rows.put(count, menu.contentSlots().subList(0, count));
+            return new Layout(menu, rows);
+        }
+    }
+    private final Layout definition;
+    public int pageSize() { return definition.pageSize(); }
+    public List<Integer> visibleContentSlots(int count) { return definition.slots(count); }
 
     private final MenuLayout<Action> layout;
     public MenuLayout<Action> layout() { return layout; }
@@ -82,7 +125,14 @@ public final class DailyQuestMenu {
     DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
                    MessageService messages, Function<UUID, Player> onlinePlayer,
                    InventoryFactory inventories, ItemRenderer items, Logger logger, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
+        this(sync, quests, players, messages, onlinePlayer, inventories, items, logger, Layout.uniform(menuLayout));
+    }
+
+    DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
+                   MessageService messages, Function<UUID, Player> onlinePlayer,
+                   InventoryFactory inventories, ItemRenderer items, Logger logger, Layout menuLayout) {
+        this.definition = Objects.requireNonNull(menuLayout, "layout");
+        this.layout = menuLayout.menu().validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.sync = Objects.requireNonNull(sync, "sync");
         this.quests = Objects.requireNonNull(quests, "quests");
@@ -106,7 +156,7 @@ public final class DailyQuestMenu {
         }
         DailyQuestSyncResult result;
         try {
-            result = sync.apply(player.getUniqueId());
+            result = rerenderInventory == null ? sync.apply(player.getUniqueId()) : DailyQuestSyncResult.CURRENT;
         } catch (RuntimeException exception) {
             logger.log(Level.WARNING, "Daily quest preparation failed for " + player.getUniqueId(), exception);
             deny(player, "Your daily quests could not be prepared. Please try again later.");
@@ -127,26 +177,36 @@ public final class DailyQuestMenu {
         }
         if (!canUse(player)) return;
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
-        Pagination pagination = Pagination.of(views.size(), requestedPage, layout.pageSize());
+        Pagination pagination = Pagination.of(views.size(), requestedPage, pageSize());
         int page = pagination.page();
         int pages = pagination.pageCount();
+        List<Integer> contentSlots = visibleContentSlots(pagination.toIndex() - pagination.fromIndex());
         Map<Integer, String> targets = new LinkedHashMap<>();
         for (int i = pagination.fromIndex(); i < pagination.toIndex(); i++)
-            targets.put(layout.contentSlot(i - pagination.fromIndex()), views.get(i).definition().id());
+            targets.put(contentSlots.get(i - pagination.fromIndex()), views.get(i).definition().id());
         DailyQuestInventoryHolder holder = new DailyQuestInventoryHolder(player.getUniqueId(), page, targets, layout);
-        Inventory inventory = inventories.create(holder, layout.size(), UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
-        holder.bind(inventory);
+        Inventory inventory;
+        if (rerenderInventory != null && rerenderInventory.getHolder() instanceof DailyQuestInventoryHolder existing) {
+            inventory = rerenderInventory;
+            existing.beginRender(holder); holder = existing;
+            for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
+        } else {
+            inventory = inventories.create(holder, layout.size(), UiItems.text("Daily Quests", NamedTextColor.DARK_GRAY));
+            holder.bind(inventory);
+        }
         int start = pagination.fromIndex();
         for (int slot = 0; slot < pagination.toIndex() - start; slot++) {
-            inventory.setItem(layout.contentSlot(slot), questItem(views.get(start + slot)));
+            inventory.setItem(contentSlots.get(slot), questItem(views.get(start + slot)));
         }
+        if (views.isEmpty() && layout.emptySlot() >= 0) inventory.setItem(layout.emptySlot(), item(Material.PAPER, "No daily quests", List.of()));
         if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous page", List.of()));
-        place(inventory, Action.PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.BOOK, "Page " + (page + 1) + " / " + pages,
                 List.of("Rewards are delivered automatically.")));
         place(inventory, Action.CLOSE, item(Material.BARRIER, "Close", List.of()));
         place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", List.of("Show your current daily quests.")));
         if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, "Next page", List.of()));
-        var opened = player.openInventory(inventory);
+        holder.finishRender();
+        var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {
             active.put(player.getUniqueId(), inventory);
@@ -215,7 +275,32 @@ public final class DailyQuestMenu {
         place(inventory, action, 0, item);
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
-        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+        layout.actionSlot(action, position).ifPresent(slot -> { inventory.setItem(slot, item); ((DailyQuestInventoryHolder) inventory.getHolder()).recordAction(slot, action); });
     }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = active.get(owner);
+        if (inventory == null || rerenderInventory != null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof DailyQuestInventoryHolder holder) || !isActive(player, inventory, holder)) {
+            active.remove(owner, inventory); return;
+        }
+        if (!canUse(player)) { active.remove(owner, inventory); player.closeInventory(); return; }
+        try { rerenderInventory = inventory; open(player, holder.page()); }
+        catch (RuntimeException exception) {
+            active.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not update DailyQuestMenu for " + owner, exception);
+        } finally { rerenderInventory = null; }
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { quests.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { quests.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
 
 }

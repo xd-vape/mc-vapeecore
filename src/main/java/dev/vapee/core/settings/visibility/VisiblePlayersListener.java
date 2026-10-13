@@ -61,6 +61,11 @@ public final class VisiblePlayersListener implements Listener {
         Inventory top = event.getView().getTopInventory();
         if (!(top.getHolder() instanceof VisiblePlayersHolder holder)) return;
         event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player viewer
+                && holder.getOwnerUniqueId().equals(viewer.getUniqueId()) && holder.isBoundTo(top)
+                && viewer.getOpenInventory().getTopInventory() != top) {
+            menu.forgetIfActive(viewer.getUniqueId(), top); return;
+        }
         if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)) return;
         if (!player.hasPermission(SettingsCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
@@ -82,9 +87,10 @@ public final class VisiblePlayersListener implements Listener {
     }
 
     private boolean navigate(Player player, VisiblePlayersHolder holder, int slot) {
-        var action = menu.layout().actionAt(slot).orElse(null);
+        var action = holder.actionAt(slot).orElse(null);
         if (action == null) return false;
         switch (action) {
+            case PAGE_INFO -> { return true; }
             case PREVIOUS -> {
                 if (holder.getPage() > 0) menu.open(player, holder.getPage() - 1);
                 return true;
@@ -102,7 +108,7 @@ public final class VisiblePlayersListener implements Listener {
                 return true;
             }
             case REFRESH -> {
-                menu.open(player, holder.getPage());
+                menu.refreshActive(player.getUniqueId());
                 return true;
             }
             case NEXT -> {
@@ -125,7 +131,7 @@ public final class VisiblePlayersListener implements Listener {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not remove visible player for " + owner + ".", exception);
             messages.send(player, "<red>Your visible players list could not be saved. Please try again.</red>");
-            menu.open(player, holder.getPage());
+            menu.refreshActive(player.getUniqueId());
             return;
         }
         switch (result) {
@@ -139,12 +145,12 @@ public final class VisiblePlayersListener implements Listener {
                 messages.send(player, Component.text("Removed ", NamedTextColor.GREEN)
                         .append(Component.text(menu.displayName(target), NamedTextColor.WHITE))
                         .append(Component.text(" from your visible players list.", NamedTextColor.GREEN)));
-                menu.open(player, holder.getPage());
+                menu.refreshActive(player.getUniqueId());
                 soundFeedback.accept(player);
             }
             case NOT_ADDED -> {
                 messages.send(player, "<yellow>That player is no longer in your visible players list.</yellow>");
-                menu.open(player, holder.getPage());
+                menu.refreshActive(player.getUniqueId());
             }
             case OWNER_NOT_LOADED -> unavailable(player);
             case CANNOT_ADD_SELF, ALREADY_ADDED -> throw new IllegalStateException(
@@ -169,6 +175,7 @@ public final class VisiblePlayersListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), false);
         Inventory top = event.getPlayer().getOpenInventory().getTopInventory();
         if (top.getHolder() instanceof VisiblePlayersHolder) {
             menu.forgetIfActive(event.getPlayer().getUniqueId(), top);
@@ -189,4 +196,9 @@ public final class VisiblePlayersListener implements Listener {
                     "Could not play visible players sound for " + player.getUniqueId() + ".", exception);
         }
     }
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onPlayerJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), true);
+    }
+
 }

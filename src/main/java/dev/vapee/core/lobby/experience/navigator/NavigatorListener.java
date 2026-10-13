@@ -59,15 +59,15 @@ public final class NavigatorListener implements Listener {
         }
 
         int slot = event.getRawSlot();
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.PREVIOUS && holder.getPage() > 0) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.PREVIOUS && holder.getPage() > 0) {
             navigatorMenu.open(player, holder.getPage() - 1);
             return;
         }
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.NEXT) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.NEXT) {
             navigatorMenu.open(player, holder.getPage() + 1);
             return;
         }
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.CLOSE) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.CLOSE) {
             navigatorMenu.close(player);
             return;
         }

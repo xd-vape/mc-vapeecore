@@ -25,6 +25,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class VisibilitySettingsMenu {
+    private final dev.vapee.core.player.settings.PlayerSettingsChangeListener committedChanges = this::refreshActive;
+    private boolean observingChanges;
+
     public enum Action { MASTER, FRIENDS, STAFF, ADDED_USERS, GAME_PARTICIPANTS, MANAGE_PLAYERS, BACK, CLOSE, REFRESH }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
             .setting(Action.MASTER, 9, 18)
@@ -35,7 +38,7 @@ public final class VisibilitySettingsMenu {
             .button(Action.MANAGE_PLAYERS, 31)
             .button(Action.BACK, 45)
             .button(Action.CLOSE, 49)
-            .button(Action.REFRESH, 52)
+
             .build();
 
     private static final Component TITLE = UiItems.text("Visibility Settings", NamedTextColor.DARK_GRAY);
@@ -217,6 +220,33 @@ public final class VisibilitySettingsMenu {
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
         layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { settings.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { settings.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = activeInventories.get(owner);
+        if (inventory == null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof VisibilitySettingsHolder holder) || !isActive(player, inventory, holder)) {
+            activeInventories.remove(owner, inventory); return;
+        }
+        if (!player.hasPermission(SettingsCommand.PERMISSION) || settings.getSettings(owner).isEmpty()) {
+            activeInventories.remove(owner, inventory); player.closeInventory(); return;
+        }
+        try { render(inventory, settings.getSettings(owner).orElseThrow()); }
+        catch (RuntimeException exception) {
+            activeInventories.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not rerender VisibilitySettingsMenu for " + owner, exception);
+        }
     }
 
 }

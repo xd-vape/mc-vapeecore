@@ -25,7 +25,15 @@ import java.util.logging.Logger;
 
 /** Holder-bound clan views; no cached domain data or scheduler. */
 public final class ClanMenu {
-    public enum Action { PREVIOUS, OVERVIEW, MEMBERS, INVITES, CLOSE, ACTION, REFRESH, NEXT }
+    private UUID presenceTarget;
+    private boolean presenceOnline;
+
+    private final dev.vapee.core.clan.ClanChangeListener committedChanges = affected -> affected.forEach(this::refreshActive);
+    private boolean observingChanges;
+
+    private Inventory rerenderInventory;
+
+    public enum Action { PREVIOUS, OVERVIEW, MEMBERS, INVITES, CLOSE, ACTION, PAGE_INFO, REFRESH, NEXT }
     public static final Layout DEFAULT_LAYOUT = new Layout(
             MenuLayout.builder(54, Action.class)
             .content(List.of(
@@ -41,7 +49,8 @@ public final class ClanMenu {
             .button(Action.INVITES, 48)
             .button(Action.CLOSE, 49)
             .button(Action.ACTION, 50)
-            .button(Action.REFRESH, 52)
+
+            .button(Action.PAGE_INFO, 52)
             .button(Action.NEXT, 53)
             .build(), 20, 22, 24);
     /** Overview displays and paged content are mutually exclusive views. */
@@ -117,12 +126,20 @@ public final class ClanMenu {
         Map<Integer, UUID> targets = new LinkedHashMap<>();
         for (int i = first; i < end; i++) targets.put(layout.contentSlot(i - first), entries.get(i).id());
         ClanMenuHolder holder = new ClanMenuHolder(viewer, view, page, clan == null ? null : clan.id(), targets, layout);
-        Inventory inventory = inventoryFactory.create(holder, layout.size(), title(view));
-        holder.bind(inventory);
+        Inventory inventory;
+        if (rerenderInventory != null && rerenderInventory.getHolder() instanceof ClanMenuHolder existing && existing.view() == holder.view()) {
+            inventory = rerenderInventory;
+            existing.beginRender(holder); holder = existing;
+            for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
+        } else {
+            inventory = inventoryFactory.create(holder, layout.size(), title(view));
+            holder.bind(inventory);
+        }
         if (view == ClanMenuView.OVERVIEW) renderOverview(inventory, viewer, clan);
         else if (entries.isEmpty()) placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER,
                 view == ClanMenuView.MEMBERS ? "No members" : "No invites", List.of()));
         for (int i = first; i < end; i++) inventory.setItem(layout.contentSlot(i - first), item(entries.get(i)));
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, item(Material.PAPER, "Page " + (pagination.page() + 1) + "/" + pagination.pageCount(), List.of()));
         if (pagination.hasPrevious()) place(inventory, Action.PREVIOUS, item(Material.ARROW, "Previous Page", List.of()));
         place(inventory, Action.OVERVIEW, tab("Overview", view == ClanMenuView.OVERVIEW));
         if (clan != null) place(inventory, Action.MEMBERS, tab("Members", view == ClanMenuView.MEMBERS));
@@ -134,7 +151,8 @@ public final class ClanMenu {
                 item(Material.RED_DYE, "Disband Clan", List.of("Shift + Right-click for confirmation command.")));
         place(inventory, Action.REFRESH, item(Material.CLOCK, "Refresh", List.of("Read current clan state.")));
         if (pagination.hasNext()) place(inventory, Action.NEXT, item(Material.ARROW, "Next Page", List.of()));
-        var opened = player.openInventory(inventory);
+        holder.finishRender();
+        var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory) active.put(viewer, inventory);
     }
 
@@ -194,7 +212,8 @@ public final class ClanMenu {
     public boolean isActive(Player viewer, Inventory inventory, ClanMenuHolder holder) {
         return viewer != null && inventory != null && holder != null
                 && holder.owner().equals(viewer.getUniqueId()) && inventory.getHolder() == holder
-                && holder.boundTo(inventory) && active.get(viewer.getUniqueId()) == inventory;
+                && holder.boundTo(inventory) && active.get(viewer.getUniqueId()) == inventory
+                && viewer.getOpenInventory().getTopInventory() == inventory;
     }
 
     void forgetIfActive(UUID viewer, Inventory inventory) { active.remove(viewer, inventory); }
@@ -243,7 +262,7 @@ public final class ClanMenu {
 
     private boolean isOnline(UUID id) {
         Player player = onlinePlayer.apply(id);
-        return player != null && player.isOnline();
+        return (id.equals(presenceTarget) ? presenceOnline : player != null && player.isOnline());
     }
 
     private ItemStack tab(String label, boolean selected) {
@@ -272,11 +291,43 @@ public final class ClanMenu {
         place(inventory, action, 0, item);
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
-        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+        layout.actionSlot(action, position).ifPresent(slot -> { inventory.setItem(slot, item); ((ClanMenuHolder) inventory.getHolder()).recordAction(slot, action); });
     }
 
     private void placeDisplay(Inventory inventory, int slot, ItemStack item) {
         if (slot >= 0) inventory.setItem(slot, item);
+    }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = active.get(owner);
+        if (inventory == null || rerenderInventory != null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof ClanMenuHolder holder) || !isActive(player, inventory, holder)) {
+            active.remove(owner, inventory); return;
+        }
+        if (!player.hasPermission(dev.vapee.core.clan.command.ClanCommand.PERMISSION)) { active.remove(owner, inventory); player.closeInventory(); return; }
+        try { rerenderInventory = inventory; open(player, holder.view(), holder.page()); }
+        catch (RuntimeException exception) {
+            active.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not update ClanMenu for " + owner, exception);
+        } finally { rerenderInventory = null; }
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { clans.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { clans.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void targetPresenceChanged(UUID target, boolean online) {
+        presenceTarget = target; presenceOnline = online;
+        try { for (UUID owner : java.util.List.copyOf(active.keySet())) {
+            if (!owner.equals(target) && (clans.getClanOf(owner).map(clan -> clan.members().stream().anyMatch(member -> member.playerId().equals(target))).orElse(false))) refreshActive(owner);
+        } } finally { presenceTarget = null; }
     }
 
 }

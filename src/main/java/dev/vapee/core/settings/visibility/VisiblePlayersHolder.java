@@ -11,6 +11,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class VisiblePlayersHolder implements InventoryHolder {
+    private VisiblePlayersHolder rendered;
+    private VisiblePlayersHolder pending;
+    private java.util.Map<Integer, VisiblePlayersMenu.Action> visibleActions = new java.util.LinkedHashMap<>();
+    private VisiblePlayersHolder data() { return rendered == null ? this : rendered; }
+    public Optional<VisiblePlayersMenu.Action> actionAt(int slot) { return Optional.ofNullable(data().visibleActions.get(slot)); }
+    void beginRender(VisiblePlayersHolder next) { pending = next; }
+    void recordAction(int slot, VisiblePlayersMenu.Action action) { (pending == null ? this : pending).visibleActions.put(slot, action); }
+    void finishRender() {
+        if (pending == null) visibleActions = java.util.Map.copyOf(visibleActions);
+        else { pending.visibleActions = java.util.Map.copyOf(pending.visibleActions); rendered = pending; pending = null; }
+    }
+
     private final UUID ownerUniqueId;
     private final int page;
     private final Map<Integer, UUID> targetsBySlot;
@@ -36,11 +48,11 @@ public final class VisiblePlayersHolder implements InventoryHolder {
     }
 
     public int getPage() {
-        return page;
+        return data().page;
     }
 
     public Optional<UUID> getTarget(int slot) {
-        return Optional.ofNullable(targetsBySlot.get(slot));
+        return Optional.ofNullable(data().targetsBySlot.get(slot));
     }
 
     void bindInventory(Inventory inventory) {

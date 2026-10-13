@@ -55,7 +55,7 @@ public final class ClanModule implements CoreModule {
             nextCommand.setExecutor(executor);
             nextCommand.setTabCompleter(executor);
         } catch (RuntimeException exception) {
-            nextMenu.closeOpenInventories();
+            nextMenu.shutdown();
             HandlerList.unregisterAll(nextListener);
             nextCommand.setExecutor(null);
             nextCommand.setTabCompleter(null);
@@ -63,6 +63,7 @@ public final class ClanModule implements CoreModule {
         }
         service = nextService;
         menu = nextMenu;
+        nextMenu.startUpdates();
         listener = nextListener;
         command = nextCommand;
         plugin.getLogger().info("Clan module enabled.");
@@ -70,7 +71,7 @@ public final class ClanModule implements CoreModule {
 
     @Override public void disable() {
         try {
-            if (menu != null) menu.closeOpenInventories();
+            if (menu != null) menu.shutdown();
         } finally {
             if (listener != null) HandlerList.unregisterAll(listener);
             if (command != null) {

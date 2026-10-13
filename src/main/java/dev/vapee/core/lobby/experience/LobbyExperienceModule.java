@@ -121,6 +121,7 @@ public final class LobbyExperienceModule implements CoreModule {
                 newVisibilityService.synchronizePlayer(player);
             }
             navigatorMenu = newNavigatorMenu;
+            newNavigatorMenu.startUpdates();
             visibilityAction = newVisibilityAction;
             registry.activate();
             experienceListener = newExperienceListener;
@@ -182,7 +183,7 @@ public final class LobbyExperienceModule implements CoreModule {
     private void cleanupRuntime(NavigatorMenu activeNavigatorMenu) {
         if (activeNavigatorMenu != null) {
             try {
-                activeNavigatorMenu.closeOpenInventories();
+                activeNavigatorMenu.shutdown();
             } catch (RuntimeException exception) {
                 plugin.getLogger().log(Level.WARNING, "Could not close all navigator inventories.", exception);
             }

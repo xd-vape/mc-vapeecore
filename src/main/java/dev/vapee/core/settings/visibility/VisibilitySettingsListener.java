@@ -87,7 +87,7 @@ public final class VisibilitySettingsListener implements Listener {
         switch (action) {
             case BACK -> settingsMenuOpener.accept(player);
             case CLOSE -> player.closeInventory();
-            case REFRESH -> menu.open(player);
+            case REFRESH -> menu.refreshActive(player.getUniqueId());
             case MANAGE_PLAYERS -> visiblePlayersMenu.open(player);
             case GAME_PARTICIPANTS -> messages.send(player,
                     "<yellow>This visibility option will become available with game integration.</yellow>");
@@ -125,7 +125,7 @@ public final class VisibilitySettingsListener implements Listener {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save visibility settings for " + owner + ".", exception);
             messages.send(player, "<red>Your visibility setting could not be saved. Please try again.</red>");
-            menu.open(player);
+            menu.refreshActive(player.getUniqueId());
             return;
         }
         if (!saved) {
@@ -142,7 +142,7 @@ public final class VisibilitySettingsListener implements Listener {
             messages.send(player,
                     "<yellow>Your setting was saved but could not be applied immediately.</yellow>");
         }
-        menu.open(player);
+        menu.refreshActive(player.getUniqueId());
         soundFeedback.accept(player);
     }
 

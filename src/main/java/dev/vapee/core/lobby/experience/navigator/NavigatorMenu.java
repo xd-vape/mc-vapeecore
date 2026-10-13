@@ -26,6 +26,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class NavigatorMenu {
+    private final dev.vapee.core.lobby.warp.WarpChangeListener committedChanges = () -> java.util.List.copyOf(this.activeInventories.keySet()).forEach(this::refreshActive);
+    private boolean observingChanges;
+
+    private Inventory rerenderInventory;
+
 
     public enum Action { PREVIOUS, PAGE_INFO, CLOSE, NEXT }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
@@ -106,8 +111,15 @@ public final class NavigatorMenu {
                 page,
                 warpIdsBySlot, layout
         );
-        Inventory inventory = inventoryFactory.create(holder, layout.size(), TITLE);
-        holder.bindInventory(inventory);
+        Inventory inventory;
+        if (rerenderInventory != null && rerenderInventory.getHolder() instanceof NavigatorInventoryHolder existing) {
+            inventory = rerenderInventory;
+            existing.beginRender(holder); holder = existing;
+            for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
+        } else {
+            inventory = inventoryFactory.create(holder, layout.size(), TITLE);
+            holder.bindInventory(inventory);
+        }
 
         for (int index = fromIndex; index < toIndex; index++) {
             inventory.setItem(layout.contentSlot(index - fromIndex), createWarpItem(warps.get(index)));
@@ -128,7 +140,7 @@ public final class NavigatorMenu {
                     List.of()
             ));
         }
-        place(inventory, Action.PAGE_INFO, createItem(
+        if (pagination.hasMultiplePages()) place(inventory, Action.PAGE_INFO, createItem(
                 Material.PAPER,
                 "Page " + (page + 1) + "/" + pageCount,
                 NamedTextColor.AQUA,
@@ -148,7 +160,8 @@ public final class NavigatorMenu {
                     List.of()
             ));
         }
-        var opened = validatedPlayer.openInventory(inventory);
+        holder.finishRender();
+        var opened = inventory == rerenderInventory ? validatedPlayer.getOpenInventory() : validatedPlayer.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && validatedPlayer.getOpenInventory().getTopInventory() == inventory) {
             if (!canAccess(validatedPlayer)) {
@@ -243,11 +256,36 @@ public final class NavigatorMenu {
         place(inventory, action, 0, item);
     }
     private void place(Inventory inventory, Action action, int position, ItemStack item) {
-        layout.actionSlot(action, position).ifPresent(slot -> inventory.setItem(slot, item));
+        layout.actionSlot(action, position).ifPresent(slot -> { inventory.setItem(slot, item); ((NavigatorInventoryHolder) inventory.getHolder()).recordAction(slot, action); });
     }
 
     private void placeDisplay(Inventory inventory, int slot, ItemStack item) {
         if (slot >= 0) inventory.setItem(slot, item);
     }
+
+    public void refreshActive(UUID owner) {
+        Inventory inventory = activeInventories.get(owner);
+        if (inventory == null || rerenderInventory != null) return;
+        Player player = onlinePlayer.apply(owner);
+        if (player == null || !player.isOnline() || player.getOpenInventory().getTopInventory() != inventory
+                || !(inventory.getHolder() instanceof NavigatorInventoryHolder holder) || !isActive(player, inventory, holder)) {
+            activeInventories.remove(owner, inventory); return;
+        }
+        if (!canAccess(player)) { activeInventories.remove(owner, inventory); player.closeInventory(); return; }
+        try { rerenderInventory = inventory; open(player, holder.getPage()); }
+        catch (RuntimeException exception) {
+            activeInventories.remove(owner, inventory);
+            if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+            logger.log(Level.WARNING, "Could not update NavigatorMenu for " + owner, exception);
+        } finally { rerenderInventory = null; }
+    }
+
+    public void startUpdates() {
+        if (!observingChanges) { warpService.addChangeListener(committedChanges); observingChanges = true; }
+    }
+    public void stopUpdates() {
+        if (observingChanges) { warpService.removeChangeListener(committedChanges); observingChanges = false; }
+    }
+    public void shutdown() { stopUpdates(); closeOpenInventories(); }
 
 }

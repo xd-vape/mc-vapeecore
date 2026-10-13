@@ -19,6 +19,8 @@ import java.util.TreeMap;
 import java.util.function.Function;
 
 public final class WarpService {
+    private final java.util.Set<WarpChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+
 
     public static final Material DEFAULT_ICON = Material.ENDER_PEARL;
 
@@ -205,6 +207,7 @@ public final class WarpService {
     private void persist(NavigableMap<String, WarpPoint> updated) {
         warpConfig.saveWarps(new ArrayList<>(updated.values()));
         warps = updated;
+        notifyChanged();
     }
 
     private String normalizeId(String id) {
@@ -221,4 +224,16 @@ public final class WarpService {
         }
         return displayWords.isEmpty() ? id : String.join(" ", displayWords);
     }
+    public void addChangeListener(WarpChangeListener listener) { changeListeners.add(Objects.requireNonNull(listener)); }
+    public void removeChangeListener(WarpChangeListener listener) { changeListeners.remove(listener); }
+    private void notifyChanged() {
+        for (var listener : java.util.List.copyOf(changeListeners)) {
+            try { listener.onWarpsChanged(); }
+            catch (RuntimeException exception) {
+                java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Committed state observer failed; domain commit is retained.", exception);
+            }
+        }
+    }
+
 }
