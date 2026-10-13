@@ -214,7 +214,7 @@ public final class PresentationRenderer {
                 createRankAndPlaytimePlaceholders(rankInfo, player.displayName(), playtimeTicks),
                 clanTagPlaceholder(Optional.of(literalTag)),
                 Placeholder.component("clan_tag_display", clanDisplay),
-                Placeholder.component("server", Component.text(configService.getServerName())),
+                Placeholder.component("server", messageService.deserialize(configService.getServerName())),
                 Placeholder.component("prefix", prefix),
                 Placeholder.component("suffix", suffix),
                 Placeholder.component("coins", coins),

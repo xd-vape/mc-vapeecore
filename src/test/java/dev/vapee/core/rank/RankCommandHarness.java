@@ -35,9 +35,10 @@ public final class RankCommandHarness {
         Fixture fixture = new Fixture();
         Player self = fixture.player("Self", "default", Set.of(RankCommand.PERMISSION));
         Player other = fixture.player("Other", "vip", Set.of(RankCommand.PERMISSION));
+        var serverName = new java.util.concurrent.atomic.AtomicReference<>("Vapee Community");
         RankCommand command = new RankCommand(
                 fixture.rankService,
-                () -> "Vapee Community",
+                serverName::get,
                 fixture.messageService,
                 new OnlinePlayerResolver(fixture::onlinePlayers)::resolveExact,
                 fixture::onlinePlayers
@@ -51,6 +52,14 @@ public final class RankCommandHarness {
                 "/rank shows the player's own rank");
         check(hasColoredText(fixture.lastComponent(), "Member", NamedTextColor.GRAY),
                 "/rank renders the friendly self rank in its configured color");
+
+        for (String formattedName : List.of("<red>Color Server</red>", "<#ff8800>Color Server")) {
+            serverName.set(formattedName);
+            command.onCommand(self, null, "rank", new String[0]);
+            check(fixture.last().contains("Color Server • Rank") && !fixture.last().contains("<red>") && !fixture.last().contains("<#"), "server formatting is not exposed as literal tags");
+            check(hasColoredText(fixture.lastComponent(), "Color Server", formattedName.startsWith("<red>") ? NamedTextColor.RED : TextColor.color(0xff8800)), "command preserves configured server color");
+        }
+        serverName.set("Vapee Community");
 
         command.onCommand(self, null, "rank", new String[]{"Other"});
         check(fixture.last().contains("Player: Other")

@@ -4,6 +4,7 @@ import dev.vapee.core.message.MessageService;
 import dev.vapee.core.rank.RankInfo;
 import dev.vapee.core.rank.RankService;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -113,7 +114,9 @@ public final class RankCommand implements TabExecutor {
     }
 
     static Component rankMessage(String serverName, String playerName, RankInfo rank) {
-        Component output = Component.text(serverName + " • Rank", NamedTextColor.GOLD)
+        Component output = Component.empty().color(NamedTextColor.GOLD)
+                .append(MiniMessage.miniMessage().deserialize(serverName))
+                .append(Component.text(" • Rank"))
                 .append(Component.newline())
                 .append(label("Player: ")).append(Component.text(playerName, NamedTextColor.WHITE))
                 .append(Component.newline())

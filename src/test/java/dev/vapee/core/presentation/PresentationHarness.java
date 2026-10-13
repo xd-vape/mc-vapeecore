@@ -20,7 +20,7 @@ public final class PresentationHarness {
     private PresentationHarness() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         check(PresentationConfig.DEFAULT_TABLIST_NAME_FORMAT.equals("<rank_name><clan_tag_display>"),
                 "missing tablist name format includes rank-colored name and conditional clan without prefix");
         TextColor rankColor = TextColor.color(0xc35cff);
@@ -111,7 +111,49 @@ public final class PresentationHarness {
         );
         check(true, "strict presentation validation recognizes rank_name and playtime");
 
+        serverNameColors();
+
         System.out.println("PresentationHarness passed " + checks + " checks.");
+    }
+
+
+    private static void serverNameColors() throws Exception {
+        try (var f = new PresentationFixture()) {
+            var player = f.player("ServerNameTest");
+            var renderer = f.renderer(ignored -> Optional.empty());
+            String[] names = {"Color Server", "<red>Color Server</red>", "<#ff8800>Color Server", "<gradient:red:yellow>Color Server</gradient>"};
+            TextColor[] colors = {NamedTextColor.AQUA, NamedTextColor.RED, TextColor.color(0xff8800)};
+            for (int index = 0; index < names.length; index++) {
+                String yaml = "server:\n  name: '" + names[index] + "'\n";
+                java.nio.file.Path file = f.directory.resolve("config.yml");
+                java.nio.file.Files.writeString(file, yaml);
+                var plan = f.config.prepareReload(); plan.apply();
+                var result = renderer.render(player.player);
+                check(PLAIN.serialize(result.scoreboardTitle()).equals("Color Server"), "server formatting is parsed rather than displayed literally");
+                check(PLAIN.serialize(result.tablistHeader()).startsWith("Color Server\n"), "same server component reaches tablist header");
+                var titleColors = effectiveColors(result.scoreboardTitle(), null);
+                var headerColors = effectiveColors(result.tablistHeader(), null).subList(0, "Color Server".length());
+                if (index < colors.length) {
+                    TextColor expected = colors[index];
+                    check(titleColors.stream().allMatch(expected::equals), "server color overrides aqua template, or inherits it when uncolored");
+                    check(headerColors.stream().allMatch(expected::equals), "tablist preserves configured named/hex color");
+                } else {
+                    check(titleColors.stream().distinct().count() > 1 && titleColors.equals(headerColors), "gradient survives both aqua wrappers");
+                }
+                check(java.nio.file.Files.readString(file).equals(yaml), "reload leaves operator config unchanged");
+                plan.rollback();
+                check(PLAIN.serialize(renderer.render(player.player).scoreboardTitle()).equals("Vapee Community"), "reload rollback restores previous server name");
+            }
+        }
+    }
+
+    private static java.util.List<TextColor> effectiveColors(Component component, TextColor inherited) {
+        TextColor color = component.color() == null ? inherited : component.color();
+        var colors = new java.util.ArrayList<TextColor>();
+        if (component instanceof net.kyori.adventure.text.TextComponent text)
+            for (int i = 0; i < text.content().length(); i++) colors.add(color);
+        for (Component child : component.children()) colors.addAll(effectiveColors(child, color));
+        return colors;
     }
 
     private static long ticksForMinutes(long minutes) {

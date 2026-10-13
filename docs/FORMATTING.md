@@ -140,6 +140,15 @@ messages:
   prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
 ```
 
+Auch `server.name` unterstützt MiniMessage-Farben und Formatierungen:
+
+```yaml
+server:
+  name: "<red>Vapee Community</red>"
+```
+
+Alternativ sind Hex-Farben (`<#ff8800>Vapee Community`) und Gradients (`<gradient:red:yellow>Vapee Community</gradient>`) möglich. Explizite Farben im Namen bleiben auch innerhalb eines Aqua-Templates in `presentation.yml` erhalten. Ohne eigene Farbe übernimmt der Name weiterhin die Template-Farbe. `/rank` und `/ranks` zeigen den formatierten Namen ebenfalls. Nach dem Ändern `/core reload` ausführen; für die neue Unterstützung zuerst die aktualisierte Plugin-JAR installieren und den Server neu starten.
+
 Auch `online-rewards.message.format` ist ein MiniMessage-Template. Es verwendet sichere numerische Placeholder; Details stehen im Abschnitt [Online-Reward-Nachricht](#online-reward-nachricht).
 
 ---

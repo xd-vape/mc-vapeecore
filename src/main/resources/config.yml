@@ -3,6 +3,8 @@
 config-version: 1
 
 # Operator settings only; player/friend/clan/moderation state is stored separately.
+# Server name supports MiniMessage colors, e.g. "<red>Vapee Community" or "<#ff8800>Vapee Community".
+# Without a color, the surrounding presentation template supplies the color.
 server:
   name: "Vapee Community"
 

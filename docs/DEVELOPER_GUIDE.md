@@ -13,6 +13,7 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 | Friends-Lobby-Item ändern | Presentation `lobby.yml` → `items.friends`; Aktion `src/main/java/dev/vapee/core/friend/gui/FriendsLobbyItemAction.java` → bestehendes `FriendMenu.open` |
 | Settings-Feature im GUI verschieben | `DEFAULT_LAYOUT` in `src/main/java/dev/vapee/core/settings/SettingsMenu.java`; `SettingsMenuEntries` definiert den gemeinsamen Render-/Action-Eintrag; `SettingsListener` löst ihn ohne eigenen Slot-Router auf |
 | Andere GUI-Layouts | `DEFAULT_LAYOUT` in `settings/visibility/VisibilitySettingsMenu.java`, `VisiblePlayersMenu.java`, `friend/gui/FriendMenu.java`, `clan/gui/ClanMenu.java`, `lobby/experience/navigator/NavigatorMenu.java`, `quest/daily/menu/DailyQuestMenu.java` unter `src/main/java/dev/vapee/core/` |
+| Servername und dessen Farben | Live `plugins/VapeeCore/config.yml` → `server.name` (MiniMessage, etwa `<red>` oder `<#ff8800>`); `<server>` bewahrt eigene Farben auch innerhalb der Presentation-Templates |
 | Chat-Format | Live `plugins/VapeeCore/chat.yml` → `format`; Vorlage `src/main/resources/chat.yml` |
 | Clan-Tag, Tablist oder Nametag formatieren | Live `plugins/VapeeCore/presentation.yml`; Vorlage `src/main/resources/presentation.yml`; Platzhalter in [FORMATTING.md](FORMATTING.md) |
 | Rank-Name/-Farbe/-Badge | LuckPerms-Meta; Parser/Anzeige in `src/main/java/dev/vapee/core/rank/RankService.java` und `RankInfo.java` |
