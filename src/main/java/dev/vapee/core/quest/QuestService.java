@@ -22,6 +22,8 @@ import java.util.logging.Logger;
  * Main-thread-owned quest assignment, progress, completion, and persistence coordinator.
  */
 public final class QuestService {
+    private final java.util.Set<QuestChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+
 
     private static final String REWARD_REASON_PREFIX = "quest:";
 
@@ -315,6 +317,7 @@ public final class QuestService {
         try {
             playerService.savePlayer(validatedPlayerId);
             dirtyPlayers.remove(validatedPlayerId);
+            notifyChanged(validatedPlayerId);
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
@@ -368,4 +371,16 @@ public final class QuestService {
 
         RewardResult grantCoins(UUID playerId, long coins, RewardSource source, String reason);
     }
+    public void addChangeListener(QuestChangeListener listener) { changeListeners.add(Objects.requireNonNull(listener)); }
+    public void removeChangeListener(QuestChangeListener listener) { changeListeners.remove(listener); }
+    private void notifyChanged(UUID owner) {
+        for (var listener : java.util.List.copyOf(changeListeners)) {
+            try { listener.onQuestsCommitted(owner); }
+            catch (RuntimeException exception) {
+                java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Committed state observer failed; domain commit is retained.", exception);
+            }
+        }
+    }
+
 }

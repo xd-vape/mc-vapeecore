@@ -49,6 +49,7 @@ public final class PrivateMessageSocialHarness {
     public static void main(String[] args) throws Exception {
         Fixture fixture = new Fixture();
         fixture.testPrivateMessageAndReply();
+        new Fixture().testLocales();
         fixture.testIgnoreBlocking();
         fixture.testCommandUsageAndCompletion();
         fixture.testMessageCommandBoundaries();
@@ -85,6 +86,32 @@ public final class PrivateMessageSocialHarness {
                 ), moderation.projection::isMuted
         );
         private final MessageService messages = messageService();
+
+        private void testLocales() {
+            alice.locale = java.util.Locale.GERMANY;
+            String body = "<red>Literal <click:run_command:'/op me'>message";
+            check(privateMessages.send(alice.player(), bob.player(), body) == PrivateMessageResult.SUCCESS, "mixed-locale PM commits normal delivery");
+            check(alice.text().contains("[An Bob] " + body), "German sender wrapper preserves exact literal body");
+            check(bob.text().contains("[Alice → You] " + body), "English recipient wrapper uses its own locale");
+            check(alice.received.stream().noneMatch(PrivateMessageSocialHarness::hasClick)
+                    && bob.received.stream().noneMatch(PrivateMessageSocialHarness::hasClick), "mixed-locale PM never interprets injected click markup");
+            var previous = privateMessages.getState();
+            privateMessages.applyState(privateMessages.prepareState(new PrivateMessageConfig.State(true,
+                    new dev.vapee.core.i18n.LocalizedText(Map.of("en", "EN <message>", "de", "DE <message>")),
+                    new dev.vapee.core.i18n.LocalizedText(Map.of("en", "IN <message>", "de", "EIN <message>")))));
+            alice.clear(); bob.clear();
+            check(privateMessages.send(alice.player(), bob.player(), body) == PrivateMessageResult.SUCCESS
+                    && alice.text().contains("DE " + body) && bob.text().contains("IN " + body), "operator localized maps resolve independently per side");
+            alice.locale = java.util.Locale.JAPAN;
+            alice.clear(); bob.clear();
+            privateMessages.send(alice.player(), bob.player(), body);
+            check(alice.text().contains("EN " + body), "unsupported PM client language falls back to English");
+            privateMessages.applyState(privateMessages.prepareState(new PrivateMessageConfig.State(true, "Universal <message>", "Universal <message>")));
+            alice.locale = java.util.Locale.GERMANY; alice.clear(); bob.clear();
+            privateMessages.send(alice.player(), bob.player(), body);
+            check(alice.text().contains("Universal " + body) && bob.text().contains("Universal " + body), "legacy operator scalar stays universal");
+            privateMessages.applyState(previous);
+        }
 
         private void testMutePolicy() {
             var actor = ModerationActor.console();
@@ -393,12 +420,14 @@ public final class PrivateMessageSocialHarness {
         private final List<Component> received = new ArrayList<>();
         private final Player player;
         private boolean permitted = true;
+        private java.util.Locale locale = java.util.Locale.US;
 
         private PlayerFixture(UUID id, String name) {
             this.id = id;
             this.name = name;
             this.player = proxy(Player.class, (method, arguments) -> switch (method.getName()) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "getName" -> name;
                 case "displayName" -> Component.text(name);
                 case "isOnline" -> true;

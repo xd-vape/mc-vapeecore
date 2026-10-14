@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 final class ClanMenuFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
     final MemoryClans repository = new MemoryClans();
     final Map<UUID, CorePlayer> known = new HashMap<>();
     final Map<UUID, TestPlayer> players = new HashMap<>();
@@ -81,7 +82,7 @@ final class ClanMenuFixture {
     }
 
     Inventory inventory(ClanMenuHolder holder, int size, Component title) {
-        return new TestInventory(holder, size).inventory;
+        Inventory result = new TestInventory(holder, size).inventory; titles.put(result, title); return result;
     }
 
     InventoryClickEvent click(TestPlayer player, Inventory top, int slot, ClickType click) {
@@ -117,6 +118,7 @@ final class ClanMenuFixture {
     static SpecItem spec(Inventory inventory, int slot) { return (SpecItem) inventory.getItem(slot); }
 
     final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         final UUID id;
         final String name;
         final Player player;
@@ -133,6 +135,7 @@ final class ClanMenuFixture {
             this.online = online;
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "getName" -> name;
                 case "isOnline" -> this.online;
                 case "hasPermission" -> permitted;

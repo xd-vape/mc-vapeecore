@@ -1,5 +1,7 @@
 package dev.vapee.core.quest.daily.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.quest.daily.menu.DailyQuestMenu;
 import org.bukkit.command.*;
@@ -24,11 +26,11 @@ public final class DailyQuestCommand implements CommandExecutor, TabCompleter {
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                                        @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission(DailyQuestMenu.PERMISSION)) {
-            messages.send(sender, "<red>You do not have permission to view quests.</red>");
+            messages.send(sender, tr("daily-quests.denied").color(net.kyori.adventure.text.format.NamedTextColor.RED));
         } else if (!(sender instanceof Player player)) {
-            messages.send(sender, "<red>Only players can use this command.</red>");
+            messages.send(sender, tr("daily-quests.command-player-only"));
         } else if (args.length != 0) {
-            messages.send(sender, "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <aqua>/quests</aqua>");
+            messages.send(sender, tr("daily-quests.command-usage"));
         } else open.accept(player);
         return true;
     }

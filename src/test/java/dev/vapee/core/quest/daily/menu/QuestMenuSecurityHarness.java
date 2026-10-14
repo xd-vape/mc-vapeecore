@@ -25,7 +25,7 @@ public final class QuestMenuSecurityHarness {
             check(f.click(owner, active, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), click).isCancelled() && f.syncCalls == sync,
                     "non-left/right refresh control is inert: " + click);
         }
-        for (int slot : new int[]{MenuTestLayouts.QUEST.contentSlot(0), MenuTestLayouts.QUEST.contentSlots().getLast(), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.size(), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), -999}) {
+        for (int slot : new int[]{MenuTestLayouts.QUEST.contentSlot(0), MenuTestLayouts.QUEST.contentSlot(Math.min(5, MenuTestLayouts.QUEST.pageSize()) - 1), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), MenuTestLayouts.QUEST.size(), dev.vapee.core.ui.LayoutTestSupport.unused(MenuTestLayouts.QUEST), -999}) {
             check(f.click(owner, active, slot, ClickType.LEFT).isCancelled() && f.syncCalls == sync,
                     "content, filler, info, bottom and outside cannot act: " + slot);
         }

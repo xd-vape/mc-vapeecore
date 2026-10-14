@@ -12,6 +12,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class NavigatorInventoryHolder implements InventoryHolder {
+    private NavigatorInventoryHolder rendered;
+    private NavigatorInventoryHolder pending;
+    private java.util.Map<Integer, NavigatorMenu.Action> visibleActions = new java.util.LinkedHashMap<>();
+    private NavigatorInventoryHolder data() { return rendered == null ? this : rendered; }
+    public Optional<NavigatorMenu.Action> actionAt(int slot) { return Optional.ofNullable(data().visibleActions.get(slot)); }
+    void beginRender(NavigatorInventoryHolder next) { pending = next; }
+    void recordAction(int slot, NavigatorMenu.Action action) { (pending == null ? this : pending).visibleActions.put(slot, action); }
+    void finishRender() {
+        if (pending == null) visibleActions = java.util.Map.copyOf(visibleActions);
+        else { pending.visibleActions = java.util.Map.copyOf(pending.visibleActions); rendered = pending; pending = null; }
+    }
+
 
     private final UUID ownerUniqueId;
     private final int page;
@@ -39,11 +51,11 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
     }
 
     public int getPage() {
-        return page;
+        return data().page;
     }
 
     public Optional<String> getWarpId(int slot) {
-        return Optional.ofNullable(warpIdsBySlot.get(slot));
+        return Optional.ofNullable(data().warpIdsBySlot.get(slot));
     }
 
     void bindInventory(Inventory inventory) {

@@ -1,5 +1,7 @@
 package dev.vapee.core.activity.blackjack.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.blackjack.BlackjackSession;
 import dev.vapee.core.activity.blackjack.presentation.BlackjackPreviewService;
 import dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition;
@@ -29,6 +31,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -46,53 +49,53 @@ public final class BlackjackCommand implements TabExecutor {
             ACTIONS.stream()
     ).toList();
     private static final CommandHelpPage MAIN_HELP_PAGE = new CommandHelpPage(
-            "Blackjack Administration",
+            tr("blackjack.help.title"),
             null,
-            List.of(new CommandHelpSection("Table Setup", List.of(
-                    new CommandHelpEntry("/blackjack setup", "Shows physical table setup commands."),
-                    new CommandHelpEntry("/blackjack setup list", "Lists all configured tables.")
+            List.of(new CommandHelpSection(tr("blackjack.help.section.table-setup"), List.of(
+                    new CommandHelpEntry("/blackjack setup", tr("blackjack.help.blackjack.setup.description")),
+                    new CommandHelpEntry("/blackjack setup list", tr("blackjack.help.blackjack.setup.list.description"))
             ))),
-            "Use /blackjack setup help for the complete setup workflow."
+            tr("blackjack.help.footer")
     );
     private static final CommandHelpPage SETUP_HELP_PAGE = new CommandHelpPage(
-            "Blackjack Setup",
+            tr("blackjack.help.title-setup"),
             null,
             List.of(
-                    new CommandHelpSection("Create & Configure", List.of(
+                    new CommandHelpSection(tr("blackjack.help.section.create-configure"), List.of(
                             new CommandHelpEntry("/blackjack setup create <id>",
-                                    "Creates a disabled blackjack table draft."),
+                                    tr("blackjack.help.blackjack.setup.create.description")),
                             new CommandHelpEntry("/blackjack setup pos1 <id>",
-                                    "Sets the first corner of the table area."),
+                                    tr("blackjack.help.blackjack.setup.pos1.description")),
                             new CommandHelpEntry("/blackjack setup pos2 <id>",
-                                    "Sets the second corner of the table area."),
+                                    tr("blackjack.help.blackjack.setup.pos2.description")),
                             new CommandHelpEntry("/blackjack setup dealer <id>",
-                                    "Stand at the dealer position facing the table."),
+                                    tr("blackjack.help.blackjack.setup.dealer.description")),
                             new CommandHelpEntry("/blackjack setup display <id>",
-                                    "Sets the center and surface of the physical blackjack table."),
+                                    tr("blackjack.help.blackjack.setup.display.description")),
                             new CommandHelpEntry("/blackjack setup interaction <id>",
-                                    "Sets the block players right-click to join."),
+                                    tr("blackjack.help.blackjack.setup.interaction.description")),
                             new CommandHelpEntry("/blackjack setup seat <id> <1-5>",
-                                    "Sets or updates a table seat."),
+                                    tr("blackjack.help.blackjack.setup.seat.description")),
                             new CommandHelpEntry("/blackjack setup removeseat <id> <1-5>",
-                                    "Removes a configured seat."),
+                                    tr("blackjack.help.blackjack.setup.removeseat.description")),
                             new CommandHelpEntry("/blackjack setup preview <id>",
-                                    "Temporarily shows the configured card and status positions.")
+                                    tr("blackjack.help.blackjack.setup.preview.description"))
                     )),
-                    new CommandHelpSection("Management", List.of(
+                    new CommandHelpSection(tr("blackjack.help.section.management"), List.of(
                             new CommandHelpEntry("/blackjack setup enable <id>",
-                                    "Validates and enables the table."),
+                                    tr("blackjack.help.blackjack.setup.enable.description")),
                             new CommandHelpEntry("/blackjack setup disable <id>",
-                                    "Disables an unused table."),
+                                    tr("blackjack.help.blackjack.setup.disable.description")),
                             new CommandHelpEntry("/blackjack setup delete <id>",
-                                    "Deletes a disabled table.")
+                                    tr("blackjack.help.blackjack.setup.delete.description"))
                     )),
-                    new CommandHelpSection("Information", List.of(
+                    new CommandHelpSection(tr("blackjack.help.section.information"), List.of(
                             new CommandHelpEntry("/blackjack setup info <id>",
-                                    "Shows configuration and runtime state."),
-                            new CommandHelpEntry("/blackjack setup list", "Lists configured tables.")
+                                    tr("blackjack.help.blackjack.setup.info.description")),
+                            new CommandHelpEntry("/blackjack setup list", tr("blackjack.help.blackjack.setup.list.description-alternate"))
                     ))
             ),
-            "Use /blackjack setup info <id> to check setup progress."
+            tr("blackjack.help.footer-setup")
     );
 
     private final JavaPlugin plugin;
@@ -129,7 +132,7 @@ public final class BlackjackCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to configure blackjack tables.</red>");
+            messageService.send(sender, tr("blackjack.setup.denied"));
             return true;
         }
         if (args.length == 0) {
@@ -182,7 +185,7 @@ public final class BlackjackCommand implements TabExecutor {
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.SEVERE, "Could not update blackjack table configuration.", exception);
             messageService.send(sender,
-                    "<red>The blackjack table configuration could not be saved. Check the server log.</red>"
+                    tr("blackjack.setup.save-failed")
             );
         }
         return true;
@@ -234,13 +237,11 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         if (!BlackjackTableDraft.isValidId(args[2])) {
-            messageService.send(sender, "<red>Table IDs must match [a-z0-9_-]+.</red>");
+            messageService.send(sender, tr("blackjack.setup.id-invalid"));
             return;
         }
         if (!tableConfig.createDraft(args[2])) {
-            messageService.send(sender, Component.text("Blackjack table '", NamedTextColor.RED)
-                    .append(Component.text(args[2], NamedTextColor.WHITE))
-                    .append(Component.text("' already exists.", NamedTextColor.RED)));
+            messageService.send(sender, tr("blackjack.table.exists", Map.of("id", Component.text(args[2], NamedTextColor.WHITE))).color(NamedTextColor.RED));
             return;
         }
         messageService.send(sender, createWorkflow(args[2]));
@@ -252,11 +253,11 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         if (draft.isEnabled() || tableService.isRuntimeActive(draft.getId())) {
-            messageService.send(sender, "<red>Disable the table before deleting it.</red>");
+            messageService.send(sender, tr("blackjack.setup.disable-delete"));
             return;
         }
         tableConfig.deleteDraft(draft.getId());
-        messageService.send(sender, success("Blackjack table '", draft.getId(), "' deleted."));
+        messageService.send(sender, tr("blackjack.table.deleted", Map.of("id", Component.text(draft.getId()))).color(NamedTextColor.GREEN));
     }
 
     private void setPosition(CommandSender sender, String[] args, PositionType type) {
@@ -272,8 +273,7 @@ public final class BlackjackCommand implements TabExecutor {
             case DEALER -> draft.setDealer(position);
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, success("Blackjack table '", draft.getId(),
-                "' " + type.label + " updated."));
+        messageService.send(sender, tr("blackjack.table.position", Map.of("id", Component.text(draft.getId()), "position", tr("blackjack.position." + type.name()))).color(NamedTextColor.GREEN));
     }
 
     private void interaction(CommandSender sender, String[] args) {
@@ -284,13 +284,12 @@ public final class BlackjackCommand implements TabExecutor {
         Player player = (Player) sender;
         Block block = player.getTargetBlockExact(6);
         if (block == null) {
-            messageService.send(sender, "<red>Look at a block within six blocks.</red>");
+            messageService.send(sender, tr("blackjack.setup.look-block"));
             return;
         }
         draft.setInteraction(BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, success("Blackjack table '", draft.getId(),
-                "' interaction block updated."));
+        messageService.send(sender, tr("blackjack.table.interaction", Map.of("id", Component.text(draft.getId()))).color(NamedTextColor.GREEN));
     }
 
     private void displayAnchor(CommandSender sender, String[] args) {
@@ -301,7 +300,7 @@ public final class BlackjackCommand implements TabExecutor {
         Player player = (Player) sender;
         Block block = player.getTargetBlockExact(6);
         if (block == null) {
-            messageService.send(sender, "<red>Look at a table block within six blocks.</red>");
+            messageService.send(sender, tr("blackjack.setup.look-table"));
             return;
         }
         double surfaceY = surfaceY(block);
@@ -314,14 +313,14 @@ public final class BlackjackCommand implements TabExecutor {
         );
         draft.setDisplayAnchor(anchor);
         tableConfig.saveDraft(draft);
-        Component output = Component.text("Blackjack table surface updated.", NamedTextColor.GREEN)
+        Component output = tr("blackjack.setup.surface-updated").color(NamedTextColor.GREEN)
                 .append(Component.newline())
-                .append(infoLine("Block: ", anchor.worldName() + " @ "
+                .append(infoLine(tr("blackjack.info.block"), anchor.worldName() + " @ "
                         + block.getX() + ", " + block.getY() + ", " + block.getZ(), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(infoLine("Surface: ", Double.toString(surfaceY), NamedTextColor.WHITE))
+                .append(infoLine(tr("blackjack.info.surface"), Double.toString(surfaceY), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(Component.text("Use /blackjack setup info " + draft.getId(), NamedTextColor.AQUA));
+                .append(tr("common.use-short").append(Component.text("/blackjack setup info " + draft.getId())).color(NamedTextColor.AQUA));
         messageService.send(sender, output);
     }
 
@@ -354,19 +353,18 @@ public final class BlackjackCommand implements TabExecutor {
         Player player = (Player) sender;
         Block block = player.getTargetBlockExact(6);
         if (block == null) {
-            messageService.send(sender, "<red>Look at a supported seat block within six blocks.</red>");
+            messageService.send(sender, tr("blackjack.setup.look-seat"));
             return;
         }
         Location resolved = seatPositionResolver.resolve(block, player.getYaw()).orElse(null);
         if (resolved == null) {
             messageService.send(sender,
-                    "<red>Use a bottom stair or a single bottom/top slab. Top stairs and double slabs are unsupported.</red>");
+                    tr("blackjack.setup.seat-block-invalid"));
             return;
         }
         draft.setSeat(number, position(resolved, true), BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, success("Blackjack table '", draft.getId(),
-                "' seat " + number + " block and sit position updated."));
+        messageService.send(sender, tr("blackjack.table.seat", Map.of("id", Component.text(draft.getId()), "seat", Component.text(number))).color(NamedTextColor.GREEN));
     }
 
     private void removeSeat(CommandSender sender, String[] args) {
@@ -379,12 +377,11 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         if (!draft.removeSeat(number)) {
-            messageService.send(sender, "<red>That seat is not configured.</red>");
+            messageService.send(sender, tr("blackjack.setup.seat-unconfigured"));
             return;
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, success("Blackjack table '", draft.getId(),
-                "' seat " + number + " removed."));
+        messageService.send(sender, tr("blackjack.table.seat-removed", Map.of("id", Component.text(draft.getId()), "seat", Component.text(number))).color(NamedTextColor.GREEN));
     }
 
     private void preview(CommandSender sender, String[] args) {
@@ -393,32 +390,31 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can view a world preview.</red>");
+            messageService.send(sender, tr("blackjack.preview.player-only"));
             return;
         }
         BlackjackPreviewService.PreviewResult result = previewService.show(player.getUniqueId(), draft);
         Component output;
         if (result.status() == BlackjackPreviewService.PreviewStatus.MISSING_SURFACE) {
-            output = Component.text("Set the table surface before starting a preview.", NamedTextColor.RED)
+            output = tr("blackjack.preview.surface-missing").color(NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                    .append(tr("common.use").color(NamedTextColor.YELLOW))
                     .append(Component.text("/blackjack setup display " + draft.getId(), NamedTextColor.AQUA)
                             .clickEvent(ClickEvent.suggestCommand(
                                     "/blackjack setup display " + draft.getId())));
         } else if (result.status() == BlackjackPreviewService.PreviewStatus.WORLD_UNAVAILABLE) {
-            output = Component.text("The table surface world is not loaded.", NamedTextColor.RED);
+            output = tr("blackjack.preview.world-missing").color(NamedTextColor.RED);
         } else {
-            output = Component.text("Blackjack table preview shown for "
-                            + BlackjackPreviewService.PREVIEW_SECONDS + " seconds.", NamedTextColor.GREEN)
+            output = tr("blackjack.preview.shown", Map.of("seconds", Component.text(BlackjackPreviewService.PREVIEW_SECONDS))).color(NamedTextColor.GREEN)
                     .append(Component.newline())
-                    .append(infoLine("Markers: ", String.join(", ", result.markers()), NamedTextColor.WHITE));
+                    .append(infoLine(tr("blackjack.preview.markers"), Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.text(", ")), result.markers()), NamedTextColor.WHITE));
         }
         if (!result.missingComponents().isEmpty()) {
             output = output.append(Component.newline())
-                    .append(Component.text("Missing components:", NamedTextColor.YELLOW));
-            for (String missing : result.missingComponents()) {
+                    .append(tr("blackjack.preview.missing-heading").color(NamedTextColor.YELLOW));
+            for (Component missing : result.missingComponents()) {
                 output = output.append(Component.newline())
-                        .append(Component.text("- " + missing + ": missing", NamedTextColor.GRAY));
+                        .append(tr("blackjack.preview.missing-item", Map.of("component", missing)).color(NamedTextColor.GRAY));
             }
         }
         messageService.send(sender, output);
@@ -431,7 +427,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         BlackjackTableOperationResult result = tableService.enableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, success("Blackjack table '", args[2], "' enabled."));
+            messageService.send(sender, tr("blackjack.table.enabled", Map.of("id", Component.text(args[2]))).color(NamedTextColor.GREEN));
             return;
         }
         sendOperationFailure(sender, args[2], result);
@@ -444,7 +440,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         BlackjackTableOperationResult result = tableService.disableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, success("Blackjack table '", args[2], "' disabled."));
+            messageService.send(sender, tr("blackjack.table.disabled", Map.of("id", Component.text(args[2]))).color(NamedTextColor.GREEN));
             return;
         }
         sendOperationFailure(sender, args[2], result);
@@ -456,58 +452,57 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         Optional<BlackjackSession> session = tableService.getSession(draft.getId());
-        String sessionStatus = session
-                .map(value -> display(value.getState().name()) + " • "
-                        + value.getParticipantCount() + " participant(s)")
-                .orElse("None");
-        Component output = Component.text("Blackjack Table • ", NamedTextColor.GOLD)
+        Component sessionStatus = session.map(value -> tr("blackjack.info.session-count", Map.of(
+                "state", tr("blackjack.info.session-state." + value.getState().name()), "count", Component.text(value.getParticipantCount()))))
+                .orElseGet(() -> tr("common.none"));
+        Component output = tr("blackjack.info.heading").color(NamedTextColor.GOLD)
                 .append(Component.text(draft.getId(), NamedTextColor.AQUA))
                 .append(Component.newline())
                 .append(Component.newline())
-                .append(Component.text("Status", NamedTextColor.YELLOW))
+                .append(tr("blackjack.info.status").color(NamedTextColor.YELLOW))
                 .append(Component.newline())
-                .append(infoLine("Enabled: ", draft.isEnabled() ? "Enabled" : "Disabled",
+                .append(infoLine(tr("blackjack.info.enabled"), draft.isEnabled() ? tr("common.enabled") : tr("common.disabled"),
                         draft.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY))
                 .append(Component.newline())
-                .append(infoLine("Runtime: ", tableService.isRuntimeActive(draft.getId()) ? "Active" : "Inactive",
+                .append(infoLine(tr("blackjack.info.runtime"), tableService.isRuntimeActive(draft.getId()) ? tr("moderation.status.active") : tr("moderation.status.inactive"),
                         tableService.isRuntimeActive(draft.getId()) ? NamedTextColor.GREEN : NamedTextColor.GRAY))
                 .append(Component.newline())
-                .append(infoLine("Session: ", sessionStatus, NamedTextColor.WHITE))
+                .append(infoLine(tr("blackjack.info.session"), sessionStatus, NamedTextColor.WHITE))
                 .append(Component.newline())
                 .append(Component.newline())
-                .append(Component.text("Physical Table Setup", NamedTextColor.YELLOW))
+                .append(tr("blackjack.info.physical").color(NamedTextColor.YELLOW))
                 .append(Component.newline())
-                .append(infoLine("World: ", configuredWorld(draft), NamedTextColor.WHITE))
+                .append(infoLine(tr("blackjack.info.world"), configuredWorld(draft), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(infoLine("Area: ", draft.getPos1().isPresent() && draft.getPos2().isPresent()
-                                ? "Configured" : "Missing",
+                .append(infoLine(tr("blackjack.info.area"), draft.getPos1().isPresent() && draft.getPos2().isPresent()
+                                ? tr("blackjack.info.configured") : tr("blackjack.info.missing"),
                         draft.getPos1().isPresent() && draft.getPos2().isPresent()
                                 ? NamedTextColor.GREEN : NamedTextColor.RED))
                 .append(Component.newline())
-                .append(configurationLine("Area Pos 1: ", draft.getPos1().isPresent()))
+                .append(configurationLine(tr("blackjack.info.pos1"), draft.getPos1().isPresent()))
                 .append(Component.newline())
-                .append(configurationLine("Area Pos 2: ", draft.getPos2().isPresent()))
+                .append(configurationLine(tr("blackjack.info.pos2"), draft.getPos2().isPresent()))
                 .append(Component.newline())
-                .append(configurationLine("Dealer: ", draft.getDealer().isPresent()))
+                .append(configurationLine(tr("blackjack.info.dealer"), draft.getDealer().isPresent()))
                 .append(Component.newline())
-                .append(infoLine("Table Surface: ", draft.getDisplayAnchor().isPresent()
-                                ? "Configured" : "Missing - using legacy geometry",
+                .append(infoLine(tr("blackjack.info.table-surface"), draft.getDisplayAnchor().isPresent()
+                                ? tr("blackjack.info.configured") : tr("blackjack.info.legacy-geometry"),
                         draft.getDisplayAnchor().isPresent() ? NamedTextColor.GREEN : NamedTextColor.YELLOW))
                 .append(Component.newline())
-                .append(configurationLine("Interaction: ", draft.getInteraction().isPresent()))
+                .append(configurationLine(tr("blackjack.info.interaction"), draft.getInteraction().isPresent()))
                 .append(Component.newline())
-                .append(infoLine("Join Mode: ", joinMode(draft), NamedTextColor.WHITE))
+                .append(infoLine(tr("blackjack.info.join-mode"), joinMode(draft), NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(infoLine("Seats: ", draft.getSeats().size() + " / 5",
+                .append(infoLine(tr("blackjack.info.seats"), draft.getSeats().size() + " / 5",
                         draft.getSeats().isEmpty() ? NamedTextColor.RED : NamedTextColor.WHITE));
 
         SetupStep nextStep = nextSetupStep(draft);
         if (nextStep != null) {
             output = output.append(Component.newline())
                     .append(Component.newline())
-                    .append(Component.text("Next", NamedTextColor.YELLOW))
+                    .append(tr("blackjack.info.next").color(NamedTextColor.YELLOW))
                     .append(Component.newline())
-                    .append(Component.text(nextStep.description(), NamedTextColor.GRAY))
+                    .append(nextStep.description().color(NamedTextColor.GRAY))
                     .append(Component.newline())
                     .append(Component.text(nextStep.syntax(), NamedTextColor.AQUA)
                             .clickEvent(ClickEvent.suggestCommand(nextStep.syntax())));
@@ -522,22 +517,21 @@ public final class BlackjackCommand implements TabExecutor {
         }
         List<BlackjackTableDraft> drafts = tableConfig.getDrafts();
         if (drafts.isEmpty()) {
-            messageService.send(sender, "<yellow>No blackjack tables are configured.</yellow>");
+            messageService.send(sender, tr("blackjack.setup.empty"));
             return;
         }
-        Component output = Component.text("Blackjack Tables", NamedTextColor.GOLD)
+        Component output = tr("blackjack.info.tables").color(NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(Component.text(drafts.size() + " table(s) configured.", NamedTextColor.GRAY));
+                .append(tr("blackjack.info.table-count", Map.of("count", Component.text(drafts.size()))).color(NamedTextColor.GRAY));
         for (BlackjackTableDraft draft : drafts) {
             BlackjackSession session = tableService.getSession(draft.getId()).orElse(null);
-            String status = draft.isEnabled() ? "Enabled" : "Disabled";
+            Component status = draft.isEnabled() ? tr("common.enabled") : tr("common.disabled");
             String capacity = session == null ? "" : " " + session.getParticipantCount() + "/"
                     + tableService.getDefinition(draft.getId()).orElseThrow().capacity();
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.DARK_GRAY))
                     .append(Component.text(draft.getId(), NamedTextColor.AQUA))
-                    .append(Component.text(" [" + status + "]" + capacity,
-                            draft.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY));
+                    .append(Component.text(" [").append(status).append(Component.text("]" + capacity)).color(draft.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY));
         }
         messageService.send(sender, output);
     }
@@ -548,7 +542,7 @@ public final class BlackjackCommand implements TabExecutor {
             return null;
         }
         if (!(sender instanceof Player)) {
-            messageService.send(sender, "<red>Only players can capture world positions.</red>");
+            messageService.send(sender, tr("blackjack.setup.player-only"));
             return null;
         }
         return ensureEditable(sender, draft) ? draft : null;
@@ -567,16 +561,14 @@ public final class BlackjackCommand implements TabExecutor {
     }
 
     private static Component missingTableMessage(String tableId) {
-        return Component.text("Blackjack table '", NamedTextColor.RED)
-                .append(Component.text(tableId, NamedTextColor.WHITE))
-                .append(Component.text("' does not exist.", NamedTextColor.RED));
+        return tr("blackjack.table.missing", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED);
     }
 
     private boolean ensureEditable(CommandSender sender, BlackjackTableDraft draft) {
         if (!draft.isEnabled() && !tableService.isRuntimeActive(draft.getId())) {
             return true;
         }
-        messageService.send(sender, "<red>Disable the table before editing it.</red>");
+        messageService.send(sender, tr("blackjack.setup.disable-edit"));
         return false;
     }
 
@@ -588,7 +580,7 @@ public final class BlackjackCommand implements TabExecutor {
             }
         } catch (NumberFormatException ignored) {
         }
-        messageService.send(sender, "<red>Seat number must be between 1 and 5.</red>");
+        messageService.send(sender, tr("blackjack.setup.seat-number"));
         return null;
     }
 
@@ -602,13 +594,13 @@ public final class BlackjackCommand implements TabExecutor {
         );
     }
 
-    private String configuredWorld(BlackjackTableDraft draft) {
+    private Component configuredWorld(BlackjackTableDraft draft) {
         return draft.getPos1().map(ActivityPosition::worldName)
                 .or(() -> draft.getPos2().map(ActivityPosition::worldName))
                 .or(() -> draft.getDealer().map(ActivityPosition::worldName))
                 .or(() -> draft.getDisplayAnchor().map(BlackjackDisplayAnchor::worldName))
                 .or(() -> draft.getInteraction().map(BlackjackBlockPosition::worldName))
-                .orElse("Not configured");
+                .map(value -> (Component) Component.text(value)).orElseGet(() -> tr("blackjack.info.not-configured"));
     }
 
     private void sendOperationFailure(
@@ -618,56 +610,56 @@ public final class BlackjackCommand implements TabExecutor {
     ) {
         switch (result.status()) {
             case TABLE_NOT_FOUND -> messageService.send(sender,
-                    error("Blackjack table '", tableId, "' does not exist."));
-            case ALREADY_ENABLED -> messageService.send(sender, "<yellow>That blackjack table is already enabled.</yellow>");
-            case NOT_ENABLED -> messageService.send(sender, "<yellow>That blackjack table is already disabled.</yellow>");
-            case WORLD_NOT_LOADED -> messageService.send(sender, "<red>The table world is not loaded.</red>");
+                    tr("blackjack.table.missing", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+            case ALREADY_ENABLED -> messageService.send(sender, tr("blackjack.setup.already-enabled"));
+            case NOT_ENABLED -> messageService.send(sender, tr("blackjack.setup.already-disabled"));
+            case WORLD_NOT_LOADED -> messageService.send(sender, tr("blackjack.setup.world-missing"));
             case INTERACTION_CONFLICT -> messageService.send(sender,
-                    "<red>That interaction block is already used by another table.</red>");
+                    tr("blackjack.setup.interaction-used"));
             case SEAT_CONFLICT -> messageService.send(sender,
-                    "<red>One of those seat blocks is already used by another enabled table.</red>");
+                    tr("blackjack.setup.seat-used"));
             case SEAT_BLOCK_INVALID -> messageService.send(sender,
-                    "<red>A configured seat block is no longer a supported stair or slab.</red>");
+                    tr("blackjack.setup.seat-invalid"));
             case TABLE_IN_USE -> messageService.send(sender,
-                    "<red>The table cannot be disabled while occupied or running a round.</red>");
+                    tr("blackjack.setup.busy"));
             case INVALID_DEFINITION -> {
                 messageService.send(sender, invalidDefinitionMessage(tableId, result.details()));
             }
             case RUNTIME_FAILURE -> messageService.send(sender,
-                    "<red>The table runtime could not be activated. Check the server log.</red>");
+                    tr("blackjack.setup.activate-failed"));
             case SUCCESS -> throw new IllegalArgumentException("Success is not a failure result");
         }
     }
 
     private static Component createWorkflow(String tableId) {
         List<WorkflowStep> steps = List.of(
-                new WorkflowStep("Build the physical table in the world.", null),
-                new WorkflowStep("Create its disabled configuration draft:",
+                new WorkflowStep(tr("blackjack.workflow.build"), null),
+                new WorkflowStep(tr("blackjack.workflow.create"),
                         "/blackjack setup create " + tableId),
-                new WorkflowStep("Set the first gameplay-area corner:",
+                new WorkflowStep(tr("blackjack.workflow.pos1"),
                         "/blackjack setup pos1 " + tableId),
-                new WorkflowStep("Set the second gameplay-area corner:",
+                new WorkflowStep(tr("blackjack.workflow.pos2"),
                         "/blackjack setup pos2 " + tableId),
-                new WorkflowStep("Stand at the dealer position facing the table, then:",
+                new WorkflowStep(tr("blackjack.workflow.dealer"),
                         "/blackjack setup dealer " + tableId),
-                new WorkflowStep("Look at the playing surface:",
+                new WorkflowStep(tr("blackjack.workflow.surface"),
                         "/blackjack setup display " + tableId),
-                new WorkflowStep("Look at every seat and repeat with its number:",
+                new WorkflowStep(tr("blackjack.workflow.seat"),
                         "/blackjack setup seat " + tableId + " <number>"),
-                new WorkflowStep("Check the visual calibration:",
+                new WorkflowStep(tr("blackjack.workflow.preview"),
                         "/blackjack setup preview " + tableId),
-                new WorkflowStep("Validate and enable the table:",
+                new WorkflowStep(tr("blackjack.workflow.enable"),
                         "/blackjack setup enable " + tableId)
         );
-        Component output = success("Blackjack table '", tableId, "' created.")
+        Component output = tr("blackjack.table.created", Map.of("id", Component.text(tableId))).color(NamedTextColor.GREEN)
                 .append(Component.newline())
                 .append(Component.newline())
-                .append(Component.text("Setup order:", NamedTextColor.YELLOW));
+                .append(tr("blackjack.workflow.order").color(NamedTextColor.YELLOW));
         for (int index = 0; index < steps.size(); index++) {
             WorkflowStep step = steps.get(index);
             output = output.append(Component.newline())
                     .append(Component.text((index + 1) + ". ", NamedTextColor.GRAY))
-                    .append(Component.text(step.description(), NamedTextColor.WHITE));
+                    .append(step.description().color(NamedTextColor.WHITE));
             if (step.command() != null) {
                 output = output.append(Component.newline())
                         .append(Component.text("   " + step.command(), NamedTextColor.AQUA)
@@ -676,24 +668,21 @@ public final class BlackjackCommand implements TabExecutor {
         }
         return output.append(Component.newline())
                 .append(Component.newline())
-                .append(Component.text("Tip: ", NamedTextColor.YELLOW))
-                .append(Component.text("Use /blackjack setup info " + tableId
-                        + " to check progress.", NamedTextColor.GRAY));
+                .append(tr("common.help-tip").color(NamedTextColor.YELLOW))
+                .append(tr("blackjack.workflow.progress", Map.of("command", Component.text("/blackjack setup info " + tableId))).color(NamedTextColor.GRAY));
     }
 
     private void sendUnknown(CommandSender sender, String subcommand, String helpSyntax) {
-        messageService.send(sender, Component.text("Unknown subcommand '", NamedTextColor.RED)
-                .append(Component.text(subcommand, NamedTextColor.WHITE))
-                .append(Component.text("'.", NamedTextColor.RED))
+        messageService.send(sender, tr("blackjack.unknown-command", Map.of("command", Component.text(subcommand, NamedTextColor.WHITE))).color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text(helpSyntax, NamedTextColor.AQUA)));
     }
 
     private void sendInvalidUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
@@ -717,27 +706,17 @@ public final class BlackjackCommand implements TabExecutor {
         };
     }
 
-    private static Component success(String before, String value, String after) {
-        return Component.text(before, NamedTextColor.GREEN)
-                .append(Component.text(value, NamedTextColor.WHITE))
-                .append(Component.text(after, NamedTextColor.GREEN));
+    private Component infoLine(Component label, Component value, NamedTextColor valueColor) {
+        return label.color(NamedTextColor.GRAY).append(value.color(valueColor));
     }
 
-    private static Component error(String before, String value, String after) {
-        return Component.text(before, NamedTextColor.RED)
-                .append(Component.text(value, NamedTextColor.WHITE))
-                .append(Component.text(after, NamedTextColor.RED));
+    private Component infoLine(Component label, String value, NamedTextColor valueColor) {
+        return infoLine(label, Component.text(value), valueColor);
     }
-
-    private Component infoLine(String label, String value, NamedTextColor valueColor) {
-        return Component.text(label, NamedTextColor.GRAY)
-                .append(Component.text(value, valueColor));
-    }
-
-    private Component configurationLine(String label, boolean configured) {
+    private Component configurationLine(Component label, boolean configured) {
         return infoLine(
                 label,
-                configured ? "Configured" : "Missing",
+                configured ? tr("blackjack.info.configured") : tr("blackjack.info.missing"),
                 configured ? NamedTextColor.GREEN : NamedTextColor.RED
         );
     }
@@ -745,57 +724,82 @@ public final class BlackjackCommand implements TabExecutor {
     private SetupStep nextSetupStep(BlackjackTableDraft draft) {
         String id = draft.getId();
         if (draft.getPos1().isEmpty()) {
-            return new SetupStep("Set the first area corner with:", "/blackjack setup pos1 " + id);
+            return new SetupStep(tr("blackjack.next.pos1"), "/blackjack setup pos1 " + id);
         }
         if (draft.getPos2().isEmpty()) {
-            return new SetupStep("Set the second area corner with:", "/blackjack setup pos2 " + id);
+            return new SetupStep(tr("blackjack.next.pos2"), "/blackjack setup pos2 " + id);
         }
         if (draft.getDealer().isEmpty()) {
-            return new SetupStep("Stand at the dealer position facing the table, then use:",
+            return new SetupStep(tr("blackjack.next.dealer"),
                     "/blackjack setup dealer " + id);
         }
         if (draft.getDisplayAnchor().isEmpty()) {
-            return new SetupStep("Set the table display surface with:", "/blackjack setup display " + id);
+            return new SetupStep(tr("blackjack.next.display"), "/blackjack setup display " + id);
         }
         if (draft.getSeats().isEmpty()) {
-            return new SetupStep("Configure at least one seat with:", "/blackjack setup seat " + id + " 1");
+            return new SetupStep(tr("blackjack.next.seat"), "/blackjack setup seat " + id + " 1");
         }
         boolean modern = draft.getSeatDefinitions().values().stream().allMatch(seat -> seat.isModern());
         if (!modern && draft.getInteraction().isEmpty()) {
-            return new SetupStep("Set the legacy interaction block with:", "/blackjack setup interaction " + id);
+            return new SetupStep(tr("blackjack.next.interaction"), "/blackjack setup interaction " + id);
         }
         if (!draft.isEnabled()) {
-            return new SetupStep("Preview the visual positions before enabling with:",
+            return new SetupStep(tr("blackjack.next.preview"),
                     "/blackjack setup preview " + id);
         }
         return null;
     }
 
     private static Component invalidDefinitionMessage(String tableId, List<String> details) {
-        Component output = error("Table '", tableId, "' is not ready.")
+        Component output = tr("blackjack.table.not-ready", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Missing or invalid:", NamedTextColor.YELLOW));
+                .append(tr("blackjack.validation.heading").color(NamedTextColor.YELLOW));
         for (String detail : details) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(friendlyDetail(detail), NamedTextColor.WHITE));
+                    .append(friendlyDetail(detail).color(NamedTextColor.WHITE));
         }
         return output.append(Component.newline())
-                .append(Component.text("Then: ", NamedTextColor.YELLOW))
+                .append(tr("blackjack.validation.then").color(NamedTextColor.YELLOW))
                 .append(Component.text("/blackjack setup info " + tableId, NamedTextColor.AQUA));
     }
 
-    private static String friendlyDetail(String detail) {
+    private static Component friendlyDetail(String detail) {
         String value = Objects.requireNonNull(detail, "detail").trim();
+        java.util.regex.Matcher match;
+        match = java.util.regex.Pattern.compile("seat number ([-0-9]+) is outside 1-5").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-number", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("seat ([-0-9]+) uses a different world").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-world", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("seat block ([-0-9]+) uses a different world").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-block-world", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("duplicate seat number ([-0-9]+)").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.duplicate-number", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("seat ([-0-9]+) is outside the area").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-outside", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("seat ([-0-9]+) has no block").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-no-block", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("duplicate seat block at seat ([-0-9]+)").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.duplicate-block", Map.of("seat", Component.text(match.group(1))));
+        match = java.util.regex.Pattern.compile("seat block ([-0-9]+) is outside the area").matcher(value);
+        if (match.matches()) return tr("blackjack.validation.seat-block-outside", Map.of("seat", Component.text(match.group(1))));
         return switch (value) {
-            case "missing area pos1" -> "Area Pos 1";
-            case "missing area pos2" -> "Area Pos 2";
-            case "missing dealer" -> "Dealer position";
-            case "missing interaction" -> "Interaction block";
-            case "missing seat", "at least one seat is required" -> "At least one seat";
-            default -> value.isEmpty()
-                    ? "Unknown validation issue"
-                    : Character.toUpperCase(value.charAt(0)) + value.substring(1);
+            case "more than 5 seats configured" -> tr("blackjack.validation.too-many");
+            case "at most five seats are allowed" -> tr("blackjack.validation.max-seats");
+            case "legacy and modern seats cannot be mixed" -> tr("blackjack.validation.mixed-seats");
+            case "area corners use different worlds" -> tr("blackjack.validation.area-worlds");
+            case "dealer uses a different world" -> tr("blackjack.validation.dealer-world");
+            case "dealer is outside the area" -> tr("blackjack.validation.dealer-outside");
+            case "interaction uses a different world" -> tr("blackjack.validation.interaction-world");
+            case "interaction is outside the area" -> tr("blackjack.validation.interaction-outside");
+            case "display anchor uses a different world" -> tr("blackjack.validation.display-world");
+            case "display anchor is outside the area" -> tr("blackjack.validation.display-outside");
+            case "missing area pos1" -> tr("blackjack.validation.area-pos1");
+            case "missing area pos2" -> tr("blackjack.validation.area-pos2");
+            case "missing dealer" -> tr("blackjack.validation.dealer");
+            case "missing interaction" -> tr("blackjack.validation.interaction");
+            case "missing seat", "at least one seat is required" -> tr("blackjack.validation.seat");
+            default -> tr("blackjack.validation.unknown");
         };
     }
 
@@ -804,12 +808,12 @@ public final class BlackjackCommand implements TabExecutor {
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
-    private String joinMode(BlackjackTableDraft draft) {
-        if (draft.getSeatDefinitions().isEmpty()) return "Not configured";
+    private Component joinMode(BlackjackTableDraft draft) {
+        if (draft.getSeatDefinitions().isEmpty()) return tr("blackjack.info.not-configured");
         long modern = draft.getSeatDefinitions().values().stream().filter(seat -> seat.isModern()).count();
-        if (modern == draft.getSeatDefinitions().size()) return "Modern seat click";
-        if (modern == 0) return "Legacy interaction";
-        return "Invalid mixed schema";
+        if (modern == draft.getSeatDefinitions().size()) return tr("blackjack.info.join-mode.modern");
+        if (modern == 0) return tr("blackjack.info.join-mode.legacy");
+        return tr("blackjack.info.join-mode.invalid");
     }
 
     private static List<String> matches(List<String> values, String prefix) {
@@ -820,7 +824,7 @@ public final class BlackjackCommand implements TabExecutor {
                 .toList();
     }
 
-    private record SetupStep(String description, String syntax) {
+    private record SetupStep(Component description, String syntax) {
 
         private SetupStep {
             description = Objects.requireNonNull(description, "description");
@@ -828,7 +832,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
     }
 
-    private record WorkflowStep(String description, String command) {
+    private record WorkflowStep(Component description, String command) {
 
         private WorkflowStep {
             description = Objects.requireNonNull(description, "description");

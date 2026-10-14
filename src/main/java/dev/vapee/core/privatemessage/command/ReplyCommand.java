@@ -1,5 +1,7 @@
 package dev.vapee.core.privatemessage.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.privatemessage.PrivateMessageResult;
 import dev.vapee.core.privatemessage.PrivateMessageService;
@@ -41,11 +43,11 @@ public final class ReplyCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can use private messages.</red>");
+            messageService.send(sender, tr("private-messages.error.player-only"));
             return true;
         }
         if (!sender.hasPermission(MessageCommand.PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to use private messages.</red>");
+            messageService.send(sender, tr("private-messages.error.denied"));
             return true;
         }
         if (args.length == 0) {
@@ -67,7 +69,7 @@ public final class ReplyCommand implements TabExecutor {
                     "Could not process a private-message reply for " + player.getUniqueId() + ".",
                     exception
             );
-            messageService.send(player, "<red>The private message could not be sent. Check the server log.</red>");
+            messageService.send(player, tr("private-messages.error.send-failed"));
         }
         return true;
     }
@@ -83,9 +85,9 @@ public final class ReplyCommand implements TabExecutor {
     }
 
     private void sendUsage(Player player) {
-        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/reply <message>", NamedTextColor.AQUA)));
     }
 
@@ -93,16 +95,16 @@ public final class ReplyCommand implements TabExecutor {
         switch (result) {
             case SUCCESS -> {
             }
-            case FEATURE_DISABLED -> messageService.send(player, "<red>Private messages are currently disabled.</red>");
-            case SENDER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
-            case SENDER_MUTED -> messageService.send(player, "<red>You cannot send private messages while muted.</red>");
-            case RECIPIENT_NOT_LOADED -> messageService.send(player, "<red>That player's profile is not available.</red>");
-            case RECIPIENT_DISABLED -> messageService.send(player, "<red>That player is not accepting private messages.</red>");
-            case SENDER_IGNORES_RECIPIENT -> messageService.send(player, "<red>You are ignoring that player.</red>");
-            case RECIPIENT_IGNORES_SENDER -> messageService.send(player, "<red>That player is not accepting private messages.</red>");
-            case TARGET_OFFLINE -> messageService.send(player, "<red>Your last conversation partner is no longer online.</red>");
-            case CANNOT_MESSAGE_SELF -> messageService.send(player, "<red>You cannot message yourself.</red>");
-            case NO_REPLY_TARGET -> messageService.send(player, "<red>You have no player to reply to.</red>");
+            case FEATURE_DISABLED -> messageService.send(player, tr("private-messages.error.disabled"));
+            case SENDER_NOT_LOADED -> messageService.send(player, tr("private-messages.error.profile-unavailable"));
+            case SENDER_MUTED -> messageService.send(player, tr("private-messages.error.muted"));
+            case RECIPIENT_NOT_LOADED -> messageService.send(player, tr("private-messages.error.recipient-unavailable"));
+            case RECIPIENT_DISABLED -> messageService.send(player, tr("private-messages.error.recipient-disabled"));
+            case SENDER_IGNORES_RECIPIENT -> messageService.send(player, tr("private-messages.error.ignored"));
+            case RECIPIENT_IGNORES_SENDER -> messageService.send(player, tr("private-messages.error.recipient-disabled"));
+            case TARGET_OFFLINE -> messageService.send(player, tr("private-messages.error.reply-offline"));
+            case CANNOT_MESSAGE_SELF -> messageService.send(player, tr("private-messages.error.self"));
+            case NO_REPLY_TARGET -> messageService.send(player, tr("private-messages.error.no-reply"));
         }
     }
 }

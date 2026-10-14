@@ -1,5 +1,7 @@
 package dev.vapee.core.friend.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
 import dev.vapee.core.command.help.CommandHelpRenderer;
@@ -44,16 +46,16 @@ public final class FriendCommand implements TabExecutor {
             "help", "add", "accept", "deny", "cancel", "remove", "list", "requests");
     private static final Comparator<String> NAME_ORDER = String.CASE_INSENSITIVE_ORDER.thenComparing(
             Comparator.naturalOrder());
-    private static final CommandHelpPage HELP = new CommandHelpPage("Friends", List.of(
-            new CommandHelpSection("Requests", List.of(
-                    new CommandHelpEntry("/friend add <player|uuid>", "Send a friend request."),
-                    new CommandHelpEntry("/friend accept <player|uuid>", "Accept an incoming request."),
-                    new CommandHelpEntry("/friend deny <player|uuid>", "Decline an incoming request."),
-                    new CommandHelpEntry("/friend cancel <player|uuid>", "Cancel your outgoing request."),
-                    new CommandHelpEntry("/friend requests", "View incoming and outgoing requests."))),
-            new CommandHelpSection("Friends", List.of(
-                    new CommandHelpEntry("/friend list", "View your friends."),
-                    new CommandHelpEntry("/friend remove <player|uuid>", "Remove a friend.")))
+    private static final CommandHelpPage HELP = new CommandHelpPage(tr("friends.help.title"), List.of(
+            new CommandHelpSection(tr("friends.help.section.requests"), List.of(
+                    new CommandHelpEntry("/friend add <player|uuid>", tr("friends.help.friend.add.description")),
+                    new CommandHelpEntry("/friend accept <player|uuid>", tr("friends.help.friend.accept.description")),
+                    new CommandHelpEntry("/friend deny <player|uuid>", tr("friends.help.friend.deny.description")),
+                    new CommandHelpEntry("/friend cancel <player|uuid>", tr("friends.help.friend.cancel.description")),
+                    new CommandHelpEntry("/friend requests", tr("friends.help.friend.requests.description")))),
+            new CommandHelpSection(tr("friends.help.title"), List.of(
+                    new CommandHelpEntry("/friend list", tr("friends.help.friend.list.description")),
+                    new CommandHelpEntry("/friend remove <player|uuid>", tr("friends.help.friend.remove.description"))))
     ));
 
     private final FriendService friends;
@@ -91,11 +93,11 @@ public final class FriendCommand implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
-            send(sender, "Only players can manage friends.", NamedTextColor.RED);
+            send(sender, tr("friends.command.player-only"), NamedTextColor.RED);
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            send(sender, "You do not have permission to use this command.", NamedTextColor.RED);
+            send(sender, tr("common.command-denied"), NamedTextColor.RED);
             return true;
         }
         try {
@@ -105,10 +107,9 @@ public final class FriendCommand implements TabExecutor {
             }
             String action = args[0].toLowerCase(Locale.ROOT);
             if (!SUBCOMMANDS.contains(action)) {
-                messages.send(sender, Component.text("Unknown friend command: ", NamedTextColor.RED)
-                        .append(Component.text(args[0], NamedTextColor.WHITE))
+                messages.send(sender, tr("friends.command.unknown", java.util.Map.of("command", Component.text(args[0], NamedTextColor.WHITE))).color(NamedTextColor.RED)
                         .append(Component.newline())
-                        .append(Component.text("Use /friend help to view available commands.", NamedTextColor.YELLOW)));
+                        .append(tr("friends.command.help-hint").color(NamedTextColor.YELLOW)));
                 return true;
             }
             if (List.of("help", "list", "requests").contains(action)) {
@@ -123,7 +124,7 @@ public final class FriendCommand implements TabExecutor {
                 return true;
             }
             if (args.length != 2) {
-                if (args.length == 1) send(sender, "Missing player.", NamedTextColor.YELLOW);
+                if (args.length == 1) send(sender, tr("common.missing-player"), NamedTextColor.YELLOW);
                 usage(sender, "/friend " + action + " <player|uuid>");
                 return true;
             }
@@ -134,11 +135,11 @@ public final class FriendCommand implements TabExecutor {
             } else {
                 PlayerLookupResult lookup = identities.resolve(args[1]);
                 if (lookup.status() == PlayerLookupStatus.NOT_FOUND) {
-                    send(sender, "This player is not known to VapeeCore.", NamedTextColor.RED);
+                    send(sender, tr("common.player-unknown"), NamedTextColor.RED);
                     return true;
                 }
                 if (lookup.status() == PlayerLookupStatus.AMBIGUOUS) {
-                    send(sender, "That name is ambiguous; use the player's UUID.", NamedTextColor.YELLOW);
+                    send(sender, tr("common.player-ambiguous"), NamedTextColor.YELLOW);
                     return true;
                 }
                 PlayerIdentity target = lookup.identity().orElseThrow();
@@ -156,7 +157,7 @@ public final class FriendCommand implements TabExecutor {
             feedback.report(player, action, targetId, targetName, result);
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process friend command for " + player.getUniqueId() + ".", exception);
-            send(sender, "The friends data could not be updated. Check the server log.", NamedTextColor.RED);
+            send(sender, tr("friends.command.save-failed"), NamedTextColor.RED);
         }
         return true;
     }
@@ -203,10 +204,10 @@ public final class FriendCommand implements TabExecutor {
     private void listFriends(Player player) {
         UUID self = player.getUniqueId();
         List<UUID> ids = friends.getFriends(self);
-        send(player, "Friends (" + ids.size() + "/" + friends.getLimits().maxFriends() + ")",
+        send(player, tr("friends.command.count", java.util.Map.of("count", Component.text(ids.size()), "maximum", Component.text(friends.getLimits().maxFriends()))),
                 NamedTextColor.GOLD);
         if (ids.isEmpty()) {
-            send(player, "None", NamedTextColor.GRAY);
+            send(player, tr("common.none"), NamedTextColor.GRAY);
         } else {
             ids.stream().map(this::displayName).sorted(NAME_ORDER)
                     .forEach(name -> sendName(player, name));
@@ -235,15 +236,15 @@ public final class FriendCommand implements TabExecutor {
         List<UUID> ids = choiceIds(player.getUniqueId(), action);
         if (ids.isEmpty()) {
             send(player, switch (action) {
-                case "accept", "deny" -> "You have no pending friend requests.";
-                case "cancel" -> "You have no pending outgoing friend requests.";
-                case "remove" -> "You do not have any friends yet.";
+                case "accept", "deny" -> tr("friends.command.no-incoming");
+                case "cancel" -> tr("friends.command.no-outgoing");
+                case "remove" -> tr("friends.command.no-friends");
                 default -> throw new IllegalArgumentException("Unknown choice action");
             }, NamedTextColor.YELLOW);
             return;
         }
-        send(player, action.equals("remove") ? "Your friends:" : action.equals("cancel")
-                ? "Outgoing friend requests:" : "Pending friend requests:", NamedTextColor.GOLD);
+        send(player, action.equals("remove") ? tr("friends.command.friends-heading") : action.equals("cancel")
+                ? tr("friends.command.outgoing-heading") : tr("friends.command.pending-heading"), NamedTextColor.GOLD);
         ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
                 .forEach(id -> messages.send(player, Component.text("• ", NamedTextColor.GRAY)
                         .append(Component.text(displayName(id), NamedTextColor.WHITE)).append(Component.space())
@@ -257,21 +258,21 @@ public final class FriendCommand implements TabExecutor {
     }
 
     private void usage(CommandSender sender, String syntax) {
-        messages.send(sender, Component.text("Usage: ", NamedTextColor.YELLOW)
+        messages.send(sender, tr("common.usage").color(NamedTextColor.YELLOW)
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private void listRequests(Player player) {
         UUID self = player.getUniqueId();
-        send(player, "Incoming:", NamedTextColor.GOLD);
+        send(player, tr("friends.command.incoming"), NamedTextColor.GOLD);
         showNames(player, friends.getIncomingRequests(self).stream().map(FriendRequest::sender).toList());
-        send(player, "Outgoing:", NamedTextColor.GOLD);
+        send(player, tr("friends.command.outgoing"), NamedTextColor.GOLD);
         showNames(player, friends.getOutgoingRequests(self).stream().map(FriendRequest::recipient).toList());
     }
 
     private void showNames(Player player, List<UUID> ids) {
         if (ids.isEmpty()) {
-            send(player, "None", NamedTextColor.GRAY);
+            send(player, tr("common.none"), NamedTextColor.GRAY);
         } else {
             ids.stream().map(this::displayName).sorted(NAME_ORDER)
                     .forEach(name -> sendName(player, name));
@@ -291,8 +292,8 @@ public final class FriendCommand implements TabExecutor {
         return identities.findById(uniqueId).map(PlayerIdentity::name);
     }
 
-    private void send(CommandSender sender, String text, NamedTextColor color) {
-        messages.send(sender, Component.text(text, color));
+    private void send(CommandSender sender, Component text, NamedTextColor color) {
+        messages.send(sender, text.color(color));
     }
 
     private static List<String> matching(List<String> names, String prefix) {

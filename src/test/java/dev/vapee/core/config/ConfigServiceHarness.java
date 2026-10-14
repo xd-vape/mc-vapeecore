@@ -76,8 +76,9 @@ public final class ConfigServiceHarness {
                     "missing online reward interval uses sixty safely converted minutes");
             check(defaults.coins() == 250L, "missing online reward coins uses 250");
             check(defaults.messageEnabled(), "missing online reward message enabled uses true");
-            check(defaults.messageFormat().contains("<coins>")
-                            && defaults.messageFormat().contains("<minutes>"),
+            check(defaults.messageFormat().equals("<reward>")
+                            && dev.vapee.core.i18n.TranslationCatalog.placeholders(
+                            dev.vapee.core.i18n.LocalizationService.bundledSnapshot().bundled().get(dev.vapee.core.i18n.Language.ENGLISH).get("rewards.online.granted")).containsAll(java.util.Set.of("coins", "minutes")),
                     "missing online reward message uses the internal MiniMessage fallback");
 
             String customOnlineRewards = """

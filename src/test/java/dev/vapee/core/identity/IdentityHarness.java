@@ -121,14 +121,14 @@ public final class IdentityHarness {
                         && core.indexOf("moduleManager.register(identityModule)")
                         < core.indexOf("moduleManager.register(rewardModule)"),
                 "Identity registers directly after Economy");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 27,
-                "twenty-seven modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 28,
+                "twenty-eight modules register");
         String source = Files.readString(Path.of("src/main/java/dev/vapee/core/identity/IdentityModule.java"));
         check(!source.contains("runTask") && !source.contains("registerEvents")
                         && source.contains("setExecutor(null)") && source.contains("setTabCompleter(null)"),
                 "Identity owns no tasks/listeners and deregisters command on shutdown");
         check(core.contains("presentationModule, dailyQuestModule)"),
-                "six reload participants remain unchanged");
+                "seven reload participants remain unchanged");
     }
 
     private static String yaml(String name, long coins) {

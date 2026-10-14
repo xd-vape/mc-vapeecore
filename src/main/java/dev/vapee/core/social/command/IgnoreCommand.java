@@ -1,5 +1,7 @@
 package dev.vapee.core.social.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.IgnoreResult;
 import dev.vapee.core.social.SocialService;
@@ -50,11 +52,11 @@ public final class IgnoreCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can manage ignored players.</red>");
+            messageService.send(sender, tr("social.player-only"));
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            messageService.send(sender, tr("social.denied"));
             return true;
         }
         if (args.length != 1) {
@@ -64,7 +66,7 @@ public final class IgnoreCommand implements TabExecutor {
 
         Player target = new OnlinePlayerResolver(server::getOnlinePlayers).resolveExact(args[0]);
         if (target == null) {
-            messageService.send(player, "<red>That player is not online.</red>");
+            messageService.send(player, tr("social.offline"));
             return true;
         }
 
@@ -72,7 +74,7 @@ public final class IgnoreCommand implements TabExecutor {
             sendResult(player, target, socialService.ignore(player.getUniqueId(), target.getUniqueId()));
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not persist an ignore for " + player.getUniqueId() + ".", exception);
-            messageService.send(player, "<red>Your ignore list could not be saved. Check the server log.</red>");
+            messageService.send(player, tr("social.save-failed"));
         }
         return true;
     }
@@ -106,20 +108,18 @@ public final class IgnoreCommand implements TabExecutor {
     private void sendResult(Player player, Player target, IgnoreResult result) {
         switch (result) {
             case SUCCESS -> messageService.send(player,
-                    Component.text("You are now ignoring ", NamedTextColor.GREEN)
-                            .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                            .append(Component.text(".", NamedTextColor.GREEN)));
-            case OWNER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
-            case CANNOT_IGNORE_SELF -> messageService.send(player, "<red>You cannot ignore yourself.</red>");
-            case ALREADY_IGNORED -> messageService.send(player, "<red>That player is already ignored.</red>");
+                    tr("social.ignored", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            case OWNER_NOT_LOADED -> messageService.send(player, tr("social.profile-unavailable"));
+            case CANNOT_IGNORE_SELF -> messageService.send(player, tr("social.ignore-self"));
+            case ALREADY_IGNORED -> messageService.send(player, tr("social.already-ignored"));
             case NOT_IGNORED -> throw new IllegalStateException("Ignore returned an unignore-only result");
         }
     }
 
     private void sendUsage(Player player) {
-        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/ignore <player>", NamedTextColor.AQUA)));
     }
 }

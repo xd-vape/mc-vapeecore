@@ -1,5 +1,7 @@
 package dev.vapee.core.settings.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.identity.IdentityCommandArgument;
 import dev.vapee.core.identity.PlayerIdentity;
@@ -79,11 +81,11 @@ public final class SettingsCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can open/manage player settings.</red>");
+            messageService.send(sender, tr("settings.command.player-only"));
             return true;
         }
         if (!player.hasPermission(PERMISSION)) {
-            messageService.send(player, "<red>You do not have permission to use this command.</red>");
+            messageService.send(player, tr("common.command-denied").color(net.kyori.adventure.text.format.NamedTextColor.RED));
             return true;
         }
         if (args.length == 0) {
@@ -156,14 +158,12 @@ public final class SettingsCommand implements TabExecutor {
         switch (result) {
             case SUCCESS -> {
                 apply(player);
-                messageService.send(player, Component.text("Added ", NamedTextColor.GREEN)
-                        .append(Component.text(target.name(), NamedTextColor.WHITE))
-                        .append(Component.text(" to your visible players list.", NamedTextColor.GREEN)));
+                messageService.send(player, tr("visible-players.added", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
             }
             case CANNOT_ADD_SELF -> messageService.send(player,
-                    "<yellow>You cannot add yourself to your visible players list.</yellow>");
+                    tr("visible-players.self"));
             case ALREADY_ADDED -> messageService.send(player,
-                    "<yellow>That player is already in your visible players list.</yellow>");
+                    tr("visible-players.already-added"));
             case OWNER_NOT_LOADED -> unavailable(player);
             case NOT_ADDED -> throw new IllegalStateException("Add returned remove-only result");
         }
@@ -179,7 +179,7 @@ public final class SettingsCommand implements TabExecutor {
         PlayerIdentity identity = null;
         if (target != null) {
             if (!added.contains(target)) {
-                messageService.send(player, "<yellow>That player is not in your visible players list.</yellow>");
+                messageService.send(player, tr("visible-players.not-added"));
                 return;
             }
             identity = identities.findById(target).orElse(null);
@@ -190,7 +190,7 @@ public final class SettingsCommand implements TabExecutor {
             target = identity.uniqueId();
         }
         if (!added.contains(target)) {
-            messageService.send(player, "<yellow>That player is not in your visible players list.</yellow>");
+            messageService.send(player, tr("visible-players.not-added"));
             return;
         }
         String display = identity == null ? target.toString() : identity.name();
@@ -204,12 +204,10 @@ public final class SettingsCommand implements TabExecutor {
         switch (result) {
             case SUCCESS -> {
                 apply(player);
-                messageService.send(player, Component.text("Removed ", NamedTextColor.GREEN)
-                        .append(Component.text(display, NamedTextColor.WHITE))
-                        .append(Component.text(" from your visible players list.", NamedTextColor.GREEN)));
+                messageService.send(player, tr("visible-players.removed", java.util.Map.of("player", Component.text(display, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
             }
             case NOT_ADDED -> messageService.send(player,
-                    "<yellow>That player is not in your visible players list.</yellow>");
+                    tr("visible-players.not-added"));
             case OWNER_NOT_LOADED -> unavailable(player);
             case CANNOT_ADD_SELF, ALREADY_ADDED -> throw new IllegalStateException(
                     "Remove returned add-only result: " + result);
@@ -218,12 +216,12 @@ public final class SettingsCommand implements TabExecutor {
 
     private boolean validateLookup(Player player, PlayerLookupResult lookup) {
         if (lookup.status() == PlayerLookupStatus.NOT_FOUND) {
-            messageService.send(player, "<red>This player is not known to VapeeCore.</red>");
+            messageService.send(player, tr("common.unknown-player.message"));
             return false;
         }
         if (lookup.status() == PlayerLookupStatus.AMBIGUOUS) {
-            messageService.send(player, "<yellow>Multiple known players use that name.</yellow>");
-            messageService.send(player, "<yellow>Use the player's UUID.</yellow>");
+            messageService.send(player, tr("common.ambiguous-player.message"));
+            messageService.send(player, tr("common.use-uuid.message"));
             return false;
         }
         return true;
@@ -242,18 +240,18 @@ public final class SettingsCommand implements TabExecutor {
             logger.log(Level.WARNING, "Could not immediately apply visible players for "
                     + player.getUniqueId() + ".", exception);
             messageService.send(player,
-                    "<yellow>Your list was saved but could not be applied immediately.</yellow>");
+                    tr("visible-players.apply-failed"));
         }
     }
 
     private void handleSaveFailure(Player player, String action, RuntimeException exception) {
         logger.log(Level.SEVERE, "Could not " + action + " visible player for "
                 + player.getUniqueId() + ".", exception);
-        messageService.send(player, "<red>Your visible players list could not be saved. Please try again.</red>");
+        messageService.send(player, tr("visible-players.save-failed"));
     }
 
     private void unavailable(Player player) {
-        messageService.send(player, "<red>Your player profile is not available.</red>");
+        messageService.send(player, tr("common.profile-unavailable.message"));
     }
 
     private UUID parseUuid(String value) {
@@ -265,7 +263,7 @@ public final class SettingsCommand implements TabExecutor {
     }
 
     private void sendUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, Component.text("Usage: ", NamedTextColor.YELLOW)
+        messageService.send(sender, tr("common.usage").color(NamedTextColor.YELLOW)
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 

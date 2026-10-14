@@ -304,8 +304,8 @@ public final class CoinsCommandHarness {
                             "wallet balance and durable value " + action);
                     check(f.repo.persisted.get(target.id) == f.balance(target.id), "durable wallet unchanged on denial");
                     if (!allowed) check(actor.text().equals(targetGroup == null || actorGroup == null && tl >= 0
-                            ? dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE
-                            : dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE), "controlled no-level denial");
+                            ? dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.UNAVAILABLE_MESSAGE)
+                            : dev.vapee.core.i18n.I18nTestSupport.english(dev.vapee.core.command.OnlineStaffTargetGuard.DENIED_MESSAGE)), "controlled no-level denial");
                     check(f.tab(actor, action, "").contains("Target") == allowed, "mutation target completion filtered");
                     int reads = f.staff.reads;
                     f.run(actor, "get", target.id.toString());

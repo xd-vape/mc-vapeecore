@@ -52,7 +52,7 @@ public final class FriendPresenceNotifierHarness {
                         || owner.equals(subject) && target.equals(reverseIgnored),
                 (recipient, message) -> {
                     recipients.add(recipient.getUniqueId());
-                    messages.add(message);
+                    messages.add(dev.vapee.core.i18n.I18nTestSupport.render(recipient, message));
                 },
                 logger
         );
@@ -62,13 +62,10 @@ public final class FriendPresenceNotifierHarness {
         check(messages.stream().map(FriendPresenceNotifierHarness::plain).toList()
                         .equals(List.of("Friend Alice is now online.", "Friend Alice is now online.")),
                 "online message is exact literal Adventure text");
-        check(messages.getFirst().color().equals(net.kyori.adventure.text.format.NamedTextColor.GRAY)
-                        && messages.getFirst().children().get(0).color()
-                        .equals(net.kyori.adventure.text.format.NamedTextColor.AQUA)
-                        && messages.getFirst().children().get(1).color()
-                        .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN),
+        check(hasColoredText(messages.getFirst(), null, "Friend ", net.kyori.adventure.text.format.NamedTextColor.GRAY)
+                        && hasColoredText(messages.getFirst(), null, "Alice", net.kyori.adventure.text.format.NamedTextColor.AQUA)
+                        && hasColoredText(messages.getFirst(), null, " is now online.", net.kyori.adventure.text.format.NamedTextColor.GREEN),
                 "online component uses calm gray, aqua and green colors");
-
         recipients.clear();
         messages.clear();
         notifier.notifyStatus(subject, "<red>Alice</red>", PresenceStatus.ONLINE);
@@ -143,6 +140,14 @@ public final class FriendPresenceNotifierHarness {
         if (type == float.class) return 0F;
         if (type == double.class) return 0D;
         return null;
+    }
+
+    private static boolean hasColoredText(Component component, net.kyori.adventure.text.format.TextColor inherited,
+                                          String text, net.kyori.adventure.text.format.TextColor expected) {
+        var effective = component.color() == null ? inherited : component.color();
+        if (component instanceof net.kyori.adventure.text.TextComponent literal
+                && literal.content().contains(text) && expected.equals(effective)) return true;
+        return component.children().stream().anyMatch(child -> hasColoredText(child, effective, text, expected));
     }
 
     private static String plain(Component component) {

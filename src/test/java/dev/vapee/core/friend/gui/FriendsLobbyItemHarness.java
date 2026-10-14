@@ -12,7 +12,7 @@ import java.util.Arrays;
 public final class FriendsLobbyItemHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
-        var friend = new FriendMenuFixture(); var owner = friend.player("LobbyFriends", true);
+        var friend = new FriendMenuFixture(); var owner = friend.player("LobbyFriends", true); owner.locale = java.util.Locale.GERMANY;
         var registry = new LobbyItemRegistry();
         LobbyItemRegistrations.register(registry, () -> null, () -> null, () -> friend.menu, () -> null);
         try (var f = new LobbyItemRegistryFixture(registry, owner.player)) {
@@ -21,10 +21,11 @@ public final class FriendsLobbyItemHarness {
             check(registry.entries().values().stream().filter(e -> e.defaults().slot() == defaults.slot()).count() == 1, "default slot unique among four production items");
             check(defaults.appearance().material() == Material.PLAYER_HEAD && defaults.appearance().selfHead(), "own-player head defaults");
             var plain = PlainTextComponentSerializer.plainText();
-            check(plain.serialize(defaults.appearance().name()).equals("Freunde") && defaults.appearance().lore().size() == 3
-                    && plain.serialize(defaults.appearance().lore().getFirst()).equals("Verwalte deine Freunde")
-                    && plain.serialize(defaults.appearance().lore().get(1)).isEmpty()
-                    && plain.serialize(defaults.appearance().lore().get(2)).equals("Klicke zum Öffnen"), "requested productive name and lore");
+            check(dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().name()).equals("Freunde") && defaults.appearance().lore().size() == 3
+                    && dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().lore().getFirst()).equals("Verwalte deine Freunde")
+                    && dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().lore().get(1)).isEmpty()
+                    && dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().lore().get(2)).equals("Klicke zum Öffnen"), "requested productive name and lore");
+            check(dev.vapee.core.i18n.I18nTestSupport.english(defaults.appearance().name()).equals("Friends"), "same productive default provides English without changing feature ID");
             f.refresh(); var item = f.storage[1];
             check(item.getType() == Material.PLAYER_HEAD && ((SkullMeta)item.getItemMeta()).getPlayerProfile() == f.profile, "real builder assigns cached own profile");
             check(f.items.getItemId(item).orElseThrow().equals("friends"), "real PDC stable friends id");

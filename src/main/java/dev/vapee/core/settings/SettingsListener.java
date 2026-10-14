@@ -1,5 +1,7 @@
 package dev.vapee.core.settings;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.settings.command.SettingsCommand;
 import dev.vapee.core.player.settings.PlayerSettings;
@@ -82,7 +84,7 @@ public final class SettingsListener implements Listener {
         if (!player.hasPermission(SettingsCommand.PERMISSION)) {
             settingsMenu.forgetIfActive(player.getUniqueId(), topInventory);
             if (player.getOpenInventory().getTopInventory() == topInventory) player.closeInventory();
-            messageService.send(player, "<red>You do not have permission to use settings.</red>");
+            messageService.send(player, tr("settings.use-denied"));
             return;
         }
         if (event.getClickedInventory() != topInventory) {
@@ -138,7 +140,7 @@ public final class SettingsListener implements Listener {
                     new SettingsMenuEntry.Context(playerSettingsService, presentationRefresh, visibilityMenuOpener));
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save player settings for " + uniqueId + ".", exception);
-            messageService.send(player, "<red>Your setting could not be saved. Please try again.</red>");
+            messageService.send(player, tr("settings.save-failed"));
             refreshOrClose(player, inventory);
             return;
         }
@@ -167,7 +169,7 @@ public final class SettingsListener implements Listener {
     private void handleUnavailableProfile(Player player) {
         settingsMenu.forget(player.getUniqueId());
         player.closeInventory();
-        messageService.send(player, "<red>Your player profile is not available.</red>");
+        messageService.send(player, tr("common.profile-unavailable.message"));
     }
 
     private static void playFeedbackSound(Player player, PlayerSettingsService settings, Logger logger) {

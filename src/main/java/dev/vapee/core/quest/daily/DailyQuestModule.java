@@ -79,6 +79,7 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
             service = newService;
             listener = newListener;
             menu = newMenu;
+            newMenu.startUpdates();
             menuListener = newMenuListener;
             command = newCommand;
             newTask = plugin.getServer().getScheduler().runTaskTimer(
@@ -89,7 +90,7 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
             if (newTask != null) newTask.cancel();
             HandlerList.unregisterAll(newListener);
             HandlerList.unregisterAll(newMenuListener);
-            newMenu.closeOpenInventories();
+            newMenu.shutdown();
             if (newCommand != null) {
                 newCommand.setExecutor(null);
                 newCommand.setTabCompleter(null);
@@ -112,7 +113,7 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     @Override
     public void disable() {
         if (syncTask != null) syncTask.cancel();
-        if (menu != null) menu.closeOpenInventories();
+        if (menu != null) menu.shutdown();
         if (menuListener != null) HandlerList.unregisterAll(menuListener);
         if (listener != null) HandlerList.unregisterAll(listener);
         if (command != null) {

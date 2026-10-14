@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
@@ -92,11 +94,11 @@ public final class ClearCommand implements TabExecutor {
         Player target;
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to clear your inventory.");
+                error(sender, tr("utility.clear.denied-self"));
                 return true;
             }
             target = player;
@@ -110,8 +112,8 @@ public final class ClearCommand implements TabExecutor {
                     && player.getUniqueId().equals(target.getUniqueId());
             if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
                 error(sender, self
-                        ? "You do not have permission to clear your inventory."
-                        : "You do not have permission to clear another player's inventory.");
+                        ? tr("utility.clear.denied-self")
+                        : tr("utility.clear.denied-other"));
                 return true;
             }
         }
@@ -119,11 +121,11 @@ public final class ClearCommand implements TabExecutor {
         if (!staffTargetGuard.authorize(sender, target, "clear", messageSender)) return true;
 
         if (activityCheck.test(target.getUniqueId())) {
-            error(sender, "That inventory is controlled by an activity and cannot be cleared.");
+            error(sender, tr("utility.clear.activity"));
             return true;
         }
         if (buildCheck.test(target.getUniqueId())) {
-            error(sender, "That inventory is controlled by build mode and cannot be cleared.");
+            error(sender, tr("utility.clear.build"));
             return true;
         }
 
@@ -131,10 +133,8 @@ public final class ClearCommand implements TabExecutor {
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
         messageSender.accept(sender, self
-                ? Component.text("Inventory cleared.", NamedTextColor.GREEN)
-                : Component.text("Cleared ", NamedTextColor.GREEN)
-                        .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                        .append(Component.text("'s inventory.", NamedTextColor.GREEN)));
+                ? tr("utility.clear.self").color(NamedTextColor.GREEN)
+                : tr("utility.clear.other", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -153,19 +153,17 @@ public final class ClearCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/clear [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

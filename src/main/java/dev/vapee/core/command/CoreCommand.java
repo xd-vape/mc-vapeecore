@@ -1,5 +1,7 @@
 package dev.vapee.core.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.VapeeCore;
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
@@ -34,104 +36,104 @@ public final class CoreCommand implements TabExecutor {
 
     private static final String ADMIN_PERMISSION = "vapeecore.admin";
     private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
-            "Command Overview",
-            "Commands are shown only when you have permission to use them.",
+            tr("core.help.title"),
+            tr("core.help.description"),
             List.of(
-                    new CommandHelpSection("General", List.of(
-                            new CommandHelpEntry("/core", "Shows the current VapeeCore status.", null,
-                                    "Alias of /vapeecore."),
-                            new CommandHelpEntry("/core help", "Shows this permission-filtered command overview."),
-                            new CommandHelpEntry("/core version", "Shows plugin, Paper and Java versions."),
-                            new CommandHelpEntry("/profile [player|uuid]", "Shows a known player's profile.",
+                    new CommandHelpSection(tr("core.help.section.general"), List.of(
+                            new CommandHelpEntry("/core", tr("core.help.core.description"), null,
+                                    tr("core.help.core.hint")),
+                            new CommandHelpEntry("/core help", tr("core.help.core.help.description")),
+                            new CommandHelpEntry("/core version", tr("core.help.core.version.description")),
+                            new CommandHelpEntry("/profile [player|uuid]", tr("core.help.profile.description"),
                                     "vapeecore.profile.view"),
-                            new CommandHelpEntry("/rank [player]", "Shows an online player's server rank.",
+                            new CommandHelpEntry("/rank [player]", tr("core.help.rank.description"),
                                     "vapeecore.rank.view"),
-                            new CommandHelpEntry("/ranks", "Shows the public server rank progression.",
+                            new CommandHelpEntry("/ranks", tr("core.help.ranks.description"),
                                     "vapeecore.ranks.view")
                     )),
-                    new CommandHelpSection("Social", List.of(
-                            new CommandHelpEntry("/friend help", "Shows friend requests and management commands.",
-                                    "vapeecore.friend.use", "Alias: /friends"),
-                            new CommandHelpEntry("/clan help", "Shows clan and invitation commands.",
-                                    "vapeecore.clan.use", "Alias: /clans"),
-                            new CommandHelpEntry("/msg <player> <message>", "Sends a private message.",
+                    new CommandHelpSection(tr("core.help.section.social"), List.of(
+                            new CommandHelpEntry("/friend help", tr("core.help.friend.help.description"),
+                                    "vapeecore.friend.use", tr("core.help.friend.help.hint")),
+                            new CommandHelpEntry("/clan help", tr("core.help.clan.help.description"),
+                                    "vapeecore.clan.use", tr("core.help.clan.help.hint")),
+                            new CommandHelpEntry("/msg <player> <message>", tr("core.help.msg.description"),
                                     "vapeecore.message.use"),
-                            new CommandHelpEntry("/reply <message>", "Replies to the last conversation.",
-                                    "vapeecore.message.use", "Alias: /r <message>"),
-                            new CommandHelpEntry("/ignore <player>", "Ignores an online player.",
+                            new CommandHelpEntry("/reply <message>", tr("core.help.reply.description"),
+                                    "vapeecore.message.use", tr("core.help.reply.hint")),
+                            new CommandHelpEntry("/ignore <player>", tr("core.help.ignore.description"),
                                     "vapeecore.social.ignore"),
-                            new CommandHelpEntry("/unignore <player|uuid>", "Stops ignoring a player.",
+                            new CommandHelpEntry("/unignore <player|uuid>", tr("core.help.unignore.description"),
                                     "vapeecore.social.ignore"),
-                            new CommandHelpEntry("/ignorelist", "Lists ignored players.",
+                            new CommandHelpEntry("/ignorelist", tr("core.help.ignorelist.description"),
                                     "vapeecore.social.ignore")
                     )),
-                    new CommandHelpSection("Lobby & Settings", List.of(
-                            new CommandHelpEntry("/spawn", "Teleports you to the lobby spawn.",
+                    new CommandHelpSection(tr("core.help.section.lobby-settings"), List.of(
+                            new CommandHelpEntry("/spawn", tr("core.help.spawn.description"),
                                     "vapeecore.lobby.spawn"),
-                            new CommandHelpEntry("/settings", "Opens your player settings.",
+                            new CommandHelpEntry("/settings", tr("core.help.settings.description"),
                                     "vapeecore.settings.use"),
-                            new CommandHelpEntry("/settings visibility", "Opens visibility settings and player management.",
+                            new CommandHelpEntry("/settings visibility", tr("core.help.settings.visibility.description"),
                                     "vapeecore.settings.use")
                     )),
-                    new CommandHelpSection("Gameplay", List.of(
-                            new CommandHelpEntry("/quests", "Shows your daily quests and automatic rewards.",
-                                    "vapeecore.quest.use", "Alias: /quest")
+                    new CommandHelpSection(tr("core.help.section.gameplay"), List.of(
+                            new CommandHelpEntry("/quests", tr("core.help.quests.description"),
+                                    "vapeecore.quest.use", tr("core.help.quests.hint"))
                     )),
-                    new CommandHelpSection("Economy", List.of(
-                            new CommandHelpEntry("/coins", "Shows your current coin balance.",
+                    new CommandHelpSection(tr("core.help.section.economy"), List.of(
+                            new CommandHelpEntry("/coins", tr("core.help.coins.description"),
                                     "vapeecore.economy.coins"),
-                            new CommandHelpEntry("/coins help", "Shows coin administration commands.",
+                            new CommandHelpEntry("/coins help", tr("core.help.coins.help.description"),
                                     "vapeecore.economy.coins")
                     )),
-                    new CommandHelpSection("Utilities", List.of(
-                            new CommandHelpEntry("/build", "Toggles temporary lobby build mode.",
+                    new CommandHelpSection(tr("core.help.section.utilities"), List.of(
+                            new CommandHelpEntry("/build", tr("core.help.build.description"),
                                     "vapeecore.utility.build"),
-                            new CommandHelpEntry("/fly [player]", "Toggles flight for an online player.",
+                            new CommandHelpEntry("/fly [player]", tr("core.help.fly.description"),
                                     "vapeecore.utility.fly"),
-                            new CommandHelpEntry("/speed <1-10> [player]", "Changes walk or flight speed.",
+                            new CommandHelpEntry("/speed <1-10> [player]", tr("core.help.speed.description"),
                                     "vapeecore.utility.speed"),
-                            new CommandHelpEntry("/gamemode <mode> [player]", "Changes game mode.",
-                                    "vapeecore.utility.gamemode", "Alias: /gm"),
-                            new CommandHelpEntry("/tp <player>", "Teleports you to an online player.",
+                            new CommandHelpEntry("/gamemode <mode> [player]", tr("core.help.gamemode.description"),
+                                    "vapeecore.utility.gamemode", tr("core.help.gamemode.hint")),
+                            new CommandHelpEntry("/tp <player>", tr("core.help.tp.description"),
                                     "vapeecore.utility.teleport"),
-                            new CommandHelpEntry("/tphere <player>", "Teleports an online player to you.",
+                            new CommandHelpEntry("/tphere <player>", tr("core.help.tphere.description"),
                                     "vapeecore.utility.teleport.here"),
-                            new CommandHelpEntry("/heal [player]", "Restores health.",
+                            new CommandHelpEntry("/heal [player]", tr("core.help.heal.description"),
                                     "vapeecore.utility.heal"),
-                            new CommandHelpEntry("/feed [player]", "Restores hunger.",
+                            new CommandHelpEntry("/feed [player]", tr("core.help.feed.description"),
                                     "vapeecore.utility.feed"),
-                            new CommandHelpEntry("/ping [player]", "Shows measured latency in milliseconds.",
+                            new CommandHelpEntry("/ping [player]", tr("core.help.ping.description"),
                                     "vapeecore.utility.ping"),
-                            new CommandHelpEntry("/clear [player]", "Clears a safe player inventory.",
+                            new CommandHelpEntry("/clear [player]", tr("core.help.clear.description"),
                                     "vapeecore.utility.clear"),
-                            new CommandHelpEntry("/invsee <player>", "Opens a read-only inventory snapshot.",
+                            new CommandHelpEntry("/invsee <player>", tr("core.help.invsee.description"),
                                     "vapeecore.utility.invsee"),
-                            new CommandHelpEntry("/enderchest [player]", "Opens an online player's ender chest.",
+                            new CommandHelpEntry("/enderchest [player]", tr("core.help.enderchest.description"),
                                     "vapeecore.utility.enderchest")
                     )),
-                    new CommandHelpSection("Moderation", List.of(
-                            new CommandHelpEntry("/mute <player|uuid> <duration|permanent> <reason...>", "Mutes a known player's chat and outgoing private messages.", "vapeecore.moderation.mute"),
-                            new CommandHelpEntry("/unmute <player|uuid> [reason...]", "Revokes an active mute.", "vapeecore.moderation.unmute"),
-                            new CommandHelpEntry("/warn <player|uuid> <reason...>", "Records a warning for a known player.",
+                    new CommandHelpSection(tr("core.help.section.moderation"), List.of(
+                            new CommandHelpEntry("/mute <player|uuid> <duration|permanent> <reason...>", tr("core.help.mute.description"), "vapeecore.moderation.mute"),
+                            new CommandHelpEntry("/unmute <player|uuid> [reason...]", tr("core.help.unmute.description"), "vapeecore.moderation.unmute"),
+                            new CommandHelpEntry("/warn <player|uuid> <reason...>", tr("core.help.warn.description"),
                                     "vapeecore.moderation.warn"),
-                            new CommandHelpEntry("/ban <player|uuid> <duration|permanent> <reason...>", "Bans a known player temporarily or permanently.",
+                            new CommandHelpEntry("/ban <player|uuid> <duration|permanent> <reason...>", tr("core.help.ban.description"),
                                     "vapeecore.moderation.ban"),
-                            new CommandHelpEntry("/unban <player|uuid> [reason...]", "Revokes an active ban.", "vapeecore.moderation.unban"),
-                            new CommandHelpEntry("/kick <player|uuid> <reason...>", "Records a kick and disconnects an online player.", "vapeecore.moderation.kick"),
-                            new CommandHelpEntry("/history <player|uuid> [page]", "Shows a known player's moderation history.", "vapeecore.moderation.history")
+                            new CommandHelpEntry("/unban <player|uuid> [reason...]", tr("core.help.unban.description"), "vapeecore.moderation.unban"),
+                            new CommandHelpEntry("/kick <player|uuid> <reason...>", tr("core.help.kick.description"), "vapeecore.moderation.kick"),
+                            new CommandHelpEntry("/history <player|uuid> [page]", tr("core.help.history.description"), "vapeecore.moderation.history")
                     )),
-                    new CommandHelpSection("Administration", List.of(
-                            new CommandHelpEntry("/core reload", "Reloads all coordinated configurations.",
+                    new CommandHelpSection(tr("core.help.section.administration"), List.of(
+                            new CommandHelpEntry("/core reload", tr("core.help.core.reload.description"),
                                     ADMIN_PERMISSION),
-                            new CommandHelpEntry("/setspawn", "Sets the lobby spawn.",
+                            new CommandHelpEntry("/setspawn", tr("core.help.setspawn.description"),
                                     "vapeecore.lobby.setspawn"),
-                            new CommandHelpEntry("/warp help", "Shows warp administration commands.",
+                            new CommandHelpEntry("/warp help", tr("core.help.warp.help.description"),
                                     "vapeecore.warp.admin"),
-                            new CommandHelpEntry("/blackjack help", "Shows blackjack administration commands.",
+                            new CommandHelpEntry("/blackjack help", tr("core.help.blackjack.help.description"),
                                     "vapeecore.blackjack.admin")
                     ))
             ),
-            "Click a command to insert it into chat."
+            tr("core.help.footer")
     );
 
     private final MessageService messageService;
@@ -210,9 +212,7 @@ public final class CoreCommand implements TabExecutor {
                 yield true;
             }
             default -> {
-                messageService.send(sender,
-                        "<red>Unknown subcommand '<white><value></white>'.</red>\n"
-                                + "<yellow>Use:</yellow> <aqua>/core help</aqua>",
+                messageService.sendTranslated(sender, "core.unknown-command",
                         net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.unparsed(
                                 "value",
                                 args[0]
@@ -250,39 +250,39 @@ public final class CoreCommand implements TabExecutor {
 
     private void sendOverview(CommandSender sender) {
         RuntimeInfo info = runtimeInfo.get();
-        messageService.send(sender, labeledValue("Plugin: ", info.pluginName(), NamedTextColor.AQUA));
-        messageService.send(sender, labeledValue("Version: ", info.pluginVersion(), NamedTextColor.WHITE));
-        messageService.send(sender, labeledValue("Server: ", info.serverVersion(), NamedTextColor.WHITE));
-        messageService.send(sender, "<gray>Status:</gray> <green>Running</green>");
-        messageService.send(sender, labeledValue("Active Modules: ",
+        messageService.send(sender, labeledValue("core.plugin", info.pluginName(), NamedTextColor.AQUA));
+        messageService.send(sender, labeledValue("core.version", info.pluginVersion(), NamedTextColor.WHITE));
+        messageService.send(sender, labeledValue("core.server", info.serverVersion(), NamedTextColor.WHITE));
+        messageService.send(sender, tr("core.status"));
+        messageService.send(sender, labeledValue("core.active-modules",
                 Integer.toString(info.modules()), NamedTextColor.WHITE));
-        messageService.send(sender, labeledValue("Loaded Players: ",
+        messageService.send(sender, labeledValue("core.loaded-players",
                 Integer.toString(info.loadedPlayers()), NamedTextColor.WHITE));
-        messageService.send(sender, "<gray>LuckPerms:</gray> <green>Connected</green>");
+        messageService.send(sender, tr("core.luckperms"));
         if (sender instanceof Player player) {
             primaryGroup.apply(player.getUniqueId()).ifPresent(primaryGroup ->
-                    messageService.send(sender, labeledValue("Primary Group: ", primaryGroup, NamedTextColor.WHITE))
+                    messageService.send(sender, labeledValue("core.primary-group", primaryGroup, NamedTextColor.WHITE))
             );
         }
         boolean debug = info.debug();
-        messageService.send(sender, labeledValue("Debug: ", debug ? "Enabled" : "Disabled",
-                debug ? NamedTextColor.GREEN : NamedTextColor.RED));
+        messageService.send(sender, tr("core.debug", java.util.Map.of("value", tr(debug ? "common.enabled" : "common.disabled")
+                .color(debug ? NamedTextColor.GREEN : NamedTextColor.RED))).color(NamedTextColor.GRAY));
     }
 
     private void sendVersion(CommandSender sender) {
         RuntimeInfo info = runtimeInfo.get();
         messageService.send(sender, labeledValue(
-                "VapeeCore version: ", info.pluginVersion(), NamedTextColor.WHITE));
-        messageService.send(sender, labeledValue("Paper/Bukkit version: ",
+                "core.plugin-version", info.pluginVersion(), NamedTextColor.WHITE));
+        messageService.send(sender, labeledValue("core.paper-version",
                 info.serverVersion() + " / " + info.bukkitVersion(),
                 NamedTextColor.WHITE));
         messageService.send(sender, labeledValue(
-                "Java version: ", info.javaVersion(), NamedTextColor.WHITE));
+                "core.java-version", info.javaVersion(), NamedTextColor.WHITE));
     }
 
     private void reloadConfig(CommandSender sender) {
         if (!sender.hasPermission(ADMIN_PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to reload VapeeCore.</red>");
+            messageService.send(sender, tr("core.reload.denied"));
             return;
         }
 
@@ -290,51 +290,45 @@ public final class CoreCommand implements TabExecutor {
         switch (result.status()) {
             case SUCCESS -> messageService.send(
                     sender,
-                    "<green>VapeeCore configuration reloaded successfully.</green>"
+                    tr("core.reload.success")
             );
             case PREPARE_FAILED -> {
                 messageService.send(sender, reloadFailure(
-                        "Reload validation failed for ", result.failedComponent(), ". No changes were applied."));
-                messageService.send(sender, "<gray>Check the server log.</gray>");
+                        "core.reload.validation", result.failedComponent()));
+                messageService.send(sender, tr("core.reload.log"));
             }
             case APPLY_FAILED -> {
                 messageService.send(sender, reloadFailure(
-                        "Reload failed while applying ", result.failedComponent(), "."));
-                messageService.send(sender, "<gray>The previous runtime configuration was restored. "
-                        + "Check the server log.</gray>"
+                        "core.reload.apply", result.failedComponent()));
+                messageService.send(sender, tr("core.reload.restored")
                 );
             }
             case ROLLBACK_INCOMPLETE -> {
-                messageService.send(sender, "<red>Reload failed and the previous state could not be restored "
-                        + "completely.</red>"
+                messageService.send(sender, tr("core.reload.incomplete")
                 );
-                messageService.send(sender, "<yellow>A controlled server restart is recommended. "
-                        + "Check the server log.</yellow>"
+                messageService.send(sender, tr("core.reload.restart")
                 );
             }
             case ALREADY_RUNNING -> messageService.send(
                     sender,
-                    "<yellow>A VapeeCore configuration reload is already running.</yellow>"
+                    tr("core.reload.running")
             );
         }
     }
 
     private void sendInvalidUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
     private Component labeledValue(String label, String value, NamedTextColor valueColor) {
-        return Component.text(label, NamedTextColor.GRAY)
-                .append(Component.text(value, valueColor));
+        return tr(label, java.util.Map.of("value", Component.text(value, valueColor))).color(NamedTextColor.GRAY);
     }
 
-    private Component reloadFailure(String before, String component, String after) {
-        return Component.text(before, NamedTextColor.RED)
-                .append(Component.text(component, NamedTextColor.WHITE))
-                .append(Component.text(after, NamedTextColor.RED));
+    private Component reloadFailure(String key, String component) {
+        return tr(key, java.util.Map.of("participant", Component.text(component, NamedTextColor.WHITE))).color(NamedTextColor.RED);
     }
 
     record RuntimeInfo(String pluginName, String pluginVersion, String serverVersion, String bukkitVersion,

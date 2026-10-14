@@ -1,5 +1,7 @@
 package dev.vapee.core.clan.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.clan.*;
 import dev.vapee.core.clan.command.ClanCommand;
 import dev.vapee.core.message.MessageService;
@@ -41,11 +43,16 @@ public final class ClanMenuListener implements Listener {
         Inventory top = event.getView().getTopInventory();
         if (!(top.getHolder() instanceof ClanMenuHolder holder)) return;
         event.setCancelled(true); // Includes forged menus, bottom inventory and every unsupported click type.
+        if (event.getWhoClicked() instanceof Player viewer
+                && holder.owner().equals(viewer.getUniqueId()) && holder.boundTo(top)
+                && viewer.getOpenInventory().getTopInventory() != top) {
+            menu.forgetIfActive(viewer.getUniqueId(), top); return;
+        }
         if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)
                 || event.getClickedInventory() != top) return;
         if (!player.hasPermission(ClanCommand.PERMISSION)) {
             player.closeInventory();
-            messages.send(player, Component.text("You do not have permission to use clans.", NamedTextColor.RED));
+            messages.send(player, tr("clans.menu.denied").color(NamedTextColor.RED));
             return;
         }
         int slot = event.getRawSlot();
@@ -54,7 +61,7 @@ public final class ClanMenuListener implements Listener {
             ClickType click = event.getClick();
             UUID currentClanId = clans.getClanOf(player.getUniqueId()).map(Clan::id).orElse(null);
             if (!Objects.equals(holder.clanId().orElse(null), currentClanId)) {
-                messages.send(player, Component.text("Your clan state changed. The menu was refreshed.", NamedTextColor.YELLOW));
+                messages.send(player, tr("clans.menu.changed").color(NamedTextColor.YELLOW));
                 menu.open(player, holder.view(), 0);
                 return;
             }
@@ -65,7 +72,7 @@ public final class ClanMenuListener implements Listener {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process clan menu action for player " + player.getUniqueId(), exception);
             player.closeInventory();
-            messages.send(player, Component.text("The clan data could not be updated. Please try again.", NamedTextColor.RED));
+            messages.send(player, tr("clans.menu.update-failed").color(NamedTextColor.RED));
         }
     }
 
@@ -101,19 +108,20 @@ public final class ClanMenuListener implements Listener {
             result = clans.cancelInvite(self, target);
             feedback.report(player, action, display, result);
         } else return;
-        menu.open(player, holder.view(), holder.page());
+        menu.refreshActive(player.getUniqueId());
     }
 
     private boolean navigate(Player player, ClanMenuHolder holder, int slot, ClickType click) {
-        if (menu.layout().actionAt(slot).orElse(null) == ClanMenu.Action.ACTION && click == ClickType.SHIFT_RIGHT) {
+        if (holder.actionAt(slot).orElse(null) == ClanMenu.Action.ACTION && click == ClickType.SHIFT_RIGHT) {
             Clan clan = clans.getClanOf(player.getUniqueId()).orElse(null);
             if (clan != null && clan.ownerId().equals(player.getUniqueId())) menu.promptDisband(player);
             return true;
         }
         if (click != ClickType.LEFT && click != ClickType.RIGHT) return false;
-        var action = menu.layout().actionAt(slot).orElse(null);
+        var action = holder.actionAt(slot).orElse(null);
         if (action == null) return false;
         switch (action) {
+            case PAGE_INFO -> { return true; }
             case PREVIOUS -> {
                 if (holder.page() > 0) menu.open(player, holder.view(), holder.page() - 1);
                 return true;
@@ -129,7 +137,7 @@ public final class ClanMenuListener implements Listener {
                 if (clans.getClanOf(player.getUniqueId()).isEmpty()) menu.promptCreate(player);
                 return true;
             }
-            case REFRESH -> { menu.open(player, holder.view(), holder.page()); return true; }
+            case REFRESH -> { menu.refreshActive(player.getUniqueId()); return true; }
             case NEXT -> {
                 if (menu.hasNext(player.getUniqueId(), holder.view(), holder.page()))
                     menu.open(player, holder.view(), holder.page() + 1);
@@ -147,8 +155,14 @@ public final class ClanMenuListener implements Listener {
         if (top.getHolder() instanceof ClanMenuHolder holder) menu.forgetIfActive(holder.owner(), top);
     }
     @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), false);
         Player player = event.getPlayer();
         Inventory top = player.getOpenInventory().getTopInventory();
         if (top.getHolder() instanceof ClanMenuHolder) menu.forgetIfActive(player.getUniqueId(), top);
     }
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onPlayerJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), true);
+    }
+
 }

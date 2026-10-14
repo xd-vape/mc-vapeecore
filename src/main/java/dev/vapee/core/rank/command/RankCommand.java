@@ -1,9 +1,12 @@
 package dev.vapee.core.rank.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.rank.RankInfo;
 import dev.vapee.core.rank.RankService;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -51,7 +54,7 @@ public final class RankCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to view ranks.</red>");
+            messageService.send(sender, tr("rank.denied"));
             return true;
         }
         if (args.length > 1) {
@@ -62,7 +65,7 @@ public final class RankCommand implements TabExecutor {
         Player target;
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                messageService.send(sender, Component.text("Specify an online player:", NamedTextColor.YELLOW)
+                messageService.send(sender, tr("rank.specify").color(NamedTextColor.YELLOW)
                         .append(Component.newline())
                         .append(Component.text("/rank <player>", NamedTextColor.AQUA)));
                 return true;
@@ -71,14 +74,14 @@ public final class RankCommand implements TabExecutor {
         } else {
             target = onlinePlayerLookup.apply(args[0]);
             if (target == null || !target.isOnline()) {
-                messageService.send(sender, "<red>That player is not online.</red>");
+                messageService.send(sender, tr("rank.offline"));
                 return true;
             }
         }
 
         RankInfo rank = rankService.getPrimaryRank(target.getUniqueId()).orElse(null);
         if (rank == null) {
-            messageService.send(sender, "<yellow>Rank information is currently unavailable.</yellow>");
+            messageService.send(sender, tr("rank.unavailable"));
             return true;
         }
         messageService.send(sender, rankMessage(serverNameSupplier.get(), target.getName(), rank));
@@ -106,29 +109,31 @@ public final class RankCommand implements TabExecutor {
     }
 
     private void sendUsage(CommandSender sender) {
-        messageService.send(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/rank [player]", NamedTextColor.AQUA)));
     }
 
     static Component rankMessage(String serverName, String playerName, RankInfo rank) {
-        Component output = Component.text(serverName + " • Rank", NamedTextColor.GOLD)
+        Component output = Component.empty().color(NamedTextColor.GOLD)
+                .append(MiniMessage.miniMessage().deserialize(serverName))
+                .append(tr("rank.heading-suffix"))
                 .append(Component.newline())
-                .append(label("Player: ")).append(Component.text(playerName, NamedTextColor.WHITE))
+                .append(label(tr("rank.player-label"))).append(Component.text(playerName, NamedTextColor.WHITE))
                 .append(Component.newline())
-                .append(label("Rank: ")).append(rank.displayComponent())
+                .append(label(tr("rank.rank-label"))).append(rank.displayComponent())
                 .append(Component.newline())
-                .append(label("Group: ")).append(Component.text(rank.id(), NamedTextColor.WHITE));
+                .append(label(tr("rank.group-label"))).append(Component.text(rank.id(), NamedTextColor.WHITE));
         if (rank.description().isPresent()) {
             output = output.append(Component.newline())
-                    .append(label("Description: "))
+                    .append(label(tr("rank.description-label")))
                     .append(Component.text(rank.description().orElseThrow(), NamedTextColor.WHITE));
         }
         return output;
     }
 
-    private static Component label(String value) {
-        return Component.text(value, NamedTextColor.GRAY);
+    private static Component label(Component value) {
+        return value.color(NamedTextColor.GRAY);
     }
 }

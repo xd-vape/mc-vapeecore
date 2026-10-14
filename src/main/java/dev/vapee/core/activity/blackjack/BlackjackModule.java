@@ -39,6 +39,7 @@ public final class BlackjackModule implements CoreModule {
     private final WorldDisplayModule worldDisplayModule;
     private final LobbyModule lobbyModule;
     private final MessageService messageService;
+    private final java.util.function.Consumer<org.bukkit.entity.Player> localeChanges = this::refreshLocaleInventory;
     private final CommandHelpRenderer commandHelpRenderer;
     private final QuestModule questModule;
 
@@ -105,7 +106,7 @@ public final class BlackjackModule implements CoreModule {
         );
         BlackjackInventoryService newInventoryService = new BlackjackInventoryService(
                 plugin,
-                lobbyModule.getLobbyPlayerStateService()
+                lobbyModule.getLobbyPlayerStateService(), messageService
         );
         BlackjackService newBlackjackService = new BlackjackService(
                 plugin,
@@ -134,11 +135,11 @@ public final class BlackjackModule implements CoreModule {
                     plugin,
                     worldDisplayModule.getWorldDisplayService(),
                     newTableService,
-                    newBlackjackService
+                    newBlackjackService, messageService.localization()
             );
             newPreviewService = new BlackjackPreviewService(
                     plugin,
-                    worldDisplayModule.getWorldDisplayService()
+                    worldDisplayModule.getWorldDisplayService(), messageService.localization()
             );
             BlackjackWorldViewService activeWorldView = newWorldViewService;
             newTableService.setLifecycleCallbacks(activeWorldView);
@@ -207,12 +208,18 @@ public final class BlackjackModule implements CoreModule {
         seatService = newSeatService;
         blackjackService = newBlackjackService;
         inventoryService = newInventoryService;
+        messageService.localization().addLocaleListener(localeChanges);
         previewService = newPreviewService;
         worldViewService = newWorldViewService;
         tableListener = newTableListener;
         blackjackCommand = newBlackjackCommand;
         plugin.getLogger().info("Blackjack module enabled with "
                 + newTableService.getDefinitions().size() + " physical table(s) (Free Play).");
+    }
+
+    private void refreshLocaleInventory(org.bukkit.entity.Player player) {
+        if (inventoryService != null && blackjackService != null && inventoryService.isOwner(player.getUniqueId()))
+            blackjackService.getSessionForPlayer(player).ifPresent(session -> inventoryService.refreshPlayer(player, session));
     }
 
     static void reportQuestOutcome(QuestProgressReporter reporter, UUID playerId, BlackjackOutcome outcome) {
@@ -223,6 +230,7 @@ public final class BlackjackModule implements CoreModule {
 
     @Override
     public void disable() {
+        messageService.localization().removeLocaleListener(localeChanges);
         if (tableListener != null) {
             HandlerList.unregisterAll(tableListener);
         }

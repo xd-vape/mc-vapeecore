@@ -46,8 +46,8 @@ public final class OnlineRewardLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-16C order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 27,
-                "VapeeCore registers exactly twenty-seven modules");
+        check(count(coreSource, "moduleManager.register(") == 28,
+                "VapeeCore registers exactly twenty-eight modules including Localization");
         check(coreSource.indexOf("rewardModule = new RewardModule")
                         < coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         && coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
@@ -56,10 +56,10 @@ public final class OnlineRewardLifecycleHarness {
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
                 "OnlineReward remains directly after Reward and before Quest and Lobby");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                        "List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,\n"
                                 + "                        presentationModule, dailyQuestModule)"
                 ),
-                "reload keeps OnlineReward outside the six participants");
+                "reload keeps OnlineReward outside the seven participants");
     }
 
     private static void testTaskAndShutdownStructure() throws IOException {

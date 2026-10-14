@@ -1,5 +1,8 @@
 package dev.vapee.core.moderation.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+import net.kyori.adventure.text.Component;
+
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.moderation.*;
 import org.bukkit.command.CommandSender;
@@ -17,8 +20,8 @@ public final class MuteCommand extends AbstractModerationCommand {
 
     @Override protected boolean validArguments(CommandSender sender, String[] args) {
         if (args.length >= 3 && !reason(args, 2).isBlank()) return true;
-        usage(sender, args.length == 0 ? "Missing player, duration and reason."
-                : args.length == 1 ? "Missing duration and reason." : "Missing reason.");
+        usage(sender, args.length == 0 ? tr("moderation.missing-all")
+                : args.length == 1 ? tr("moderation.missing-duration-reason") : tr("moderation.missing-reason"));
         return false;
     }
 
@@ -29,14 +32,13 @@ public final class MuteCommand extends AbstractModerationCommand {
             duration = ModerationDurationParser.parse(args[1]);
             expiry = duration.expiresAt(context.clock().instant());
         } catch (IllegalArgumentException exception) {
-            context.send(sender, "Invalid duration. Use a positive whole number with s, m, h, d or w, or permanent.");
+            context.send(sender, tr("moderation.duration-invalid"));
             return;
         }
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().issueMute(target.uniqueId(), actor, reason(args, 2), expiry));
         if (record == null) return;
-        context.send(sender, "Muted " + target.name() + (expiry.isEmpty() ? " permanently."
-                : " for " + duration.display() + ".") + "\nReason: " + record.reason());
+        context.send(sender, tr(expiry.isEmpty() ? "moderation.mute.saved-permanent" : "moderation.mute.saved-duration", java.util.Map.of("player", Component.text(target.name()), "duration", Component.text(duration.display()), "reason", Component.text(record.reason()))));
         context.notifyMute(sender, actor, target, record, false);
     }
 

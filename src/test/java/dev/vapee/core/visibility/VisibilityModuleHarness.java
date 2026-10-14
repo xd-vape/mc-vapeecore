@@ -16,8 +16,8 @@ public final class VisibilityModuleHarness {
         check(friend >= 0 && friend < clan, "Friend remains before Clan");
         check(lobby >= 0 && lobby < visibility && visibility < chat,
                 "Visibility registers after Lobby and before Chat");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 27,
-                "twenty-seven modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 28,
+                "twenty-eight modules register");
         check(core.contains("presentationModule, dailyQuestModule")
                 && !core.contains("visibilityModule, dailyQuestModule"),
                 "reload participant list remains six without Visibility");
@@ -89,10 +89,12 @@ public final class VisibilityModuleHarness {
 
         String itemDefaults = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/lobby/item/LobbyItemRegistrations.java"));
-        check(itemDefaults.contains("Players: Visible")
-                        && itemDefaults.contains("Right-click to use your visibility filters.")
-                        && itemDefaults.contains("Players: Filtered")
-                        && itemDefaults.contains("Right-click to show all lobby players."),
+        check(itemDefaults.contains("<i18n:lobby.visibility.name>")
+                        && itemDefaults.contains("<i18n:lobby.visibility.filtered-name>")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.name").equals("Players: Visible")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.lore").equals("Right-click to use your visibility filters.")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-name").equals("Players: Filtered")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-lore").equals("Right-click to show all lobby players."),
                 "hotbar labels describe visible and filtered master states");
 
         String plugin = Files.readString(Path.of("src/main/resources/plugin.yml")).replace("\r\n", "\n");

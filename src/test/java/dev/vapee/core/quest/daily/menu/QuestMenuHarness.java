@@ -15,12 +15,12 @@ public final class QuestMenuHarness {
         QuestMenuFixture f = new QuestMenuFixture();
         var player = f.player();
         List<QuestDefinition> definitions = new ArrayList<>();
-        for (int i = 0; i < MenuTestLayouts.QUEST.pageSize() * 2 + 1; i++) definitions.add(definition("q%03d".formatted(i), "future:event", Long.MAX_VALUE, Long.MAX_VALUE));
+        for (int i = 0; i < Math.min(5, MenuTestLayouts.QUEST.pageSize()) * 2 + 1; i++) definitions.add(definition("q%03d".formatted(i), "future:event", Long.MAX_VALUE, Long.MAX_VALUE));
         f.domain.registry.replaceAll(definitions);
         f.menu.open(player.player, -100);
         check(f.syncCalls == 1 && player.open.getSize() == MenuTestLayouts.QUEST.size() && text(player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 1 / 3"),
                 "real daily initialization occurs before opening clamped first page");
-        check(player.open.getItem(MenuTestLayouts.QUEST.contentSlots().getLast()) != null && player.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PREVIOUS)) == null && player.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.NEXT)) != null,
+        check(player.open.getItem(MenuTestLayouts.QUEST.contentSlot(Math.min(5, MenuTestLayouts.QUEST.pageSize()) - 1)) != null && player.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PREVIOUS)) == null && player.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.NEXT)) != null,
                 "explicit content slots and functional next-only first-page controls");
         check(text(player.open, MenuTestLayouts.QUEST.contentSlot(0)).equals(definitions.getFirst().name()) && lore(player.open, MenuTestLayouts.QUEST.contentSlot(0)).contains(definitions.getFirst().description()),
                 "configured name and description remain literal");
@@ -37,7 +37,7 @@ public final class QuestMenuHarness {
                 && f.domain.repository.saves == saves && f.domain.economy.getCoins(player.id).orElseThrow() == 0,
                 "quest and page-info clicks cannot mutate state, save or grant coins");
         f.click(player, player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.NEXT), ClickType.RIGHT);
-        check(text(player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 2 / 3") && text(player.open, MenuTestLayouts.QUEST.contentSlot(0)).equals(definitions.get(MenuTestLayouts.QUEST.pageSize()).name()),
+        check(text(player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 2 / 3") && text(player.open, MenuTestLayouts.QUEST.contentSlot(0)).equals(definitions.get(Math.min(5, MenuTestLayouts.QUEST.pageSize())).name()),
                 "next renders deterministic next page of definitions");
         f.click(player, player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PREVIOUS), ClickType.LEFT);
         check(text(player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 1 / 3"), "previous control navigates");
@@ -46,8 +46,8 @@ public final class QuestMenuHarness {
                 "oversized page clamps to final single-entry page");
         f.domain.registry.replaceAll(List.of(definitions.getFirst()));
         f.click(player, player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH), ClickType.LEFT);
-        check(text(player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 1 / 1"), "refresh reclamps after current definition catalog shrinks");
-        check(state.size() == 91 && f.domain.players.getPlayer(player.id).orElseThrow().getQuestState().snapshot().size() == 91,
+        check(player.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)) == null && ((DailyQuestInventoryHolder) player.open.getHolder()).page() == 0, "refresh reclamps after current definition catalog shrinks");
+        check(state.size() == definitions.size() && f.domain.players.getPlayer(player.id).orElseThrow().getQuestState().snapshot().size() == definitions.size(),
                 "same-cycle refresh and catalog changes do not reroll persisted assignments");
         f.click(player, player.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.CLOSE), ClickType.LEFT);
         check(player.open == player.bottom && f.menu.activeCount() == 0, "close control releases exact active binding");
@@ -93,7 +93,7 @@ public final class QuestMenuHarness {
         var emptyPlayer = empty.player();
         empty.forcedResult = DailyQuestSyncResult.CURRENT;
         empty.menu.open(emptyPlayer.player, 99);
-        check(text(emptyPlayer.open, MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)).equals("Page 1 / 1") && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.contentSlot(0)) == null
+        check(emptyPlayer.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PAGE_INFO)) == null && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.contentSlot(0)) == null
                         && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.PREVIOUS)) == null && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.NEXT)) == null
                         && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.CLOSE)) != null && emptyPlayer.open.getItem(MenuTestLayouts.QUEST.slot(DailyQuestMenu.Action.REFRESH)) != null,
                 "empty definition-backed view retains safe single-page controls");

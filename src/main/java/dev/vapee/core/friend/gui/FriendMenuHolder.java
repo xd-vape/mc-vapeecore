@@ -11,6 +11,18 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class FriendMenuHolder implements InventoryHolder {
+    private FriendMenuHolder rendered;
+    private FriendMenuHolder pending;
+    private java.util.Map<Integer, FriendMenu.Action> visibleActions = new java.util.LinkedHashMap<>();
+    private FriendMenuHolder data() { return rendered == null ? this : rendered; }
+    public Optional<FriendMenu.Action> actionAt(int slot) { return Optional.ofNullable(data().visibleActions.get(slot)); }
+    void beginRender(FriendMenuHolder next) { pending = next; }
+    void recordAction(int slot, FriendMenu.Action action) { (pending == null ? this : pending).visibleActions.put(slot, action); }
+    void finishRender() {
+        if (pending == null) visibleActions = java.util.Map.copyOf(visibleActions);
+        else { pending.visibleActions = java.util.Map.copyOf(pending.visibleActions); rendered = pending; pending = null; }
+    }
+
 
     private final UUID ownerUniqueId;
     private final FriendMenuView view;
@@ -43,15 +55,15 @@ public final class FriendMenuHolder implements InventoryHolder {
     }
 
     public FriendMenuView getView() {
-        return view;
+        return data().view;
     }
 
     public int getPage() {
-        return page;
+        return data().page;
     }
 
     public Optional<UUID> getTarget(int slot) {
-        return Optional.ofNullable(targetsBySlot.get(slot));
+        return Optional.ofNullable(data().targetsBySlot.get(slot));
     }
 
     void bindInventory(Inventory inventory) {

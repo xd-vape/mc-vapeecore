@@ -130,6 +130,7 @@ public final class ModerationTestSupport {
     }
 
     public static final class Sender {
+        public java.util.Locale locale = java.util.Locale.US;
         public final UUID id;
         public final CommandSender sender;
         public final Set<String> permissions = new HashSet<>();
@@ -146,6 +147,7 @@ public final class ModerationTestSupport {
                 return switch (method.getName()) {
                     case "hasPermission" -> allowAll || permissions.contains(args[0]);
                     case "getUniqueId" -> id;
+                    case "locale" -> locale;
                     case "getName" -> name;
                     case "isOnline" -> isOnline;
                     case "sendMessage" -> {
@@ -170,7 +172,7 @@ public final class ModerationTestSupport {
         public String text() { return output.stream().map(ModerationTestSupport::plain).reduce("", (a, b) -> a + "\n" + b); }
     }
 
-    public static String plain(Component component) { return PlainTextComponentSerializer.plainText().serialize(component); }
+    public static String plain(Component component) { return dev.vapee.core.i18n.I18nTestSupport.english(component); }
     public static boolean noEvents(Component component) {
         return component.clickEvent() == null && component.hoverEvent() == null
                 && component.children().stream().allMatch(ModerationTestSupport::noEvents);

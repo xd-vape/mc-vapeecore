@@ -42,13 +42,25 @@ public final class LobbyExperienceListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        event.joinMessage(lobbyMessageService.renderJoinMessage(event.getPlayer()));
+        if (lobbyMessageService.perRecipient(true)) {
+            event.joinMessage(null);
+            lobbyMessageService.broadcast(event.getPlayer(), true, plugin.getServer().getOnlinePlayers(),
+                    plugin.getServer().getConsoleSender());
+        } else {
+            event.joinMessage(lobbyMessageService.renderJoinMessage(event.getPlayer()));
+        }
         scheduleSynchronization(event.getPlayer(), 2L);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        event.quitMessage(lobbyMessageService.renderQuitMessage(event.getPlayer()));
+        if (lobbyMessageService.perRecipient(false)) {
+            event.quitMessage(null);
+            lobbyMessageService.broadcast(event.getPlayer(), false, plugin.getServer().getOnlinePlayers(),
+                    plugin.getServer().getConsoleSender());
+        } else {
+            event.quitMessage(lobbyMessageService.renderQuitMessage(event.getPlayer()));
+        }
         visibilityService.restorePlayer(event.getPlayer());
     }
 

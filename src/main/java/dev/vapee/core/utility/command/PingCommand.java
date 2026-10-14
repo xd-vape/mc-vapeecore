@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
 import net.kyori.adventure.text.Component;
@@ -63,18 +65,18 @@ public final class PingCommand implements TabExecutor {
         Player target;
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                error(sender, "A player target is required when using this command from the console.");
+                error(sender, tr("common.console-target"));
                 return true;
             }
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to view your ping.");
+                error(sender, tr("utility.ping.denied-self"));
                 return true;
             }
             target = player;
         } else {
             if (!sender.hasPermission(OTHERS_PERMISSION)
                     && (!(sender instanceof Player player) || !player.getName().equalsIgnoreCase(args[0]))) {
-                error(sender, "You do not have permission to view another player's ping.");
+                error(sender, tr("utility.ping.denied-other"));
                 return true;
             }
             target = playerLookup.apply(args[0]);
@@ -86,18 +88,17 @@ public final class PingCommand implements TabExecutor {
                     && player.getUniqueId().equals(target.getUniqueId());
             if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
                 error(sender, self
-                        ? "You do not have permission to view your ping."
-                        : "You do not have permission to view another player's ping.");
+                        ? tr("utility.ping.denied-self")
+                        : tr("utility.ping.denied-other"));
                 return true;
             }
         }
 
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component message = self
-                ? Component.text("Your ping: " + target.getPing() + " ms", NamedTextColor.GREEN)
-                : Component.text(target.getName(), NamedTextColor.WHITE)
-                        .append(Component.text("'s ping: " + target.getPing() + " ms", NamedTextColor.GREEN));
+        Component message = (self ? tr("utility.ping.self", java.util.Map.of("ping", Component.text(target.getPing())))
+                : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing()), "player", Component.text(target.getName(), NamedTextColor.WHITE))))
+                .color(NamedTextColor.GREEN);
         messageSender.accept(sender, message);
         return true;
     }
@@ -116,19 +117,17 @@ public final class PingCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/ping [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

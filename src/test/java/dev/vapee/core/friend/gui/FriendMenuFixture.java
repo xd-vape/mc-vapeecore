@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 final class FriendMenuFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
 
     final MemoryFriends repository = new MemoryFriends();
     final AtomicReference<FriendLimits> limits = new AtomicReference<>(new FriendLimits(100, 100, 100));
@@ -115,7 +116,7 @@ final class FriendMenuFixture {
     }
 
     Inventory inventory(FriendMenuHolder holder, int size, Component title) {
-        return new TestInventory(holder, size).inventory;
+        Inventory result = new TestInventory(holder, size).inventory; titles.put(result, title); return result;
     }
 
     InventoryClickEvent click(TestPlayer player, Inventory top, int rawSlot, ClickType click) {
@@ -161,6 +162,7 @@ final class FriendMenuFixture {
     }
 
     final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         final UUID id;
         final String name;
         final Player player;
@@ -177,6 +179,7 @@ final class FriendMenuFixture {
             this.online = online;
             this.player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "getName" -> name;
                 case "isOnline" -> this.online;
                 case "hasPermission" -> permitted;

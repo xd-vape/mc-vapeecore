@@ -14,6 +14,7 @@ import java.util.*;
 import static dev.vapee.core.quest.QuestCompletionFixture.*;
 
 public final class QuestMenuFixture {
+    public final java.util.Map<Inventory, Component> titles = new java.util.IdentityHashMap<>();
     public final QuestCompletionFixture domain = new QuestCompletionFixture();
     public final MessageService messages = messages();
     public final Map<UUID, TestPlayer> online = new HashMap<>();
@@ -35,6 +36,10 @@ public final class QuestMenuFixture {
     }
 
     public QuestMenuFixture(dev.vapee.core.ui.MenuLayout<DailyQuestMenu.Action> layout) throws Exception {
+        this(DailyQuestMenu.Layout.uniform(layout));
+    }
+
+    public QuestMenuFixture(DailyQuestMenu.Layout layout) throws Exception {
         menu = new DailyQuestMenu(id -> {
             syncCalls++;
             if (syncFailure != null) throw syncFailure;
@@ -42,7 +47,7 @@ public final class QuestMenuFixture {
         }, domain.quests, domain.players, messages, id -> {
             TestPlayer player = online.get(id);
             return player != null && player.online ? player.player : null;
-        }, (holder, size, title) -> inventory(holder, size), SpecItem::new, domain.logger, layout);
+        }, (holder, size, title) -> { Inventory result = inventory(holder, size); titles.put(result, title); return result; }, SpecItem::new, domain.logger, layout);
         listener = new DailyQuestMenuListener(menu);
     }
 
@@ -87,6 +92,7 @@ public final class QuestMenuFixture {
         return spec(inventory, slot).lore().stream().map(QuestCompletionFixture::plain).reduce("", (a, b) -> a + "\n" + b);
     }
     public final class TestPlayer {
+        public java.util.Locale locale = java.util.Locale.US;
         public final UUID id;
         public final Inventory bottom = inventory(null, 36);
         public final List<Component> output = new ArrayList<>();
@@ -102,6 +108,7 @@ public final class QuestMenuFixture {
             this.id = id;
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "locale" -> locale;
                 case "isOnline" -> online;
                 case "hasPermission" -> permission;
                 case "openInventory" -> {

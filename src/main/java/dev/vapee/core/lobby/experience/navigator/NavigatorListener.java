@@ -1,5 +1,7 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.lobby.warp.WarpResult;
 import dev.vapee.core.lobby.warp.WarpService;
 import dev.vapee.core.message.MessageService;
@@ -59,15 +61,15 @@ public final class NavigatorListener implements Listener {
         }
 
         int slot = event.getRawSlot();
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.PREVIOUS && holder.getPage() > 0) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.PREVIOUS && holder.getPage() > 0) {
             navigatorMenu.open(player, holder.getPage() - 1);
             return;
         }
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.NEXT) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.NEXT) {
             navigatorMenu.open(player, holder.getPage() + 1);
             return;
         }
-        if (navigatorMenu.layout().actionAt(slot).orElse(null) == NavigatorMenu.Action.CLOSE) {
+        if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.CLOSE) {
             navigatorMenu.close(player);
             return;
         }
@@ -79,13 +81,13 @@ public final class NavigatorListener implements Listener {
         switch (result) {
             case SUCCESS -> navigatorMenu.close(player);
             case NOT_FOUND, NOT_NAVIGABLE -> {
-                messageService.send(player, "<red>That destination is no longer available.</red>");
+                messageService.send(player, tr("warp.destination-missing"));
                 navigatorMenu.open(player, page);
             }
-            case WORLD_NOT_LOADED -> messageService.send(player, "<red>The warp world is not loaded.</red>");
-            case TELEPORT_FAILED -> messageService.send(player, "<red>The teleport was cancelled or failed.</red>");
+            case WORLD_NOT_LOADED -> messageService.send(player, tr("warp.world-missing"));
+            case TELEPORT_FAILED -> messageService.send(player, tr("warp.teleport-failed"));
             case PLAYER_OFFLINE, INVALID_ID, INVALID_NAME, INVALID_ICON, INVALID_ORDER ->
-                    messageService.send(player, "<red>The warp is currently unavailable.</red>");
+                    messageService.send(player, tr("warp.unavailable"));
         }
     }
 

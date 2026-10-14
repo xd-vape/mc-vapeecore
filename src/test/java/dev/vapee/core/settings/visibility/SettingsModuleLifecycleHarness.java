@@ -28,9 +28,9 @@ public final class SettingsModuleLifecycleHarness {
                         && module.contains("newSettingsCommand.setExecutor(newSettingsExecutor)")
                         && module.contains("newSettingsCommand.setTabCompleter(newSettingsExecutor)"),
                 "enable registers settings command and completion");
-        check(module.contains("settingsMenu.closeOpenInventories()")
-                        && module.contains("visibilitySettingsMenu.closeOpenInventories()")
-                        && module.contains("visiblePlayersMenu.closeOpenInventories()")
+        check(module.contains("settingsMenu.shutdown()")
+                        && module.contains("visibilitySettingsMenu.shutdown()")
+                        && module.contains("visiblePlayersMenu.shutdown()")
                         && module.indexOf("closeVisibilityMenus();") < module.indexOf("if (settingsListener != null)"),
                 "disable closes all own menus before unregistering listeners");
         for (String field : new String[]{"settingsListener", "visibilitySettingsListener", "visiblePlayersListener"}) {
@@ -55,7 +55,7 @@ public final class SettingsModuleLifecycleHarness {
         f.visiblePlayersMenu.open(manage.player);
         Inventory rootInventory = root.open, visibilityInventory = visibility.open, manageInventory = manage.open;
         f.visibilityMenu.closeOpenInventories();
-        f.visiblePlayersMenu.closeOpenInventories();
+        f.visiblePlayersMenu.shutdown();
         f.rootMenu.closeOpenInventories();
         check(root.open == root.bottom && visibility.open == visibility.bottom && manage.open == manage.bottom,
                 "cleanup closes three concurrently open own menu types");

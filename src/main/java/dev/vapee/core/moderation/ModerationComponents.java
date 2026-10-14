@@ -1,5 +1,7 @@
 package dev.vapee.core.moderation;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -23,29 +25,27 @@ public final class ModerationComponents {
     }
 
     public static Component banScreen(ModerationRecord record) {
-        return Component.text("You are banned from this server.", NamedTextColor.RED)
-                .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE))
-                .append(Component.newline()).append(Component.text("Expires: "
-                        + record.expiresAt().map(ModerationComponents::time).orElse("Permanent"), NamedTextColor.GRAY));
+        return tr("moderation.ban.screen").color(NamedTextColor.RED).append(Component.newline())
+                .append(reason(record.reason())).append(Component.newline()).append(expiry(record));
     }
-
     public static Component kickScreen(ModerationRecord record) {
-        return Component.text("You were kicked from the server.", NamedTextColor.RED)
-                .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE));
+        return tr("moderation.kick.screen").color(NamedTextColor.RED).append(Component.newline()).append(reason(record.reason()));
     }
-
     public static Component muteNotice(ModerationRecord record) {
-        return Component.text("You are muted.", NamedTextColor.RED)
-                .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE))
-                .append(Component.newline()).append(Component.text("Expires: "
-                        + record.expiresAt().map(ModerationComponents::time).orElse("Permanent"), NamedTextColor.GRAY));
+        return tr("moderation.mute.screen").color(NamedTextColor.RED).append(Component.newline())
+                .append(reason(record.reason())).append(Component.newline()).append(expiry(record));
     }
-
     public static Component unmuteNotice(ModerationRecord record) {
-        Component result = Component.text("Your mute has been removed.", NamedTextColor.GREEN);
+        Component result = tr("moderation.unmute.screen").color(NamedTextColor.GREEN);
         var reason = record.revocation().flatMap(ModerationRevocation::reason);
-        return reason.isEmpty() ? result : result.append(Component.newline())
-                .append(Component.text("Reason: " + reason.get(), NamedTextColor.WHITE));
+        return reason.isEmpty() ? result : result.append(Component.newline()).append(reason(reason.get()));
+    }
+    private static Component reason(String reason) {
+        return tr("moderation.reason", java.util.Map.of("reason", Component.text(reason))).color(NamedTextColor.WHITE);
+    }
+    private static Component expiry(ModerationRecord record) {
+        Component expiry = record.expiresAt().map(value -> (Component) Component.text(time(value))).orElseGet(() -> tr("moderation.permanent"));
+        return tr("moderation.expires", java.util.Map.of("expiry", expiry)).color(NamedTextColor.GRAY);
     }
 
     public static String status(ModerationRecord record, Instant now) {
@@ -56,23 +56,24 @@ public final class ModerationComponents {
         return "Inactive";
     }
 
-    public static Component historyEntry(ModerationRecord record, Instant now,
-                                         Function<ModerationActor, String> actorName) {
-        Component result = Component.text(record.action().name() + " • " + time(record.createdAt())
-                        + " • " + status(record, now), NamedTextColor.YELLOW)
-                .hoverEvent(HoverEvent.showText(Component.text("Record ID: " + record.id())))
-                .append(Component.newline()).append(Component.text("Actor: " + actorName.apply(record.actor()), NamedTextColor.GRAY))
-                .append(Component.newline()).append(Component.text("Reason: " + record.reason(), NamedTextColor.WHITE));
-        if (record.action().supportsActiveState()) result = result.append(Component.newline())
-                .append(Component.text("Expires: " + record.expiresAt().map(ModerationComponents::time)
-                        .orElse("Permanent"), NamedTextColor.GRAY));
+    public static Component historyEntry(ModerationRecord record, Instant now, Function<ModerationActor, String> actorName) {
+        Component status = tr("moderation.status." + status(record, now).toLowerCase(Locale.ROOT));
+        Component result = tr("moderation.action." + record.action().name()).append(Component.text(" • " + time(record.createdAt()) + " • "))
+                .append(status).color(NamedTextColor.YELLOW)
+                .hoverEvent(HoverEvent.showText(tr("moderation.record-id", java.util.Map.of("id", Component.text(record.id().toString())))))
+                .append(Component.newline()).append(tr("moderation.actor", java.util.Map.of("actor", actor(record.actor(), actorName))).color(NamedTextColor.GRAY))
+                .append(Component.newline()).append(reason(record.reason()));
+        if (record.action().supportsActiveState()) result = result.append(Component.newline()).append(expiry(record));
         if (record.revocation().isPresent()) {
             ModerationRevocation revoke = record.revocation().get();
-            result = result.append(Component.newline()).append(Component.text("Revoked by: "
-                    + actorName.apply(revoke.actor()) + " • " + time(revoke.revokedAt()), NamedTextColor.GRAY));
-            if (revoke.reason().isPresent()) result = result.append(Component.newline())
-                    .append(Component.text("Revocation reason: " + revoke.reason().get(), NamedTextColor.WHITE));
+            result = result.append(Component.newline()).append(tr("moderation.revoked", java.util.Map.of("actor", actor(revoke.actor(), actorName),
+                    "time", Component.text(time(revoke.revokedAt())))).color(NamedTextColor.GRAY));
+            if (revoke.reason().isPresent()) result = result.append(Component.newline()).append(tr("moderation.revocation-reason",
+                    java.util.Map.of("reason", Component.text(revoke.reason().get()))).color(NamedTextColor.WHITE));
         }
         return result;
+    }
+    private static Component actor(ModerationActor actor, Function<ModerationActor, String> name) {
+        return actor.playerId().isEmpty() ? tr("moderation.console") : Component.text(name.apply(actor));
     }
 }

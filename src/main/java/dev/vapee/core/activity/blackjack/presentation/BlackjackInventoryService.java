@@ -1,5 +1,7 @@
 package dev.vapee.core.activity.blackjack.presentation;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.ActivityState;
 import dev.vapee.core.activity.blackjack.BlackjackPlayerRoundView;
 import dev.vapee.core.activity.blackjack.BlackjackRoundPhase;
@@ -35,12 +37,18 @@ public final class BlackjackInventoryService {
     public static final int LEAVE_SLOT = 8;
 
     private final JavaPlugin plugin;
+    private final dev.vapee.core.message.MessageService messages;
+    private Player renderingFor;
     private final LobbyPlayerStateService lobbyPlayerStateService;
     private final NamespacedKey actionKey;
     private final NamespacedKey itemKey;
     private final Set<UUID> owners = new HashSet<>();
 
     public BlackjackInventoryService(JavaPlugin plugin, LobbyPlayerStateService lobbyPlayerStateService) {
+        this(plugin, lobbyPlayerStateService, new dev.vapee.core.message.MessageService(() -> "", dev.vapee.core.i18n.LocalizationService.bundled(java.util.logging.Logger.getLogger(BlackjackInventoryService.class.getName()))));
+    }
+    public BlackjackInventoryService(JavaPlugin plugin, LobbyPlayerStateService lobbyPlayerStateService, dev.vapee.core.message.MessageService messages) {
+        this.messages = Objects.requireNonNull(messages);
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyPlayerStateService = Objects.requireNonNull(lobbyPlayerStateService, "lobbyPlayerStateService");
         this.actionKey = new NamespacedKey(plugin, ACTION_PDC);
@@ -67,24 +75,27 @@ public final class BlackjackInventoryService {
 
     public void refreshPlayer(Player player, BlackjackSession session) {
         if (!isOwner(player.getUniqueId())) return;
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
         removeManagedItems(player);
         PlayerInventory inventory = player.getInventory();
         if (session.getState() == ActivityState.AVAILABLE) {
-            inventory.setItem(PRIMARY_SLOT, actionItem(Material.EMERALD, "Deal", NamedTextColor.GREEN,
-                    "Start a new free-play round.", BlackjackAction.DEAL));
+            inventory.setItem(PRIMARY_SLOT, actionItem(Material.EMERALD, tr("blackjack.action.deal"), NamedTextColor.GREEN,
+                    tr("blackjack.hint.deal"), BlackjackAction.DEAL));
         } else if (isOwnTurn(session, player.getUniqueId())) {
-            inventory.setItem(PRIMARY_SLOT, actionItem(Material.IRON_SWORD, "Hit", NamedTextColor.AQUA,
-                    "Draw one card.", BlackjackAction.HIT));
-            inventory.setItem(STAND_SLOT, actionItem(Material.SHIELD, "Stand", NamedTextColor.YELLOW,
-                    "Keep your current hand.", BlackjackAction.STAND));
+            inventory.setItem(PRIMARY_SLOT, actionItem(Material.IRON_SWORD, tr("blackjack.action.hit"), NamedTextColor.AQUA,
+                    tr("blackjack.hint.hit"), BlackjackAction.HIT));
+            inventory.setItem(STAND_SLOT, actionItem(Material.SHIELD, tr("blackjack.action.stand"), NamedTextColor.YELLOW,
+                    tr("blackjack.hint.stand"), BlackjackAction.STAND));
             if (canDoubleDown(session, player.getUniqueId())) {
-                inventory.setItem(DOUBLE_SLOT, actionItem(Material.GOLD_INGOT, "Double", NamedTextColor.GOLD,
-                        "Draw exactly one card, then stand.", BlackjackAction.DOUBLE));
+                inventory.setItem(DOUBLE_SLOT, actionItem(Material.GOLD_INGOT, tr("blackjack.action.double"), NamedTextColor.GOLD,
+                        tr("blackjack.hint.double"), BlackjackAction.DOUBLE));
             }
         }
         inventory.setItem(STATUS_SLOT, statusItem(session, player.getUniqueId()));
-        inventory.setItem(LEAVE_SLOT, actionItem(Material.BARRIER, "Leave Table", NamedTextColor.RED,
-                "Leave blackjack and return your lobby items.", BlackjackAction.LEAVE));
+        inventory.setItem(LEAVE_SLOT, actionItem(Material.BARRIER, tr("blackjack.action.leave"), NamedTextColor.RED,
+                tr("blackjack.hint.leave"), BlackjackAction.LEAVE));
+        } finally { renderingFor = previousViewer; }
     }
 
     public void release(UUID playerId, boolean restoreLobbyInventory) {
@@ -142,32 +153,32 @@ public final class BlackjackInventoryService {
 
     private ItemStack statusItem(BlackjackSession session, UUID playerId) {
         BlackjackPlayerRoundView round = session.getPlayerRoundView(playerId).orElse(null);
-        String state;
+        Component state;
         if (session.getState() == ActivityState.AVAILABLE) {
-            state = "Waiting for deal";
+            state = tr("blackjack.state.waiting");
         } else if (session.getRoundPhase() == BlackjackRoundPhase.PLAYER_TURNS) {
             state = session.getCurrentTurnPlayer().filter(playerId::equals).isPresent()
-                    ? "Your turn" : "Another player's turn";
+                    ? tr("blackjack.state.own-turn") : tr("blackjack.state.other-turn");
         } else if (session.getRoundPhase() == BlackjackRoundPhase.DEALER_TURN) {
-            state = "Dealer is playing";
+            state = tr("blackjack.state.dealer");
         } else if (session.getRoundPhase() == BlackjackRoundPhase.SETTLED) {
-            state = "Round complete";
+            state = tr("blackjack.state.complete");
         } else {
-            state = "Table available";
+            state = tr("blackjack.state.available");
         }
-        List<String> lore = round == null
-                ? List.of(state, session.getParticipantCount() + " player(s) seated")
-                : List.of(state, "Hand value: " + round.hand().value());
-        return item(Material.PAPER, "Blackjack Status", NamedTextColor.GOLD, lore, null);
+        List<Component> lore = round == null
+                ? List.of(state, tr("blackjack.status.players", java.util.Map.of("count", Component.text(session.getParticipantCount()))))
+                : List.of(state, tr("blackjack.status.value", java.util.Map.of("value", Component.text(round.hand().value()))));
+        return item(Material.PAPER, tr("blackjack.status.title"), NamedTextColor.GOLD, lore, null);
     }
 
-    private ItemStack actionItem(Material material, String name, NamedTextColor color,
-                                 String lore, BlackjackAction action) {
-        return item(material, name, color, List.of(lore, "Right-click to use."), action);
+    private ItemStack actionItem(Material material, Component name, NamedTextColor color,
+                                 Component lore, BlackjackAction action) {
+        return item(material, name, color, List.of(lore, tr("blackjack.hint.use")), action);
     }
 
-    private ItemStack item(Material material, String name, NamedTextColor color,
-                           List<String> lore, BlackjackAction action) {
+    private ItemStack item(Material material, Component name, NamedTextColor color,
+                           List<Component> lore, BlackjackAction action) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         meta.displayName(text(name, color));
@@ -180,8 +191,8 @@ public final class BlackjackInventoryService {
         return item;
     }
 
-    private Component text(String value, NamedTextColor color) {
-        return Component.text(value, color).decoration(TextDecoration.ITALIC, false);
+    private Component text(Component value, NamedTextColor color) {
+        return messages.localize(renderingFor, value).applyFallbackStyle(net.kyori.adventure.text.format.Style.style(color)).decoration(TextDecoration.ITALIC, false);
     }
 
     private void clearInventory(Player player) {

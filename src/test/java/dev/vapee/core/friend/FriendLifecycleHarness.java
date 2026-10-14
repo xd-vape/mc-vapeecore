@@ -35,11 +35,11 @@ public final class FriendLifecycleHarness {
                         && core.indexOf("moduleManager.register(friendModule)")
                         < core.indexOf("moduleManager.register(rewardModule)"),
                 "Friend starts after Identity and before Reward, so reverse shutdown is safe");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 27,
-                "exactly twenty-seven modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 28,
+                "exactly twenty-eight modules register");
         check(core.contains("presentationModule, dailyQuestModule)")
                         && !core.contains("List.of(configService, friendModule"),
-                "Friend does not join six reload participants");
+                "Friend does not join seven reload participants");
         String source = Files.readString(Path.of("src/main/java/dev/vapee/core/friend/FriendModule.java"));
         check(source.contains("resolve(\"friends.yml\")")
                         && source.contains("new FileFriendRepository(file, plugin.getLogger())")
@@ -56,7 +56,7 @@ public final class FriendLifecycleHarness {
                         && source.contains("command.setTabCompleter(null)")
                         && source.contains("HandlerList.unregisterAll(listener)")
                         && source.contains("HandlerList.unregisterAll(friendMenuListener)")
-                        && source.contains("friendMenu.closeOpenInventories()")
+                        && source.contains("friendMenu.shutdown()") && source.contains("menu.startUpdates()")
                         && source.contains("friendService = null")
                         && source.contains("requireNonNull(friendService"),
                 "disable and failed enable clean up GUI, listener and command");

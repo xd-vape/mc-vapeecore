@@ -1,5 +1,7 @@
 package dev.vapee.core.friend;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
@@ -37,48 +39,45 @@ public final class FriendMessages {
         Objects.requireNonNull(targetName, "targetName");
         Objects.requireNonNull(result, "result");
         if (result == FriendResult.SUCCESS) {
-            String prefix = switch (action) {
-                case "add" -> "Friend request sent to ";
-                case "accept" -> "You are now friends with ";
-                case "deny" -> "Friend request declined from ";
-                case "cancel" -> "Friend request canceled for ";
-                case "remove" -> "Removed friend ";
+            String key = switch (action) {
+                case "add" -> "friends.request.sent";
+                case "accept" -> "friends.request.accepted";
+                case "deny" -> "friends.request.denied";
+                case "cancel" -> "friends.request.canceled";
+                case "remove" -> "friends.removed";
                 default -> throw new IllegalArgumentException("Unknown friend action: " + action);
             };
-            messages.send(actor, Component.text(prefix, NamedTextColor.GREEN)
-                    .append(Component.text(targetName, NamedTextColor.WHITE)));
+            messages.send(actor, tr(key, java.util.Map.of("player", Component.text(targetName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
             if (action.equals("add")) {
                 Player target = onlinePlayer.apply(targetId);
                 if (target != null && target.isOnline()) {
-                    messages.send(target, Component.text(actor.getName(), NamedTextColor.WHITE)
-                            .append(Component.text(" sent you a friend request. ", NamedTextColor.GREEN))
+                    messages.send(target, tr("friends.request.received", java.util.Map.of("player", Component.text(actor.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN)
                             .append(requestActions(commandArgument.apply(actor.getUniqueId()))));
                 }
             } else if (action.equals("accept")) {
-                notifyOnline(targetId, actor.getName(), " accepted your friend request.");
+                notifyOnline(targetId, actor.getName(), "friends.request.accept-notice");
             }
             return;
         }
         if (result == FriendResult.AUTO_ACCEPTED) {
-            messages.send(actor, Component.text("You are now friends with ", NamedTextColor.GREEN)
-                    .append(Component.text(targetName, NamedTextColor.WHITE)));
-            notifyOnline(targetId, actor.getName(), " is now your friend.");
+            messages.send(actor, tr("friends.request.accepted", java.util.Map.of("player", Component.text(targetName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            notifyOnline(targetId, actor.getName(), "friends.request.auto-notice");
             return;
         }
-        String message = switch (result) {
-            case SELF -> "You cannot add yourself.";
-            case ALREADY_FRIENDS -> "You are already friends.";
-            case REQUEST_ALREADY_SENT -> "A friend request is already pending.";
-            case REQUEST_NOT_FOUND -> "No matching friend request was found.";
-            case NOT_FRIENDS -> "You are not friends with that player.";
-            case BLOCKED -> "The friend request could not be processed.";
-            case REQUESTS_DISABLED -> "This player is not accepting friend requests.";
-            case FRIEND_LIMIT_REACHED -> "A friend limit has been reached.";
-            case INCOMING_LIMIT_REACHED -> "This player has too many incoming requests.";
-            case OUTGOING_LIMIT_REACHED -> "You have too many outgoing requests.";
+        String messageKey = switch (result) {
+            case SELF -> "friends.error.self";
+            case ALREADY_FRIENDS -> "friends.error.already-friends";
+            case REQUEST_ALREADY_SENT -> "friends.error.request-pending";
+            case REQUEST_NOT_FOUND -> "friends.error.request-not-found";
+            case NOT_FRIENDS -> "friends.error.not-friends";
+            case BLOCKED -> "friends.error.blocked";
+            case REQUESTS_DISABLED -> "friends.error.disabled";
+            case FRIEND_LIMIT_REACHED -> "friends.error.friend-limit";
+            case INCOMING_LIMIT_REACHED -> "friends.error.incoming-limit";
+            case OUTGOING_LIMIT_REACHED -> "friends.error.outgoing-limit";
             default -> throw new IllegalStateException("Unexpected friend result: " + result);
         };
-        messages.send(actor, Component.text(message, NamedTextColor.RED));
+        messages.send(actor, tr(messageKey).color(NamedTextColor.RED));
     }
 
     public static String commandArgument(PlayerIdentityService identities, UUID id) {
@@ -92,16 +91,15 @@ public final class FriendMessages {
     }
 
     public static Component actionButton(String action, String argument) {
-        String label = Character.toUpperCase(action.charAt(0)) + action.substring(1);
-        return Component.text("[" + label + "]", action.equals("accept") ? NamedTextColor.GREEN : NamedTextColor.RED)
+        Component label = tr(switch (action) { case "accept" -> "common.accept"; case "deny" -> "common.deny"; case "cancel" -> "common.cancel"; case "remove" -> "common.remove"; default -> throw new IllegalArgumentException("Unknown friend button action: " + action); });
+        return Component.text("[").append(label).append(Component.text("]")).color(action.equals("accept") ? NamedTextColor.GREEN : NamedTextColor.RED)
                 .clickEvent(ClickEvent.suggestCommand("/friend " + action + " " + argument));
     }
 
-    private void notifyOnline(UUID targetId, String actorName, String suffix) {
+    private void notifyOnline(UUID targetId, String actorName, String key) {
         Player target = onlinePlayer.apply(targetId);
         if (target != null && target.isOnline()) {
-            messages.send(target, Component.text(actorName, NamedTextColor.WHITE)
-                    .append(Component.text(suffix, NamedTextColor.GREEN)));
+            messages.send(target, tr(key, java.util.Map.of("player", Component.text(actorName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         }
     }
 }

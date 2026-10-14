@@ -20,7 +20,7 @@ public final class TeleportParser {
         Objects.requireNonNull(args, "args");
         if (args.length == 1) return new Request(null, args[0], null, null, false);
         if (args.length == 2) return new Request(args[0], args[1], null, null, true);
-        if (args.length < 3 || args.length > 8) throw new IllegalArgumentException("Invalid teleport usage.");
+        if (args.length < 3 || args.length > 8) throw new TeleportParseException(TeleportParseException.Reason.USAGE, "Invalid teleport usage.", "");
         boolean selfWorld = args[0].equalsIgnoreCase("world") && (args.length == 5 || args.length == 7);
         boolean other = !selfWorld && ((args.length > 1 && args[1].equalsIgnoreCase("world"))
                 || args.length == 4 || args.length == 6 || args.length == 8);
@@ -28,9 +28,9 @@ public final class TeleportParser {
         boolean explicitWorld = args[offset].equalsIgnoreCase("world");
         int coordinateStart = offset + (explicitWorld ? 2 : 0);
         int remaining = args.length - coordinateStart;
-        if (remaining != 3 && remaining != 5) throw new IllegalArgumentException("Invalid teleport usage.");
+        if (remaining != 3 && remaining != 5) throw new TeleportParseException(TeleportParseException.Reason.USAGE, "Invalid teleport usage.", "");
         if (explicitWorld && args[offset + 1].isBlank())
-            throw new IllegalArgumentException("Invalid teleport usage.");
+            throw new TeleportParseException(TeleportParseException.Reason.USAGE, "Invalid teleport usage.", "");
         return new Request(other ? args[0] : null, null,
                 explicitWorld ? args[offset + 1] : null,
                 Arrays.copyOfRange(args, coordinateStart, args.length), other);
@@ -42,10 +42,10 @@ public final class TeleportParser {
         Objects.requireNonNull(world, "world");
         String[] tokens = Objects.requireNonNull(request.coordinates(), "coordinates");
         if (tokens.length != 3 && tokens.length != 5)
-            throw new IllegalArgumentException("Invalid teleport usage.");
+            throw new TeleportParseException(TeleportParseException.Reason.USAGE, "Invalid teleport usage.", "");
         boolean local = tokens[0].startsWith("^") || tokens[1].startsWith("^") || tokens[2].startsWith("^");
         if (local && !(tokens[0].startsWith("^") && tokens[1].startsWith("^") && tokens[2].startsWith("^")))
-            throw new IllegalArgumentException("Local coordinates cannot be mixed with world/relative coordinates.");
+            throw new TeleportParseException(TeleportParseException.Reason.MIXED_COORDINATES, "Local coordinates cannot be mixed with world/relative coordinates.", "");
         double x, y, z;
         if (local) {
             double left = number(tokens[0].substring(1), "coordinate", true);
@@ -64,14 +64,14 @@ public final class TeleportParser {
             z = coordinate(tokens[2], source.getZ());
         }
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z))
-            throw new IllegalArgumentException("Invalid coordinate: destination must be finite.");
+            throw new TeleportParseException(TeleportParseException.Reason.NONFINITE_DESTINATION, "Invalid coordinate: destination must be finite.", "");
         float finalYaw = source.getYaw(), finalPitch = source.getPitch();
         if (tokens.length == 5) {
             finalYaw = rotation(tokens[3], finalYaw);
             finalPitch = rotation(tokens[4], finalPitch);
         }
         if (!Float.isFinite(finalYaw) || !Float.isFinite(finalPitch))
-            throw new IllegalArgumentException("Invalid rotation: value must be finite.");
+            throw new TeleportParseException(TeleportParseException.Reason.NONFINITE_ROTATION, "Invalid rotation: value must be finite.", "");
         finalPitch = Math.max(-90.0F, Math.min(90.0F, finalPitch));
         return new Location(world, x, y, z, finalYaw, finalPitch);
     }
@@ -86,19 +86,19 @@ public final class TeleportParser {
                 ? base + number(token.substring(1), "rotation", true)
                 : number(token, "rotation", false);
         if (!Double.isFinite(result) || result > Float.MAX_VALUE || result < -Float.MAX_VALUE)
-            throw new IllegalArgumentException("Invalid rotation: value must be finite.");
+            throw new TeleportParseException(TeleportParseException.Reason.NONFINITE_ROTATION, "Invalid rotation: value must be finite.", "");
         return (float) result;
     }
 
     private static double number(String token, String kind, boolean emptyMeansZero) {
         if (emptyMeansZero && token.isEmpty()) return 0.0D;
-        if (token.isEmpty() || token.isBlank()) throw new IllegalArgumentException("Invalid " + kind + ": " + token);
+        if (token.isEmpty() || token.isBlank()) throw new TeleportParseException(kind.equals("coordinate") ? TeleportParseException.Reason.INVALID_COORDINATE : TeleportParseException.Reason.INVALID_ROTATION, "Invalid " + kind + ": " + token, token);
         try {
             double value = Double.parseDouble(token);
             if (Double.isFinite(value)) return value;
         } catch (NumberFormatException ignored) {
             // One controlled error for invalid text and overflow alike.
         }
-        throw new IllegalArgumentException("Invalid " + kind + ": " + token);
+        throw new TeleportParseException(kind.equals("coordinate") ? TeleportParseException.Reason.INVALID_COORDINATE : TeleportParseException.Reason.INVALID_ROTATION, "Invalid " + kind + ": " + token, token);
     }
 }

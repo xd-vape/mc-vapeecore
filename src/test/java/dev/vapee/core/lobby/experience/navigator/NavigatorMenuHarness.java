@@ -20,10 +20,10 @@ public final class NavigatorMenuHarness {
         check(player.open.getSize() == MenuTestLayouts.NAVIGATOR.size() && plain(f.title).equals("Warp Navigator"), "unchanged size and title");
         check(text(player.open, MenuTestLayouts.NAVIGATOR.emptySlot()).equals("No Destinations Available"), "friendly empty state");
         check(spec(player.open, MenuTestLayouts.NAVIGATOR.emptySlot()).lore().isEmpty(), "empty state reveals no administrative details");
-        check(spec(player.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).material() == Material.PAPER
+        check(player.open.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)) == null
                         && spec(player.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.CLOSE)).material() == Material.BARRIER,
-                "page info and close keep original slots/materials");
-        check(text(player.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).equals("Page 1/1") && plain(spec(player.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals("0 destinations."),
+                "single-page menu omits Page Info while preserving Close");
+        check(((NavigatorInventoryHolder) player.open.getHolder()).getPage() == 0 && ((NavigatorInventoryHolder) player.open.getHolder()).actionAt(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).isEmpty(),
                 "empty registry has one page and zero destinations");
         check(player.open.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)) == null && player.open.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT)) == null, "empty has no paging actions");
         int capacity = f.menu.layout().pageSize();
@@ -47,7 +47,7 @@ public final class NavigatorMenuHarness {
         }
         check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)).isEmpty() && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)) == null && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT)) != null,
                 "first page shows only next control");
-        check(plain(spec(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals((count - 1) + " destinations.") && text(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).equals("Page 1/2"),
+        check(plain(spec(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals((count - 1) + " destinations.") && text(first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).equals("Page 1 / 2"),
                 "page count includes only visible destinations");
         f.click(player, first, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT), ClickType.RIGHT);
         Inventory second = player.open;
@@ -81,11 +81,11 @@ public final class NavigatorMenuHarness {
         hidden.warps.setNavigatorVisible("custom_000", false);
         hidden.menu.open(hiddenPlayer.player);
         check(text(hiddenPlayer.open, MenuTestLayouts.NAVIGATOR.emptySlot()).equals("No Destinations Available")
-                        && plain(spec(hiddenPlayer.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals("0 destinations."),
+                        && hiddenPlayer.open.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)) == null,
                 "hidden-only registry has same empty presentation");
         hidden.warps.setNavigatorVisible("custom_000", true);
         hidden.menu.open(hiddenPlayer.player);
-        check(plain(spec(hiddenPlayer.open, MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)).lore().getFirst()).equals("1 destination."), "single destination label");
+        check(hiddenPlayer.open.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PAGE_INFO)) == null && ((NavigatorInventoryHolder) hiddenPlayer.open.getHolder()).getWarpId(MenuTestLayouts.NAVIGATOR.contentSlot(0)).orElseThrow().equals("custom_000"), "single destination renders without pagination clutter");
         hiddenPlayer.cancelNextOpen = true;
         Inventory preserved = hiddenPlayer.open;
         check(!hidden.menu.open(hiddenPlayer.player)

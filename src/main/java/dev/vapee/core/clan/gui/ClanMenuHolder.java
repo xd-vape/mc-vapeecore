@@ -12,6 +12,18 @@ import java.util.UUID;
 
 /** Immutable slot targets plus one exact inventory binding. */
 public final class ClanMenuHolder implements InventoryHolder {
+    private ClanMenuHolder rendered;
+    private ClanMenuHolder pending;
+    private java.util.Map<Integer, ClanMenu.Action> visibleActions = new java.util.LinkedHashMap<>();
+    private ClanMenuHolder data() { return rendered == null ? this : rendered; }
+    public Optional<ClanMenu.Action> actionAt(int slot) { return Optional.ofNullable(data().visibleActions.get(slot)); }
+    void beginRender(ClanMenuHolder next) { pending = next; }
+    void recordAction(int slot, ClanMenu.Action action) { (pending == null ? this : pending).visibleActions.put(slot, action); }
+    void finishRender() {
+        if (pending == null) visibleActions = java.util.Map.copyOf(visibleActions);
+        else { pending.visibleActions = java.util.Map.copyOf(pending.visibleActions); rendered = pending; pending = null; }
+    }
+
     private final UUID owner;
     private final ClanMenuView view;
     private final int page;
@@ -39,10 +51,10 @@ public final class ClanMenuHolder implements InventoryHolder {
     }
 
     public UUID owner() { return owner; }
-    public ClanMenuView view() { return view; }
-    public int page() { return page; }
-    public Optional<UUID> clanId() { return Optional.ofNullable(clanId); }
-    public Optional<UUID> target(int slot) { return Optional.ofNullable(targets.get(slot)); }
+    public ClanMenuView view() { return data().view; }
+    public int page() { return data().page; }
+    public Optional<UUID> clanId() { return Optional.ofNullable(data().clanId); }
+    public Optional<UUID> target(int slot) { return Optional.ofNullable(data().targets.get(slot)); }
 
     void bind(Inventory candidate) {
         if (inventory != null) throw new IllegalStateException("Already bound");

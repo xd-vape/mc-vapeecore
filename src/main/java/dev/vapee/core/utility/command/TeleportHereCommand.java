@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
@@ -83,11 +85,11 @@ public final class TeleportHereCommand implements TabExecutor {
             return true;
         }
         if (!(sender instanceof Player player)) {
-            error(sender, "A destination player is required; console has no location.");
+            error(sender, tr("utility.teleport-here.console"));
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            error(sender, "You do not have permission to teleport another player to you.");
+            error(sender, tr("utility.teleport-here.denied"));
             return true;
         }
 
@@ -97,28 +99,26 @@ public final class TeleportHereCommand implements TabExecutor {
             return true;
         }
         if (player.getUniqueId().equals(target.getUniqueId())) {
-            error(sender, "You are already here.");
+            error(sender, tr("utility.teleport-here.same"));
             return true;
         }
         if (!staffTargetGuard.authorize(sender, target, "tphere", messageSender)) return true;
 
         if (!sender.hasPermission(BYPASS_PERMISSION)) {
             if (activityCheck.test(player.getUniqueId())) {
-                error(sender, "You cannot use this command while participating in an activity.");
+                error(sender, tr("common.activity-self"));
                 return true;
             }
             if (activityCheck.test(target.getUniqueId())) {
-                error(sender, "That player is participating in an activity.");
+                error(sender, tr("common.activity-target"));
                 return true;
             }
         }
         if (!utilityService.teleport(target, player)) {
-            error(sender, "Teleport failed or was cancelled.");
+            error(sender, tr("utility.teleport.failed"));
             return true;
         }
-        messageSender.accept(sender, Component.text("Teleported ", NamedTextColor.GREEN)
-                .append(Component.text(target.getName(), NamedTextColor.WHITE))
-                .append(Component.text(" to you.", NamedTextColor.GREEN)));
+        messageSender.accept(sender, tr("utility.teleport-here.success", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -138,19 +138,17 @@ public final class TeleportHereCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/tphere <player>", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

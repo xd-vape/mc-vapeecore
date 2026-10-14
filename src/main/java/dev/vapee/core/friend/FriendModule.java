@@ -82,6 +82,7 @@ public final class FriendModule implements CoreModule {
         }
         friendService = service;
         friendMenu = menu;
+        menu.startUpdates();
         friendMenuListener = listener;
         friendCommand = command;
         plugin.getLogger().info("Friend module enabled.");
@@ -106,7 +107,7 @@ public final class FriendModule implements CoreModule {
     public void disable() {
         try {
             if (friendMenu != null) {
-                friendMenu.closeOpenInventories();
+                friendMenu.shutdown();
             }
         } finally {
             if (friendMenuListener != null) {

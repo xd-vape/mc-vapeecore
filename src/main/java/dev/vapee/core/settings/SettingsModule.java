@@ -137,6 +137,7 @@ public final class SettingsModule implements CoreModule {
         visiblePlayersMenu = newVisiblePlayersMenu;
         visiblePlayersListener = newVisiblePlayersListener;
         settingsCommand = newSettingsCommand;
+        newSettingsMenu.startUpdates(); newVisibilitySettingsMenu.startUpdates(); newVisiblePlayersMenu.startUpdates();
         plugin.getLogger().info("Settings module enabled.");
     }
 
@@ -144,7 +145,7 @@ public final class SettingsModule implements CoreModule {
     public void disable() {
         closeVisibilityMenus();
         try {
-            if (settingsMenu != null) settingsMenu.closeOpenInventories();
+            if (settingsMenu != null) settingsMenu.shutdown();
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not close all player settings menus.", exception);
         }
@@ -183,12 +184,12 @@ public final class SettingsModule implements CoreModule {
 
     private void closeVisibilityMenus() {
         try {
-            if (visibilitySettingsMenu != null) visibilitySettingsMenu.closeOpenInventories();
+            if (visibilitySettingsMenu != null) visibilitySettingsMenu.shutdown();
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not close all visibility settings menus.", exception);
         }
         try {
-            if (visiblePlayersMenu != null) visiblePlayersMenu.closeOpenInventories();
+            if (visiblePlayersMenu != null) visiblePlayersMenu.shutdown();
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not close all visible players menus.", exception);
         }

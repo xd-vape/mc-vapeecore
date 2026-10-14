@@ -64,9 +64,9 @@ public final class ClanIntegrationHarness {
             int clan = core.indexOf("moduleManager.register(clanModule)");
             int reward = core.indexOf("moduleManager.register(rewardModule)");
             check(friend >= 0 && friend < clan && clan < reward, "Clan registers after Friend before Reward");
-            check(core.split("moduleManager.register\\(", -1).length - 1 == 27, "27 modules registered");
+            check(core.split("moduleManager.register\\(", -1).length - 1 == 28, "28 modules including Localization registered");
             check(core.contains("presentationModule, dailyQuestModule")
-                    && !core.contains("presentationModule, clanModule"), "six reload participants unchanged");
+                    && !core.contains("presentationModule, clanModule"), "seven reload participants unchanged");
             String plugin = Files.readString(Path.of("src/main/resources/plugin.yml")).replace("\r\n", "\n");
             check(plugin.contains("  clan:\n") && plugin.contains("      - clans\n"), "command and alias declared");
             check(plugin.contains("  vapeecore.clan.use:\n")
@@ -74,7 +74,7 @@ public final class ClanIntegrationHarness {
                     "  vapeecore.clan.use:\n    description: Allows using the clan system\n    default: true"),
                     "single clan permission defaults true");
             String moduleSource = Files.readString(Path.of("src/main/java/dev/vapee/core/clan/ClanModule.java"));
-            check(moduleSource.contains("closeOpenInventories") && moduleSource.contains("HandlerList.unregisterAll")
+            check(moduleSource.contains("shutdown()") && moduleSource.contains("nextMenu.startUpdates()") && moduleSource.contains("HandlerList.unregisterAll")
                     && moduleSource.contains("setTabCompleter(null)"), "module lifecycle cleanup");
             check(!moduleSource.contains("runTask") && !moduleSource.contains("ReloadParticipant"),
                     "no scheduler or seventh reload participant");

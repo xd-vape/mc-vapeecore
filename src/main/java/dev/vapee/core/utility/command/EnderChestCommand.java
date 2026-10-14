@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.utility.OnlinePlayerResolver;
@@ -71,14 +73,14 @@ public final class EnderChestCommand implements TabExecutor {
             return true;
         }
         if (!(sender instanceof Player viewer)) {
-            error(sender, "This command can only be used by a player because it opens an inventory.");
+            error(sender, tr("common.inventory-player-only"));
             return true;
         }
 
         Player owner;
         if (args.length == 0) {
             if (!sender.hasPermission(PERMISSION)) {
-                error(sender, "You do not have permission to open your ender chest.");
+                error(sender, tr("utility.enderchest.denied-self"));
                 return true;
             }
             owner = viewer;
@@ -91,8 +93,8 @@ public final class EnderChestCommand implements TabExecutor {
             boolean self = viewer.getUniqueId().equals(owner.getUniqueId());
             if (!sender.hasPermission(self ? PERMISSION : OTHERS_PERMISSION)) {
                 error(sender, self
-                        ? "You do not have permission to open your ender chest."
-                        : "You do not have permission to open another player's ender chest.");
+                        ? tr("utility.enderchest.denied-self")
+                        : tr("utility.enderchest.denied-other"));
                 return true;
             }
         }
@@ -101,9 +103,7 @@ public final class EnderChestCommand implements TabExecutor {
 
         utilityService.openEnderChest(viewer, owner);
         if (!viewer.getUniqueId().equals(owner.getUniqueId())) {
-            messageSender.accept(sender, Component.text("Opened ", NamedTextColor.GREEN)
-                    .append(Component.text(owner.getName(), NamedTextColor.WHITE))
-                    .append(Component.text("'s ender chest.", NamedTextColor.GREEN)));
+            messageSender.accept(sender, tr("utility.enderchest.opened", java.util.Map.of("player", Component.text(owner.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
         }
         return true;
     }
@@ -123,19 +123,17 @@ public final class EnderChestCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/enderchest [player]", NamedTextColor.AQUA)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

@@ -21,7 +21,7 @@ public final class DailyQuestMenuListener implements Listener {
         if (event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT) return;
         int slot = event.getRawSlot();
         if (slot < 0 || slot >= top.getSize()) return;
-        var action = menu.layout().actionAt(slot).orElse(null);
+        var action = holder.actionAt(slot).orElse(null);
         if (action == null) return;
         switch (action) {
             case CLOSE -> player.closeInventory();

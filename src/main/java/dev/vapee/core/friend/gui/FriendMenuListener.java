@@ -1,5 +1,7 @@
 package dev.vapee.core.friend.gui;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.friend.FriendMessages;
 import dev.vapee.core.friend.FriendResult;
 import dev.vapee.core.friend.FriendService;
@@ -45,13 +47,18 @@ public final class FriendMenuListener implements Listener {
         }
         // Cancel even forged, stale and bottom-inventory interactions: this GUI is never item storage.
         event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player viewer
+                && holder.getOwnerUniqueId().equals(viewer.getUniqueId()) && holder.isBoundTo(top)
+                && viewer.getOpenInventory().getTopInventory() != top) {
+            menu.forgetIfActive(viewer.getUniqueId(), top); return;
+        }
         if (!(event.getWhoClicked() instanceof Player player) || !menu.isActive(player, top, holder)) {
             return;
         }
         if (!player.hasPermission(FriendCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
             if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
-            messages.send(player, "<red>You do not have permission to use friends.</red>");
+            messages.send(player, tr("friends.menu.denied"));
             return;
         }
         if (event.getClickedInventory() != top) {
@@ -91,19 +98,20 @@ public final class FriendMenuListener implements Listener {
                 default -> throw new IllegalStateException("Unexpected friend action");
             };
             feedback.report(player, action, target, targetName, result);
-            menu.open(player, holder.getView(), holder.getPage());
+            menu.refreshActive(player.getUniqueId());
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process friend menu action for " + player.getUniqueId() + ".",
                     exception);
             player.closeInventory();
-            messages.send(player, "<red>The friends data could not be updated. Please try again.</red>");
+            messages.send(player, tr("friends.menu.update-failed"));
         }
     }
 
     private boolean navigate(Player player, FriendMenuHolder holder, int slot) {
-        var action = menu.layout().actionAt(slot).orElse(null);
+        var action = holder.actionAt(slot).orElse(null);
         if (action == null) return false;
         switch (action) {
+            case PAGE_INFO -> { return true; }
             case PREVIOUS -> {
                 if (holder.getPage() > 0) {
                     menu.open(player, holder.getView(), holder.getPage() - 1);
@@ -131,7 +139,7 @@ public final class FriendMenuListener implements Listener {
                 return true;
             }
             case REFRESH -> {
-                menu.open(player, holder.getView(), holder.getPage());
+                menu.refreshActive(player.getUniqueId());
                 return true;
             }
             case NEXT -> {
@@ -163,10 +171,16 @@ public final class FriendMenuListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), false);
         Player player = event.getPlayer();
         Inventory top = player.getOpenInventory().getTopInventory();
         if (top.getHolder() instanceof FriendMenuHolder) {
             menu.forgetIfActive(player.getUniqueId(), top);
         }
     }
+    @EventHandler(priority = org.bukkit.event.EventPriority.MONITOR)
+    public void onPlayerJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        menu.targetPresenceChanged(event.getPlayer().getUniqueId(), true);
+    }
+
 }

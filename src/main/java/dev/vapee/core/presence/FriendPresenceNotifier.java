@@ -1,5 +1,7 @@
 package dev.vapee.core.presence;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
@@ -94,12 +96,9 @@ public final class FriendPresenceNotifier {
     }
 
     private static Component createMessage(String subjectName, PresenceStatus status) {
-        Component prefix = Component.text("Friend ", NamedTextColor.GRAY)
-                .append(Component.text(subjectName, NamedTextColor.AQUA));
-        return switch (status) {
-            case ONLINE -> prefix.append(Component.text(" is now online.", NamedTextColor.GREEN));
-            case OFFLINE -> prefix.append(Component.text(" went offline.", NamedTextColor.GRAY));
-        };
+        return tr(status == PresenceStatus.ONLINE ? "friends.presence.online" : "friends.presence.offline",
+                java.util.Map.of("player", Component.text(subjectName, NamedTextColor.AQUA)))
+                .color(status == PresenceStatus.ONLINE ? NamedTextColor.GREEN : NamedTextColor.GRAY);
     }
 
     @FunctionalInterface

@@ -1,5 +1,7 @@
 package dev.vapee.core.social.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.IgnoreResult;
 import dev.vapee.core.social.SocialService;
@@ -42,11 +44,11 @@ public final class UnignoreCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can manage ignored players.</red>");
+            messageService.send(sender, tr("social.player-only"));
             return true;
         }
         if (!sender.hasPermission(IgnoreCommand.PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            messageService.send(sender, tr("social.denied"));
             return true;
         }
         if (args.length != 1) {
@@ -57,18 +59,18 @@ public final class UnignoreCommand implements TabExecutor {
         try {
             List<ResolvedTarget> targets = resolveTargets(player.getUniqueId(), args[0]);
             if (targets.isEmpty()) {
-                messageService.send(player, "<red>That player is not ignored.</red>");
+                messageService.send(player, tr("social.not-ignored"));
                 return true;
             }
             if (targets.size() > 1) {
-                messageService.send(player, "<yellow>That name is ambiguous. Use the player's UUID.</yellow>");
+                messageService.send(player, tr("social.ambiguous"));
                 return true;
             }
             ResolvedTarget target = targets.getFirst();
             sendResult(player, target, socialService.unignore(player.getUniqueId(), target.uniqueId()));
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not persist an unignore for " + player.getUniqueId() + ".", exception);
-            messageService.send(player, "<red>Your ignore list could not be saved. Check the server log.</red>");
+            messageService.send(player, tr("social.save-failed"));
         }
         return true;
     }
@@ -126,20 +128,18 @@ public final class UnignoreCommand implements TabExecutor {
     private void sendResult(Player player, ResolvedTarget target, IgnoreResult result) {
         switch (result) {
             case SUCCESS -> messageService.send(player,
-                    Component.text("You are no longer ignoring ", NamedTextColor.GREEN)
-                            .append(Component.text(target.displayName(), NamedTextColor.WHITE))
-                            .append(Component.text(".", NamedTextColor.GREEN)));
-            case OWNER_NOT_LOADED -> messageService.send(player, "<red>Your player profile is not available.</red>");
-            case NOT_IGNORED -> messageService.send(player, "<red>That player is not ignored.</red>");
-            case CANNOT_IGNORE_SELF -> messageService.send(player, "<red>You cannot unignore yourself.</red>");
+                    tr("social.unignored", java.util.Map.of("player", Component.text(target.displayName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            case OWNER_NOT_LOADED -> messageService.send(player, tr("social.profile-unavailable"));
+            case NOT_IGNORED -> messageService.send(player, tr("social.not-ignored"));
+            case CANNOT_IGNORE_SELF -> messageService.send(player, tr("social.unignore-self"));
             case ALREADY_IGNORED -> throw new IllegalStateException("Unignore returned an ignore-only result");
         }
     }
 
     private void sendUsage(Player player) {
-        messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/unignore <player|uuid>", NamedTextColor.AQUA)));
     }
 

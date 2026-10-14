@@ -155,9 +155,9 @@ public final class PermissionDescriptorHarness {
         check(invsee.contains("Reserved") || invsee.split("MODIFY_PERMISSION", -1).length == 2,
                 "invsee modify defined but not an execution capability");
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 27, "27 modules");
-        check(core.contains("List.of(configService, lobbyModule, chatModule, privateMessageModule,")
-                && core.contains("presentationModule, dailyQuestModule)"), "same six reload participants");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 28, "28 modules including Localization");
+        check(core.contains("List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,")
+                && core.contains("presentationModule, dailyQuestModule)"), "same seven reload participants");
         String utility = Files.readString(Path.of("src/main/java/dev/vapee/core/utility/UtilityModule.java"));
         String economy = Files.readString(Path.of("src/main/java/dev/vapee/core/economy/EconomyModule.java"));
         check(utility.contains("rankModule.getStaffHierarchyService()") && economy.contains("rankModule.getStaffHierarchyService()"),

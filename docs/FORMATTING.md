@@ -17,6 +17,35 @@ Sie dient als zentrale Referenz für:
 - Online-Reward-Nachrichten
 - zukünftige neue Ränge
 
+## Sprache und lokalisierte Texte
+
+Die Minecraft-Clientsprache entscheidet über eigene Plugin-Texte: `de` → Deutsch, sonst Englisch; Console → Englisch. Die UTF-8-Dateien `plugins/VapeeCore/lang/en.yml` und `de.yml` enthalten optionale MiniMessage-Overrides. Bestehende Dateien werden nicht überschrieben oder migriert. `/core reload` prüft beide Dateien gemeinsam; fehlerhaftes YAML, doppelte Keys oder inkompatible dynamische Placeholder verhindern die Veröffentlichung des Kandidaten. Fallback Deutsch: Live-DE → gebündeltes DE → Live-EN → gebündeltes EN; Englisch: Live-EN → gebündeltes EN.
+
+Kataloge dürfen flache semantische Keys (`common.close`) oder gleichwertige verschachtelte Sections verwenden. EN/DE müssen dieselben dynamischen Placeholder besitzen; Farbtags gehören nicht zu dieser Menge. Namen, Staff-Gründe und PM-/Chat-Body werden als literal Components eingesetzt und können keine MiniMessage-Tags injizieren.
+
+Bestehende operator-authored Strings und Lore-Listen gelten unverändert für alle Spieler. Für Lobby-Item-Namen/Lore und PM-/Join-/Quit-Formate sind Sprachmaps mit `en` als Fallback möglich:
+
+```yaml
+items:
+  friends:
+    enabled: true
+    slot: 6 # Beispiel; Live lobby.yml bestimmt den Slot
+    material: PLAYER_HEAD
+    head-owner: self
+    name:
+      en: "<aqua>Friends"
+      de: "<aqua>Freunde"
+    lore:
+      en: ["<gray>Manage your friends", "", "<yellow>Click to open"]
+      de: ["<gray>Verwalte deine Freunde", "", "<yellow>Klicke zum Öffnen"]
+```
+
+Bei Quest-Namen/Beschreibungen gilt dieselbe `en/de`-Map, aber deren Werte sind **Plain Text**, keine MiniMessage-Vorlagen. Technische Quest-/Feature-IDs werden nicht übersetzt. Lokalisierte Join-/Quit-Formate enthalten weiterhin den sicheren `<name>`-Placeholder und werden pro Empfänger ausgegeben. PM-Formate enthalten die bisherigen `<sender>`, `<recipient>`, `<message>`-Placeholder. Die neuen Default-Aliase `<outgoing>`, `<incoming>` liefern den ganzen katalogbasierten PM-Wrapper. `<reward>` liefert den katalogbasierten Playtime-Reward-Hinweis; bisherige Reward-Templates bleiben universal gültig.
+
+In Lobby-/Presentation-/PM-MiniMessage-Vorlagen kann `<i18n:common.close>` ausdrücklich einen parameterlosen Katalogtext referenzieren. Diese Referenz definiert ausschließlich Text, nie einen Command oder eine Java-Aktion. Dynamische Katalogvorlagen benötigen die vom jeweiligen Feature gelieferten sicheren Argumente; füge sie nicht als parameterlose Referenz ein. Für neue eigene Sidebar-/Header-/Footer-Texte sind etwa `<i18n:presentation.sidebar.coins>`, `<i18n:presentation.sidebar.rank>` und `<i18n:presentation.tablist.tagline>` vorgesehen.
+
+Alle sieben normalen Menüs übersetzen Titel, Icons und Lore für ihren Besitzer. Sprachwechsel aktualisieren aktive Items; native Inventartitel werden beim nächsten Open neu erstellt. Eigene Sidebar/Tablist-Header/Footer sind persönlich. Native Nametag-/Tablist-Namen, Chat-Wrappers und global sichtbare Blackjack-/Preview-Anzeigen bleiben gemeinsame Texte; eigene Katalogtexte in den gemeinsamen Weltanzeigen sind Englisch. Servermarke, Clan-/Warp-Namen, LuckPerms-Prefix/Suffix und Benutzertexte bleiben unverändert. Frühzeitige Ban-Login-Ablehnung verwendet Englisch.
+
 ---
 
 # Inhaltsverzeichnis
@@ -139,6 +168,15 @@ Beispiel:
 messages:
   prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
 ```
+
+Auch `server.name` unterstützt MiniMessage-Farben und Formatierungen:
+
+```yaml
+server:
+  name: "<red>Vapee Community</red>"
+```
+
+Alternativ sind Hex-Farben (`<#ff8800>Vapee Community`) und Gradients (`<gradient:red:yellow>Vapee Community</gradient>`) möglich. Explizite Farben im Namen bleiben auch innerhalb eines Aqua-Templates in `presentation.yml` erhalten. Ohne eigene Farbe übernimmt der Name weiterhin die Template-Farbe. `/rank` und `/ranks` zeigen den formatierten Namen ebenfalls. Nach dem Ändern `/core reload` ausführen; für die neue Unterstützung zuerst die aktualisierte Plugin-JAR installieren und den Server neu starten.
 
 Auch `online-rewards.message.format` ist ein MiniMessage-Template. Es verwendet sichere numerische Placeholder; Details stehen im Abschnitt [Online-Reward-Nachricht](#online-reward-nachricht).
 
@@ -1233,10 +1271,11 @@ online-rewards:
 | `<minutes>` | tatsächlich vergütete Minuten |
 | `<intervals>` | Anzahl gleichzeitig vergüteter Intervalle |
 | `<balance>` | neue Coin-Balance nach dem Reward |
+| `<reward>` | Vollständiger EN-/DE-Kataloghinweis mit sicheren Coin-/Minutenwerten |
 
 Bei drei gleichzeitig fälligen 60-Minuten-Intervallen mit je 250 Coins sind die Werte beispielsweise `750`, `180`, `3` und die danach aktuelle Balance. Die Werte werden als sichere unparsed Placeholder eingesetzt und nicht erneut als MiniMessage interpretiert. Ein ungültiges Template verwendet den internen Default und verändert die Live-Datei nicht.
 
-`<playtime>` gehört weiterhin ausschließlich zu `presentation.yml` und zeigt die gesamte Minecraft-Spielzeit. Es ist kein Placeholder für `online-rewards.message.format`; umgekehrt stehen die vier Reward-Placeholder nicht in Scoreboard oder Tablist zur Verfügung.
+`<playtime>` gehört weiterhin ausschließlich zu `presentation.yml` und zeigt die gesamte Minecraft-Spielzeit. Es ist kein Placeholder für `online-rewards.message.format`; umgekehrt stehen diese Reward-Placeholder nicht in Scoreboard oder Tablist zur Verfügung.
 
 ---
 
@@ -1547,6 +1586,8 @@ Wer Prefix und Suffix anzeigen möchte, kann sie um `<rank_name>` ergänzen. Der
 ---
 
 # 25. Reload
+
+`/core reload` umfasst die sechs Operator-Configs und beide Sprachdateien (`lang/en.yml`, `lang/de.yml`) über sieben Teilnehmer. Der gemeinsame Prepare-/Apply-/Rollback-Vertrag bewahrt bei Fehlern den vorherigen aktiven Stand; vorhandene Dateien werden dabei nicht geschrieben.
 
 Nach Änderungen an VapeeCore Config-Dateien:
 

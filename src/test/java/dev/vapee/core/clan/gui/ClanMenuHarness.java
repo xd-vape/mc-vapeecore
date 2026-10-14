@@ -109,7 +109,7 @@ public final class ClanMenuHarness {
         pages.clans.cancelInvite(pagingOwner.id, stale.id);
         pages.click(pagingOwner, staleMenu, MenuTestLayouts.CLAN.menu().contentSlot(0), ClickType.RIGHT);
         check(pages.clans.getOutgoingInvites(pagingClan).isEmpty()
-                && pagingOwner.open != staleMenu, "stale invite gives controlled refresh");
+                && pagingOwner.open == staleMenu, "stale invite gives controlled in-place refresh");
         System.out.println("ClanMenuHarness passed " + checks + " checks.");
     }
     private static String name(Inventory inv, int slot) {

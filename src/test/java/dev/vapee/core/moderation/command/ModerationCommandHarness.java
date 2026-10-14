@@ -15,10 +15,23 @@ import java.util.*;
 public final class ModerationCommandHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
+        localizedRecipients();
         guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
         hierarchyMatrix(); hierarchyFreshness(); hierarchyAsync(); hierarchyCompletion();
         safeCompletionArguments();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
+    }
+
+    private static void localizedRecipients() throws Exception {
+        Fixture f = new Fixture();
+        f.target.locale = Locale.GERMANY;
+        new KickCommand(f.context).onCommand(f.staff.sender, null, "kick", new String[]{"Alex", ATTACK});
+        check(f.target.kicks.size() == 1 && plain(f.target.kicks.getFirst()).contains("Du wurdest vom Server getrennt."), "online disconnect uses target locale rather than staff locale");
+        check(f.staff.text().contains("Kicked Alex") && f.target.kicks.stream().allMatch(ModerationTestSupport::noEvents), "English staff feedback and literal German disconnect");
+        Fixture warning = new Fixture(); warning.target.locale = Locale.GERMANY;
+        new WarnCommand(warning.context).onCommand(warning.staff.sender, null, "warn", new String[]{"Alex", ATTACK});
+        check(warning.target.text().contains("Du wurdest verwarnt.") && warning.staff.text().contains("Warned Alex"), "two-recipient warning resolves each locale independently");
+        check(warning.service.getHistory(TARGET).getFirst().reason().equals(ATTACK), "localized warning never changes persisted staff reason");
     }
 
     private static TabExecutor command(Fixture f, String name) {
@@ -135,7 +148,7 @@ public final class ModerationCommandHarness {
             check(record.expiresAt().equals(ModerationDurationParser.parse(duration).expiresAt(NOW)), "ban expiry " + duration);
             check(f.target.kicks.size() == 1 && f.repository.saves == 1 && f.info() == 1, "ban online exactly once");
             check(plain(f.target.kicks.getFirst()).contains(ATTACK) && noEvents(f.target.kicks.getFirst()), "ban literal screen");
-            check(f.target.kicks.getFirst().equals(ModerationComponents.banScreen(record)), "same screen as login");
+            check(f.target.kicks.getFirst().equals(dev.vapee.core.i18n.I18nTestSupport.render(f.target.sender, ModerationComponents.banScreen(record))), "same screen as login");
             check(f.console.text().contains(record.expiresAt().isEmpty() ? "permanently" : "for " + duration), "human duration feedback");
             run(c, f.console, "already banned", "Alex", duration, "Duplicate");
             check(f.repository.saves == 1 && f.info() == 1 && f.target.kicks.size() == 1 && f.severe() == 0, "already ban no save/audit/kick");

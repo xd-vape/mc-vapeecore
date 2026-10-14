@@ -1,5 +1,7 @@
 package dev.vapee.core.social.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.social.SocialService;
 import net.kyori.adventure.text.Component;
@@ -35,17 +37,17 @@ public final class IgnoreListCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!(sender instanceof Player player)) {
-            messageService.send(sender, "<red>Only players can view ignored players.</red>");
+            messageService.send(sender, tr("social.list-player-only"));
             return true;
         }
         if (!sender.hasPermission(IgnoreCommand.PERMISSION)) {
-            messageService.send(sender, "<red>You do not have permission to manage ignored players.</red>");
+            messageService.send(sender, tr("social.denied"));
             return true;
         }
         if (args.length != 0) {
-            messageService.send(player, Component.text("Invalid usage.", NamedTextColor.RED)
+            messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                    .append(tr("common.use").color(NamedTextColor.YELLOW))
                     .append(Component.text("/ignorelist", NamedTextColor.AQUA)));
             return true;
         }
@@ -66,12 +68,10 @@ public final class IgnoreListCommand implements TabExecutor {
 
         int size = knownEntries.size() + unknownEntries.size();
         if (size == 0) {
-            messageService.send(player, "<yellow>You are not ignoring any players.</yellow>");
+            messageService.send(player, tr("social.empty"));
             return true;
         }
-        Component output = Component.text("Ignored players (", NamedTextColor.GRAY)
-                .append(Component.text(size, NamedTextColor.WHITE))
-                .append(Component.text("):", NamedTextColor.GRAY));
+        Component output = tr("social.list-heading", java.util.Map.of("count", Component.text(size, NamedTextColor.WHITE))).color(NamedTextColor.GRAY);
         for (KnownEntry entry : knownEntries) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.GRAY))

@@ -81,8 +81,8 @@ public final class QuestLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-17A order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 27,
-                "VapeeCore registers exactly twenty-seven modules");
+        check(count(coreSource, "moduleManager.register(") == 28,
+                "VapeeCore registers exactly twenty-eight modules");
         check(coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("questModule = new QuestModule")
                         && coreSource.indexOf("questModule = new QuestModule")
@@ -91,7 +91,7 @@ public final class QuestLifecycleHarness {
                         < coreSource.indexOf("lobbyModule = new LobbyModule"),
                 "Quest and DailyQuest are constructed between OnlineReward and Lobby");
         check(coreSource.contains(
-                        "List.of(configService, lobbyModule, chatModule, privateMessageModule,\n"
+                        "List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,\n"
                                 + "                        presentationModule, dailyQuestModule)"
                 ),
                 "reload wiring adds DailyQuest after the existing five participants");

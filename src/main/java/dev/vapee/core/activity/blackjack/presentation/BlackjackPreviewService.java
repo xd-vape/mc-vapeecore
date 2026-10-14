@@ -1,8 +1,11 @@
 package dev.vapee.core.activity.blackjack.presentation;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.activity.blackjack.table.BlackjackDisplayAnchor;
 import dev.vapee.core.activity.blackjack.table.BlackjackTableDraft;
 import dev.vapee.core.worlddisplay.WorldDisplayKey;
+import dev.vapee.core.i18n.LocalizationService;
 import dev.vapee.core.worlddisplay.WorldDisplayService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -41,6 +44,10 @@ public final class BlackjackPreviewService implements Listener {
     private final Map<UUID, PreviewState> activePreviews = new HashMap<>();
 
     public BlackjackPreviewService(JavaPlugin plugin, WorldDisplayService displayService) {
+        this(plugin, displayService, LocalizationService.bundled(java.util.logging.Logger.getLogger("VapeeCore")));
+    }
+
+    public BlackjackPreviewService(JavaPlugin plugin, WorldDisplayService displayService, LocalizationService localization) {
         JavaPlugin validatedPlugin = Objects.requireNonNull(plugin, "plugin");
         WorldDisplayService validatedDisplays = Objects.requireNonNull(displayService, "displayService");
         this.worldLookup = validatedPlugin.getServer()::getWorld;
@@ -50,7 +57,7 @@ public final class BlackjackPreviewService implements Listener {
                 validatedDisplays.createText(
                         new WorldDisplayKey(owner, marker.id()),
                         marker.location(),
-                        Component.text(marker.text(), marker.color()).decoration(TextDecoration.BOLD, true),
+                        localization.render(java.util.Locale.ENGLISH, marker.text()).color(marker.color()).decoration(TextDecoration.BOLD, true),
                         display -> configure(display)
                 );
             }
@@ -80,7 +87,7 @@ public final class BlackjackPreviewService implements Listener {
         clear(validatedAdmin);
 
         BlackjackDisplayAnchor anchor = validatedDraft.getDisplayAnchor().orElse(null);
-        List<String> missing = missingComponents(validatedDraft);
+        List<Component> missing = missingComponents(validatedDraft);
         if (anchor == null) {
             return new PreviewResult(PreviewStatus.MISSING_SURFACE, List.of(), missing);
         }
@@ -169,37 +176,37 @@ public final class BlackjackPreviewService implements Listener {
     static List<PreviewMarker> buildMarkers(World world, BlackjackTableDraft draft) {
         BlackjackDisplayAnchor anchor = Objects.requireNonNull(draft, "draft").getDisplayAnchor().orElseThrow();
         List<PreviewMarker> markers = new ArrayList<>();
-        markers.add(marker("center", "CENTER", BlackjackDisplayGeometry.tableCenter(world, anchor),
+        markers.add(marker("center", tr("blackjack.preview.center"), BlackjackDisplayGeometry.tableCenter(world, anchor),
                 NamedTextColor.AQUA));
         if (draft.getDealer().isPresent()) {
-            markers.add(markerAt("dealer-hand", "DEALER HAND", BlackjackDisplayGeometry.dealerHandLocation(
+            markers.add(markerAt("dealer-hand", tr("blackjack.preview.dealer-hand"), BlackjackDisplayGeometry.dealerHandLocation(
                     world, draft.getDealer().orElseThrow()), NamedTextColor.GOLD));
         }
-        markers.add(marker("status", "STATUS", BlackjackDisplayGeometry.statusAnchor(world, anchor),
+        markers.add(marker("status", tr("blackjack.preview.status"), BlackjackDisplayGeometry.statusAnchor(world, anchor),
                 NamedTextColor.YELLOW));
         draft.getSeatDefinitions().forEach((number, seat) -> markers.add(marker(
                 "seat-" + number,
-                "SEAT " + number,
+                tr("blackjack.preview.seat", Map.of("seat", Component.text(number))),
                 BlackjackDisplayGeometry.seatCardAnchor(world, anchor, seat.position()),
                 NamedTextColor.GREEN
         )));
         return List.copyOf(markers);
     }
 
-    static List<String> missingComponents(BlackjackTableDraft draft) {
+    static List<Component> missingComponents(BlackjackTableDraft draft) {
         BlackjackTableDraft validated = Objects.requireNonNull(draft, "draft");
-        List<String> missing = new ArrayList<>();
-        if (validated.getDisplayAnchor().isEmpty()) missing.add("Table Surface");
-        if (validated.getDealer().isEmpty()) missing.add("Dealer");
+        List<Component> missing = new ArrayList<>();
+        if (validated.getDisplayAnchor().isEmpty()) missing.add(tr("blackjack.preview.surface"));
+        if (validated.getDealer().isEmpty()) missing.add(tr("blackjack.preview.dealer"));
         for (int seat = 1; seat <= 5; seat++) {
-            if (!validated.getSeatDefinitions().containsKey(seat)) missing.add("Seat " + seat);
+            if (!validated.getSeatDefinitions().containsKey(seat)) missing.add(tr("blackjack.preview.missing-seat", Map.of("seat", Component.text(seat))));
         }
         return List.copyOf(missing);
     }
 
     private static PreviewMarker marker(
             String id,
-            String text,
+            Component text,
             Location location,
             NamedTextColor color
     ) {
@@ -208,7 +215,7 @@ public final class BlackjackPreviewService implements Listener {
 
     private static PreviewMarker markerAt(
             String id,
-            String text,
+            Component text,
             Location location,
             NamedTextColor color
     ) {
@@ -240,8 +247,8 @@ public final class BlackjackPreviewService implements Listener {
 
     public record PreviewResult(
             PreviewStatus status,
-            List<String> markers,
-            List<String> missingComponents
+            List<Component> markers,
+            List<Component> missingComponents
     ) {
         public PreviewResult {
             status = Objects.requireNonNull(status, "status");
@@ -250,7 +257,7 @@ public final class BlackjackPreviewService implements Listener {
         }
     }
 
-    record PreviewMarker(String id, String text, Location location, NamedTextColor color) {
+    record PreviewMarker(String id, Component text, Location location, NamedTextColor color) {
         PreviewMarker {
             id = Objects.requireNonNull(id, "id");
             text = Objects.requireNonNull(text, "text");

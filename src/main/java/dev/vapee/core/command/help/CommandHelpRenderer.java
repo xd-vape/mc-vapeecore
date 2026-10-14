@@ -1,5 +1,7 @@
 package dev.vapee.core.command.help;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -41,27 +43,27 @@ public final class CommandHelpRenderer {
         Component result = Component.empty()
                 .append(Component.text("VapeeCore", NamedTextColor.GOLD, TextDecoration.BOLD))
                 .append(Component.text(" • ", NamedTextColor.DARK_GRAY))
-                .append(Component.text(validatedPage.title(), NamedTextColor.AQUA, TextDecoration.BOLD))
+                .append(validatedPage.title().color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
                 .append(NEWLINE)
                 .append(SEPARATOR);
 
         if (validatedPage.description() != null) {
             result = result.append(NEWLINE)
-                    .append(Component.text(validatedPage.description(), NamedTextColor.GRAY));
+                    .append(validatedPage.description().color(NamedTextColor.GRAY));
         }
 
         for (VisibleSection section : visibleSections) {
             result = result.append(NEWLINE)
                     .append(NEWLINE)
-                    .append(Component.text(section.title(), NamedTextColor.YELLOW, TextDecoration.BOLD));
+                    .append(section.title().color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
             for (CommandHelpEntry entry : section.entries()) {
                 result = result.append(NEWLINE)
-                        .append(syntax(entry.syntax()))
+                        .append(syntax(entry.syntax(), sender))
                         .append(NEWLINE)
-                        .append(Component.text("  " + entry.description(), NamedTextColor.GRAY));
+                        .append(Component.text("  ").append(entry.description().color(NamedTextColor.GRAY)));
                 if (entry.hint() != null) {
                     result = result.append(NEWLINE)
-                            .append(Component.text("  " + entry.hint(), NamedTextColor.YELLOW));
+                            .append(Component.text("  ").append(entry.hint().color(NamedTextColor.YELLOW)));
                 }
             }
         }
@@ -69,19 +71,16 @@ public final class CommandHelpRenderer {
         if (validatedPage.footer() != null) {
             result = result.append(NEWLINE)
                     .append(NEWLINE)
-                    .append(Component.text("Tip: ", NamedTextColor.YELLOW, TextDecoration.BOLD))
-                    .append(Component.text(validatedPage.footer(), NamedTextColor.GRAY));
+                    .append(tr("common.help-tip").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD))
+                    .append(validatedPage.footer().color(NamedTextColor.GRAY));
         }
-        return result;
+        return messageService.localize(sender, result);
     }
 
-    private Component syntax(String syntax) {
+    private Component syntax(String syntax, CommandSender sender) {
         return Component.text(syntax, NamedTextColor.AQUA)
                 .clickEvent(ClickEvent.suggestCommand(syntax))
-                .hoverEvent(HoverEvent.showText(Component.text(
-                        "Click to insert this command.",
-                        NamedTextColor.GRAY
-                )));
+                .hoverEvent(HoverEvent.showText(tr("common.command-insert").color(NamedTextColor.GRAY)));
     }
 
     private List<VisibleSection> visibleSections(CommandSender sender, CommandHelpPage page) {
@@ -97,7 +96,7 @@ public final class CommandHelpRenderer {
         return List.copyOf(sections);
     }
 
-    private record VisibleSection(String title, List<CommandHelpEntry> entries) {
+    private record VisibleSection(Component title, List<CommandHelpEntry> entries) {
 
         private VisibleSection {
             title = Objects.requireNonNull(title, "title");

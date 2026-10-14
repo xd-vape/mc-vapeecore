@@ -45,6 +45,7 @@ public final class MenuTestLayouts {
             .button(VisiblePlayersMenu.Action.ADD, 46)
             .button(VisiblePlayersMenu.Action.BACK, 48)
             .button(VisiblePlayersMenu.Action.CLOSE, 49)
+            .button(VisiblePlayersMenu.Action.PAGE_INFO, 51)
             .button(VisiblePlayersMenu.Action.REFRESH, 52)
             .button(VisiblePlayersMenu.Action.NEXT, 53)
             .build();
@@ -62,6 +63,7 @@ public final class MenuTestLayouts {
             .button(FriendMenu.Action.INCOMING, 48)
             .button(FriendMenu.Action.CLOSE, 49)
             .button(FriendMenu.Action.OUTGOING, 50)
+            .button(FriendMenu.Action.PAGE_INFO, 51)
             .button(FriendMenu.Action.REFRESH, 52)
             .button(FriendMenu.Action.NEXT, 53)
             .build();
@@ -80,6 +82,7 @@ public final class MenuTestLayouts {
             .button(ClanMenu.Action.INVITES, 48)
             .button(ClanMenu.Action.CLOSE, 49)
             .button(ClanMenu.Action.ACTION, 50)
+            .button(ClanMenu.Action.PAGE_INFO, 51)
             .button(ClanMenu.Action.REFRESH, 52)
             .button(ClanMenu.Action.NEXT, 53)
             .build(), 20, 22, 24);

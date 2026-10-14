@@ -675,7 +675,7 @@ public final class BlackjackHarness {
                     return Optional.ofNullable(sessions.get(id));
                 }
             }, seats, onlinePlayers::get,
-                    (player, message) -> messages.add(player.getUniqueId() + ":" + message),
+                    (player, message) -> messages.add(player.getUniqueId() + ":" + dev.vapee.core.i18n.I18nTestSupport.text(player, message)),
                     scheduler::schedule,
                     () -> shoes.isEmpty() ? new BlackjackShoe(6, new java.util.Random(123L)) : shoes.removeFirst(),
                     buildPlayers::contains,

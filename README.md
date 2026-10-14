@@ -14,6 +14,16 @@ VapeeCore ist ein modular aufgebautes Minecraft-Plugin für Paper. Es verbindet 
 
 `/core help` zeigt die verfügbaren Befehle. Feature-Einstiege sind beispielsweise `/spawn`, `/settings`, `/friend`, `/clan`, `/profile`, `/quests`, `/msg`, `/rank` und `/ranks`. Vollständige Berechtigungen und öffentliche Command-Verträge stehen in [PERMISSIONS.md](docs/PERMISSIONS.md).
 
+## Sprache: Deutsch und Englisch
+
+VapeeCore liest die aktuelle Minecraft-Clientsprache: Sprachcode `de` (einschließlich Deutschland, Österreich und Schweiz) zeigt Deutsch, alle anderen Sprachen Englisch. Console-Ausgaben bleiben Englisch. Es gibt keinen Sprach-Command und keinen gespeicherten Sprachwert im Spielerprofil.
+
+`plugins/VapeeCore/lang/en.yml` und `lang/de.yml` sind UTF-8-MiniMessage-Kataloge. Beim ersten Start werden nur fehlende Dateien kopiert; vorhandene Dateien werden nie überschrieben oder durch ConfigEvolution ergänzt. Eigene Einträge sind optionale Overrides. Deutsch verwendet Live-DE → gebündeltes DE → Live-EN → gebündeltes EN; Englisch Live-EN → gebündeltes EN. `/core reload` validiert beide Kataloge und übernimmt sie gemeinsam. Bei Fehlern bleibt der vorherige Stand aktiv.
+
+Eigene Config-Texte bleiben erhalten: ein bisheriger String oder eine Lore-Liste gilt weiterhin für alle Spieler. Lobby-Namen/Lore, Join-/Quit-Formate, PM-Formate und Quest-Namen/Beschreibungen können zusätzlich `en`/`de`-Maps mit englischem Fallback verwenden. Darstellung und sichere Platzhalter sind in [FORMATTING.md](docs/FORMATTING.md) beschrieben.
+
+Ein Client-Sprachwechsel aktualisiert zukünftige Nachrichten und die Items eigener aktiver Menüs. Native Inventartitel ändern sich beim nächsten Öffnen. Spielertexte, Clan-/Warp-Namen, Staff-Gründe, Servermarke und LuckPerms-Metadaten werden unverändert angezeigt. Gemeinsam sichtbare Weltanzeigen bleiben Englisch; die bestehende gemeinsame Chat-/Nametag-Darstellung wird nicht in eine neue Architektur umgebaut.
+
 ## Voraussetzungen
 
 - Paper **1.21.11**
@@ -45,10 +55,11 @@ Bei Updates den vorhandenen `plugins/VapeeCore/`-Ordner behalten. Beim Startup e
 | `private-messages.yml` | Aktivierung und Nachrichtentemplates für private Nachrichten |
 | `presentation.yml` | Sidebar, Tablist, Nametags, Rank-/Clan-Darstellung und Updateintervall |
 | `daily-quests.yml` | Aktivierung, Auswahl, Reset, Zeitzone und Quest-Katalog |
+| `lang/en.yml`, `lang/de.yml` | Optionale englische/deutsche Übersetzungs-Overrides; keine ConfigEvolution |
 
 `lobby.yml` besitzt `config-version: 2`, die anderen fünf Dateien `config-version: 1` und werden beim Startup auf der festen Operator-Allowlist weiterentwickelt. Die Version nicht manuell erhöhen, um Defaults anzufordern: neue Keys werden mit einem entsprechenden Schema-Update ergänzt. Typkonflikte bewahren den Betreiberwert und erzeugen eine Warnung; der jeweilige Loader verwendet seine sicheren Fallbacks.
 
-Nach normalen Änderungen liest **`/core reload`** alle sechs Dateien in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Neue Daily-Assignments entstehen erst beim nächsten regulären Sync.
+Nach normalen Änderungen liest **`/core reload`** die sechs Operator-Configs und beide Sprachdateien über sieben Teilnehmer in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Neue Daily-Assignments entstehen erst beim nächsten regulären Sync.
 
 `warps.yml`, `blackjack.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind veränderliche **Persistence**, keine Operator-Config-Evolution. Sie besitzen ihre eigenen Datei-/Schema-Verträge. Verwende für Warps und Blackjack die Admin-Commands.
 

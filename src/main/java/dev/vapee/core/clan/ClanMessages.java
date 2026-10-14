@@ -1,5 +1,7 @@
 package dev.vapee.core.clan;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.message.MessageService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -27,45 +29,44 @@ public final class ClanMessages {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(result, "result");
         if (result == ClanResult.SUCCESS) {
-            String prefix = switch (action) {
-                case "create" -> "Created clan ";
-                case "invite" -> "Invited ";
-                case "accept" -> "Joined clan ";
-                case "deny" -> "Declined invite from ";
-                case "cancel" -> "Canceled invite for ";
-                case "leave" -> "Left clan ";
-                case "kick" -> "Removed ";
-                case "transfer" -> "Transferred ownership to ";
-                case "rename" -> "Renamed clan to ";
-                case "tag" -> "Changed clan tag to ";
-                case "disband" -> "Disbanded clan ";
+            String key = switch (action) {
+                case "create" -> "clan.success.create";
+                case "invite" -> "clan.success.invite";
+                case "accept" -> "clan.success.accept";
+                case "deny" -> "clan.success.deny";
+                case "cancel" -> "clan.success.cancel";
+                case "leave" -> "clan.success.leave";
+                case "kick" -> "clan.success.kick";
+                case "transfer" -> "clan.success.transfer";
+                case "rename" -> "clan.success.rename";
+                case "tag" -> "clan.success.tag";
+                case "disband" -> "clan.success.disband";
                 default -> throw new IllegalArgumentException("Unknown clan action: " + action);
             };
-            messages.send(actor, Component.text(prefix, NamedTextColor.GREEN)
-                    .append(Component.text(target, NamedTextColor.WHITE)));
+            messages.send(actor, tr(key, java.util.Map.of("target", Component.text(target, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
             return;
         }
-        String error = switch (result) {
-            case ALREADY_IN_CLAN -> "You are already in a clan.";
-            case CLAN_NOT_FOUND -> "That clan no longer exists.";
-            case NOT_IN_CLAN -> "You are not in a clan.";
-            case NOT_OWNER -> "Only the clan owner can do that.";
-            case TARGET_NOT_MEMBER -> "That player is not a member of your clan.";
-            case TARGET_ALREADY_MEMBER -> "That player is already in a clan.";
-            case NAME_INVALID -> "Invalid clan name. Check the configured length and characters.";
-            case NAME_ALREADY_USED -> "That clan name is already used.";
-            case TAG_INVALID -> "Invalid clan tag. Check the configured length and characters.";
-            case TAG_ALREADY_USED -> "That clan tag is already used.";
-            case MEMBER_LIMIT_REACHED -> "The clan member limit has been reached.";
-            case INVITE_ALREADY_EXISTS -> "An invite for this player already exists.";
-            case INVITE_NOT_FOUND -> "That clan invite no longer exists.";
-            case OUTGOING_INVITE_LIMIT_REACHED -> "Your clan has too many outgoing invites.";
-            case INCOMING_INVITE_LIMIT_REACHED -> "That player has too many incoming invites.";
-            case OWNER_CANNOT_LEAVE -> "Transfer ownership or disband the clan first.";
-            case CANNOT_TARGET_SELF -> "You cannot target yourself.";
+        String errorKey = switch (result) {
+            case ALREADY_IN_CLAN -> "clan.error.already-in-clan";
+            case CLAN_NOT_FOUND -> "clan.error.not-found";
+            case NOT_IN_CLAN -> "clan.error.not-in-clan";
+            case NOT_OWNER -> "clan.error.not-owner";
+            case TARGET_NOT_MEMBER -> "clan.error.target-not-member";
+            case TARGET_ALREADY_MEMBER -> "clan.error.target-in-clan";
+            case NAME_INVALID -> "clan.error.name-invalid";
+            case NAME_ALREADY_USED -> "clan.error.name-used";
+            case TAG_INVALID -> "clan.error.tag-invalid";
+            case TAG_ALREADY_USED -> "clan.error.tag-used";
+            case MEMBER_LIMIT_REACHED -> "clan.error.member-limit";
+            case INVITE_ALREADY_EXISTS -> "clan.error.invite-exists";
+            case INVITE_NOT_FOUND -> "clan.error.invite-not-found";
+            case OUTGOING_INVITE_LIMIT_REACHED -> "clan.error.outgoing-limit";
+            case INCOMING_INVITE_LIMIT_REACHED -> "clan.error.incoming-limit";
+            case OWNER_CANNOT_LEAVE -> "clan.error.owner-leave";
+            case CANNOT_TARGET_SELF -> "clan.error.self";
             case SUCCESS -> throw new IllegalStateException("Success handled above");
         };
-        messages.send(actor, Component.text(error, NamedTextColor.RED));
+        messages.send(actor, tr(errorKey).color(NamedTextColor.RED));
     }
 
     public void notifyOnline(UUID recipient, Component notice) {
@@ -74,38 +75,29 @@ public final class ClanMessages {
     }
 
     public void notifyInvite(UUID recipient, String owner, String clanName, String tag) {
-        notifyOnline(recipient, Component.text(owner, NamedTextColor.WHITE)
-                .append(Component.text(" invited you to clan ", NamedTextColor.GREEN))
-                .append(Component.text(clanName, NamedTextColor.GOLD))
-                .append(Component.text(" [", NamedTextColor.GRAY))
-                .append(Component.text(tag, NamedTextColor.AQUA))
-                .append(Component.text("].", NamedTextColor.GRAY))
+        notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", Component.text(owner, NamedTextColor.WHITE),
+                "clan", Component.text(clanName, NamedTextColor.GOLD), "tag", Component.text(tag, NamedTextColor.AQUA))).color(NamedTextColor.GREEN)
                 .append(Component.newline())
-                .append(inviteButton("Accept", "/clan accept " + tag, NamedTextColor.GREEN,
-                        "Click to accept this clan invite."))
+                .append(inviteButton(tr("common.accept"), "/clan accept " + tag, NamedTextColor.GREEN, tr("clan.invite.accept-hover")))
                 .append(Component.space())
-                .append(inviteButton("Deny", "/clan deny " + tag, NamedTextColor.RED,
-                        "Click to deny this clan invite.")));
+                .append(inviteButton(tr("common.deny"), "/clan deny " + tag, NamedTextColor.RED, tr("clan.invite.deny-hover"))));
     }
 
     public void notifyAccept(UUID owner, String playerName) {
-        notifyOnline(owner, Component.text(playerName, NamedTextColor.WHITE)
-                .append(Component.text(" joined your clan.", NamedTextColor.GREEN)));
+        notifyOnline(owner, tr("clan.invite.accepted", java.util.Map.of("player", Component.text(playerName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
     }
 
     public void notifyKick(UUID target, String tag) {
-        notifyOnline(target, Component.text("You were removed from clan ", NamedTextColor.YELLOW)
-                .append(Component.text(tag + ".", NamedTextColor.WHITE)));
+        notifyOnline(target, tr("clan.member.removed", java.util.Map.of("tag", Component.text(tag, NamedTextColor.WHITE))).color(NamedTextColor.YELLOW));
     }
 
     public void notifyTransfer(UUID target, String tag) {
-        notifyOnline(target, Component.text("You are now the owner of clan ", NamedTextColor.GREEN)
-                .append(Component.text(tag + ".", NamedTextColor.WHITE)));
+        notifyOnline(target, tr("clan.owner.transferred", java.util.Map.of("tag", Component.text(tag, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
     }
 
-    private Component inviteButton(String label, String command, NamedTextColor color, String hover) {
-        return Component.text("[" + label + "]", color)
+    private Component inviteButton(Component label, String command, NamedTextColor color, Component hover) {
+        return Component.text("[").append(label).append(Component.text("]")).color(color)
                 .clickEvent(ClickEvent.suggestCommand(command))
-                .hoverEvent(HoverEvent.showText(Component.text(hover, NamedTextColor.GRAY)));
+                .hoverEvent(HoverEvent.showText(hover.color(NamedTextColor.GRAY)));
     }
 }

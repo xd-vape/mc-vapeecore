@@ -1,5 +1,7 @@
 package dev.vapee.core.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.rank.staff.StaffHierarchyService;
 import dev.vapee.core.rank.staff.StaffTargetDecision;
 import net.kyori.adventure.text.Component;
@@ -17,9 +19,9 @@ import java.util.logging.Logger;
 
 /** Bukkit application boundary for synchronous, loaded-only online staff target checks. */
 public final class OnlineStaffTargetGuard {
-    public static final String DENIED_MESSAGE = "You cannot target a staff member at your level or above.";
+    public static final String DENIED_MESSAGE = "common.staff-target-denied";
     public static final String UNAVAILABLE_MESSAGE =
-            "The target's staff hierarchy could not be verified. No action was applied.";
+            "common.staff-target-unavailable";
 
     private final StaffHierarchyService hierarchy;
     private final Logger logger;
@@ -48,8 +50,8 @@ public final class OnlineStaffTargetGuard {
                              BiConsumer<CommandSender, Component> feedback) {
         StaffTargetDecision decision = check(actor, target, action);
         if (decision == StaffTargetDecision.ALLOW) return true;
-        feedback.accept(actor, Component.text(decision == StaffTargetDecision.UNAVAILABLE
-                ? UNAVAILABLE_MESSAGE : DENIED_MESSAGE, NamedTextColor.RED));
+        feedback.accept(actor, tr(decision == StaffTargetDecision.UNAVAILABLE
+                ? UNAVAILABLE_MESSAGE : DENIED_MESSAGE).color(NamedTextColor.RED));
         return false;
     }
 

@@ -38,10 +38,10 @@ public final class BlackjackPreviewHarness {
         BlackjackPreviewService.PreviewResult draftResult = service.show(admin, draft);
         check(draftResult.status() == BlackjackPreviewService.PreviewStatus.SHOWN,
                 "disabled draft table can be previewed without a session");
-        check(draftResult.markers().equals(List.of("CENTER", "STATUS", "SEAT 1")),
+        check(draftResult.markers().stream().map(dev.vapee.core.i18n.I18nTestSupport::english).toList().equals(List.of("CENTER", "STATUS", "SEAT 1")),
                 "partial setup renders only available anchors plus center and status");
-        check(draftResult.missingComponents().contains("Dealer")
-                        && draftResult.missingComponents().contains("Seat 5"),
+        check(draftResult.missingComponents().stream().map(dev.vapee.core.i18n.I18nTestSupport::english).toList().contains("Dealer")
+                        && draftResult.missingComponents().stream().map(dev.vapee.core.i18n.I18nTestSupport::english).toList().contains("Seat 5"),
                 "partial setup reports missing components without rejecting the preview");
         String owner = BlackjackPreviewService.owner(admin, "table-1");
         check(owner.equals("blackjack-preview:" + admin + ":table-1")
@@ -57,7 +57,7 @@ public final class BlackjackPreviewHarness {
                 .filter(marker -> marker.id().equals("dealer-hand"))
                 .findFirst().orElseThrow();
         org.bukkit.Location productionDealerLocation = BlackjackDisplayGeometry.dealerHandLocation(world, dealer);
-        check(dealerMarker.text().equals("DEALER HAND")
+        check(dev.vapee.core.i18n.I18nTestSupport.english(dealerMarker.text()).equals("DEALER HAND")
                         && distanceSquared(dealerMarker.location(), productionDealerLocation) < 0.0000001D,
                 "preview dealer marker uses the exact floating production-hand location");
 
@@ -72,7 +72,7 @@ public final class BlackjackPreviewHarness {
         BlackjackTableDraft missingSurface = new BlackjackTableDraft("missing-surface");
         BlackjackPreviewService.PreviewResult missingResult = service.show(admin, missingSurface);
         check(missingResult.status() == BlackjackPreviewService.PreviewStatus.MISSING_SURFACE
-                        && missingResult.missingComponents().contains("Table Surface"),
+                        && missingResult.missingComponents().stream().map(dev.vapee.core.i18n.I18nTestSupport::english).toList().contains("Table Surface"),
                 "missing table surface returns a graceful result with a setup hint");
 
         gateway.clearCreated();

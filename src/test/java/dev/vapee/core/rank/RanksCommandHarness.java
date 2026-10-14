@@ -31,9 +31,10 @@ public final class RanksCommandHarness {
 
     public static void main(String[] args) {
         Fixture fixture = new Fixture();
+        var serverName = new java.util.concurrent.atomic.AtomicReference<>("Vapee Community");
         RanksCommand command = new RanksCommand(
                 fixture.rankService,
-                () -> "Vapee Community",
+                serverName::get,
                 fixture.messageService
         );
         Player player = fixture.player("Player", "vip");
@@ -57,6 +58,14 @@ public final class RanksCommandHarness {
                 "/ranks renders every track entry in its individual rank color");
 
         CommandSender console = fixture.console();
+        for (String formattedName : List.of("<red>Color Server</red>", "<#ff8800>Color Server")) {
+            serverName.set(formattedName);
+            command.onCommand(player, null, "ranks", new String[0]);
+            check(fixture.last().contains("Color Server • Ranks") && !fixture.last().contains("<red>") && !fixture.last().contains("<#"), "server formatting is not exposed as literal tags");
+            check(hasColoredText(fixture.lastComponent(), "Color Server", formattedName.startsWith("<red>") ? NamedTextColor.RED : TextColor.color(0xff8800)), "command preserves configured server color");
+        }
+        serverName.set("Vapee Community");
+
         command.onCommand(console, null, "ranks", new String[0]);
         check(!fixture.last().contains("• You") && fixture.last().contains("2. VIP"),
                 "console receives the rank list without a player marker");

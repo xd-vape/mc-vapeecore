@@ -1,5 +1,7 @@
 package dev.vapee.core.utility.command;
 
+import static dev.vapee.core.i18n.Translations.tr;
+
 import dev.vapee.core.command.OnlineStaffTargetGuard;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.message.MessageService;
@@ -110,7 +112,7 @@ public final class TeleportCommand implements TabExecutor {
             return true;
         }
         if (!request.other() && !(sender instanceof Player)) {
-            error(sender, "A source player is required when using this form from console.");
+            error(sender, tr("utility.teleport.console-source"));
             return true;
         }
         String permission = request.other()
@@ -118,9 +120,9 @@ public final class TeleportCommand implements TabExecutor {
                 : request.explicitWorld() ? WORLD_PERMISSION : PERMISSION;
         if (!sender.hasPermission(permission)) {
             error(sender, request.other()
-                    ? request.playerTarget() ? "You do not have permission to teleport one player to another."
-                    : "You do not have permission to teleport another player."
-                    : "You do not have permission to teleport.");
+                    ? request.playerTarget() ? tr("utility.teleport.denied-pair")
+                    : tr("utility.teleport.denied-other")
+                    : tr("utility.teleport.denied-self"));
             return true;
         }
         Player source = request.other() ? playerLookup.apply(request.source()) : (Player) sender;
@@ -139,8 +141,8 @@ public final class TeleportCommand implements TabExecutor {
                 return true;
             }
             if (source.getUniqueId().equals(target.getUniqueId())) {
-                error(sender, request.other() ? "Source and target are the same player."
-                        : "You are already at your own location.");
+                error(sender, request.other() ? tr("utility.teleport.same-pair")
+                        : tr("utility.teleport.same-self"));
                 return true;
             }
         } else {
@@ -148,50 +150,46 @@ public final class TeleportCommand implements TabExecutor {
             World world = request.explicitWorld() ? resolveWorld(request.world()) : sourceLocation.getWorld();
             if (world == null) {
                 if (request.explicitWorld()) {
-                    messageSender.accept(sender, Component.text("Unknown world '", NamedTextColor.RED)
-                            .append(Component.text(request.world(), NamedTextColor.WHITE))
-                            .append(Component.text("'.", NamedTextColor.RED)));
-                } else error(sender, "The source player has no world.");
+                    messageSender.accept(sender, tr("utility.teleport.world-unknown", java.util.Map.of("world", Component.text(request.world(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
+                } else error(sender, tr("utility.teleport.no-world"));
                 return true;
             }
             try {
                 destination = TeleportParser.destination(request, sourceLocation, world);
             } catch (IllegalArgumentException exception) {
-                error(sender, exception.getMessage());
+                error(sender, teleportError(exception));
                 return true;
             }
         }
         if (!sender.hasPermission(BYPASS_PERMISSION)) {
             if (activityCheck.test(source.getUniqueId())) {
                 error(sender, source.equals(sender)
-                        ? "You cannot use this command while participating in an activity."
-                        : "The source player is participating in an activity.");
+                        ? tr("common.activity-self")
+                        : tr("utility.teleport.activity-source"));
                 return true;
             }
             if (target != null && activityCheck.test(target.getUniqueId())) {
-                error(sender, "The destination player is participating in an activity.");
+                error(sender, tr("utility.teleport.activity-destination"));
                 return true;
             }
         }
         boolean success = target != null ? utilityService.teleport(source, target)
                 : utilityService.teleport(source, destination);
         if (!success) {
-            error(sender, "Teleport failed or was cancelled.");
+            error(sender, tr("utility.teleport.failed"));
             return true;
         }
-        Component message = request.other() ? Component.text("Teleported ", NamedTextColor.GREEN)
-                .append(Component.text(source.getName(), NamedTextColor.WHITE))
-                .append(Component.text(" to ", NamedTextColor.GREEN))
-                : Component.text("Teleported to ", NamedTextColor.GREEN);
-        if (target != null) {
-            message = message.append(Component.text(target.getName(), NamedTextColor.WHITE));
-        } else {
-            message = message.append(Component.text(String.format(Locale.ROOT, "%.2f, %.2f, %.2f",
-                    destination.getX(), destination.getY(), destination.getZ()), NamedTextColor.WHITE));
-            if (request.explicitWorld()) message = message.append(Component.text(" in ", NamedTextColor.GREEN))
-                    .append(Component.text(destination.getWorld().getName(), NamedTextColor.WHITE));
+        Component destinationText;
+        if (target != null) destinationText = Component.text(target.getName(), NamedTextColor.WHITE);
+        else {
+            Component coordinates = Component.text(String.format(Locale.ROOT, "%.2f, %.2f, %.2f",
+                    destination.getX(), destination.getY(), destination.getZ()), NamedTextColor.WHITE);
+            destinationText = request.explicitWorld() ? tr("utility.teleport.world-destination",
+                    java.util.Map.of("coordinates", coordinates, "world", Component.text(destination.getWorld().getName(), NamedTextColor.WHITE))) : coordinates;
         }
-        messageSender.accept(sender, message.append(Component.text(".", NamedTextColor.GREEN)));
+        Component message = request.other() ? tr("utility.teleport.other", java.util.Map.of("player", Component.text(source.getName(), NamedTextColor.WHITE), "destination", destinationText))
+                : tr("utility.teleport.self", java.util.Map.of("destination", destinationText));
+        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
         return true;
     }
 
@@ -284,9 +282,9 @@ public final class TeleportCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender) {
-        messageSender.accept(sender, Component.text("Invalid usage.", NamedTextColor.RED)
+        messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(Component.text("Use: ", NamedTextColor.YELLOW))
+                .append(tr("common.use").color(NamedTextColor.YELLOW))
                 .append(Component.text("/tp <player> | /tp <x> <y> <z> [yaw pitch] | "
                         + "/tp <source> <target> | /tp <source> <x> <y> <z> [yaw pitch] | "
                         + "/tp world <world> <x> <y> <z> [yaw pitch] | "
@@ -294,12 +292,22 @@ public final class TeleportCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, Component.text("Player '", NamedTextColor.RED)
-                .append(Component.text(name, NamedTextColor.WHITE))
-                .append(Component.text("' is not online.", NamedTextColor.RED)));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
     }
 
-    private void error(CommandSender sender, String message) {
-        messageSender.accept(sender, Component.text(message, NamedTextColor.RED));
+    private static Component teleportError(IllegalArgumentException exception) {
+        if (!(exception instanceof dev.vapee.core.utility.teleport.TeleportParseException failure)) return tr("utility.teleport.failed");
+        return switch (failure.reason()) {
+            case USAGE -> tr("utility.teleport.parse.usage");
+            case MIXED_COORDINATES -> tr("utility.teleport.parse.mixed");
+            case NONFINITE_DESTINATION -> tr("utility.teleport.parse.destination");
+            case NONFINITE_ROTATION -> tr("utility.teleport.parse.rotation");
+            case INVALID_COORDINATE -> tr("utility.teleport.parse.coordinate-value", java.util.Map.of("value", Component.text(failure.value())));
+            case INVALID_ROTATION -> tr("utility.teleport.parse.rotation-value", java.util.Map.of("value", Component.text(failure.value())));
+        };
+    }
+
+    private void error(CommandSender sender, Component message) {
+        messageSender.accept(sender, message.color(NamedTextColor.RED));
     }
 }

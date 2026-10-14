@@ -66,11 +66,11 @@ public final class PresenceLifecycleHarness {
                         && core.indexOf("moduleManager.register(presenceModule)")
                         < core.indexOf("moduleManager.register(clanModule)"),
                 "module order is Friend then Presence then Clan");
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 27,
-                "exactly twenty-seven modules register");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 28,
+                "exactly twenty-eight modules register");
         check(core.contains("presentationModule, dailyQuestModule)")
                         && !core.contains("List.of(configService, presenceModule"),
-                "Presence does not alter six reload participants");
+                "Presence does not alter seven reload participants");
 
         String module = Files.readString(Path.of("src/main/java/dev/vapee/core/presence/PresenceModule.java"));
         check(module.contains("registerEvents(newListener, plugin)")
