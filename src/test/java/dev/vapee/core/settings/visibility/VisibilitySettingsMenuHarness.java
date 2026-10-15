@@ -25,8 +25,8 @@ public final class VisibilitySettingsMenuHarness {
                         && holder.getInventory() == inventory,
                 "menu binds exact owner and inventory");
         check(fixture.visibilityMenu.isActive(owner.player, inventory, holder), "opened menu is active");
-        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).equals("All Players")
-                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: Enabled"),
+        check(text(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).equals("Player Visibility")
+                        && lore(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER)).contains("Current: All Players"),
                 "master feature renders enabled state");
         check(material(inventory, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.MASTER, 1))
                         == Material.LIME_STAINED_GLASS_PANE

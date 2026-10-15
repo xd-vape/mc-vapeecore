@@ -39,6 +39,7 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
     public final LobbyItemListener listener;
     public boolean eligible = true;
     public int sounds;
+    public int heldSlot;
     private final Path root = Files.createTempDirectory("vapeecore-registry-");
     private final AtomicReference<Map<String, LobbyItemDefinition>> definitions = new AtomicReference<>();
 
@@ -59,6 +60,8 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
         var inventory = LobbyItemsConfigHarness.proxy(PlayerInventory.class, (name, args) -> switch (name) {
             case "getContents", "getStorageContents" -> storage.clone();
             case "getItem" -> storage[(int) args[0]];
+            case "getItemInMainHand" -> storage[heldSlot];
+            case "getHeldItemSlot" -> heldSlot;
             case "setItem" -> { storage[(int) args[0]] = (ItemStack) args[1]; yield null; }
             default -> null;
         });

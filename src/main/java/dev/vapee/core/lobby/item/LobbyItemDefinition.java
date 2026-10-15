@@ -10,12 +10,20 @@ import java.util.Locale;
 import dev.vapee.core.i18n.LanguageResolver;
 
 /** Immutable, validated operator presentation. Item identity and actions are deliberately absent. */
-public record LobbyItemDefinition(boolean enabled, int slot, Appearance appearance, Appearance filteredAppearance) {
+public record LobbyItemDefinition(boolean enabled, int slot, Appearance appearance, Appearance filteredAppearance,
+                                  Map<String, Appearance> variants) {
     public LobbyItemDefinition {
         if (slot < 0 || slot > 8) throw new IllegalArgumentException("Lobby slot must be in 0..8");
         Objects.requireNonNull(appearance);
         Objects.requireNonNull(filteredAppearance);
+        variants = Map.copyOf(variants);
     }
+
+    public LobbyItemDefinition(boolean enabled, int slot, Appearance appearance, Appearance filteredAppearance) {
+        this(enabled, slot, appearance, filteredAppearance, Map.of());
+    }
+
+    public Appearance variant(String id) { return variants.getOrDefault(id, appearance); }
 
     public record Appearance(Material material, Component name, List<Component> lore, boolean selfHead, Map<String, Component> localizedNames, Map<String, List<Component>> localizedLore) {
         public Appearance {

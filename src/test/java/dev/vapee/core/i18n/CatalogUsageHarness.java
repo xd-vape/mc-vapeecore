@@ -43,6 +43,7 @@ public final class CatalogUsageHarness {
         }
         for (var state : dev.vapee.core.activity.ActivityState.values()) check(english.containsKey("blackjack.info.session-state." + state.name()), "all actual activity state captions");
         for (var action : dev.vapee.core.moderation.ModerationAction.values()) check(english.containsKey("moderation.action." + action.name()), "all moderation action captions");
+        for (var mode : dev.vapee.core.player.settings.VisibilityMode.values()) check(english.containsKey("visibility.mode." + mode.name()), "all persisted quick visibility mode captions");
         System.out.println("CatalogUsageHarness passed " + checks + " checks.");
     }
     private static void check(boolean condition, String label) { checks++; if (!condition) throw new AssertionError(label); }

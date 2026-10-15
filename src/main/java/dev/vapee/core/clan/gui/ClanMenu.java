@@ -173,7 +173,7 @@ public final class ClanMenu {
         }
         placeDisplay(inventory, clanLayout.clanNameSlot(), item(Material.NAME_TAG, Component.text(clan.name()), List.of(tr("clan.tag", java.util.Map.of("tag", Component.text(clan.tag()))))));
         placeDisplay(inventory, clanLayout.memberCountSlot(), item(Material.PLAYER_HEAD, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size()), "maximum", Component.text(clans.getLimits().maxMembers()))), List.of(tr("clan.owner", java.util.Map.of("player", Component.text(displayName(clan.ownerId())))))));
-        placeDisplay(inventory, clanLayout.roleSlot(), item(Material.PAPER, tr("clan.role", java.util.Map.of("role", tr(clan.ownerId().equals(viewer) ? "clan.role.owner" : "clan.role.member"))), List.of(tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString()))))));
+        placeDisplay(inventory, clanLayout.roleSlot(), item(Material.PAPER, tr("clan.role", java.util.Map.of("role", tr(clan.ownerId().equals(viewer) ? "clan.role.owner" : "clan.role.member"))), List.of()));
     }
 
     private List<Entry> entries(UUID viewer, Clan clan, ClanMenuView view) {

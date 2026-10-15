@@ -1,5 +1,6 @@
 package dev.vapee.core.friend;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -47,11 +48,11 @@ public final class FriendMessages {
                 case "remove" -> "friends.removed";
                 default -> throw new IllegalArgumentException("Unknown friend action: " + action);
             };
-            messages.send(actor, tr(key, java.util.Map.of("player", Component.text(targetName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            messages.send(actor, tr(key, java.util.Map.of("player", Component.text(targetName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             if (action.equals("add")) {
                 Player target = onlinePlayer.apply(targetId);
                 if (target != null && target.isOnline()) {
-                    messages.send(target, tr("friends.request.received", java.util.Map.of("player", Component.text(actor.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN)
+                    messages.send(target, tr("friends.request.received", java.util.Map.of("player", Component.text(actor.getName(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY)
                             .append(requestActions(commandArgument.apply(actor.getUniqueId()))));
                 }
             } else if (action.equals("accept")) {
@@ -60,7 +61,7 @@ public final class FriendMessages {
             return;
         }
         if (result == FriendResult.AUTO_ACCEPTED) {
-            messages.send(actor, tr("friends.request.accepted", java.util.Map.of("player", Component.text(targetName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            messages.send(actor, tr("friends.request.accepted", java.util.Map.of("player", Component.text(targetName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             notifyOnline(targetId, actor.getName(), "friends.request.auto-notice");
             return;
         }
@@ -99,7 +100,7 @@ public final class FriendMessages {
     private void notifyOnline(UUID targetId, String actorName, String key) {
         Player target = onlinePlayer.apply(targetId);
         if (target != null && target.isOnline()) {
-            messages.send(target, tr(key, java.util.Map.of("player", Component.text(actorName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            messages.send(target, tr(key, java.util.Map.of("player", Component.text(actorName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
         }
     }
 }

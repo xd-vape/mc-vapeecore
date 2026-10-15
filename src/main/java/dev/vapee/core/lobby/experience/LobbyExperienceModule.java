@@ -1,5 +1,8 @@
 package dev.vapee.core.lobby.experience;
 
+import dev.vapee.core.lobby.experience.player.PlayerSelectionListener;
+import dev.vapee.core.lobby.experience.player.PlayerMenu;
+import dev.vapee.core.lobby.experience.player.PlayerMenuListener;
 import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.friend.FriendModule;
 import dev.vapee.core.lobby.item.LobbyItemRegistrations;
@@ -46,6 +49,10 @@ public final class LobbyExperienceModule implements CoreModule {
     private LobbyExperienceListener experienceListener;
     private LobbyItemListener itemListener;
     private NavigatorListener navigatorListener;
+    private PlayerMenu playerMenu;
+    private PlayerMenuListener playerMenuListener;
+    private PlayerSelectionListener playerSelectionListener;
+    private final FriendModule friendModule;
 
     public LobbyExperienceModule(
             JavaPlugin plugin,
@@ -66,10 +73,10 @@ public final class LobbyExperienceModule implements CoreModule {
         this.visibilityModule = Objects.requireNonNull(visibilityModule, "visibilityModule");
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
-        Objects.requireNonNull(friendModule, "friendModule");
+        this.friendModule = Objects.requireNonNull(friendModule, "friendModule");
         // Registration precedes Lobby configuration loading; menu suppliers are invoked only after activation.
         LobbyItemRegistrations.register(lobbyModule.getItemRegistry(), () -> navigatorMenu,
-                settingsModule::getSettingsMenu, friendModule::getFriendMenu, () -> visibilityAction);
+                settingsModule::getSettingsMenu, friendModule::getFriendMenu, () -> visibilityAction, () -> playerMenu);
     }
 
     @Override
@@ -101,6 +108,16 @@ public final class LobbyExperienceModule implements CoreModule {
         var newVisibilityAction = new VisibilityLobbyItemAction(plugin, newLobbyService, newLobbyItemService,
                 newVisibilityService, newPlayerSettingsService, messageService, this::playFeedbackSound,
                 player -> registry.isActive() && newAccessPolicy.canAccess(player) && newLobbyItemService.isEnabled("visibility"));
+        var newPlayerMenu = new PlayerMenu(plugin, newPlayerSettingsService,
+                messageService, player -> registry.isActive() && newAccessPolicy.canAccess(player)
+                        && newLobbyItemService.isEnabled("player-menu"), java.util.Map.of(
+                PlayerMenu.Action.VISIBILITY, player -> settingsModule.getVisibilitySettingsMenu().open(player),
+                PlayerMenu.Action.FRIENDS, player -> friendModule.getFriendMenu().open(player),
+                PlayerMenu.Action.SETTINGS, player -> settingsModule.getSettingsMenu().open(player)));
+        var newPlayerMenuListener = new PlayerMenuListener(newPlayerMenu);
+        var newSelectionListener = new PlayerSelectionListener(registry,
+                newLobbyItemService, newPlayerSettingsService, newAccessPolicy::canAccess,
+                newVisibilityService::applyViewerPreference, messageService, plugin.getLogger());
         LobbyItemListener newItemListener = new LobbyItemListener(newLobbyService, newLobbyItemService,
                 registry, newAccessPolicy::canAccess, this::playFeedbackSound, plugin.getLogger());
         NavigatorListener newNavigatorListener = new NavigatorListener(
@@ -113,6 +130,8 @@ public final class LobbyExperienceModule implements CoreModule {
             plugin.getServer().getPluginManager().registerEvents(newExperienceListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newItemListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newNavigatorListener, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newPlayerMenuListener, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newSelectionListener, plugin);
 
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 if (!newLobbyService.isLobbyWorld(player.getWorld())) {
@@ -121,6 +140,13 @@ public final class LobbyExperienceModule implements CoreModule {
                 newVisibilityService.synchronizePlayer(player);
             }
             navigatorMenu = newNavigatorMenu;
+            playerMenu = newPlayerMenu;
+            playerMenuListener = newPlayerMenuListener;
+            playerSelectionListener = newSelectionListener;
+            newPlayerMenu.startUpdates();
+            settingsModule.setVisibilityBackOpener(player -> {
+                if (!newPlayerMenu.open(player)) player.closeInventory();
+            });
             newNavigatorMenu.startUpdates();
             visibilityAction = newVisibilityAction;
             registry.activate();
@@ -133,7 +159,12 @@ public final class LobbyExperienceModule implements CoreModule {
                             && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
             lobbyModule.getLobbyPlayerStateService().refreshLobbyItems();
         } catch (RuntimeException exception) {
+            settingsModule.setVisibilityBackOpener(Player::closeInventory);
             registry.deactivate();
+            newPlayerMenu.shutdown();
+            HandlerList.unregisterAll(newPlayerMenuListener);
+            HandlerList.unregisterAll(newSelectionListener);
+            playerMenu = null; playerMenuListener = null; playerSelectionListener = null;
             visibilityAction = null;
             navigatorMenu = null;
             experienceListener = null;
@@ -153,7 +184,12 @@ public final class LobbyExperienceModule implements CoreModule {
 
     @Override
     public void disable() {
+        settingsModule.setVisibilityBackOpener(Player::closeInventory);
         lobbyModule.getItemRegistry().deactivate();
+        if (playerMenu != null) playerMenu.shutdown();
+        if (playerMenuListener != null) HandlerList.unregisterAll(playerMenuListener);
+        if (playerSelectionListener != null) HandlerList.unregisterAll(playerSelectionListener);
+        playerMenu = null; playerMenuListener = null; playerSelectionListener = null;
         visibilityAction = null;
         lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
         cleanupRuntime(navigatorMenu);

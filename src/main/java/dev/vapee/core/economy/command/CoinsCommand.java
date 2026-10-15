@@ -1,5 +1,6 @@
 package dev.vapee.core.economy.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -98,7 +99,7 @@ public final class CoinsCommand implements TabExecutor {
             return true;
         }
         if (!ADMIN_ACTIONS.contains(action)) {
-            messageService.send(sender, tr("economy.unknown-command", java.util.Map.of("command", Component.text(args[0], NamedTextColor.WHITE))).color(NamedTextColor.RED)
+            messageService.send(sender, tr("economy.unknown-command", java.util.Map.of("command", Component.text(args[0], MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
                     .append(Component.newline())
                     .append(tr("economy.help-hint").color(NamedTextColor.YELLOW)));
             return true;
@@ -152,7 +153,7 @@ public final class CoinsCommand implements TabExecutor {
             sendPlayerNotLoaded(sender, player.getName());
             return;
         }
-        messageService.send(sender, tr("economy.balance", java.util.Map.of("balance", Component.text(format(balance.getAsLong()), NamedTextColor.WHITE))).color(NamedTextColor.GRAY));
+        messageService.send(sender, tr("economy.balance", java.util.Map.of("balance", Component.text(format(balance.getAsLong()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
     }
 
     private void handleGet(CommandSender sender, String[] args) {
@@ -168,7 +169,7 @@ public final class CoinsCommand implements TabExecutor {
                 sendUnknownTarget(sender);
                 return;
             }
-            messageService.send(sender, tr("economy.target-balance", java.util.Map.of("player", Component.text(target.name()), "balance", Component.text(format(balance.getAsLong()), NamedTextColor.WHITE))).color(NamedTextColor.GRAY));
+            messageService.send(sender, tr("economy.target-balance", java.util.Map.of("player", Component.text(target.name()), "balance", Component.text(format(balance.getAsLong()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
         } catch (RuntimeException exception) {
             logReadFailure(sender, target.id().toString(), exception);
         }
@@ -221,7 +222,7 @@ public final class CoinsCommand implements TabExecutor {
         if (target == null) return;
         Player online = server.getPlayer(target.id());
         if (online == null || !online.isOnline()) {
-            messageService.send(sender, tr("economy.offline-mutation", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
+            messageService.send(sender, tr("economy.offline-mutation", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
             return;
         }
         if (!staffTargetGuard.authorize(sender, online, "coins " + mutation.name(), messageService::send)) return;
@@ -261,7 +262,7 @@ public final class CoinsCommand implements TabExecutor {
             }
             case PLAYER_NOT_LOADED -> sendPlayerNotLoaded(sender, target.name());
             case INSUFFICIENT_FUNDS -> messageService.send(sender,
-                    tr("economy.insufficient", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
+                    tr("economy.insufficient", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
             case BALANCE_OVERFLOW -> messageService.send(sender,
                     tr("economy.overflow"));
         }
@@ -271,13 +272,13 @@ public final class CoinsCommand implements TabExecutor {
                                      Mutation mutation, long balance) {
         String key = "economy.admin." + mutation.name().toLowerCase(Locale.ROOT);
         messageService.send(sender, tr(key, java.util.Map.of("player", Component.text(target.name()),
-                "amount", Component.text(format(amount)), "balance", Component.text(format(balance)))).color(NamedTextColor.GREEN));
+                "amount", Component.text(format(amount)), "balance", Component.text(format(balance)))).color(MessageStyle.BODY));
     }
 
     private void notifyTarget(Player target, long amount, Mutation mutation, long balance) {
         String key = "economy.notice." + mutation.name().toLowerCase(Locale.ROOT);
         messageService.send(target, tr(key, java.util.Map.of("amount", Component.text(format(amount)),
-                "balance", Component.text(format(balance)))).color(NamedTextColor.GREEN));
+                "balance", Component.text(format(balance)))).color(MessageStyle.BODY));
     }
 
     private static String actor(CommandSender sender) {

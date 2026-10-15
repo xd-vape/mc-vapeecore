@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -134,8 +135,8 @@ public final class SpeedCommand implements TabExecutor {
                 && player.getUniqueId().equals(target.getUniqueId());
         Component type = tr("utility.speed." + result.type().name().toLowerCase(java.util.Locale.ROOT));
         Component message = self ? tr("utility.speed.self", java.util.Map.of("type", type, "level", Component.text(level)))
-                : tr("utility.speed.other", java.util.Map.of("type", type, "level", Component.text(level), "player", Component.text(target.getName(), NamedTextColor.WHITE)));
-        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
+                : tr("utility.speed.other", java.util.Map.of("type", type, "level", Component.text(level), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT)));
+        messageSender.accept(sender, message.color(MessageStyle.BODY));
         return true;
     }
 
@@ -185,7 +186,7 @@ public final class SpeedCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void error(CommandSender sender, Component message) {

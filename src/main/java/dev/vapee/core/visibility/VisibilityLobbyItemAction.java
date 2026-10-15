@@ -1,5 +1,6 @@
 package dev.vapee.core.visibility;
 
+import dev.vapee.core.player.settings.VisibilityMode;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.lobby.LobbyService;
@@ -51,8 +52,12 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
     }
 
     public LobbyItemDefinition.Appearance appearance(Player player, LobbyItemDefinition definition) {
-        return playerSettingsService.areLobbyPlayersVisible(player.getUniqueId()).orElse(true)
-                ? definition.appearance() : definition.filteredAppearance();
+        return switch (playerSettingsService.getVisibilityMode(player.getUniqueId())
+                .orElse(VisibilityMode.ALL)) {
+            case ALL -> definition.appearance();
+            case FILTERED -> definition.filteredAppearance();
+            case HIDDEN -> definition.variant("hidden");
+        };
     }
 
     private void toggleVisibility(Player player) {
@@ -61,7 +66,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
             return;
         }
 
-        Optional<Boolean> currentValue = playerSettingsService.areLobbyPlayersVisible(uniqueId);
+        var currentValue = playerSettingsService.getVisibilityMode(uniqueId);
         if (currentValue.isEmpty()) {
             messageService.send(player, tr("common.profile-unavailable.message"));
             return;
@@ -69,7 +74,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
 
         boolean saved;
         try {
-            saved = playerSettingsService.setLobbyPlayersVisible(uniqueId, !currentValue.get());
+            saved = playerSettingsService.setVisibilityMode(uniqueId, currentValue.get().next());
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not save lobby visibility setting for " + uniqueId + ".", exception);
             messageService.send(player, tr("visibility.save-failed"));
@@ -87,8 +92,10 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
 
     @Override public boolean handleClick(Player player, Action action) {
         if (!available.test(player)) return false;
-        if (action != Action.RIGHT_CLICK_BLOCK) {
-            toggleVisibility(player);
+        if (!supports(action)) return false;
+        Runnable use = () -> toggleVisibility(player);
+        if (action == Action.RIGHT_CLICK_AIR) {
+            use.run();
             return false;
         }
 
@@ -96,9 +103,13 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
             if (!available.test(player) || !player.isOnline() || !lobbyService.isLobbyWorld(player.getWorld())) {
                 return;
             }
-            toggleVisibility(player);
+            use.run();
         });
         return false;
+    }
+
+    @Override public boolean supports(Action click) {
+        return click == Action.RIGHT_CLICK_AIR || click == Action.RIGHT_CLICK_BLOCK;
     }
 
     private boolean beginVisibilityToggleCooldown(Player player, UUID uniqueId) {
@@ -109,6 +120,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
         try {
             player.setCooldown(Material.LIME_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
             player.setCooldown(Material.GRAY_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
+            player.setCooldown(Material.RED_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
             plugin.getServer().getScheduler().runTaskLater(
                     plugin,
                     () -> visibilityToggleCooldowns.remove(uniqueId),

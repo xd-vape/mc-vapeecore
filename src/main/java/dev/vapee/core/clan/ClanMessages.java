@@ -1,5 +1,6 @@
 package dev.vapee.core.clan;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -43,7 +44,7 @@ public final class ClanMessages {
                 case "disband" -> "clan.success.disband";
                 default -> throw new IllegalArgumentException("Unknown clan action: " + action);
             };
-            messages.send(actor, tr(key, java.util.Map.of("target", Component.text(target, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            messages.send(actor, tr(key, java.util.Map.of("target", Component.text(target, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             return;
         }
         String errorKey = switch (result) {
@@ -75,8 +76,8 @@ public final class ClanMessages {
     }
 
     public void notifyInvite(UUID recipient, String owner, String clanName, String tag) {
-        notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", Component.text(owner, NamedTextColor.WHITE),
-                "clan", Component.text(clanName, NamedTextColor.GOLD), "tag", Component.text(tag, NamedTextColor.AQUA))).color(NamedTextColor.GREEN)
+        notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", Component.text(owner, MessageStyle.HIGHLIGHT),
+                "clan", Component.text(clanName, MessageStyle.HIGHLIGHT), "tag", Component.text(tag, NamedTextColor.AQUA))).color(MessageStyle.BODY)
                 .append(Component.newline())
                 .append(inviteButton(tr("common.accept"), "/clan accept " + tag, NamedTextColor.GREEN, tr("clan.invite.accept-hover")))
                 .append(Component.space())
@@ -84,15 +85,15 @@ public final class ClanMessages {
     }
 
     public void notifyAccept(UUID owner, String playerName) {
-        notifyOnline(owner, tr("clan.invite.accepted", java.util.Map.of("player", Component.text(playerName, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+        notifyOnline(owner, tr("clan.invite.accepted", java.util.Map.of("player", Component.text(playerName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     public void notifyKick(UUID target, String tag) {
-        notifyOnline(target, tr("clan.member.removed", java.util.Map.of("tag", Component.text(tag, NamedTextColor.WHITE))).color(NamedTextColor.YELLOW));
+        notifyOnline(target, tr("clan.member.removed", java.util.Map.of("tag", Component.text(tag, MessageStyle.HIGHLIGHT))).color(NamedTextColor.YELLOW));
     }
 
     public void notifyTransfer(UUID target, String tag) {
-        notifyOnline(target, tr("clan.owner.transferred", java.util.Map.of("tag", Component.text(tag, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+        notifyOnline(target, tr("clan.owner.transferred", java.util.Map.of("tag", Component.text(tag, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private Component inviteButton(Component label, String command, NamedTextColor color, Component hover) {

@@ -41,7 +41,7 @@ public final class LobbyItemRegistry {
 
     public boolean handleClick(String id, Player player, Action click) {
         Entry entry = entries.get(id);
-        return active && entry != null && entry.action().handleClick(player, click);
+        return active && entry != null && entry.action().supports(click) && entry.action().handleClick(player, click);
     }
 
     public record Entry(String id, LobbyItemDefinition defaults, LobbyItemAction action,

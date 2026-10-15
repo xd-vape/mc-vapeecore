@@ -40,10 +40,10 @@ public final class LobbyItemsConfigHarness {
         installRegistries();
         Logger logger = Logger.getAnonymousLogger(); logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() { public void publish(LogRecord r) { logs.add(r); } public void flush() { } public void close() { } });
-        check(LobbyItemsConfig.defaults().size() == 4, "four explicit production registrations");
+        check(LobbyItemsConfig.defaults().size() == 5, "five explicit production registrations including optional shortcuts");
         var defaults = read("", logger);
-        check(defaults.get("navigator").slot() == 0 && defaults.get("visibility").slot() == 4
-                && defaults.get("settings").slot() == 8, "default hotbar layout unchanged");
+        check(defaults.get("navigator").slot() == 8 && defaults.get("visibility").slot() == 1
+                && defaults.get("player-menu").slot() == 0, "three primary default items use configured product geometry");
         check(defaults.get("navigator").appearance().material() == Material.COMPASS
                 && defaults.get("settings").appearance().material() == Material.COMPARATOR, "default materials unchanged");
         check(logs.isEmpty(), "missing legacy item section uses quiet internal defaults");
@@ -84,14 +84,14 @@ public final class LobbyItemsConfigHarness {
                   settings:
                     slot: 0
                 """, logger);
-        check(invalid.get("navigator").slot() == 0, "out-of-range slot fallback");
-        check(invalid.get("visibility").slot() == 4 && invalid.get("settings").slot() == 8, "duplicate slots use safe distinct fallbacks");
+        check(invalid.get("navigator").slot() == 8, "out-of-range slot fallback");
+        check(invalid.get("visibility").slot() == 0 && invalid.get("settings").slot() == 7, "duplicate explicit slots use safe distinct fallbacks");
         check(invalid.get("navigator").appearance().material() == Material.COMPASS
                 && invalid.get("visibility").appearance().material() == Material.LIME_DYE, "invalid/air materials fallback");
         check(plain(invalid.get("navigator").appearance().name()).equals("Warp Navigator"), "invalid typed text fallback (implicit style closing is now valid)");
         check(logs.stream().filter(r -> r.getLevel().intValue() >= 900).count() >= 8, "invalid fields and duplicate slots warn");
         var fractional = read("items:\n  navigator:\n    slot: 1.5\n  visibility:\n    slot: -1\n", logger);
-        check(fractional.get("navigator").slot() == 0 && fractional.get("visibility").slot() == 4, "fractional/negative slot fallback");
+        check(fractional.get("navigator").slot() == 8 && fractional.get("visibility").slot() == 1, "fractional/negative slot fallback");
 
         Path root = Files.createTempDirectory("vapeecore-lobby-items-");
         try {
@@ -134,8 +134,8 @@ public final class LobbyItemsConfigHarness {
                     allocate(dev.vapee.core.visibility.VisibilityService.class), settings,
                     allocate(dev.vapee.core.message.MessageService.class), ignored -> { }, ignored -> true));
             service.applyLobbyItems(player);
-            for (var type : defaults.keySet()) check(service.getItemId(storage[defaults.get(type).slot()]).orElseThrow().equals(type), "default PDC identity " + type);
-            check(countOwned(service, storage) == 4, "exact four initial owned items");
+            for (var type : defaults.keySet().stream().filter(feature -> defaults.get(feature).enabled()).toList()) check(service.getItemId(storage[defaults.get(type).slot()]).orElseThrow().equals(type), "default PDC identity " + type);
+            check(countOwned(service, storage) == 3, "exact three initial owned items");
             current.set(read("items:\n  friends:\n    enabled: true\n    slot: 6\n    material: PLAYER_HEAD\n    head-owner: self\n    name: {en: '<aqua>Custom Friends', de: '<aqua>Eigene Freunde'}\n    lore: {en: ['English lore'], de: ['Deutsche Lore']}\n", logger));
             service.applyLobbyItems(player);
             check(plain(storage[6].getItemMeta().displayName()).equals("Custom Friends"), "English locale reaches actual managed head");
@@ -152,7 +152,7 @@ public final class LobbyItemsConfigHarness {
 
             current.set(read("items:\n  navigator:\n    material: CLOCK\n", logger));
             service.applyLobbyItems(player);
-            check(storage[0].getType() == Material.CLOCK && service.getItemId(storage[0]).orElseThrow().equals("navigator"),
+            check(storage[8].getType() == Material.CLOCK && service.getItemId(storage[8]).orElseThrow().equals("navigator"),
                     "one YAML material edit changes existing item without Java or action changes");
             current.set(custom); service.applyLobbyItems(player);
             check(countOwned(service, storage) == 2 && storage[0] == null && storage[4] == null && storage[8] == null, "config change removes old slots and disabled item");
@@ -199,7 +199,12 @@ public final class LobbyItemsConfigHarness {
     }
     @SuppressWarnings("unchecked") static <T> T proxy(Class<T> type, Call call) {
         return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (ignored, method, args) -> {
-            if (method.getName().equals("toString")) return type.getSimpleName();
+            if (method.getDeclaringClass() == Object.class) return switch (method.getName()) {
+                case "toString" -> type.getSimpleName();
+                case "hashCode" -> System.identityHashCode(ignored);
+                case "equals" -> ignored == args[0];
+                default -> null;
+            };
             Object result = call.run(method.getName(), args == null ? new Object[0] : args);
             if (result != null || !method.getReturnType().isPrimitive()) return result;
             if (method.getReturnType() == boolean.class) return false;

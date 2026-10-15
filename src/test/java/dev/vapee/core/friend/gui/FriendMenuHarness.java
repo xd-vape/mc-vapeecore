@@ -91,7 +91,7 @@ public final class FriendMenuHarness {
         check(lore(inventory, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Offline") && lore(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Online"),
                 "status uses actual online player rather than known identity");
         check(text(inventory, MenuTestLayouts.FRIEND.contentSlot(2)).equals(missing.toString()), "missing identity renders literal UUID fallback");
-        check(lore(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Shift + Right-click to remove"),
+        check(lore(inventory, MenuTestLayouts.FRIEND.contentSlot(1)).contains("Shift + Right Click to remove"),
                 "friend removal gesture is clearly explained");
         fixture.limits.set(new FriendLimits(55, 25, 25));
         bob.online = false;
@@ -172,8 +172,8 @@ public final class FriendMenuHarness {
         fixture.friends.sendRequest(charlie.id, owner.id);
         fixture.menu.open(owner.player, FriendMenuView.INCOMING, 0);
         check(FriendMenuFixture.holder(owner.open).getTarget(MenuTestLayouts.FRIEND.contentSlot(0)).orElseThrow().equals(charlie.id)
-                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Left-click to accept")
-                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Right-click to decline"),
+                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Left Click to accept")
+                && lore(owner.open, MenuTestLayouts.FRIEND.contentSlot(0)).contains("Right Click to decline"),
                 "incoming request maps sender UUID and documents both actions");
         fixture.click(owner, owner.open, MenuTestLayouts.FRIEND.contentSlot(0), ClickType.LEFT);
         check(fixture.friends.getRelation(owner.id, charlie.id) == FriendRelation.FRIENDS

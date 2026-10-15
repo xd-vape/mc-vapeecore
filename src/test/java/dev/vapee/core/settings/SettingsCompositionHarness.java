@@ -14,6 +14,32 @@ public final class SettingsCompositionHarness {
         var owner = production.player("Production");
         check(production.menu.open(owner.player), "current operator composition opens");
         var actual = owner.open;
+        for (var action : List.of(SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, FRIEND_PRESENCE)) {
+            check(production.menu.layout().placement(action).size() == 2, "production restores a status pane for each setting " + action);
+            int icon = production.menu.layout().slot(action);
+            check(spec(actual, icon).lore().stream().map(SettingsMenuFixture::plain).anyMatch(line -> line.startsWith("Current: ")),
+                    "current state is visible on feature itself " + action);
+        }
+        check(production.menu.layout().placement(VISIBILITY).isEmpty(), "Player Settings has no second Visibility entry");
+        int savedBeforeHiddenClick = production.repository.saves;
+        for (int empty = 0; empty < actual.getSize(); empty++) {
+            if (production.menu.layout().actionAt(empty).isEmpty()) {
+                production.click(owner, actual, empty, ClickType.LEFT);
+                production.click(owner, actual, empty, ClickType.RIGHT);
+            }
+        }
+        check(production.visibilityCalls == 0 && production.repository.saves == savedBeforeHiddenClick && owner.open == actual,
+                "removed Visibility icon and status slots are empty and inert");
+        int score = production.menu.layout().slot(SCOREBOARD);
+        production.click(owner, actual, score, ClickType.LEFT);
+        check(spec(actual, production.menu.layout().slot(SCOREBOARD, 1)).material() == Material.RED_STAINED_GLASS_PANE,
+                "successful toggle immediately updates restored status pane");
+        production.click(owner, actual, production.menu.layout().slot(SCOREBOARD, 1), ClickType.RIGHT);
+        check(spec(actual, production.menu.layout().slot(SCOREBOARD, 1)).material() == Material.LIME_STAINED_GLASS_PANE,
+                "restored status pane itself toggles and rerenders");
+        production.click(owner, actual, score, ClickType.LEFT);
+        check(owner.open == actual && spec(actual, score).lore().stream().map(SettingsMenuFixture::plain).anyMatch("Current: Disabled"::equals),
+                "default toggle updates current state without Refresh or reopening");
         check(actual.getSize() == production.menu.layout().size(), "operator size retained");
         for (int slot = 0; slot < actual.getSize(); slot++) {
             check((actual.getItem(slot) != null) == production.menu.layout().actionAt(slot).isPresent(), "only currently placed items render " + slot);

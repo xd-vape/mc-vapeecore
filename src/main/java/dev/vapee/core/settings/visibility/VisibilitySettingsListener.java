@@ -31,7 +31,7 @@ import java.util.logging.Logger;
 public final class VisibilitySettingsListener implements Listener {
     private final VisibilitySettingsMenu menu;
     private final VisiblePlayersMenu visiblePlayersMenu;
-    private final Consumer<Player> settingsMenuOpener;
+    private Consumer<Player> settingsMenuOpener;
     private final PlayerSettingsService settings;
     private final Consumer<Player> applyVisibility;
     private final Consumer<Player> refreshHotbar;
@@ -105,6 +105,11 @@ public final class VisibilitySettingsListener implements Listener {
         }
     }
 
+    /** The owning experience supplies its parent; reset on teardown to avoid a stale menu callback. */
+    public void setBackOpener(Consumer<Player> opener) {
+        settingsMenuOpener = Objects.requireNonNull(opener, "opener");
+    }
+
     private void toggle(Player player, Toggle toggle) {
         UUID owner = player.getUniqueId();
         Optional<PlayerSettings> current = settings.getSettings(owner);
@@ -116,7 +121,7 @@ public final class VisibilitySettingsListener implements Listener {
         boolean saved;
         try {
             saved = switch (toggle) {
-                case MASTER -> settings.setLobbyPlayersVisible(owner, !value.isLobbyPlayersVisible());
+                case MASTER -> settings.setVisibilityMode(owner, value.getVisibility().getMode().next());
                 case FRIENDS -> settings.setLobbyFriendsVisible(owner,
                         !value.getVisibility().isShowFriends());
                 case STAFF -> settings.setLobbyStaffVisible(owner,

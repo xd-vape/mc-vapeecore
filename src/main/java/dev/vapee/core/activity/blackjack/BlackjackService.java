@@ -1,5 +1,6 @@
 package dev.vapee.core.activity.blackjack;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.activity.ActivityLeaveReason;
@@ -599,7 +600,8 @@ public final class BlackjackService {
     }
 
     private void send(Player player, net.kyori.adventure.text.Component message) {
-        messageSender.accept(Objects.requireNonNull(player, "player"), Objects.requireNonNull(message, "message"));
+        messageSender.accept(Objects.requireNonNull(player, "player"),
+                MessageStyle.activity(tr("activity.blackjack"), Objects.requireNonNull(message, "message")));
     }
 
     private net.kyori.adventure.text.Component outcomeMessage(BlackjackOutcome outcome) {

@@ -44,7 +44,26 @@ Bei Quest-Namen/Beschreibungen gilt dieselbe `en/de`-Map, aber deren Werte sind 
 
 In Lobby-/Presentation-/PM-MiniMessage-Vorlagen kann `<i18n:common.close>` ausdrücklich einen parameterlosen Katalogtext referenzieren. Diese Referenz definiert ausschließlich Text, nie einen Command oder eine Java-Aktion. Dynamische Katalogvorlagen benötigen die vom jeweiligen Feature gelieferten sicheren Argumente; füge sie nicht als parameterlose Referenz ein. Für neue eigene Sidebar-/Header-/Footer-Texte sind etwa `<i18n:presentation.sidebar.coins>`, `<i18n:presentation.sidebar.rank>` und `<i18n:presentation.tablist.tagline>` vorgesehen.
 
-Alle sieben normalen Menüs übersetzen Titel, Icons und Lore für ihren Besitzer. Sprachwechsel aktualisieren aktive Items; native Inventartitel werden beim nächsten Open neu erstellt. Eigene Sidebar/Tablist-Header/Footer sind persönlich. Native Nametag-/Tablist-Namen, Chat-Wrappers und global sichtbare Blackjack-/Preview-Anzeigen bleiben gemeinsame Texte; eigene Katalogtexte in den gemeinsamen Weltanzeigen sind Englisch. Servermarke, Clan-/Warp-Namen, LuckPerms-Prefix/Suffix und Benutzertexte bleiben unverändert. Frühzeitige Ban-Login-Ablehnung verwendet Englisch.
+### Bestehende Installation auf übersetzte Standardtexte umstellen
+
+Ein neues Plugin-JAR und `/core reload` ersetzen keine vorhandenen Texte in `lobby.yml`, `presentation.yml`, `private-messages.yml` oder `config.yml`. Ein alter englischer Header oder ein deutscher Friends-Name bleibt deshalb für beide Clientsprachen gleich. Das Anpassen von `lang/de.yml` wirkt nur, wenn die jeweilige Vorlage diesen Sprachschlüssel verwendet. Vor Änderungen die Live-Dateien sichern und gezielt die gewünschten Textfelder ersetzen; Slots, Materialien, Spawn, Rang-/Clanformate und eigene Texte beibehalten.
+
+| Live-Textfeld | Übersetzte Standardvorlage |
+|---|---|
+| `presentation.yml`: `tablist.header` (Textzeile nach dem Servernamen) | `<i18n:presentation.tablist.tagline>` |
+| `presentation.yml`: `tablist.footer` | `<i18n:presentation.tablist.footer>` |
+| `presentation.yml`: Labels in `scoreboard.lines` | `<i18n:presentation.sidebar.coins>`, `<i18n:presentation.sidebar.rank>`, `<i18n:presentation.sidebar.playtime>` |
+| `lobby.yml`: `items.navigator.name` / `lore` | `<i18n:lobby.navigator.name>` / `<i18n:lobby.navigator.lore>` |
+| `lobby.yml`: `items.visibility.name` / `lore` | `<i18n:lobby.visibility.name>` / `<i18n:lobby.visibility.lore>` |
+| `lobby.yml`: `items.visibility.filtered.name` / `lore` | `<i18n:lobby.visibility.filtered-name>` / `<i18n:lobby.visibility.filtered-lore>` |
+| `lobby.yml`: `items.settings.name` / `lore` | `<i18n:lobby.settings.name>` / `<i18n:lobby.settings.lore>` |
+| `lobby.yml`: `items.friends.name` / `lore` | `<i18n:lobby.friends.name>` / Liste aus `<i18n:lobby.friends.lore>`, Leerzeile, `<i18n:lobby.friends.open>` |
+| `private-messages.yml`: `format.outgoing` / `format.incoming` | `<outgoing>` / `<incoming>` |
+| `config.yml`: `online-rewards.message.format` | `<reward>` |
+
+Header/Footer und Lore bleiben YAML-Listen; die Referenzen sind deren einzelne String-Einträge. Nach `/core reload` folgen diese Texte der aktuellen Minecraft-Clientsprache. Für eigene zweisprachige Header/Footer einen eigenen parameterlosen Key in beiden Sprachdateien anlegen und ausdrücklich referenzieren. Für eigene Lobby-Namen/Lore kann alternativ die oben gezeigte `en/de`-Map verwendet werden. Feste Strings werden absichtlich nicht anhand ihres Inhalts automatisch übersetzt.
+
+Alle normalen Menüs einschließlich Player Menu übersetzen Titel, Icons und Lore für ihren Besitzer. Sprachwechsel aktualisieren aktive Items; native Inventartitel werden beim nächsten Open neu erstellt. Eigene Sidebar/Tablist-Header/Footer sind persönlich. Native Nametag-/Tablist-Namen, Chat-Wrappers und global sichtbare Blackjack-/Preview-Anzeigen bleiben gemeinsame Texte; eigene Katalogtexte in den gemeinsamen Weltanzeigen sind Englisch. Servermarke, Clan-/Warp-Namen, LuckPerms-Prefix/Suffix und Benutzertexte bleiben unverändert. Frühzeitige Ban-Login-Ablehnung verwendet Englisch.
 
 ---
 
@@ -160,9 +179,9 @@ scoreboard:
 
 ## `config.yml`
 
-Der globale VapeeCore-Message-Prefix wird über `MessageService` als MiniMessage verarbeitet.
+Der globale Message-Prefix wird über `MessageService` als MiniMessage verarbeitet. Der Default ist `messages.prefix: ""`; normale Core-Nachrichten benötigen kein Pluginlabel. Ein expliziter eigener Prefix bleibt unterstützt.
 
-Beispiel:
+Beispiel für einen bewusst gewählten eigenen Prefix:
 
 ```yaml
 messages:
@@ -1122,20 +1141,20 @@ scoreboard:
 
   lines:
     - ""
-    - "<gray>Rank:</gray>"
+    - "<i18n:presentation.sidebar.rank>"
     - "<rank>"
     - ""
-    - "<gray>Playtime:</gray>"
+    - "<i18n:presentation.sidebar.playtime>"
     - "<yellow><playtime></yellow>"
     - ""
-    - "<gray>Coins:</gray>"
+    - "<i18n:presentation.sidebar.coins>"
     - "<gold><coins></gold>"
     - ""
     - "<gray>Online:</gray> <white><online>/<max_players></white>"
     - ""
 ```
 
-Das ergibt ungefähr:
+Das ergibt für einen englischen Client ungefähr; ein deutscher Client sieht stattdessen etwa `Rang` und `Spielzeit`:
 
 ```text
 Vapee Community
@@ -1260,7 +1279,7 @@ Beispiel:
 online-rewards:
   message:
     enabled: true
-    format: "<green>You received <gold><coins> Coins</gold> for <yellow><minutes> minutes</yellow> of playtime.</green>"
+    format: "<reward>"
 ```
 
 `format` ist MiniMessage und unterstützt diese Online-Reward-Placeholder:
@@ -1848,7 +1867,7 @@ server:
   name: "Vapee Community"
 
 messages:
-  prefix: "<gray>[<aqua>VapeeCore</aqua>]</gray> "
+  prefix: ""
 
 ranks:
   track: "ranks"
@@ -1859,7 +1878,7 @@ online-rewards:
   coins: 250
   message:
     enabled: true
-    format: "<green>You received <gold><coins> Coins</gold> for <yellow><minutes> minutes</yellow> of playtime.</green>"
+    format: "<reward>"
 
 settings:
   debug: false
@@ -1898,13 +1917,13 @@ scoreboard:
   title: "<aqua><bold><server></bold></aqua>"
 
   lines:
-    - "<gray>Coins:</gray>"
+    - "<i18n:presentation.sidebar.coins>"
     - "<gold><coins></gold> "
     - ""
-    - "<gray>Rank:</gray>"
+    - "<i18n:presentation.sidebar.rank>"
     - "<rank>"
     - ""
-    - "<gray>Playtime:</gray>"
+    - "<i18n:presentation.sidebar.playtime>"
     - "<blue><playtime></blue>"
 
 tablist:
@@ -1913,10 +1932,10 @@ tablist:
 
   header:
     - "<aqua><bold><server></bold></aqua>"
-    - "<gray>The place to meet new friends, hang out and play games together!</gray>"
+    - "<i18n:presentation.tablist.tagline>"
 
   footer:
-    - "<gray>you dont need to pay for extra features!</gray>"
+    - "<i18n:presentation.tablist.footer>"
 ```
 
 ---

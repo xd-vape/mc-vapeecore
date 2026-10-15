@@ -34,12 +34,11 @@ public final class SettingsMenu {
 
     public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, REFRESH }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
-            .setting(Action.SCOREBOARD, 10, 19)
-            .setting(Action.SOUNDS, 11, 20)
-            .setting(Action.PRIVATE_MESSAGES, 12, 21)
-            .setting(Action.FRIEND_REQUESTS, 13, 22)
-            .setting(Action.FRIEND_PRESENCE, 14, 23)
-            .setting(Action.VISIBILITY, 16, 25)
+            .setting(Action.SCOREBOARD, 11, 20)
+            .setting(Action.SOUNDS, 12, 21)
+            .setting(Action.PRIVATE_MESSAGES, 13, 22)
+            .setting(Action.FRIEND_REQUESTS, 14, 23)
+            .setting(Action.FRIEND_PRESENCE, 15, 24)
             .button(Action.CLOSE, 40)
             .build();
 

@@ -33,45 +33,43 @@ messages:
 # Material: Bukkit item name (no AIR). Name/lore: MiniMessage (implicit style closing is supported).
 # head-owner: self uses the online player's cached profile with PLAYER_HEAD; none uses no owner.
 # No texture URL/profile lookup is performed; head-owner is ignored for other materials.
+# Optional registered friends/settings shortcuts can be added here with enabled: true.
 items:
-  navigator:
+  player-menu:
     enabled: true
     slot: 0
-    material: COMPASS
-    name: "<i18n:lobby.navigator.name>"
+    material: PLAYER_HEAD
+    head-owner: self
+    name: "<i18n:lobby.player-menu.name>"
     lore:
-      - "<i18n:lobby.navigator.lore>"
-    head-owner: none
+      - "<i18n:lobby.player-menu.open>"
+      - "<i18n:lobby.player-menu.select>"
   visibility:
     enabled: true
-    slot: 4
+    slot: 1
     material: LIME_DYE
     name: "<i18n:lobby.visibility.name>"
     lore:
       - "<i18n:lobby.visibility.lore>"
     head-owner: none
-    # Presentation when the persisted master visibility switch is off. The action remains the same.
     filtered:
       material: GRAY_DYE
       name: "<i18n:lobby.visibility.filtered-name>"
       lore:
         - "<i18n:lobby.visibility.filtered-lore>"
       head-owner: none
-  settings:
+    variants:
+      hidden:
+        material: RED_DYE
+        name: "<i18n:lobby.visibility.hidden-name>"
+        lore:
+          - "<i18n:lobby.visibility.hidden-lore>"
+        head-owner: none
+  navigator:
     enabled: true
     slot: 8
-    material: COMPARATOR
-    name: "<i18n:lobby.settings.name>"
+    material: COMPASS
+    name: "<i18n:lobby.navigator.name>"
     lore:
-      - "<i18n:lobby.settings.lore>"
+      - "<i18n:lobby.navigator.lore>"
     head-owner: none
-  friends:
-    enabled: true
-    slot: 1
-    material: PLAYER_HEAD
-    head-owner: self
-    name: "<i18n:lobby.friends.name>"
-    lore:
-      - "<i18n:lobby.friends.lore>"
-      - ""
-      - "<i18n:lobby.friends.open>"

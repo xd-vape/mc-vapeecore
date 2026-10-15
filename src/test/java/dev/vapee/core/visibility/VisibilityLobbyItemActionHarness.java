@@ -34,26 +34,47 @@ public final class VisibilityLobbyItemActionHarness {
             action.set(new VisibilityLobbyItemAction(f.plugin,f.lobby,f.items,service,settings,messages,p->f.sounds++,
                     p->registry.isActive()&&f.eligible&&f.items.isEnabled("visibility")));
             registry.activate();f.refresh();int initial=saves[0];
-            f.click(f.storage[4],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);
+            rejectLeftClicks(f,action.get(),settings,saves,queued,cooldowns);
+            f.click(f.storage[1],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);
             check(queued.size()==1&&saves[0]==initial,"block click waits one tick without premature save");
             queued.removeFirst().run();
             check(!settings.areLobbyPlayersVisible(f.player.getUniqueId()).orElseThrow()&&saves[0]==initial+1,"deferred real action persists master toggle once");
-            check(f.storage[4].getType()==Material.GRAY_DYE&&f.sounds==1,"filtered item refreshed and success feedback once");
-            f.click(f.storage[4],Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND);
+            check(f.storage[1].getType()==Material.GRAY_DYE&&f.sounds==1,"filtered item refreshed and success feedback once");
+            f.click(f.storage[1],Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND);
             check(saves[0]==initial+1&&f.sounds==1,"cooldown prevents repeated toggle");
-            cooldowns.removeFirst().run();f.click(f.storage[4],Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND);
-            check(settings.areLobbyPlayersVisible(f.player.getUniqueId()).orElseThrow()&&f.storage[4].getType()==Material.LIME_DYE,"air toggle restores normal presentation");
+            cooldowns.removeFirst().run();
+            rejectLeftClicks(f,action.get(),settings,saves,queued,cooldowns);
+            f.click(f.storage[1],Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND);
+            check(settings.getVisibilityMode(f.player.getUniqueId()).orElseThrow()==dev.vapee.core.player.settings.VisibilityMode.HIDDEN&&f.storage[1].getType()==Material.RED_DYE,"second cycle enters HIDDEN presentation");
             check(saves[0]==initial+2&&f.sounds==2,"second real toggle saves/feedback exactly once");
             cooldowns.removeFirst().run();
-            f.click(f.storage[4],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);f.eligible=false;queued.removeFirst().run();
-            check(saves[0]==initial+2,"queued ownership change to BUILD/activity fails closed");f.eligible=true;
-            f.click(f.storage[4],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);registry.deactivate();queued.removeFirst().run();
-            check(saves[0]==initial+2&&f.sounds==2,"queued teardown cannot call disabled features");registry.activate();
-            f.click(f.storage[4],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);f.configure("items:\n  visibility:\n    enabled: false\n");queued.removeFirst().run();
-            check(saves[0]==initial+2,"queued config disable fails closed");
+            rejectLeftClicks(f,action.get(),settings,saves,queued,cooldowns);
+            f.click(f.storage[1],Action.RIGHT_CLICK_AIR,EquipmentSlot.HAND);
+            check(settings.getVisibilityMode(f.player.getUniqueId()).orElseThrow()==dev.vapee.core.player.settings.VisibilityMode.ALL&&saves[0]==initial+3,"right click cycles mode and saves without opening a menu");
+            cooldowns.removeFirst().run();
+            f.click(f.storage[1],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);f.eligible=false;queued.removeFirst().run();
+            check(saves[0]==initial+3,"queued ownership change to BUILD/activity fails closed");f.eligible=true;
+            f.click(f.storage[1],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);registry.deactivate();queued.removeFirst().run();
+            check(saves[0]==initial+3&&f.sounds==3,"queued teardown cannot call disabled features");registry.activate();
+            f.click(f.storage[1],Action.RIGHT_CLICK_BLOCK,EquipmentSlot.HAND);f.configure("items:\n  visibility:\n    enabled: false\n");queued.removeFirst().run();
+            check(saves[0]==initial+3,"queued config disable fails closed");
             check(f.logs.stream().noneMatch(log->log.getLevel().intValue()>=1000),"no visibility runtime error/severe");
         }
         System.out.println("VisibilityLobbyItemActionHarness passed "+checks+" checks.");
+    }
+    private static void rejectLeftClicks(LobbyItemRegistryFixture f, VisibilityLobbyItemAction action,
+                                         PlayerSettingsService settings, int[] saves,
+                                         List<Runnable> queued, List<Runnable> cooldowns) {
+        var before=settings.getVisibilityMode(f.player.getUniqueId()).orElseThrow();
+        int previousSaves=saves[0], sounds=f.sounds, scheduled=queued.size(), timers=cooldowns.size();
+        for(var click:List.of(Action.LEFT_CLICK_AIR,Action.LEFT_CLICK_BLOCK)) {
+            check(!action.supports(click),"left click not a registered visibility gesture in "+before);
+            f.click(f.storage[1],click,EquipmentSlot.HAND);
+            action.handleClick(f.player,click);
+            check(settings.getVisibilityMode(f.player.getUniqueId()).orElseThrow()==before&&saves[0]==previousSaves
+                    &&f.sounds==sounds&&queued.size()==scheduled&&cooldowns.size()==timers,
+                    "left click is inert without save, feedback, cooldown or deferred work in "+before);
+        }
     }
     private static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
 }

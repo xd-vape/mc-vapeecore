@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /** Main-thread-owned player preferences; exposed UUID sets are immutable snapshots. */
 public final class PlayerVisibilitySettings {
-    private boolean allPlayersVisible;
+    private VisibilityMode mode;
     private boolean showFriends;
     private boolean showStaff;
     private boolean showAddedUsers;
@@ -15,13 +15,16 @@ public final class PlayerVisibilitySettings {
     private final Set<UUID> addedPlayers = new HashSet<>();
 
     private PlayerVisibilitySettings(boolean allPlayersVisible) {
-        this.allPlayersVisible = allPlayersVisible;
+        this.mode = allPlayersVisible ? VisibilityMode.ALL : VisibilityMode.FILTERED;
     }
 
     public static PlayerVisibilitySettings defaults() { return new PlayerVisibilitySettings(true); }
 
-    public boolean isAllPlayersVisible() { return allPlayersVisible; }
-    public void setAllPlayersVisible(boolean value) { allPlayersVisible = value; }
+    public VisibilityMode getMode() { return mode; }
+    public void setMode(VisibilityMode value) { mode = Objects.requireNonNull(value, "mode"); }
+    public boolean isAllPlayersVisible() { return mode == VisibilityMode.ALL; }
+    /** Compatibility for callers that deliberately request the former two-state policy. */
+    public void setAllPlayersVisible(boolean value) { mode = value ? VisibilityMode.ALL : VisibilityMode.FILTERED; }
     public boolean isShowFriends() { return showFriends; }
     public void setShowFriends(boolean value) { showFriends = value; }
     public boolean isShowStaff() { return showStaff; }

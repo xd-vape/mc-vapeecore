@@ -80,7 +80,7 @@ public final class VisiblePlayersMenuHarness {
         check(material(owner.open, MenuTestLayouts.VISIBLE_PLAYERS.contentSlot(0)) == Material.PLAYER_HEAD
                         && lore(owner.open, MenuTestLayouts.VISIBLE_PLAYERS.contentSlot(0)).contains("Offline")
                         && lore(owner.open, MenuTestLayouts.VISIBLE_PLAYERS.contentSlot(1)).contains("Online")
-                        && lore(owner.open, MenuTestLayouts.VISIBLE_PLAYERS.contentSlot(1)).contains("Right-click to remove."),
+                        && lore(owner.open, MenuTestLayouts.VISIBLE_PLAYERS.contentSlot(1)).contains("Right Click to remove."),
                 "entry renders head, actual online status and removal gesture");
         check(VisibilityMenuFixture.visibleSpec(owner.open, 1).lore().getFirst().color()
                         .equals(net.kyori.adventure.text.format.NamedTextColor.GREEN)

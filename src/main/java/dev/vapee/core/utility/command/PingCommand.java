@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -97,8 +98,8 @@ public final class PingCommand implements TabExecutor {
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
         Component message = (self ? tr("utility.ping.self", java.util.Map.of("ping", Component.text(target.getPing())))
-                : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing()), "player", Component.text(target.getName(), NamedTextColor.WHITE))))
-                .color(NamedTextColor.GREEN);
+                : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing()), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))))
+                .color(MessageStyle.BODY);
         messageSender.accept(sender, message);
         return true;
     }
@@ -124,7 +125,7 @@ public final class PingCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void error(CommandSender sender, Component message) {

@@ -47,14 +47,15 @@ public final class LobbyItemsConfig {
             // An explicit items section owns its entries; removing an ID must not resurrect its Java fallback.
             if (configured != null && !configured.contains(entry.id())) {
                 result.put(entry.id(), new LobbyItemDefinition(false, fallback.slot(),
-                        fallback.appearance(), fallback.filteredAppearance()));
+                        fallback.appearance(), fallback.filteredAppearance(), fallback.variants()));
                 continue;
             }
             if (yaml.contains(path) && !yaml.isConfigurationSection(path)) {
                 warn(logger, path, "expected a section; using defaults");
             }
             Object enabledValue = yaml.get(path + ".enabled");
-            boolean enabled = enabledValue instanceof Boolean flag ? flag : fallback.enabled();
+            boolean enabled = enabledValue instanceof Boolean flag ? flag
+                    : (configured != null && configured.contains(entry.id()) || fallback.enabled());
             if (enabledValue != null && !(enabledValue instanceof Boolean)) warn(logger, path + ".enabled", "expected boolean; using default");
             Object slotValue = yaml.get(path + ".slot");
             int slot = fallback.slot();
@@ -77,7 +78,10 @@ public final class LobbyItemsConfig {
             Appearance normal = appearance(yaml, path, fallback.appearance(), logger);
             Appearance filtered = !fallback.filteredAppearance().equals(fallback.appearance())
                     ? appearance(yaml, path + ".filtered", fallback.filteredAppearance(), logger) : normal;
-            result.put(entry.id(), new LobbyItemDefinition(enabled, slot, normal, filtered));
+            Map<String, Appearance> variants = new LinkedHashMap<>();
+            fallback.variants().forEach((id, variant) -> variants.put(id,
+                    appearance(yaml, path + ".variants." + id, variant, logger)));
+            result.put(entry.id(), new LobbyItemDefinition(enabled, slot, normal, filtered, variants));
         }
         return Map.copyOf(result);
     }
