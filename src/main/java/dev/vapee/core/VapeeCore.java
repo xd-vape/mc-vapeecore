@@ -164,6 +164,7 @@ public final class VapeeCore extends JavaPlugin {
                 visibilityModule,
                 activityModule,
                 friendModule,
+                utilityModule,
                 messageService
         );
         moduleManager.register(localizationModule);
