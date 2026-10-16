@@ -7,6 +7,9 @@ import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.friend.FriendModule;
 import dev.vapee.core.lobby.item.LobbyItemRegistrations;
 import dev.vapee.core.visibility.VisibilityLobbyItemAction;
+import dev.vapee.core.lobby.experience.glide.LobbyGlideService;
+import dev.vapee.core.lobby.experience.glide.LobbyGlideListener;
+import dev.vapee.core.utility.UtilityModule;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import dev.vapee.core.lobby.LobbyModule;
@@ -42,6 +45,9 @@ public final class LobbyExperienceModule implements CoreModule {
     private final WarpModule warpModule;
     private final VisibilityModule visibilityModule;
     private final ActivityModule activityModule;
+    private final UtilityModule utilityModule;
+    private LobbyGlideService glideService;
+    private LobbyGlideListener glideListener;
     private final MessageService messageService;
     private final java.util.function.Consumer<Player> localeChanges = this::refreshLocaleItems;    private VisibilityLobbyItemAction visibilityAction;
 
@@ -63,6 +69,7 @@ public final class LobbyExperienceModule implements CoreModule {
             VisibilityModule visibilityModule,
             ActivityModule activityModule,
             FriendModule friendModule,
+            UtilityModule utilityModule,
             MessageService messageService
     ) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
@@ -74,6 +81,7 @@ public final class LobbyExperienceModule implements CoreModule {
         this.activityModule = Objects.requireNonNull(activityModule, "activityModule");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.friendModule = Objects.requireNonNull(friendModule, "friendModule");
+        this.utilityModule = Objects.requireNonNull(utilityModule, "utilityModule");
         // Registration precedes Lobby configuration loading; menu suppliers are invoked only after activation.
         LobbyItemRegistrations.register(lobbyModule.getItemRegistry(), () -> navigatorMenu,
                 settingsModule::getSettingsMenu, friendModule::getFriendMenu, () -> visibilityAction, () -> playerMenu);
@@ -97,6 +105,8 @@ public final class LobbyExperienceModule implements CoreModule {
         NavigatorAccessPolicy newAccessPolicy = new NavigatorAccessPolicy(newPlayerService, newLobbyService,
                 lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy, messageService);
+        var newGlide = new LobbyGlideService(plugin, newAccessPolicy, utilityModule.getUtilityService());
+        var newGlideListener = new LobbyGlideListener(newGlide);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
                 plugin,
                 newLobbyService,
@@ -127,6 +137,10 @@ public final class LobbyExperienceModule implements CoreModule {
         );
 
         try {
+            utilityModule.getUtilityService().addFlightListener(newGlide);
+            lobbyModule.getLobbyPlayerStateService().addStateListener(newGlide);
+            activityModule.getActivityService().addMembershipListener(newGlide);
+            plugin.getServer().getPluginManager().registerEvents(newGlideListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newExperienceListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newItemListener, plugin);
             plugin.getServer().getPluginManager().registerEvents(newNavigatorListener, plugin);
@@ -158,7 +172,12 @@ public final class LobbyExperienceModule implements CoreModule {
                     newPlayerService.isLoaded(player.getUniqueId())
                             && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
             lobbyModule.getLobbyPlayerStateService().refreshLobbyItems();
+            glideService = newGlide;
+            glideListener = newGlideListener;
+            for (Player player : plugin.getServer().getOnlinePlayers()) newGlide.onPlayerAvailable(player);
         } catch (RuntimeException exception) {
+            detachGlide(newGlide, newGlideListener);
+            glideService = null; glideListener = null;
             settingsModule.setVisibilityBackOpener(Player::closeInventory);
             registry.deactivate();
             newPlayerMenu.shutdown();
@@ -184,6 +203,8 @@ public final class LobbyExperienceModule implements CoreModule {
 
     @Override
     public void disable() {
+        if (glideService != null) detachGlide(glideService, glideListener);
+        glideService = null; glideListener = null;
         settingsModule.setVisibilityBackOpener(Player::closeInventory);
         lobbyModule.getItemRegistry().deactivate();
         if (playerMenu != null) playerMenu.shutdown();
@@ -215,6 +236,14 @@ public final class LobbyExperienceModule implements CoreModule {
         catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not play lobby UI feedback sound for " + player.getUniqueId(), exception);
         }
+    }
+
+    private void detachGlide(LobbyGlideService service, LobbyGlideListener listener) {
+        utilityModule.getUtilityService().removeFlightListener(service);
+        lobbyModule.getLobbyPlayerStateService().removeStateListener(service);
+        activityModule.getActivityService().removeMembershipListener(service);
+        if (listener != null) HandlerList.unregisterAll(listener);
+        service.shutdown();
     }
 
     private void refreshLocaleItems(Player player) {

@@ -29,6 +29,7 @@ public final class LobbyPlayerStateService {
     private final Consumer<Player> lobbyItemRemover;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final Set<UUID> buildPlayers = new HashSet<>();
+    private final Set<LobbyPlayerStateListener> stateListeners = new java.util.LinkedHashSet<>();
     private Predicate<Player> itemRefreshEligibility = player -> false;
 
     public LobbyPlayerStateService(
@@ -76,29 +77,41 @@ public final class LobbyPlayerStateService {
 
     public void synchronizeJoin(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        buildPlayers.remove(validatedPlayer.getUniqueId());
-        if (lobbyPlayerCheck.test(validatedPlayer)) {
-            applyNormalMode(validatedPlayer, true);
-        } else {
-            lobbyItemRemover.accept(validatedPlayer);
-            validatedPlayer.setGameMode(normalGameMode());
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            buildPlayers.remove(validatedPlayer.getUniqueId());
+            if (lobbyPlayerCheck.test(validatedPlayer)) {
+                applyNormalMode(validatedPlayer, true);
+            } else {
+                lobbyItemRemover.accept(validatedPlayer);
+                validatedPlayer.setGameMode(normalGameMode());
+            }
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
     }
 
     public void synchronize(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        if (!lobbyPlayerCheck.test(validatedPlayer)) {
-            return;
-        }
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            if (!lobbyPlayerCheck.test(validatedPlayer)) {
+                return;
+            }
 
-        if (isBuildMode(validatedPlayer.getUniqueId())) {
-            lobbyItemRemover.accept(validatedPlayer);
-            validatedPlayer.setGameMode(GameMode.CREATIVE);
-            return;
+            if (isBuildMode(validatedPlayer.getUniqueId())) {
+                lobbyItemRemover.accept(validatedPlayer);
+                validatedPlayer.setGameMode(GameMode.CREATIVE);
+                return;
+            }
+            applyNormalMode(validatedPlayer, true);
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
-        applyNormalMode(validatedPlayer, true);
     }
 
     /**
@@ -106,65 +119,95 @@ public final class LobbyPlayerStateService {
      */
     public boolean relinquishNormalInventory(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        if (isBuildMode(validatedPlayer.getUniqueId())) {
-            return false;
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            if (isBuildMode(validatedPlayer.getUniqueId())) {
+                return false;
+            }
+            lobbyItemRemover.accept(validatedPlayer);
+            clearInventory(validatedPlayer);
+            return true;
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
-        lobbyItemRemover.accept(validatedPlayer);
-        clearInventory(validatedPlayer);
-        return true;
     }
 
     public void enterNormalMode(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        buildPlayers.remove(validatedPlayer.getUniqueId());
-        applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer));
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            buildPlayers.remove(validatedPlayer.getUniqueId());
+            applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer));
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
+        }
     }
 
     public void enterBuildMode(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        if (!lobbyPlayerCheck.test(validatedPlayer)) {
-            throw new IllegalStateException("Build mode can only be entered in the lobby world");
-        }
-        if (isBuildMode(validatedPlayer.getUniqueId())) {
-            return;
-        }
-
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
         try {
-            lobbyItemRemover.accept(validatedPlayer);
-            clearInventory(validatedPlayer);
-            buildPlayers.add(validatedPlayer.getUniqueId());
-            validatedPlayer.setGameMode(GameMode.CREATIVE);
-        } catch (RuntimeException exception) {
-            buildPlayers.remove(validatedPlayer.getUniqueId());
-            try {
-                applyNormalMode(validatedPlayer, true);
-            } catch (RuntimeException rollbackException) {
-                exception.addSuppressed(rollbackException);
+            Player validatedPlayer = player;
+            if (!lobbyPlayerCheck.test(validatedPlayer)) {
+                throw new IllegalStateException("Build mode can only be entered in the lobby world");
             }
-            throw exception;
+            if (isBuildMode(validatedPlayer.getUniqueId())) {
+                return;
+            }
+
+            try {
+                lobbyItemRemover.accept(validatedPlayer);
+                clearInventory(validatedPlayer);
+                buildPlayers.add(validatedPlayer.getUniqueId());
+                validatedPlayer.setGameMode(GameMode.CREATIVE);
+            } catch (RuntimeException exception) {
+                buildPlayers.remove(validatedPlayer.getUniqueId());
+                try {
+                    applyNormalMode(validatedPlayer, true);
+                } catch (RuntimeException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
+            }
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
     }
 
     public void exitBuildMode(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        clearInventory(validatedPlayer);
-        buildPlayers.remove(validatedPlayer.getUniqueId());
-        applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer));
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            clearInventory(validatedPlayer);
+            buildPlayers.remove(validatedPlayer.getUniqueId());
+            applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer));
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
+        }
     }
 
     public void leaveLobby(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        boolean wasBuilding = buildPlayers.remove(validatedPlayer.getUniqueId());
-        if (wasBuilding) {
-            clearInventory(validatedPlayer);
-            validatedPlayer.setGameMode(normalGameMode());
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+        try {
+            Player validatedPlayer = player;
+            boolean wasBuilding = buildPlayers.remove(validatedPlayer.getUniqueId());
+            if (wasBuilding) {
+                clearInventory(validatedPlayer);
+                validatedPlayer.setGameMode(normalGameMode());
+            }
+            lobbyItemRemover.accept(validatedPlayer);
+        } finally {
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
-        lobbyItemRemover.accept(validatedPlayer);
     }
 
     public void handleQuit(UUID playerId) {
@@ -175,11 +218,12 @@ public final class LobbyPlayerStateService {
     public void refreshNormalGameModes() {
         requirePrimaryThread();
         for (Player player : onlinePlayersSupplier.get()) {
-            if (player != null
-                    && player.isOnline()
-                    && lobbyPlayerCheck.test(player)
-                    && !isBuildMode(player.getUniqueId())) {
-                player.setGameMode(normalGameMode());
+            if (player == null || !player.isOnline()) continue;
+            for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
+            try {
+                if (lobbyPlayerCheck.test(player) && !isBuildMode(player.getUniqueId())) player.setGameMode(normalGameMode());
+            } finally {
+                for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
             }
         }
     }
@@ -209,6 +253,9 @@ public final class LobbyPlayerStateService {
             }
         }
     }
+
+    public void addStateListener(LobbyPlayerStateListener listener) { stateListeners.add(Objects.requireNonNull(listener)); }
+    public void removeStateListener(LobbyPlayerStateListener listener) { stateListeners.remove(listener); }
 
     public void setItemRefreshEligibility(Predicate<Player> eligibility) {
         requirePrimaryThread();

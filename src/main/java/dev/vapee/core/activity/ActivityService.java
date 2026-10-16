@@ -38,6 +38,16 @@ public final class ActivityService {
     private final Map<VenueKey, UUID> venueReservations = new LinkedHashMap<>();
     private final Map<UUID, UUID> playerMemberships = new LinkedHashMap<>();
     private final Set<UUID> closingSessions = new HashSet<>();
+    private final Set<ActivityMembershipListener> membershipListeners = new java.util.LinkedHashSet<>();
+
+    public void addMembershipListener(ActivityMembershipListener listener) { membershipListeners.add(Objects.requireNonNull(listener)); }
+    public void removeMembershipListener(ActivityMembershipListener listener) { membershipListeners.remove(listener); }
+    private void membershipChanged(UUID playerId) {
+        for (var listener : List.copyOf(membershipListeners)) {
+            try { listener.membershipChanged(playerId); }
+            catch (RuntimeException failure) { logger.log(Level.WARNING, "Activity membership observer failed for " + playerId, failure); }
+        }
+    }
 
     public ActivityService(Server server, PlayerService playerService, Logger logger) {
         this(
@@ -283,8 +293,16 @@ public final class ActivityService {
             return ActivityResult.SESSION_FULL;
         }
 
+        try {
+            for (var listener : List.copyOf(membershipListeners)) listener.beforeJoin(validatedPlayer);
+        } catch (RuntimeException failure) {
+            logger.log(Level.WARNING, "Activity ownership handoff failed for " + playerId, failure);
+            membershipChanged(playerId);
+            return ActivityResult.HOOK_FAILED;
+        }
         ActivityParticipant participant = new ActivityParticipant(playerId, Instant.now());
         if (!session.addParticipant(participant)) {
+            membershipChanged(playerId);
             return ActivityResult.PLAYER_ALREADY_IN_ACTIVITY;
         }
         playerMemberships.put(playerId, session.getSessionId());
@@ -296,6 +314,8 @@ public final class ActivityService {
             playerMemberships.remove(playerId, session.getSessionId());
             logSessionFailure(session, "onParticipantJoined", exception);
             return ActivityResult.HOOK_FAILED;
+        } finally {
+            membershipChanged(playerId);
         }
 
         return ActivityResult.SUCCESS;
@@ -318,6 +338,7 @@ public final class ActivityService {
         ActivitySession session = sessions.get(sessionId);
         if (session == null) {
             playerMemberships.remove(validatedPlayerId, sessionId);
+            membershipChanged(validatedPlayerId);
             return ActivityResult.SESSION_NOT_FOUND;
         }
         if (!isWorldLoaded(session.getVenue().area().worldName())) {
@@ -328,6 +349,7 @@ public final class ActivityService {
         ActivityParticipant participant = session.removeParticipant(validatedPlayerId);
         playerMemberships.remove(validatedPlayerId, sessionId);
         if (participant == null) {
+            membershipChanged(validatedPlayerId);
             return ActivityResult.NOT_PARTICIPANT;
         }
 
@@ -337,6 +359,8 @@ public final class ActivityService {
         } catch (RuntimeException exception) {
             hookFailed = true;
             logSessionFailure(session, "onParticipantLeft", exception);
+        } finally {
+            membershipChanged(validatedPlayerId);
         }
 
         RegisteredActivityType registeredType = activityTypes.get(session.getActivityKey());
@@ -520,6 +544,8 @@ public final class ActivityService {
                     session.onParticipantLeft(participant, participantReason);
                 } catch (RuntimeException exception) {
                     logSessionFailure(session, "onParticipantLeft", exception);
+                } finally {
+                    membershipChanged(participant.uniqueId());
                 }
             }
             playerMemberships.entrySet().removeIf(entry -> entry.getValue().equals(session.getSessionId()));

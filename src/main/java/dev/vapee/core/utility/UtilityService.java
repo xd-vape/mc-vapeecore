@@ -28,6 +28,7 @@ public final class UtilityService {
     private final ToDoubleFunction<Player> maximumHealthProvider;
     private final Set<UUID> managedFlightPlayers = new HashSet<>();
     private final Set<UUID> managedSpeedPlayers = new HashSet<>();
+    private final Set<UtilityFlightListener> flightListeners = new java.util.LinkedHashSet<>();
 
     public UtilityService(JavaPlugin plugin) {
         this(
@@ -49,17 +50,23 @@ public final class UtilityService {
 
     public boolean toggleFlight(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        UUID playerId = validatedPlayer.getUniqueId();
-        if (managedFlightPlayers.remove(playerId)) {
-            validatedPlayer.setFlying(false);
-            validatedPlayer.setAllowFlight(false);
-            return false;
-        }
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(flightListeners)) listener.beforeFlightChange(player);
+        try {
+            Player validatedPlayer = player;
+            UUID playerId = validatedPlayer.getUniqueId();
+            if (managedFlightPlayers.remove(playerId)) {
+                validatedPlayer.setFlying(false);
+                validatedPlayer.setAllowFlight(false);
+                return false;
+            }
 
-        validatedPlayer.setAllowFlight(true);
-        managedFlightPlayers.add(playerId);
-        return true;
+            validatedPlayer.setAllowFlight(true);
+            managedFlightPlayers.add(playerId);
+            return true;
+        } finally {
+            for (var listener : java.util.List.copyOf(flightListeners)) listener.afterFlightChange(player.getUniqueId());
+        }
     }
 
     public UtilitySpeedResult setSpeed(Player player, int level) {
@@ -82,13 +89,19 @@ public final class UtilityService {
 
     public void setGameMode(Player player, GameMode gameMode) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        GameMode validatedGameMode = Objects.requireNonNull(gameMode, "gameMode");
-        clearManagedFlight(validatedPlayer);
-        validatedPlayer.setGameMode(validatedGameMode);
-        if (validatedGameMode == GameMode.SURVIVAL || validatedGameMode == GameMode.ADVENTURE) {
-            validatedPlayer.setFlying(false);
-            validatedPlayer.setAllowFlight(false);
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(flightListeners)) listener.beforeFlightChange(player);
+        try {
+            Player validatedPlayer = player;
+            GameMode validatedGameMode = Objects.requireNonNull(gameMode, "gameMode");
+            clearManagedFlight(validatedPlayer);
+            validatedPlayer.setGameMode(validatedGameMode);
+            if (validatedGameMode == GameMode.SURVIVAL || validatedGameMode == GameMode.ADVENTURE) {
+                validatedPlayer.setFlying(false);
+                validatedPlayer.setAllowFlight(false);
+            }
+        } finally {
+            for (var listener : java.util.List.copyOf(flightListeners)) listener.afterFlightChange(player.getUniqueId());
         }
     }
 
@@ -148,19 +161,26 @@ public final class UtilityService {
             validatedPlayer.setFlying(false);
             validatedPlayer.setAllowFlight(false);
         }
+        for (var listener : java.util.List.copyOf(flightListeners)) listener.afterFlightChange(validatedPlayer.getUniqueId());
     }
 
     public void normalizeTransientState(Player player) {
         requirePrimaryThread();
-        Player validatedPlayer = Objects.requireNonNull(player, "player");
-        managedFlightPlayers.remove(validatedPlayer.getUniqueId());
-        managedSpeedPlayers.remove(validatedPlayer.getUniqueId());
-        validatedPlayer.setWalkSpeed(DEFAULT_WALK_SPEED);
-        validatedPlayer.setFlySpeed(DEFAULT_FLY_SPEED);
-        if (validatedPlayer.getGameMode() == GameMode.SURVIVAL
-                || validatedPlayer.getGameMode() == GameMode.ADVENTURE) {
-            validatedPlayer.setFlying(false);
-            validatedPlayer.setAllowFlight(false);
+        Objects.requireNonNull(player, "player");
+        for (var listener : java.util.List.copyOf(flightListeners)) listener.beforeFlightChange(player);
+        try {
+            Player validatedPlayer = player;
+            managedFlightPlayers.remove(validatedPlayer.getUniqueId());
+            managedSpeedPlayers.remove(validatedPlayer.getUniqueId());
+            validatedPlayer.setWalkSpeed(DEFAULT_WALK_SPEED);
+            validatedPlayer.setFlySpeed(DEFAULT_FLY_SPEED);
+            if (validatedPlayer.getGameMode() == GameMode.SURVIVAL
+                    || validatedPlayer.getGameMode() == GameMode.ADVENTURE) {
+                validatedPlayer.setFlying(false);
+                validatedPlayer.setAllowFlight(false);
+            }
+        } finally {
+            for (var listener : java.util.List.copyOf(flightListeners)) listener.afterFlightChange(player.getUniqueId());
         }
     }
 
@@ -199,6 +219,9 @@ public final class UtilityService {
         managedFlightPlayers.clear();
         managedSpeedPlayers.clear();
     }
+
+    public void addFlightListener(UtilityFlightListener listener) { flightListeners.add(Objects.requireNonNull(listener)); }
+    public void removeFlightListener(UtilityFlightListener listener) { flightListeners.remove(listener); }
 
     public boolean hasManagedFlight(UUID playerId) {
         return managedFlightPlayers.contains(Objects.requireNonNull(playerId, "playerId"));
