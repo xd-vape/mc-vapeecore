@@ -133,9 +133,9 @@ public final class SpeedCommand implements TabExecutor {
         UtilitySpeedResult result = utilityService.setSpeed(target, level);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component type = tr("utility.speed." + result.type().name().toLowerCase(java.util.Locale.ROOT));
-        Component message = self ? tr("utility.speed.self", java.util.Map.of("type", type, "level", Component.text(level)))
-                : tr("utility.speed.other", java.util.Map.of("type", type, "level", Component.text(level), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT)));
+        Component type = tr("utility.speed." + result.type().name().toLowerCase(java.util.Locale.ROOT)).color(MessageStyle.HIGHLIGHT);
+        Component message = self ? tr("utility.speed.self", java.util.Map.of("type", type, "level", Component.text(level, MessageStyle.HIGHLIGHT)))
+                : tr("utility.speed.other", java.util.Map.of("type", type, "level", Component.text(level, MessageStyle.HIGHLIGHT), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT)));
         messageSender.accept(sender, message.color(MessageStyle.BODY));
         return true;
     }

@@ -169,7 +169,7 @@ public final class CoinsCommand implements TabExecutor {
                 sendUnknownTarget(sender);
                 return;
             }
-            messageService.send(sender, tr("economy.target-balance", java.util.Map.of("player", Component.text(target.name()), "balance", Component.text(format(balance.getAsLong()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
+            messageService.send(sender, tr("economy.target-balance", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "balance", Component.text(format(balance.getAsLong()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
         } catch (RuntimeException exception) {
             logReadFailure(sender, target.id().toString(), exception);
         }
@@ -271,14 +271,14 @@ public final class CoinsCommand implements TabExecutor {
     private void sendMutationSuccess(CommandSender sender, Target target, long amount,
                                      Mutation mutation, long balance) {
         String key = "economy.admin." + mutation.name().toLowerCase(Locale.ROOT);
-        messageService.send(sender, tr(key, java.util.Map.of("player", Component.text(target.name()),
-                "amount", Component.text(format(amount)), "balance", Component.text(format(balance)))).color(MessageStyle.BODY));
+        messageService.send(sender, tr(key, java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT),
+                "amount", Component.text(format(amount), MessageStyle.HIGHLIGHT), "balance", Component.text(format(balance), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void notifyTarget(Player target, long amount, Mutation mutation, long balance) {
         String key = "economy.notice." + mutation.name().toLowerCase(Locale.ROOT);
-        messageService.send(target, tr(key, java.util.Map.of("amount", Component.text(format(amount)),
-                "balance", Component.text(format(balance)))).color(MessageStyle.BODY));
+        messageService.send(target, tr(key, java.util.Map.of("amount", Component.text(format(amount), MessageStyle.HIGHLIGHT),
+                "balance", Component.text(format(balance), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private static String actor(CommandSender sender) {
@@ -298,7 +298,7 @@ public final class CoinsCommand implements TabExecutor {
     }
 
     private void sendPlayerNotLoaded(CommandSender sender, String name) {
-        messageService.send(sender, tr("economy.not-loaded", java.util.Map.of("player", Component.text(name))).color(NamedTextColor.RED));
+        messageService.send(sender, tr("economy.not-loaded", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void sendUnknownTarget(CommandSender sender) {

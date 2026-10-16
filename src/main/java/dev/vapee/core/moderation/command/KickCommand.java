@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 import net.kyori.adventure.text.Component;
 
@@ -22,7 +23,7 @@ public final class KickCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().recordKick(target.uniqueId(), actor, reason(args, 1)));
         if (record == null) return;
-        context.send(sender, tr("moderation.kick.saved", java.util.Map.of("player", Component.text(target.name()), "reason", Component.text(record.reason()))));
+        context.send(sender, tr("moderation.kick.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "reason", Component.text(record.reason()))));
         context.disconnect(sender, actor, target, record, false);
     }
 }

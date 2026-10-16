@@ -1,5 +1,6 @@
 package dev.vapee.core.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.VapeeCore;
@@ -251,17 +252,17 @@ public final class CoreCommand implements TabExecutor {
     private void sendOverview(CommandSender sender) {
         RuntimeInfo info = runtimeInfo.get();
         messageService.send(sender, labeledValue("core.plugin", info.pluginName(), NamedTextColor.AQUA));
-        messageService.send(sender, labeledValue("core.version", info.pluginVersion(), NamedTextColor.WHITE));
-        messageService.send(sender, labeledValue("core.server", info.serverVersion(), NamedTextColor.WHITE));
+        messageService.send(sender, labeledValue("core.version", info.pluginVersion(), MessageStyle.HIGHLIGHT));
+        messageService.send(sender, labeledValue("core.server", info.serverVersion(), MessageStyle.HIGHLIGHT));
         messageService.send(sender, tr("core.status"));
         messageService.send(sender, labeledValue("core.active-modules",
-                Integer.toString(info.modules()), NamedTextColor.WHITE));
+                Integer.toString(info.modules()), MessageStyle.HIGHLIGHT));
         messageService.send(sender, labeledValue("core.loaded-players",
-                Integer.toString(info.loadedPlayers()), NamedTextColor.WHITE));
+                Integer.toString(info.loadedPlayers()), MessageStyle.HIGHLIGHT));
         messageService.send(sender, tr("core.luckperms"));
         if (sender instanceof Player player) {
             primaryGroup.apply(player.getUniqueId()).ifPresent(primaryGroup ->
-                    messageService.send(sender, labeledValue("core.primary-group", primaryGroup, NamedTextColor.WHITE))
+                    messageService.send(sender, labeledValue("core.primary-group", primaryGroup, MessageStyle.HIGHLIGHT))
             );
         }
         boolean debug = info.debug();
@@ -272,12 +273,12 @@ public final class CoreCommand implements TabExecutor {
     private void sendVersion(CommandSender sender) {
         RuntimeInfo info = runtimeInfo.get();
         messageService.send(sender, labeledValue(
-                "core.plugin-version", info.pluginVersion(), NamedTextColor.WHITE));
+                "core.plugin-version", info.pluginVersion(), MessageStyle.HIGHLIGHT));
         messageService.send(sender, labeledValue("core.paper-version",
                 info.serverVersion() + " / " + info.bukkitVersion(),
-                NamedTextColor.WHITE));
+                MessageStyle.HIGHLIGHT));
         messageService.send(sender, labeledValue(
-                "core.java-version", info.javaVersion(), NamedTextColor.WHITE));
+                "core.java-version", info.javaVersion(), MessageStyle.HIGHLIGHT));
     }
 
     private void reloadConfig(CommandSender sender) {
@@ -328,7 +329,7 @@ public final class CoreCommand implements TabExecutor {
     }
 
     private Component reloadFailure(String key, String component) {
-        return tr(key, java.util.Map.of("participant", Component.text(component, NamedTextColor.WHITE))).color(NamedTextColor.RED);
+        return tr(key, java.util.Map.of("participant", Component.text(component, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED);
     }
 
     record RuntimeInfo(String pluginName, String pluginVersion, String serverVersion, String bukkitVersion,

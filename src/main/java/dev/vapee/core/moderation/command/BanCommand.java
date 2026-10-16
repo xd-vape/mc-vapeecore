@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 import net.kyori.adventure.text.Component;
 
@@ -38,7 +39,7 @@ public final class BanCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().issueBan(target.uniqueId(), actor, reason(args, 2), expiry));
         if (record == null) return;
-        context.send(sender, tr(expiry.isEmpty() ? "moderation.ban.saved-permanent" : "moderation.ban.saved-duration", java.util.Map.of("player", Component.text(target.name()), "duration", Component.text(duration.display()), "reason", Component.text(record.reason()))));
+        context.send(sender, tr(expiry.isEmpty() ? "moderation.ban.saved-permanent" : "moderation.ban.saved-duration", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "duration", Component.text(duration.display(), MessageStyle.HIGHLIGHT), "reason", Component.text(record.reason()))));
         context.disconnect(sender, actor, target, record, true);
     }
 

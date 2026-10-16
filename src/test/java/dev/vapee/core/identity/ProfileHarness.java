@@ -78,6 +78,10 @@ public final class ProfileHarness {
                     "first/last join use deterministic injected time zone and correct labels");
             check(messages.stream().anyMatch(component -> colored(component, "Owner", NamedTextColor.DARK_RED)),
                     "rank display retains RankInfo dark-red color");
+            check(messages.stream().anyMatch(c -> dev.vapee.core.message.MessageColorAssertions.hasTextColor(c,
+                    "_ImVentex_", NamedTextColor.AQUA)), "profile name is highlighted");
+            check(messages.stream().anyMatch(c -> dev.vapee.core.message.MessageColorAssertions.hasTextColor(c,
+                    "12,500", NamedTextColor.AQUA)), "profile balance is highlighted without losing rank colors");
             CommandSender console = sender("Console", true, messages);
             messages.clear();
             command.onCommand(console, null, "profile", new String[0]);

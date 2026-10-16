@@ -203,7 +203,7 @@ public final class ClanCommandHarness {
         check(all(actor).contains("Unknown clan command: <red>unknown</red>")
                         && all(actor).contains("Use /clan help to view all clan commands."),
                 "unknown command is identified and points to optional help");
-        check(hasLiteral(actor.received, "<red>unknown</red>", NamedTextColor.WHITE),
+        check(hasLiteral(actor.received, "<red>unknown</red>", NamedTextColor.AQUA),
                 "unknown user input remains literal component text");
 
         ClanMenuFixture choices = new ClanMenuFixture();

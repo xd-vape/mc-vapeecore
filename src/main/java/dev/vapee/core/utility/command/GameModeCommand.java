@@ -149,7 +149,7 @@ public final class GameModeCommand implements TabExecutor {
         utilityService.setGameMode(target, gameMode);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component mode = tr("utility.game-mode." + gameMode.name().toLowerCase(java.util.Locale.ROOT));
+        Component mode = tr("utility.game-mode." + gameMode.name().toLowerCase(java.util.Locale.ROOT)).color(MessageStyle.HIGHLIGHT);
         Component message = (self ? tr("utility.game-mode.self", java.util.Map.of("mode", mode))
                 : tr("utility.game-mode.other", java.util.Map.of("mode", mode, "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))))
                 .color(MessageStyle.BODY);

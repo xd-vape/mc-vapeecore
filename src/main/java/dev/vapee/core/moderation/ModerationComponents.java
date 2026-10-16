@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import net.kyori.adventure.text.Component;
@@ -44,7 +45,7 @@ public final class ModerationComponents {
         return tr("moderation.reason", java.util.Map.of("reason", Component.text(reason))).color(NamedTextColor.WHITE);
     }
     private static Component expiry(ModerationRecord record) {
-        Component expiry = record.expiresAt().map(value -> (Component) Component.text(time(value))).orElseGet(() -> tr("moderation.permanent"));
+        Component expiry = record.expiresAt().map(value -> (Component) Component.text(time(value), MessageStyle.HIGHLIGHT)).orElseGet(() -> tr("moderation.permanent"));
         return tr("moderation.expires", java.util.Map.of("expiry", expiry)).color(NamedTextColor.GRAY);
     }
 
@@ -67,13 +68,13 @@ public final class ModerationComponents {
         if (record.revocation().isPresent()) {
             ModerationRevocation revoke = record.revocation().get();
             result = result.append(Component.newline()).append(tr("moderation.revoked", java.util.Map.of("actor", actor(revoke.actor(), actorName),
-                    "time", Component.text(time(revoke.revokedAt())))).color(NamedTextColor.GRAY));
+                    "time", Component.text(time(revoke.revokedAt()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
             if (revoke.reason().isPresent()) result = result.append(Component.newline()).append(tr("moderation.revocation-reason",
                     java.util.Map.of("reason", Component.text(revoke.reason().get()))).color(NamedTextColor.WHITE));
         }
         return result;
     }
     private static Component actor(ModerationActor actor, Function<ModerationActor, String> name) {
-        return actor.playerId().isEmpty() ? tr("moderation.console") : Component.text(name.apply(actor));
+        return actor.playerId().isEmpty() ? tr("moderation.console") : Component.text(name.apply(actor), MessageStyle.HIGHLIGHT);
     }
 }

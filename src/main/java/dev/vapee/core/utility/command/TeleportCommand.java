@@ -303,8 +303,8 @@ public final class TeleportCommand implements TabExecutor {
             case MIXED_COORDINATES -> tr("utility.teleport.parse.mixed");
             case NONFINITE_DESTINATION -> tr("utility.teleport.parse.destination");
             case NONFINITE_ROTATION -> tr("utility.teleport.parse.rotation");
-            case INVALID_COORDINATE -> tr("utility.teleport.parse.coordinate-value", java.util.Map.of("value", Component.text(failure.value())));
-            case INVALID_ROTATION -> tr("utility.teleport.parse.rotation-value", java.util.Map.of("value", Component.text(failure.value())));
+            case INVALID_COORDINATE -> tr("utility.teleport.parse.coordinate-value", java.util.Map.of("value", Component.text(failure.value(), MessageStyle.HIGHLIGHT)));
+            case INVALID_ROTATION -> tr("utility.teleport.parse.rotation-value", java.util.Map.of("value", Component.text(failure.value(), MessageStyle.HIGHLIGHT)));
         };
     }
 

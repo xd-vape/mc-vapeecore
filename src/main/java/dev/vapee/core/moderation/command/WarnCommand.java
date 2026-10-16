@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 import net.kyori.adventure.text.Component;
 
@@ -21,7 +22,7 @@ public final class WarnCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().issueWarning(target.uniqueId(), actor, reason(args, 1)));
         if (record == null) return;
-        context.send(sender, tr("moderation.warn.saved", java.util.Map.of("player", Component.text(target.name()), "reason", Component.text(record.reason()))));
+        context.send(sender, tr("moderation.warn.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "reason", Component.text(record.reason()))));
         try {
             Player online = context.online(target.uniqueId());
             if (online != null) context.send(online, tr("moderation.warn.received", java.util.Map.of("reason", Component.text(record.reason()))));

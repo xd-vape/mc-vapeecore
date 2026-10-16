@@ -19,7 +19,25 @@ public final class ModerationCommandHarness {
         guards(); targets(); warnings(); bans(); unbans(); kicks(); history(); completion(); mutes(); descriptor();
         hierarchyMatrix(); hierarchyFreshness(); hierarchyAsync(); hierarchyCompletion();
         safeCompletionArguments();
+        highlightFeedback();
         System.out.println("ModerationCommandHarness passed " + checks + " checks.");
+    }
+
+    private static void highlightFeedback() throws Exception {
+        for (Locale locale : List.of(Locale.US, Locale.GERMANY)) {
+            Fixture f = new Fixture(); f.staff.locale = locale;
+            new BanCommand(f.context).onCommand(f.staff.sender, null, "ban", new String[]{"Alex", "2h", ATTACK});
+            Component feedback = f.staff.output.getLast();
+            check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(feedback, "Alex", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
+                    "localized actual moderation target highlight " + locale);
+            check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(feedback, "2h", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
+                    "localized duration highlight " + locale);
+            check(noEvents(feedback) && plain(feedback).contains(ATTACK), "highlight never interprets staff reason as markup");
+            new HistoryCommand(f.context).onCommand(f.staff.sender, null, "history", new String[]{"Alex"});
+            Component heading = f.staff.output.stream().filter(c -> plain(c).contains("Alex") && plain(c).contains("1/1")).findFirst().orElseThrow();
+            check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(heading, "1", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
+                    "actual history page numbers highlighted " + locale);
+        }
     }
 
     private static void localizedRecipients() throws Exception {

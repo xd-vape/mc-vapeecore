@@ -278,7 +278,7 @@ public final class WarpCommand implements TabExecutor {
             return;
         }
         WarpPoint warp = warpService.getWarp(args[1]).orElseThrow();
-        messageService.send(sender, tr("warp.order-changed", Map.of("id", Component.text(warp.id(), MessageStyle.HIGHLIGHT), "order", Component.text(warp.navigation().order()))).color(MessageStyle.BODY));
+        messageService.send(sender, tr("warp.order-changed", Map.of("id", Component.text(warp.id(), MessageStyle.HIGHLIGHT), "order", Component.text(warp.navigation().order(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     static Integer parseOrder(String input) {
@@ -348,12 +348,12 @@ public final class WarpCommand implements TabExecutor {
     private static Component listMessage(List<WarpPoint> warps) {
         Component output = tr("warp.list.title").color(NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(tr("warp.list.count", Map.of("count", Component.text(warps.size()))).color(NamedTextColor.GRAY));
+                .append(tr("warp.list.count", Map.of("count", Component.text(warps.size(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
         for (WarpPoint warp : warps) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.DARK_GRAY))
                     .append(Component.text(warp.id(), NamedTextColor.AQUA))
-                    .append(tr("warp.list.entry", Map.of("visibility", tr(warp.navigation().visible() ? "warp.visible" : "warp.hidden-state"), "order", Component.text(warp.navigation().order()))).color(NamedTextColor.GRAY));
+                    .append(tr("warp.list.entry", Map.of("visibility", tr(warp.navigation().visible() ? "warp.visible" : "warp.hidden-state"), "order", Component.text(warp.navigation().order(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
         }
         return output;
     }

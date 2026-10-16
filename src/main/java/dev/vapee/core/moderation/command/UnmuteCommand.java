@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 import net.kyori.adventure.text.Component;
 
@@ -22,7 +23,7 @@ public final class UnmuteCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target, () -> context.service().revokeMute(target.uniqueId(), actor,
                 reason.isBlank() ? Optional.empty() : Optional.of(reason)));
         if (record == null) return;
-        context.send(sender, tr("moderation.unmute.saved", java.util.Map.of("player", Component.text(target.name()))));
+        context.send(sender, tr("moderation.unmute.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT))));
         context.notifyMute(sender, actor, target, record, true);
     }
 }

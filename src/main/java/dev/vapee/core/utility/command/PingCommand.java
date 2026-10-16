@@ -97,8 +97,8 @@ public final class PingCommand implements TabExecutor {
 
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component message = (self ? tr("utility.ping.self", java.util.Map.of("ping", Component.text(target.getPing())))
-                : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing()), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))))
+        Component message = (self ? tr("utility.ping.self", java.util.Map.of("ping", Component.text(target.getPing(), MessageStyle.HIGHLIGHT)))
+                : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing(), MessageStyle.HIGHLIGHT), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))))
                 .color(MessageStyle.BODY);
         messageSender.accept(sender, message);
         return true;

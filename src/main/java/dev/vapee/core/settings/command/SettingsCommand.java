@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -158,7 +159,7 @@ public final class SettingsCommand implements TabExecutor {
         switch (result) {
             case SUCCESS -> {
                 apply(player);
-                messageService.send(player, tr("visible-players.added", java.util.Map.of("player", Component.text(target.name(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+                messageService.send(player, tr("visible-players.added", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             }
             case CANNOT_ADD_SELF -> messageService.send(player,
                     tr("visible-players.self"));
@@ -204,7 +205,7 @@ public final class SettingsCommand implements TabExecutor {
         switch (result) {
             case SUCCESS -> {
                 apply(player);
-                messageService.send(player, tr("visible-players.removed", java.util.Map.of("player", Component.text(display, NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+                messageService.send(player, tr("visible-players.removed", java.util.Map.of("player", Component.text(display, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             }
             case NOT_ADDED -> messageService.send(player,
                     tr("visible-players.not-added"));

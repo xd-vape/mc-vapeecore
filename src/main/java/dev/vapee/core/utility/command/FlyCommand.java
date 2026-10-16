@@ -143,7 +143,7 @@ public final class FlyCommand implements TabExecutor {
         boolean enabled = utilityService.toggleFlight(target);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component state = tr(enabled ? "common.enabled-lower" : "common.disabled-lower");
+        Component state = tr(enabled ? "common.enabled-lower" : "common.disabled-lower").color(MessageStyle.HIGHLIGHT);
         Component message = self ? tr("utility.fly.self", java.util.Map.of("state", state))
                 : tr("utility.fly.other", java.util.Map.of("state", state, "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT)));
         messageSender.accept(sender, message.color(MessageStyle.BODY));
