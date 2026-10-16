@@ -25,7 +25,7 @@ public final class LobbyGlideHandoffHarness {
             check(!f.flight(p).isCancelled(),"managed flight input is never intercepted");
             p.ground=true;check(!f.utility.toggleFlight(p.player),"real Utility disables managed flight");f.flush();
             check(p.allow&&!p.flying&&f.glide.isOwned(p.id),"disabling /fly rearms eligible grounded lobby");
-            check(inventory.equals(p.inventoryBytes())&&p.inventoryReads==0,"/fly handoff introduces no equipment access");
+            check(inventory.equals(p.inventoryBytes())&&p.inventoryWrites==0,"/fly handoff preserves existing equipment");
         }
     }
     private static void build()throws Exception {
@@ -70,7 +70,7 @@ public final class LobbyGlideHandoffHarness {
             check(f.activities.leaveCurrentSession(p.id,ActivityLeaveReason.VOLUNTARY)==ActivityResult.SUCCESS,"actual Activity leave succeeds");f.flush();
             check(p.allow&&!p.gliding&&f.glide.isOwned(p.id),"Activity leave rearms eligible NORMAL owner");
         }
-        check(inventory.equals(p.inventoryBytes())&&p.inventoryReads==0,"generic Activity handoff changes no equipment");
+        check(inventory.equals(p.inventoryBytes())&&p.inventoryWrites==0,"generic Activity handoff changes no equipment");
     }
     private static void activityClose()throws Exception {
         var f=new LobbyGlideFixture();var p=f.user("Close");f.glide.reconcile(p.player);var session=session(f,p,false);

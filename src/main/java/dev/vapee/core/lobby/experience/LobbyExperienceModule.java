@@ -174,7 +174,7 @@ public final class LobbyExperienceModule implements CoreModule {
             lobbyModule.getLobbyPlayerStateService().refreshLobbyItems();
             glideService = newGlide;
             glideListener = newGlideListener;
-            for (Player player : plugin.getServer().getOnlinePlayers()) newGlide.reconcile(player);
+            for (Player player : plugin.getServer().getOnlinePlayers()) newGlide.onPlayerAvailable(player);
         } catch (RuntimeException exception) {
             detachGlide(newGlide, newGlideListener);
             glideService = null; glideListener = null;

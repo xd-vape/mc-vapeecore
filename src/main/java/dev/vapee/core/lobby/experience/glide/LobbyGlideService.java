@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.function.*;
 import java.util.logging.*;
 
-/** Armor-free movement; owns only explicitly acquired flight/glide flags, never equipment. */
+/** Lobby movement with disposable wings in an empty chest slot; real armor is never replaced. */
 public final class LobbyGlideService implements UtilityFlightListener, LobbyPlayerStateListener, ActivityMembershipListener {
     private static final double LAUNCH_UP = 0.85;
     private static final double LAUNCH_FORWARD = 0.85;
@@ -31,7 +31,8 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
     private static final class Pending {
         final long generation;
         Task task;
-        Pending(long generation) { this.generation = generation; }
+        final boolean recoverEquipment;
+        Pending(long generation, boolean recoverEquipment) { this.generation = generation; this.recoverEquipment = recoverEquipment; }
     }
     @FunctionalInterface interface Task { void cancel(); }
     private final Function<UUID, Player> online;
@@ -39,6 +40,7 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
     private final Predicate<UUID> managedFlight;
     private final Function<Runnable, Task> nextTick;
     private final Logger logger;
+    private final LobbyGlideEquipment equipment;
     private final Map<UUID, State> states = new HashMap<>();
     private final Map<UUID, Pending> pending = new HashMap<>();
     private long generation;
@@ -47,13 +49,19 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
     public LobbyGlideService(JavaPlugin plugin, NavigatorAccessPolicy access, UtilityService utility) {
         this(plugin.getServer()::getPlayer, access::canAccess, utility::hasManagedFlight,
                 action -> { var task = plugin.getServer().getScheduler().runTask(plugin, action); return task::cancel; },
-                plugin.getLogger());
+                plugin.getLogger(), new LobbyGlideEquipment(plugin));
     }
     LobbyGlideService(Function<UUID, Player> online, Predicate<Player> access, Predicate<UUID> managedFlight,
-                      Function<Runnable, Task> nextTick, Logger logger) {
+                      Function<Runnable, Task> nextTick, Logger logger, LobbyGlideEquipment equipment) {
         this.online = Objects.requireNonNull(online); this.access = Objects.requireNonNull(access);
         this.managedFlight = Objects.requireNonNull(managedFlight); this.nextTick = Objects.requireNonNull(nextTick);
         this.logger = Objects.requireNonNull(logger);
+        this.equipment = Objects.requireNonNull(equipment);
+    }
+    LobbyGlideEquipment equipment() { return equipment; }
+    public void onPlayerAvailable(Player player) {
+        equipment.cleanupOrphans(player);
+        deferEquipmentCleanup(player.getUniqueId());
     }
     public boolean isOwned(UUID id) { return states.containsKey(id); }
     boolean isActive(UUID id) { var state = states.get(id); return state != null && state.phase == Phase.GLIDING; }
@@ -96,16 +104,22 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
             }
         } catch (RuntimeException failure) { failed(player, "reconcile", failure); }
     }
-    public void deferReconcile(UUID id) {
+    public void deferReconcile(UUID id) { queueReconcile(id, false); }
+    void deferEquipmentCleanup(UUID id) { queueReconcile(id, true); }
+    private void queueReconcile(UUID id, boolean recoverEquipment) {
         if (!enabled) return;
+        Pending previous = pending.get(id);
+        boolean recover = recoverEquipment || (previous != null && previous.recoverEquipment);
         cancelPending(id);
-        Pending request = new Pending(++generation);
+        Pending request = new Pending(++generation, recover);
         pending.put(id, request);
         try {
             request.task = nextTick.apply(() -> {
                 if (!enabled || pending.get(id) != request) return;
                 pending.remove(id);
-                reconcile(online.apply(id));
+                Player player = online.apply(id);
+                if (player != null && request.recoverEquipment) equipment.cleanupOrphans(player);
+                reconcile(player);
             });
         } catch (RuntimeException failure) {
             pending.remove(id, request);
@@ -145,16 +159,18 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
             expected.phase = Phase.GLIDING;
             expected.glideOwned = true;
             player.setGliding(true);
-            if (!player.isGliding()) { expected.glideOwned = false; expected.phase = Phase.WAITING; }
+            if (player.isGliding()) equipment.equip(player, expected.generation);
+            else { expected.glideOwned = false; expected.phase = Phase.WAITING; }
         } catch (RuntimeException failure) { failed(player, "start glide", failure); }
     }
-    /** Keep only the feature's active airborne no-equipment glide; all termination paths remain open. */
+    /** Keep only the feature's active airborne glide; all termination paths remain open. */
     boolean keepGliding(Player player) {
         State state = states.get(player.getUniqueId());
         if (state == null || state.phase != Phase.GLIDING || !state.glideOwned) return false;
         if (!eligible(player) || !flightMatches(player, state)) { release(player); return false; }
         if (player.isOnGround() || !clearAir(player)) {
             state.glideOwned = false; state.phase = Phase.WAITING;
+            equipment.release(player, state.generation);
             deferReconcile(player.getUniqueId());
             return false;
         }
@@ -167,6 +183,7 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
             if (!eligible(player) || !flightMatches(player, state)) { release(player); return; }
             if (state.phase == Phase.GLIDING && (player.isOnGround() || !clearAir(player) || !player.isGliding())) {
                 state.phase = Phase.WAITING;
+                equipment.release(player, state.generation);
                 boolean stop = state.glideOwned && player.isGliding(); state.glideOwned = false;
                 if (stop) player.setGliding(false);
             }
@@ -189,6 +206,7 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
         if (state == null || state.generation != token) return;
         states.remove(id);
         cancelPending(id); cancel(state.task, id);
+        equipment.release(player, state.generation);
         // Remove authority before touching the flag: our glide-stop listener must permit this cleanup.
         if (state.glideOwned && player.isGliding()) {
             try { player.setGliding(false); }
@@ -218,12 +236,12 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
                 try { Player player = online.apply(id); if (player != null) release(player); }
                 catch (RuntimeException failure) { logger.log(Level.WARNING, "Could not clean up lobby glide for " + id, failure); }
             }
-        } finally { states.clear(); pending.clear(); }
+        } finally { equipment.shutdown(online); states.clear(); pending.clear(); }
     }
     @Override public void beforeFlightChange(Player player) { release(player); }
-    @Override public void afterFlightChange(UUID id) { deferReconcile(id); }
+    @Override public void afterFlightChange(UUID id) { deferEquipmentCleanup(id); }
     @Override public void beforeStateChange(Player player) { release(player); }
-    @Override public void afterStateChange(UUID id) { deferReconcile(id); }
+    @Override public void afterStateChange(UUID id) { deferEquipmentCleanup(id); }
     @Override public void beforeJoin(Player player) { release(player); }
-    @Override public void membershipChanged(UUID id) { deferReconcile(id); }
+    @Override public void membershipChanged(UUID id) { deferEquipmentCleanup(id); }
 }

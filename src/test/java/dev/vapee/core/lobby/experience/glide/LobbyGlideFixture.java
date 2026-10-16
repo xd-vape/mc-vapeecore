@@ -27,13 +27,16 @@ final class LobbyGlideFixture {
     final World lobby = world("lobby"), other = world("other");
     World configured = lobby;
     boolean permitInventory;
-    int profileReads;
+    int profileReads, equipmentItems;
+    boolean rejectEquipmentMeta;
     final PlayerService players;
     final LobbyPlayerStateService states;
     final ActivityService activities;
     final UtilityService utility;
     final LobbyGlideService glide;
     final LobbyGlideListener listener;
+    final org.bukkit.NamespacedKey equipmentKey=new org.bukkit.NamespacedKey("vapeecore","glide_elytra");
+    final LobbyGlideEquipment equipment;
     LobbyGlideFixture() throws Exception {
         logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() {
@@ -57,8 +60,9 @@ final class LobbyGlideFixture {
                 (Predicate<World>)w->w==configured, (Function<UUID,LobbyPlayerMode>)states::getMode,
                 (Predicate<UUID>)activities::isParticipating);
         utility = new UtilityService(()->true,this::players,p->20);
+        equipment = new LobbyGlideEquipment(equipmentKey,()->{equipmentItems++;var item=new GlideTestItem(Material.ELYTRA);item.rejectMeta=rejectEquipmentMeta;return item;},logger);
         glide = new LobbyGlideService(id->online.containsKey(id)?online.get(id).player:null,access::canAccess,
-                utility::hasManagedFlight, action->{var task=new Deferred(action);tasks.add(task);return task;},logger);
+                utility::hasManagedFlight, action->{var task=new Deferred(action);tasks.add(task);return task;},logger,equipment);
         listener = new LobbyGlideListener(glide);
         utility.addFlightListener(glide); states.addStateListener(glide); activities.addMembershipListener(glide);
     }
@@ -82,11 +86,27 @@ final class LobbyGlideFixture {
         World world=lobby;GameMode mode=GameMode.ADVENTURE;
         boolean ground=true,onlineState=true,dead,water,vehicle,swimming,climbing,allow,flying,gliding,failRelease;
         int launches,glideWrites,inventoryReads,inventoryWrites,messages;
+        final ItemStack[] contents=new ItemStack[41];
+        ItemStack cursorStack=new GlideTestItem(Material.PAPER);
+        boolean failEquipmentWrite, failInventoryRead, rejectGliding;
         Vector velocity=new Vector();
         User(String name){
+            contents[3]=new GlideTestItem(Material.DIAMOND);contents[8]=new GlideTestItem(Material.EMERALD);
+            contents[36]=new GlideTestItem(Material.DIAMOND_BOOTS);contents[37]=new GlideTestItem(Material.IRON_LEGGINGS);
+            contents[38]=new GlideTestItem(Material.DIAMOND_CHESTPLATE);contents[39]=new GlideTestItem(Material.GOLDEN_HELMET);
+            contents[40]=new GlideTestItem(Material.SHIELD);
             var inventory=proxy(PlayerInventory.class,(method,args)->{
                 if(method.startsWith("set")||method.equals("clear"))inventoryWrites++;
-                return DEFAULT;
+                return switch(method){
+                    case "getContents"->contents.clone();case "getStorageContents"->Arrays.copyOf(contents,36);
+                    case "getArmorContents"->Arrays.copyOfRange(contents,36,40);case "getSize"->41;
+                    case "getChestplate"->contents[38];case "getItemInOffHand"->contents[40];case "getItem"->contents[(int)args[0]];
+                    case "setChestplate"->{contents[38]=(ItemStack)args[0];if(failEquipmentWrite){failEquipmentWrite=false;throw new IllegalStateException("partial equip failure");}yield null;}
+                    case "setItem"->{contents[(int)args[0]]=(ItemStack)args[1];yield null;}
+                    case "setArmorContents"->{System.arraycopy(args[0],0,contents,36,4);yield null;}
+                    case "setItemInOffHand"->{contents[40]=(ItemStack)args[0];yield null;}
+                    case "clear"->{Arrays.fill(contents,null);yield null;}default->DEFAULT;
+                };
             });
             player=proxy(Player.class,(method,args)->switch(method){
                 case "getUniqueId"->id;case "getName"->name;case "isOnline"->onlineState;
@@ -98,15 +118,18 @@ final class LobbyGlideFixture {
                 case "getAllowFlight"->allow;case "isFlying"->flying;case "isGliding"->gliding;
                 case "setAllowFlight"->{if(failRelease&&!(boolean)args[0])throw new IllegalStateException("release failure");allow=(boolean)args[0];yield null;}
                 case "setFlying"->{flying=(boolean)args[0];yield null;}
-                case "setGliding"->{glideWrites++;var e=new EntityToggleGlideEvent(player(),(boolean)args[0]);listener.onGlide(e);if(!e.isCancelled())gliding=(boolean)args[0];yield null;}
+                case "setGliding"->{glideWrites++;var e=new EntityToggleGlideEvent(player(),(boolean)args[0]);listener.onGlide(e);if(!e.isCancelled()&&(!(boolean)args[0]||!rejectGliding))gliding=(boolean)args[0];yield null;}
                 case "setVelocity"->{launches++;velocity=((Vector)args[0]).clone();yield null;}
                 case "getVelocity"->velocity.clone();
-                case "getInventory"->{inventoryReads++;if(!permitInventory)throw new AssertionError("Glide armor/inventory integrity: inventory access forbidden");yield inventory;}
+                case "getInventory"->{inventoryReads++;if(failInventoryRead)throw new IllegalStateException("inventory read failure");yield inventory;}
+                case "getItemOnCursor"->cursorStack;case "setItemOnCursor"->{cursorStack=(ItemStack)args[0];inventoryWrites++;yield null;}
                 case "sendMessage"->{messages++;yield null;}
                 default->DEFAULT;
             });
         }
         private Player player(){return player;}
-        String inventoryBytes(){return Arrays.toString(armor)+Arrays.toString(storage)+Arrays.toString(offhand)+Arrays.toString(cursor);}
+        String inventoryBytes(){return Arrays.toString(armor)+Arrays.toString(storage)+Arrays.toString(offhand)+Arrays.toString(cursor)
+                +Arrays.stream(contents).map(User::fingerprint).toList()+fingerprint(cursorStack);}
+        private static String fingerprint(ItemStack item){return item==null?"empty":((GlideTestItem)item).fingerprint();}
     }
 }

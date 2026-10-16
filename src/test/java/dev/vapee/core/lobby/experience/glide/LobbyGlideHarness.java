@@ -32,7 +32,7 @@ public final class LobbyGlideHarness {
         check(!p.gliding&&!p.allow,"no airborne rearm in water");p.water=false;p.ground=true;f.glide.moved(p.player,true);
         check(p.allow&&!p.gliding,"grounded movement fallback rearms after interrupted glide");
         f.glide.release(p.player);check(!p.allow&&!f.glide.isOwned(p.id),"owned armed flag restored on release");
-        check(p.inventoryBytes().equals(inventory)&&p.inventoryReads==0&&p.inventoryWrites==0,"exact armor/storage/offhand/cursor snapshot unchanged and no inventory access");
+        check(p.inventoryBytes().equals(inventory)&&p.inventoryWrites==0,"exact armor/storage/offhand/cursor snapshot unchanged and no writes to occupied armor");
         check(p.messages==0,"successful movement is silent");
     }
     private static void eligibility()throws Exception {
@@ -88,7 +88,7 @@ public final class LobbyGlideHarness {
         p.mode=GameMode.ADVENTURE;p.allow=false;f.listener.onGameMode(new PlayerGameModeChangeEvent(p.player,GameMode.ADVENTURE));f.flush();check(p.allow,"return from native mode rearms");
         f.glide.deferReconcile(p.id);var quit=new PlayerQuitEvent(p.player,Component.empty());f.listener.onQuit(quit);p.onlineState=false;f.listener.afterQuit(quit);f.flush();
         check(!f.glide.isOwned(p.id)&&f.glide.pendingCount()==0&&!p.allow,"quit clears owned and delayed state");
-        check(inventory.equals(p.inventoryBytes())&&p.inventoryReads==0,"world/quit/mode cleanup never accesses armor or inventory");
+        check(inventory.equals(p.inventoryBytes())&&p.inventoryWrites==0,"world/quit/mode cleanup preserves occupied armor and inventory");
         p.onlineState=true;f.listener.onJoin(new PlayerJoinEvent(p.player,Component.empty()));f.flush();check(p.allow,"rejoin starts fresh safe ownership");
         f.active(p);p.dead=true;
         var death=new org.bukkit.event.entity.PlayerDeathEvent(p.player,
