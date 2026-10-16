@@ -36,6 +36,7 @@ public final class CoinsCommandHarness {
         testMutations();
         testFailures();
         testLiteralComponents();
+        testHighlightColors();
         testCompletion();
         testSafeCompletionArguments();
         testStaffTargets();
@@ -238,6 +239,39 @@ public final class CoinsCommandHarness {
         return c.clickEvent() == null && c.children().stream().allMatch(CoinsCommandHarness::safe);
     }
 
+    private static void testHighlightColors() throws Exception {
+        for (Locale locale : List.of(Locale.US, Locale.GERMANY)) {
+            for (String action : List.of("add", "remove", "set")) {
+                Fixture f = new Fixture();
+                Actor admin = f.player("Admin", 10L, true);
+                Actor target = f.player("<red>Safe</red>", 1_000L, false);
+                admin.locale = locale; target.locale = locale;
+                f.run(admin, action, target.id.toString(), "250");
+                Component success = admin.received.getLast(), notice = target.received.getLast();
+                String balance = action.equals("add") ? "1,250" : action.equals("remove") ? "750" : "250";
+                check(highlight(success, target.name) && highlight(success, balance), "actual localized admin target and balance highlight " + locale + action);
+                check(highlight(notice, balance) && safe(success) && safe(notice), "localized recipient balance and safe literal name " + locale + action);
+                if (!action.equals("set")) check(highlight(success, "250") && highlight(notice, "250"), "amount is highlighted for sender and target " + locale + action);
+                String body = locale.getLanguage().equals("de") ? action.equals("set") ? "Coin-Kontostand von "
+                        : action.equals("add") ? "hinzugefügt." : "abgezogen."
+                        : action.equals("set") ? "Set " : action.equals("add") ? "Added " : "Removed ";
+                check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(success, body,
+                        dev.vapee.core.message.MessageStyle.BODY), "surrounding sentence stays neutral " + locale + action);
+                f.run(admin, "get", target.id.toString());
+                check(highlight(admin.received.getLast(), target.name) && highlight(admin.received.getLast(), balance), "get target and balance highlight " + locale);
+                f.run(target);
+                check(highlight(target.received.getLast(), balance), "own balance highlight " + locale);
+                f.run(admin, "add", admin.id.toString(), "1");
+                check(admin.received.size() == 1 && highlight(admin.received.getFirst(), "Admin"), "self mutation highlighted once " + locale);
+            }
+        }
+    }
+
+    private static boolean highlight(Component message, String text) {
+        return dev.vapee.core.message.MessageColorAssertions.hasTextColor(message, text,
+                dev.vapee.core.message.MessageStyle.HIGHLIGHT);
+    }
+
     private static void testCompletion() throws Exception {
         Fixture f = new Fixture();
         Actor player = f.player("Normal", 0L, false);
@@ -405,12 +439,14 @@ public final class CoinsCommandHarness {
         final UUID id; final String name; final CommandSender sender;
         final List<Component> received = new ArrayList<>();
         boolean base = true, admin, online = true;
+        Locale locale = Locale.US;
         Runnable afterSend = () -> { };
         Actor(UUID id, String name, boolean admin) {
             this.id = id; this.name = name; this.admin = admin;
             sender = proxy(id == null ? ConsoleCommandSender.class : Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
                 case "getName" -> name;
+                case "locale" -> locale;
                 case "isOnline" -> online;
                 case "isOp" -> true;
                 case "hasPermission" -> args[0].equals("vapeecore.economy.coins") ? base : this.admin;

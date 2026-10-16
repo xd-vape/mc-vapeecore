@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -103,7 +104,7 @@ public final class EnderChestCommand implements TabExecutor {
 
         utilityService.openEnderChest(viewer, owner);
         if (!viewer.getUniqueId().equals(owner.getUniqueId())) {
-            messageSender.accept(sender, tr("utility.enderchest.opened", java.util.Map.of("player", Component.text(owner.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+            messageSender.accept(sender, tr("utility.enderchest.opened", java.util.Map.of("player", Component.text(owner.getName(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
         }
         return true;
     }
@@ -130,7 +131,7 @@ public final class EnderChestCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void error(CommandSender sender, Component message) {

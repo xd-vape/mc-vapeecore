@@ -44,6 +44,7 @@ public final class UtilityCommandHarness {
         testExplicitSelfAndCommandBoundaries();
         testStaffTargetProtection();
         testCompletionContract();
+        testFeedbackHighlights();
         System.out.println("UtilityCommandHarness passed " + checks + " checks.");
     }
 
@@ -724,6 +725,26 @@ public final class UtilityCommandHarness {
     private static String[] staffArguments(int index, String target) {
         return index == 1 ? new String[]{"5", target} : index == 2
                 ? new String[]{"creative", target} : new String[]{target};
+    }
+
+    private static void testFeedbackHighlights() {
+        var f = new Fixture();
+        var player = f.player("Target", GameMode.SURVIVAL, FlyCommand.PERMISSION, SpeedCommand.PERMISSION,
+                GameModeCommand.PERMISSION, PingCommand.PERMISSION);
+        var fly = new FlyCommand(f.service, f::lookup, f::onlinePlayers, f.buildPlayers::contains,
+                f.activityPlayers::contains, f.messages, f.staff.guard);
+        fly.onCommand(player.player, null, "fly", new String[0]);
+        check(accent(f.output.getLast(), "enabled"), "actual fly feedback highlights its state");
+        player.flying = true;
+        var speed = new SpeedCommand(f.service, f::lookup, f::onlinePlayers, f.activityPlayers::contains, f.messages, f.staff.guard);
+        speed.onCommand(player.player, null, "speed", new String[]{"5"});
+        check(accent(f.output.getLast(), "5") && accent(f.output.getLast(), "Flight"), "speed highlights number and type");
+        var ping = new PingCommand(f::lookup, f::onlinePlayers, f.messages);
+        player.ping = 73; ping.onCommand(player.player, null, "ping", new String[0]);
+        check(accent(f.output.getLast(), "73"), "ping value highlighted");
+    }
+    private static boolean accent(Component message, String text) {
+        return dev.vapee.core.message.MessageColorAssertions.hasTextColor(message, text, dev.vapee.core.message.MessageStyle.HIGHLIGHT);
     }
 
     private static boolean close(double actual, double expected) {

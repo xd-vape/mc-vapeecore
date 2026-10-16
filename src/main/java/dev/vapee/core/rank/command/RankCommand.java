@@ -1,5 +1,6 @@
 package dev.vapee.core.rank.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -120,7 +121,7 @@ public final class RankCommand implements TabExecutor {
                 .append(MiniMessage.miniMessage().deserialize(serverName))
                 .append(tr("rank.heading-suffix"))
                 .append(Component.newline())
-                .append(label(tr("rank.player-label"))).append(Component.text(playerName, NamedTextColor.WHITE))
+                .append(label(tr("rank.player-label"))).append(Component.text(playerName, MessageStyle.HIGHLIGHT))
                 .append(Component.newline())
                 .append(label(tr("rank.rank-label"))).append(rank.displayComponent())
                 .append(Component.newline())

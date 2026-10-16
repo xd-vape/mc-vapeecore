@@ -1,5 +1,6 @@
 package dev.vapee.core.rank.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -59,7 +60,7 @@ public final class RanksCommand implements TabExecutor {
 
         RankService.RankTrackResult result = rankService.getPublicRanks();
         if (result.status() == RankService.RankTrackStatus.MISSING_TRACK) {
-            messageService.send(sender, tr("rank.track-missing", java.util.Map.of("track", Component.text(result.trackName()))).color(NamedTextColor.RED));
+            messageService.send(sender, tr("rank.track-missing", java.util.Map.of("track", Component.text(result.trackName(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
             return true;
         }
         if (result.ranks().isEmpty()) {

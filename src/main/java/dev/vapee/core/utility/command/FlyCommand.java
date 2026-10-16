@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -142,10 +143,10 @@ public final class FlyCommand implements TabExecutor {
         boolean enabled = utilityService.toggleFlight(target);
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
-        Component state = tr(enabled ? "common.enabled-lower" : "common.disabled-lower");
+        Component state = tr(enabled ? "common.enabled-lower" : "common.disabled-lower").color(MessageStyle.HIGHLIGHT);
         Component message = self ? tr("utility.fly.self", java.util.Map.of("state", state))
-                : tr("utility.fly.other", java.util.Map.of("state", state, "player", Component.text(target.getName(), NamedTextColor.WHITE)));
-        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
+                : tr("utility.fly.other", java.util.Map.of("state", state, "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT)));
+        messageSender.accept(sender, message.color(MessageStyle.BODY));
         return true;
     }
 
@@ -177,7 +178,7 @@ public final class FlyCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void error(CommandSender sender, Component message) {

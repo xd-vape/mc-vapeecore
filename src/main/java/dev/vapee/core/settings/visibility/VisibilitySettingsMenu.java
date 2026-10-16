@@ -1,5 +1,6 @@
 package dev.vapee.core.settings.visibility;
 
+import dev.vapee.core.player.settings.VisibilityMode;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.ui.MenuLayout;
@@ -31,15 +32,15 @@ public final class VisibilitySettingsMenu {
     private boolean observingChanges;
 
     public enum Action { MASTER, FRIENDS, STAFF, ADDED_USERS, GAME_PARTICIPANTS, MANAGE_PLAYERS, BACK, CLOSE, REFRESH }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
-            .setting(Action.MASTER, 9, 18)
-            .setting(Action.FRIENDS, 11, 20)
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(36, Action.class)
+            .setting(Action.MASTER, 11, 20)
+            .setting(Action.FRIENDS, 12, 21)
             .setting(Action.STAFF, 13, 22)
-            .setting(Action.ADDED_USERS, 15, 24)
-            .setting(Action.GAME_PARTICIPANTS, 17, 26)
-            .button(Action.MANAGE_PLAYERS, 31)
-            .button(Action.BACK, 45)
-            .button(Action.CLOSE, 49)
+            .setting(Action.ADDED_USERS, 14, 23)
+            .setting(Action.GAME_PARTICIPANTS, 15, 24)
+            .button(Action.MANAGE_PLAYERS, 35)
+            .button(Action.BACK, 27)
+            .button(Action.CLOSE, 31)
 
             .build();
 
@@ -142,19 +143,27 @@ public final class VisibilitySettingsMenu {
         Player previousViewer = renderingFor; renderingFor = viewer;
         try {
         var visibility = current.getVisibility();
-        place(inventory, Action.MASTER, item(Material.ENDER_EYE, tr("visibility.all-players"), NamedTextColor.AQUA,
+        place(inventory, Action.MASTER, item(Material.ENDER_EYE, tr("settings.visibility.name"), NamedTextColor.AQUA,
                 List.of(
-                        visibility.isAllPlayersVisible()
+                        visibility.getMode() == VisibilityMode.HIDDEN
+                                ? tr("visibility.hidden-hint") : visibility.isAllPlayersVisible()
                                 ? tr("visibility.visible-hint")
                                 : tr("visibility.filtered-hint"),
-                        tr("common.current", java.util.Map.of("state", visibility.isAllPlayersVisible() ? tr("common.enabled") : tr("common.filtered"))),
+                        tr("common.current", java.util.Map.of("state", tr("visibility.mode." + visibility.getMode().name()))),
                         tr("common.click-change")
                 )));
         place(inventory, Action.MASTER, 1, item(
-                visibility.isAllPlayersVisible() ? Material.LIME_STAINED_GLASS_PANE
-                        : Material.YELLOW_STAINED_GLASS_PANE,
-                visibility.isAllPlayersVisible() ? tr("visibility.all-players") : tr("common.filtered"),
-                visibility.isAllPlayersVisible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW,
+                switch (visibility.getMode()) {
+                    case ALL -> Material.LIME_STAINED_GLASS_PANE;
+                    case FILTERED -> Material.YELLOW_STAINED_GLASS_PANE;
+                    case HIDDEN -> Material.RED_STAINED_GLASS_PANE;
+                },
+                tr("visibility.mode." + visibility.getMode().name()),
+                switch (visibility.getMode()) {
+                    case ALL -> NamedTextColor.GREEN;
+                    case FILTERED -> NamedTextColor.YELLOW;
+                    case HIDDEN -> NamedTextColor.RED;
+                },
                 List.of(tr("common.click-change"))));
 
         place(inventory, Action.FRIENDS, filterItem(Material.PLAYER_HEAD, tr("friends.title"),
@@ -178,7 +187,8 @@ public final class VisibilitySettingsMenu {
         place(inventory, Action.GAME_PARTICIPANTS, item(Material.NETHER_STAR, tr("visibility.game-name"),
                 NamedTextColor.GRAY, List.of(
                         tr("visibility.game-hint"),
-                        tr("common.current", java.util.Map.of("state", tr("common.unavailable")))
+                        tr("common.current", java.util.Map.of("state", tr("common.unavailable"))),
+                        tr("visibility.game-unavailable")
                 )));
         place(inventory, Action.GAME_PARTICIPANTS, 1, item(Material.GRAY_STAINED_GLASS_PANE,
                 tr("common.unavailable"), NamedTextColor.GRAY, List.of(tr("visibility.game-unavailable"))));

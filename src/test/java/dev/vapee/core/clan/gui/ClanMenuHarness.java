@@ -45,7 +45,7 @@ public final class ClanMenuHarness {
         check(name(member.open, MenuTestLayouts.CLAN.roleSlot()).contains("MEMBER"), "member role");
         f.menu.open(owner.player, ClanMenuView.MEMBERS, 0);
         check(ClanMenuFixture.holder(owner.open).target(MenuTestLayouts.CLAN.menu().contentSlot(0)).orElseThrow().equals(owner.id), "owner sorts first");
-        check(lore(owner.open, MenuTestLayouts.CLAN.menu().contentSlot(1)).contains("Online") && lore(owner.open, MenuTestLayouts.CLAN.menu().contentSlot(1)).contains("Shift + Right-click"),
+        check(lore(owner.open, MenuTestLayouts.CLAN.menu().contentSlot(1)).contains("Online") && lore(owner.open, MenuTestLayouts.CLAN.menu().contentSlot(1)).contains("Shift + Right Click"),
                 "member online status and owner actions");
         f.menu.open(owner.player, ClanMenuView.INVITES, 0);
         check(ClanMenuFixture.holder(owner.open).target(MenuTestLayouts.CLAN.menu().contentSlot(0)).orElseThrow().equals(offline.id),

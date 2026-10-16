@@ -10,6 +10,32 @@ public final class VisibilityCompositionHarness {
         var d = defaults.player("Default", true);
         defaults.visibilityMenu.open(d.player);
         check(d.open.getSize() == defaults.visibilityMenu.layout().size(), "current visibility composition opens");
+        int modeRow = defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MASTER) / 9;
+        for (var action : List.of(VisibilitySettingsMenu.Action.MASTER, VisibilitySettingsMenu.Action.FRIENDS,
+                VisibilitySettingsMenu.Action.STAFF, VisibilitySettingsMenu.Action.ADDED_USERS,
+                VisibilitySettingsMenu.Action.GAME_PARTICIPANTS)) {
+            check(defaults.visibilityMenu.layout().slot(action) / 9 == modeRow, "mode and filters share one feature row " + action);
+            check(defaults.visibilityMenu.layout().placement(action).size() == 2
+                    && VisibilityMenuFixture.visibilitySpec(d.open, defaults.visibilityMenu.layout().slot(action, 1))
+                    .material().name().endsWith("STAINED_GLASS_PANE"), "default visible status pane " + action);
+        }
+        check(defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS) == d.open.getSize() - 1,
+                "Manage Players chest is at the lower right corner");
+        var inventory = d.open;
+        int master = defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MASTER, 1);
+        defaults.visibilityClick(d, inventory, master, ClickType.RIGHT);
+        check(d.open == inventory && VisibilityMenuFixture.visibilitySpec(inventory, master).material() == org.bukkit.Material.YELLOW_STAINED_GLASS_PANE,
+                "mode pane cycles to FILTERED in the same inventory");
+        defaults.visibilityClick(d, inventory, master, ClickType.LEFT);
+        check(VisibilityMenuFixture.visibilitySpec(inventory, master).material() == org.bukkit.Material.RED_STAINED_GLASS_PANE,
+                "HIDDEN has a distinct red status pane");
+        int friends = defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.FRIENDS, 1);
+        boolean previous = defaults.settings.getSettings(d.id).orElseThrow().getVisibility().isShowFriends();
+        defaults.visibilityClick(d, inventory, friends, ClickType.RIGHT);
+        check(defaults.settings.getSettings(d.id).orElseThrow().getVisibility().isShowFriends() != previous
+                        && VisibilityMenuFixture.visibilitySpec(inventory, friends).material()
+                        == (previous ? org.bukkit.Material.RED_STAINED_GLASS_PANE : org.bukkit.Material.LIME_STAINED_GLASS_PANE),
+                "filter status pane changes persisted state and rerenders immediately");
         defaults.visiblePlayersMenu.open(d.player);
         check(d.open.getSize() == defaults.visiblePlayersMenu.layout().size(), "current players composition opens");
         for (var action : VisibilitySettingsMenu.Action.values()) {

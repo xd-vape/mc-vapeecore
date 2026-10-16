@@ -159,6 +159,8 @@ public final class BlackjackHarness {
                 "rejected BUILD player does not reserve a physical seat");
         check(fixture.messages.stream().anyMatch(message -> message.contains("build mode")),
                 "BUILD conflict returns a controlled blackjack message");
+        check(fixture.messages.stream().allMatch(message -> message.contains("Blackjack › ")),
+                "real activity feedback retains explicit contextual label");
     }
 
     private static void testQuestOutcomeIntegration() {

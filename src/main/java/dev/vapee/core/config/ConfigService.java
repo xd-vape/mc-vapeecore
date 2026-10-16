@@ -20,7 +20,7 @@ public final class ConfigService implements ReloadParticipant {
 
     private static final String RESOURCE_NAME = "config.yml";
     private static final String DEFAULT_SERVER_NAME = "Vapee Community";
-    private static final String DEFAULT_MESSAGE_PREFIX = "<gray>[<aqua>VapeeCore</aqua>]</gray> ";
+    private static final String DEFAULT_MESSAGE_PREFIX = "";
     public static final String DEFAULT_RANK_TRACK = "ranks";
 
     private final Runnable defaultConfigSaver;

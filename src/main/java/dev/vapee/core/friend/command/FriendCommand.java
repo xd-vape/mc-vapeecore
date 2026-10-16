@@ -1,5 +1,6 @@
 package dev.vapee.core.friend.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.help.CommandHelpEntry;
@@ -107,7 +108,7 @@ public final class FriendCommand implements TabExecutor {
             }
             String action = args[0].toLowerCase(Locale.ROOT);
             if (!SUBCOMMANDS.contains(action)) {
-                messages.send(sender, tr("friends.command.unknown", java.util.Map.of("command", Component.text(args[0], NamedTextColor.WHITE))).color(NamedTextColor.RED)
+                messages.send(sender, tr("friends.command.unknown", java.util.Map.of("command", Component.text(args[0], MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
                         .append(Component.newline())
                         .append(tr("friends.command.help-hint").color(NamedTextColor.YELLOW)));
                 return true;
@@ -204,7 +205,7 @@ public final class FriendCommand implements TabExecutor {
     private void listFriends(Player player) {
         UUID self = player.getUniqueId();
         List<UUID> ids = friends.getFriends(self);
-        send(player, tr("friends.command.count", java.util.Map.of("count", Component.text(ids.size()), "maximum", Component.text(friends.getLimits().maxFriends()))),
+        send(player, tr("friends.command.count", java.util.Map.of("count", Component.text(ids.size(), MessageStyle.HIGHLIGHT), "maximum", Component.text(friends.getLimits().maxFriends(), MessageStyle.HIGHLIGHT))),
                 NamedTextColor.GOLD);
         if (ids.isEmpty()) {
             send(player, tr("common.none"), NamedTextColor.GRAY);
@@ -247,7 +248,7 @@ public final class FriendCommand implements TabExecutor {
                 ? tr("friends.command.outgoing-heading") : tr("friends.command.pending-heading"), NamedTextColor.GOLD);
         ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
                 .forEach(id -> messages.send(player, Component.text("• ", NamedTextColor.GRAY)
-                        .append(Component.text(displayName(id), NamedTextColor.WHITE)).append(Component.space())
+                        .append(Component.text(displayName(id), MessageStyle.HIGHLIGHT)).append(Component.space())
                         .append(action.equals("accept") || action.equals("deny")
                                 ? FriendMessages.requestActions(commandArgument(id))
                                 : FriendMessages.actionButton(action, commandArgument(id)))));
@@ -281,7 +282,7 @@ public final class FriendCommand implements TabExecutor {
 
     private void sendName(Player player, String name) {
         messages.send(player, Component.text("• ", NamedTextColor.GRAY)
-                .append(Component.text(name, NamedTextColor.WHITE)));
+                .append(Component.text(name, MessageStyle.HIGHLIGHT)));
     }
 
     private String displayName(UUID uniqueId) {

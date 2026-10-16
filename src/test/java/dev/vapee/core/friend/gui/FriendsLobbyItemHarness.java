@@ -17,7 +17,7 @@ public final class FriendsLobbyItemHarness {
         LobbyItemRegistrations.register(registry, () -> null, () -> null, () -> friend.menu, () -> null);
         try (var f = new LobbyItemRegistryFixture(registry, owner.player)) {
             var defaults = registry.resolve("friends").orElseThrow().defaults();
-            check(defaults.enabled() && defaults.slot() == 1, "friends enabled in verified free default slot 1");
+            check(!defaults.enabled(), "friends shortcut remains registered but off in product defaults");
             check(registry.entries().values().stream().filter(e -> e.defaults().slot() == defaults.slot()).count() == 1, "default slot unique among four production items");
             check(defaults.appearance().material() == Material.PLAYER_HEAD && defaults.appearance().selfHead(), "own-player head defaults");
             var plain = PlainTextComponentSerializer.plainText();
@@ -26,6 +26,7 @@ public final class FriendsLobbyItemHarness {
                     && dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().lore().get(1)).isEmpty()
                     && dev.vapee.core.i18n.I18nTestSupport.text(owner.player, defaults.appearance().lore().get(2)).equals("Klicke zum Öffnen"), "requested productive name and lore");
             check(dev.vapee.core.i18n.I18nTestSupport.english(defaults.appearance().name()).equals("Friends"), "same productive default provides English without changing feature ID");
+            f.configure("items:\n  friends:\n    enabled: true\n    slot: 1\n");
             f.refresh(); var item = f.storage[1];
             check(item.getType() == Material.PLAYER_HEAD && ((SkullMeta)item.getItemMeta()).getPlayerProfile() == f.profile, "real builder assigns cached own profile");
             check(f.items.getItemId(item).orElseThrow().equals("friends"), "real PDC stable friends id");

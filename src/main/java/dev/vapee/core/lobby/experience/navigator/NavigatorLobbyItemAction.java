@@ -10,6 +10,7 @@ public final class NavigatorLobbyItemAction implements LobbyItemAction {
     private final Supplier<NavigatorMenu> menu;
     public NavigatorLobbyItemAction(Supplier<NavigatorMenu> menu) { this.menu = Objects.requireNonNull(menu); }
     @Override public boolean handleClick(Player player, Action click) {
+        if (click != Action.RIGHT_CLICK_AIR && click != Action.RIGHT_CLICK_BLOCK) return false;
         NavigatorMenu current = menu.get();
         return current != null && current.open(player);
     }

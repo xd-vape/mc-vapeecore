@@ -46,7 +46,10 @@ public final class SettingsHotbarSecurityHarness {
             var registry = new dev.vapee.core.lobby.item.LobbyItemRegistry();
             dev.vapee.core.lobby.item.LobbyItemRegistrations.register(registry, () -> null, () -> f.menu, () -> null, () -> null);
             registry.activate();
-            var items = new LobbyItemService(plugin, lobby, registry, dev.vapee.core.lobby.config.LobbyItemsConfig::defaults);
+            var enabledShortcut = new org.bukkit.configuration.file.YamlConfiguration();
+            enabledShortcut.set("items.settings.enabled", true);
+            var definitions = dev.vapee.core.lobby.config.LobbyItemsConfig.read(enabledShortcut, f.logger, registry);
+            var items = new LobbyItemService(plugin, lobby, registry, () -> definitions);
             NamespacedKey key = new NamespacedKey(plugin, "lobby_item");
             PersistentDataContainer pdc = proxy(PersistentDataContainer.class, (method, values) -> switch (method) {
                 case "has" -> key.equals(values[0]) && values[1] == PersistentDataType.STRING;

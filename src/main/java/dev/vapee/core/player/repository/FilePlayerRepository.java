@@ -1,5 +1,6 @@
 package dev.vapee.core.player.repository;
 
+import dev.vapee.core.player.settings.VisibilityMode;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
@@ -128,7 +129,7 @@ public final class FilePlayerRepository implements PlayerRepository {
         }
 
         try {
-            return Optional.of(readPlayer(uniqueId, playerFile, loadDocument(playerFile).configuration()));
+            return Optional.of(readPlayer(uniqueId, playerFile, loadDocument(playerFile)));
         } catch (IOException | RuntimeException exception) {
             throw storageFailure("load player data", playerFile, exception);
         }
@@ -143,7 +144,7 @@ public final class FilePlayerRepository implements PlayerRepository {
         try {
             fileWriter.requireReconciled(playerFile);
             Document source = Files.notExists(playerFile) ? null : loadDocument(playerFile);
-            if (source != null) readPlayer(player.getUniqueId(), playerFile, source.configuration());
+            if (source != null) readPlayer(player.getUniqueId(), playerFile, source);
             YamlConfiguration configuration = new YamlConfiguration();
             configuration.set("name", player.getName());
             configuration.set("first-join", player.getFirstJoin().toEpochMilli());
@@ -156,6 +157,7 @@ public final class FilePlayerRepository implements PlayerRepository {
                     player.getSettings().isFriendPresenceNotificationsEnabled());
             configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
             PlayerVisibilitySettings visibility = player.getSettings().getVisibility();
+            configuration.set("settings.visibility.mode", visibility.getMode().name());
             configuration.set("settings.visibility.show-friends", visibility.isShowFriends());
             configuration.set("settings.visibility.show-staff", visibility.isShowStaff());
             configuration.set("settings.visibility.show-added-users", visibility.isShowAddedUsers());
@@ -185,7 +187,7 @@ public final class FilePlayerRepository implements PlayerRepository {
                 if (written.version() != PlayerFileSchema.CURRENT_VERSION) {
                     throw new IOException("Written player candidate has an unexpected schema version");
                 }
-                readPlayer(player.getUniqueId(), candidate, written.configuration());
+                readPlayer(player.getUniqueId(), candidate, written);
                 PlayerFileSchema.validateOwnedValues(written.configuration(), configuration);
             }, target -> {
                 // Detect edits during this save as well as rereading extensions/version after a prior load.
@@ -238,7 +240,8 @@ public final class FilePlayerRepository implements PlayerRepository {
         return ((Number) value).longValue();
     }
 
-    private CorePlayer readPlayer(UUID uniqueId, Path playerFile, YamlConfiguration configuration) {
+    private CorePlayer readPlayer(UUID uniqueId, Path playerFile, Document document) {
+        YamlConfiguration configuration = document.configuration();
         String name = configuration.getString("name");
         if (name == null || name.isBlank()) {
             throw invalidPlayerFile(playerFile, "Missing or blank 'name'");
@@ -246,7 +249,7 @@ public final class FilePlayerRepository implements PlayerRepository {
 
         long firstJoinMillis = readEpochMillis(configuration, playerFile, "first-join");
         long lastJoinMillis = readEpochMillis(configuration, playerFile, "last-join");
-        PlayerSettings settings = readSettings(uniqueId, playerFile, configuration);
+        PlayerSettings settings = readSettings(uniqueId, playerFile, configuration, document.root());
         CoinWallet wallet = readWallet(playerFile, configuration);
         PlayerSocial social = readSocial(uniqueId, playerFile, configuration);
         OnlineRewardProgress onlineRewardProgress = readOnlineRewardProgress(
@@ -286,7 +289,8 @@ public final class FilePlayerRepository implements PlayerRepository {
     private PlayerSettings readSettings(
             UUID uniqueId,
             Path playerFile,
-            YamlConfiguration configuration
+            YamlConfiguration configuration,
+            Map<Object, Object> source
     ) {
         PlayerSettings settings = PlayerSettings.defaults();
         if (!configuration.contains("settings")) {
@@ -339,17 +343,29 @@ public final class FilePlayerRepository implements PlayerRepository {
                 "settings.lobby-players-visible",
                 settings.isLobbyPlayersVisible()
         ));
-        readVisibilitySettings(uniqueId, playerFile, configuration, settings.getVisibility());
+        boolean modePresent = source.get("settings") instanceof Map<?, ?> rawSettings
+                && rawSettings.get("visibility") instanceof Map<?, ?> rawVisibility && rawVisibility.containsKey("mode");
+        readVisibilitySettings(uniqueId, playerFile, configuration, settings.getVisibility(), modePresent);
         return settings;
     }
 
     private void readVisibilitySettings(UUID owner, Path file, YamlConfiguration configuration,
-                                        PlayerVisibilitySettings visibility) {
+                                        PlayerVisibilitySettings visibility, boolean modePresent) {
         String prefix = "settings.visibility";
         if (!configuration.contains(prefix)) return;
         if (!configuration.isConfigurationSection(prefix)) {
             logInvalidSetting(owner, file, prefix, "expected a YAML section");
             return;
+        }
+        if (modePresent) {
+            Object raw = configuration.get(prefix + ".mode");
+            try {
+                if (!(raw instanceof String value)) throw new IllegalArgumentException("expected mode string");
+                visibility.setMode(VisibilityMode.valueOf(value));
+            } catch (IllegalArgumentException exception) {
+                logInvalidSetting(owner, file, prefix + ".mode", "expected ALL, FILTERED or HIDDEN; using HIDDEN");
+                visibility.setMode(VisibilityMode.HIDDEN);
+            }
         }
         visibility.setShowFriends(readBooleanSetting(owner, file, configuration,
                 prefix + ".show-friends", false));

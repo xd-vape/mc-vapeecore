@@ -106,12 +106,25 @@ public final class PlayerSettingsService {
     }
 
     public boolean setLobbyPlayersVisible(UUID uniqueId, boolean visible) {
-        return updateSettings(
-                uniqueId,
-                visible,
-                PlayerSettings::isLobbyPlayersVisible,
-                PlayerSettings::setLobbyPlayersVisible
-        );
+        return setVisibilityMode(uniqueId, visible ? VisibilityMode.ALL : VisibilityMode.FILTERED);
+    }
+
+    public Optional<VisibilityMode> getVisibilityMode(UUID uniqueId) {
+        return getSettings(uniqueId).map(value -> value.getVisibility().getMode());
+    }
+
+    public boolean setVisibilityMode(UUID uniqueId, VisibilityMode mode) {
+        Objects.requireNonNull(mode, "mode");
+        var found = getSettings(Objects.requireNonNull(uniqueId, "uniqueId"));
+        if (found.isEmpty()) return false;
+        var visibility = found.get().getVisibility();
+        VisibilityMode previous = visibility.getMode();
+        if (previous == mode) return true;
+        visibility.setMode(mode);
+        try { playerService.savePlayer(uniqueId); }
+        catch (RuntimeException exception) { visibility.setMode(previous); throw exception; }
+        notifyChanged(uniqueId);
+        return true;
     }
 
     public boolean setLobbyFriendsVisible(UUID uniqueId, boolean visible) {

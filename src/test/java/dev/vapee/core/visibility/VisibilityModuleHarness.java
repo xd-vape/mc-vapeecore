@@ -79,7 +79,7 @@ public final class VisibilityModuleHarness {
 
         String itemListener = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/visibility/VisibilityLobbyItemAction.java"));
-        check(itemListener.contains("setLobbyPlayersVisible(uniqueId, !currentValue.get())")
+        check(itemListener.contains("setVisibilityMode(uniqueId, currentValue.get().next())")
                         && itemListener.contains("visibilityService.applyViewerPreference(player)")
                         && itemListener.contains("lobbyItemService.refreshVisibilityItem(player)"),
                 "hotbar master toggle persists and refreshes visibility plus item immediately");
@@ -91,10 +91,10 @@ public final class VisibilityModuleHarness {
                 "src/main/java/dev/vapee/core/lobby/item/LobbyItemRegistrations.java"));
         check(itemDefaults.contains("<i18n:lobby.visibility.name>")
                         && itemDefaults.contains("<i18n:lobby.visibility.filtered-name>")
-                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.name").equals("Players: Visible")
-                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.lore").equals("Right-click to use your visibility filters.")
-                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-name").equals("Players: Filtered")
-                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-lore").equals("Right-click to show all lobby players."),
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.name").equals("All Players")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.lore").equals("Right Click: Change mode")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-name").equals("Filtered")
+                        && dev.vapee.core.i18n.I18nTestSupport.english("lobby.visibility.filtered-lore").equals("Right Click: Change mode"),
                 "hotbar labels describe visible and filtered master states");
 
         String plugin = Files.readString(Path.of("src/main/resources/plugin.yml")).replace("\r\n", "\n");

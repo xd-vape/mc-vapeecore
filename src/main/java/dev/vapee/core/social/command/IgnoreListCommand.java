@@ -1,5 +1,6 @@
 package dev.vapee.core.social.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -71,16 +72,16 @@ public final class IgnoreListCommand implements TabExecutor {
             messageService.send(player, tr("social.empty"));
             return true;
         }
-        Component output = tr("social.list-heading", java.util.Map.of("count", Component.text(size, NamedTextColor.WHITE))).color(NamedTextColor.GRAY);
+        Component output = tr("social.list-heading", java.util.Map.of("count", Component.text(size, MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY);
         for (KnownEntry entry : knownEntries) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.GRAY))
-                    .append(Component.text(entry.name(), NamedTextColor.WHITE));
+                    .append(Component.text(entry.name(), MessageStyle.HIGHLIGHT));
         }
         for (UUID uniqueId : unknownEntries) {
             output = output.append(Component.newline())
                     .append(Component.text("- ", NamedTextColor.GRAY))
-                    .append(Component.text(uniqueId.toString(), NamedTextColor.WHITE));
+                    .append(Component.text(uniqueId.toString(), MessageStyle.HIGHLIGHT));
         }
         messageService.send(player, output);
         return true;

@@ -43,10 +43,19 @@ public final class SettingsMenuEntries {
                 Map.entry(SettingsMenu.Action.VISIBILITY, new Definition(
                         current -> new UiItemSpec(Material.SPYGLASS, UiItems.text(tr("settings.visibility.name"), NamedTextColor.AQUA),
                                 List.of(UiItems.text(tr("settings.visibility.hint"), NamedTextColor.GRAY),
-                                        Component.empty(), UiItems.text(tr("common.click-open"), NamedTextColor.YELLOW))),
-                        current -> new UiItemSpec(current.isLobbyPlayersVisible() ? Material.LIME_STAINED_GLASS_PANE : Material.YELLOW_STAINED_GLASS_PANE,
-                                UiItems.text(current.isLobbyPlayersVisible() ? tr("visibility.all-players") : tr("common.filtered"),
-                                        current.isLobbyPlayersVisible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
+                                        UiItems.text(tr("common.current", Map.of("state", tr("visibility.mode." + current.getVisibility().getMode().name()))), NamedTextColor.GRAY),
+                                        Component.empty(), UiItems.text(tr("common.click-open"), NamedTextColor.GRAY))),
+                        current -> new UiItemSpec(switch (current.getVisibility().getMode()) {
+                                    case ALL -> Material.LIME_STAINED_GLASS_PANE;
+                                    case FILTERED -> Material.YELLOW_STAINED_GLASS_PANE;
+                                    case HIDDEN -> Material.RED_STAINED_GLASS_PANE;
+                                },
+                                UiItems.text(tr("visibility.mode." + current.getVisibility().getMode().name()),
+                                        switch (current.getVisibility().getMode()) {
+                                            case ALL -> NamedTextColor.GREEN;
+                                            case FILTERED -> NamedTextColor.YELLOW;
+                                            case HIDDEN -> NamedTextColor.RED;
+                                        }),
                                 List.of(UiItems.text(tr("settings.visibility.open-hint"), NamedTextColor.GRAY))),
                         (player, current, context) -> {
                             context.visibilityMenuOpener().accept(player);
@@ -66,6 +75,8 @@ public final class SettingsMenuEntries {
                 current -> {
                     List<Component> lore = new ArrayList<>();
                     description.forEach(line -> lore.add(UiItems.text(line, NamedTextColor.GRAY)));
+                    lore.add(UiItems.text(tr("common.current", Map.of("state", enabled.test(current)
+                            ? tr("common.enabled") : tr("common.disabled"))), NamedTextColor.GRAY));
                     lore.add(Component.empty());
                     lore.add(UiItems.text(enabled.test(current) ? tr("common.click-disable") : tr("common.click-enable"), NamedTextColor.YELLOW));
                     return new UiItemSpec(material, UiItems.text(name, NamedTextColor.AQUA), lore);

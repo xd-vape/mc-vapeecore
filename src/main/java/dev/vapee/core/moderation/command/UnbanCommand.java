@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 import net.kyori.adventure.text.Component;
 
@@ -21,6 +22,6 @@ public final class UnbanCommand extends AbstractModerationCommand {
         String reason = reason(args, 1);
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().revokeBan(target.uniqueId(), actor, reason.isBlank() ? Optional.empty() : Optional.of(reason)));
-        if (record != null) context.send(sender, tr("moderation.unban.saved", java.util.Map.of("player", Component.text(target.name()))));
+        if (record != null) context.send(sender, tr("moderation.unban.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT))));
     }
 }

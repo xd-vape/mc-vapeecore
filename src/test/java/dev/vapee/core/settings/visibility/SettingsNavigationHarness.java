@@ -59,6 +59,14 @@ public final class SettingsNavigationHarness {
         check(p.open == p.bottom, "manage close opens no parent");
         check(f.repository.saves == saves && f.applyCalls == 0 && p.soundCalls == 0,
                 "navigation and refresh are nonmutating and silent");
+        int[] parentCalls = {0};
+        f.visibilityListener.setBackOpener(viewer -> { parentCalls[0]++; viewer.closeInventory(); });
+        f.visibilityMenu.open(p.player);
+        var previousView = p.open;
+        f.visibilityClick(p, previousView, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.BACK), ClickType.RIGHT);
+        check(parentCalls[0] == 1 && p.open == p.bottom, "Back uses the experience-supplied parent instead of Settings");
+        f.visibilityClick(p, previousView, MenuTestLayouts.VISIBILITY.slot(VisibilitySettingsMenu.Action.BACK), ClickType.RIGHT);
+        check(parentCalls[0] == 1, "stale Back cannot invoke parent navigation");
         System.out.println("SettingsNavigationHarness passed " + checks + " checks.");
     }
 

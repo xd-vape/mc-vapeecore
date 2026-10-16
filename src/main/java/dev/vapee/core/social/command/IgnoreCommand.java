@@ -1,5 +1,6 @@
 package dev.vapee.core.social.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -108,7 +109,7 @@ public final class IgnoreCommand implements TabExecutor {
     private void sendResult(Player player, Player target, IgnoreResult result) {
         switch (result) {
             case SUCCESS -> messageService.send(player,
-                    tr("social.ignored", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+                    tr("social.ignored", java.util.Map.of("player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             case OWNER_NOT_LOADED -> messageService.send(player, tr("social.profile-unavailable"));
             case CANNOT_IGNORE_SELF -> messageService.send(player, tr("social.ignore-self"));
             case ALREADY_IGNORED -> messageService.send(player, tr("social.already-ignored"));

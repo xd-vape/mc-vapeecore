@@ -1,5 +1,6 @@
 package dev.vapee.core.clan.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.clan.*;
@@ -146,9 +147,9 @@ public final class ClanCommand implements TabExecutor {
             return;
         }
         send(actor, clanIdentity(clan));
-        send(actor, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size()), "maximum", Component.text(clans.getLimits().maxMembers()))), NamedTextColor.WHITE);
-        send(actor, tr("clan.owner", java.util.Map.of("player", Component.text(displayName(clan.ownerId()), NamedTextColor.WHITE))).color(NamedTextColor.GRAY));
-        send(actor, tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString()))).color(NamedTextColor.GRAY));
+        send(actor, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size(), MessageStyle.HIGHLIGHT), "maximum", Component.text(clans.getLimits().maxMembers(), MessageStyle.HIGHLIGHT))), MessageStyle.BODY);
+        send(actor, tr("clan.owner", java.util.Map.of("player", Component.text(displayName(clan.ownerId()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
+        send(actor, tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
     }
 
     private void handleCreate(Player actor, UUID self, String[] args) {
@@ -298,7 +299,7 @@ public final class ClanCommand implements TabExecutor {
             Clan source = clans.getClan(invite.clanId()).orElse(null);
             String identifier = source == null ? invite.clanId().toString() : source.tag();
             Component identity = source == null
-                    ? tr("clan.command.unknown-clan", java.util.Map.of("id", Component.text(invite.clanId().toString()))).color(NamedTextColor.GRAY)
+                    ? tr("clan.command.unknown-clan", java.util.Map.of("id", Component.text(invite.clanId().toString(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY)
                     : clanIdentity(source);
             send(actor, identity.append(Component.space()).append(actionButton(action, identifier)));
         }
@@ -320,7 +321,7 @@ public final class ClanCommand implements TabExecutor {
         for (ClanInvite invite : invites) {
             String display = displayName(invite.recipient());
             String argument = identityCommandArgument(invite.recipient());
-            send(actor, Component.text(display, NamedTextColor.WHITE)
+            send(actor, Component.text(display, MessageStyle.HIGHLIGHT)
                     .append(Component.space())
                     .append(actionButton("cancel", argument)));
         }
@@ -368,7 +369,7 @@ public final class ClanCommand implements TabExecutor {
     }
 
     private void sendUnknownCommand(Player actor, String input) {
-        send(actor, tr("clan.command.unknown", java.util.Map.of("command", Component.text(input, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        send(actor, tr("clan.command.unknown", java.util.Map.of("command", Component.text(input, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
         send(actor, tr("clan.command.help", java.util.Map.of("command", commandSuggestion("/clan help", NamedTextColor.AQUA, tr("clan.command.help-hover")))).color(NamedTextColor.GRAY));
     }
 

@@ -1,5 +1,6 @@
 package dev.vapee.core.visibility;
 
+import dev.vapee.core.player.settings.VisibilityMode;
 import dev.vapee.core.friend.FriendRelation;
 import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
@@ -45,6 +46,7 @@ public final class VisibilityPolicy {
                 || ignored.test(checkedTarget, checkedViewer)) return false;
         PlayerVisibilitySettings choice = Objects.requireNonNull(settings.apply(checkedViewer), "visibility settings");
         if (choice.isAllPlayersVisible()) return true;
+        if (choice.getMode() == VisibilityMode.HIDDEN) return false;
         return (choice.isShowFriends() && friends.test(checkedViewer, checkedTarget))
                 || (choice.isShowStaff() && targetIsStaff)
                 || (choice.isShowAddedUsers() && choice.includesAddedPlayer(checkedTarget))

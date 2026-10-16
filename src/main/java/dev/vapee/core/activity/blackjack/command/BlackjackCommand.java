@@ -1,5 +1,6 @@
 package dev.vapee.core.activity.blackjack.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.activity.blackjack.BlackjackSession;
@@ -257,7 +258,7 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         tableConfig.deleteDraft(draft.getId());
-        messageService.send(sender, tr("blackjack.table.deleted", Map.of("id", Component.text(draft.getId()))).color(NamedTextColor.GREEN));
+        messageService.send(sender, tr("blackjack.table.deleted", Map.of("id", Component.text(draft.getId(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void setPosition(CommandSender sender, String[] args, PositionType type) {
@@ -273,7 +274,7 @@ public final class BlackjackCommand implements TabExecutor {
             case DEALER -> draft.setDealer(position);
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, tr("blackjack.table.position", Map.of("id", Component.text(draft.getId()), "position", tr("blackjack.position." + type.name()))).color(NamedTextColor.GREEN));
+        messageService.send(sender, tr("blackjack.table.position", Map.of("id", Component.text(draft.getId(), MessageStyle.HIGHLIGHT), "position", tr("blackjack.position." + type.name()))).color(MessageStyle.BODY));
     }
 
     private void interaction(CommandSender sender, String[] args) {
@@ -289,7 +290,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         draft.setInteraction(BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, tr("blackjack.table.interaction", Map.of("id", Component.text(draft.getId()))).color(NamedTextColor.GREEN));
+        messageService.send(sender, tr("blackjack.table.interaction", Map.of("id", Component.text(draft.getId(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void displayAnchor(CommandSender sender, String[] args) {
@@ -313,7 +314,7 @@ public final class BlackjackCommand implements TabExecutor {
         );
         draft.setDisplayAnchor(anchor);
         tableConfig.saveDraft(draft);
-        Component output = tr("blackjack.setup.surface-updated").color(NamedTextColor.GREEN)
+        Component output = tr("blackjack.setup.surface-updated").color(MessageStyle.BODY)
                 .append(Component.newline())
                 .append(infoLine(tr("blackjack.info.block"), anchor.worldName() + " @ "
                         + block.getX() + ", " + block.getY() + ", " + block.getZ(), NamedTextColor.WHITE))
@@ -364,7 +365,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         draft.setSeat(number, position(resolved, true), BlackjackBlockPosition.fromBlock(block));
         tableConfig.saveDraft(draft);
-        messageService.send(sender, tr("blackjack.table.seat", Map.of("id", Component.text(draft.getId()), "seat", Component.text(number))).color(NamedTextColor.GREEN));
+        messageService.send(sender, tr("blackjack.table.seat", Map.of("id", Component.text(draft.getId(), MessageStyle.HIGHLIGHT), "seat", Component.text(number, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void removeSeat(CommandSender sender, String[] args) {
@@ -381,7 +382,7 @@ public final class BlackjackCommand implements TabExecutor {
             return;
         }
         tableConfig.saveDraft(draft);
-        messageService.send(sender, tr("blackjack.table.seat-removed", Map.of("id", Component.text(draft.getId()), "seat", Component.text(number))).color(NamedTextColor.GREEN));
+        messageService.send(sender, tr("blackjack.table.seat-removed", Map.of("id", Component.text(draft.getId(), MessageStyle.HIGHLIGHT), "seat", Component.text(number, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void preview(CommandSender sender, String[] args) {
@@ -405,7 +406,7 @@ public final class BlackjackCommand implements TabExecutor {
         } else if (result.status() == BlackjackPreviewService.PreviewStatus.WORLD_UNAVAILABLE) {
             output = tr("blackjack.preview.world-missing").color(NamedTextColor.RED);
         } else {
-            output = tr("blackjack.preview.shown", Map.of("seconds", Component.text(BlackjackPreviewService.PREVIEW_SECONDS))).color(NamedTextColor.GREEN)
+            output = tr("blackjack.preview.shown", Map.of("seconds", Component.text(BlackjackPreviewService.PREVIEW_SECONDS, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY)
                     .append(Component.newline())
                     .append(infoLine(tr("blackjack.preview.markers"), Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.text(", ")), result.markers()), NamedTextColor.WHITE));
         }
@@ -427,7 +428,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         BlackjackTableOperationResult result = tableService.enableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, tr("blackjack.table.enabled", Map.of("id", Component.text(args[2]))).color(NamedTextColor.GREEN));
+            messageService.send(sender, tr("blackjack.table.enabled", Map.of("id", Component.text(args[2], MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             return;
         }
         sendOperationFailure(sender, args[2], result);
@@ -440,7 +441,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         BlackjackTableOperationResult result = tableService.disableTable(args[2]);
         if (result.isSuccess()) {
-            messageService.send(sender, tr("blackjack.table.disabled", Map.of("id", Component.text(args[2]))).color(NamedTextColor.GREEN));
+            messageService.send(sender, tr("blackjack.table.disabled", Map.of("id", Component.text(args[2], MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
             return;
         }
         sendOperationFailure(sender, args[2], result);
@@ -453,7 +454,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         Optional<BlackjackSession> session = tableService.getSession(draft.getId());
         Component sessionStatus = session.map(value -> tr("blackjack.info.session-count", Map.of(
-                "state", tr("blackjack.info.session-state." + value.getState().name()), "count", Component.text(value.getParticipantCount()))))
+                "state", tr("blackjack.info.session-state." + value.getState().name()), "count", Component.text(value.getParticipantCount(), MessageStyle.HIGHLIGHT))))
                 .orElseGet(() -> tr("common.none"));
         Component output = tr("blackjack.info.heading").color(NamedTextColor.GOLD)
                 .append(Component.text(draft.getId(), NamedTextColor.AQUA))
@@ -522,7 +523,7 @@ public final class BlackjackCommand implements TabExecutor {
         }
         Component output = tr("blackjack.info.tables").color(NamedTextColor.GOLD)
                 .append(Component.newline())
-                .append(tr("blackjack.info.table-count", Map.of("count", Component.text(drafts.size()))).color(NamedTextColor.GRAY));
+                .append(tr("blackjack.info.table-count", Map.of("count", Component.text(drafts.size(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
         for (BlackjackTableDraft draft : drafts) {
             BlackjackSession session = tableService.getSession(draft.getId()).orElse(null);
             Component status = draft.isEnabled() ? tr("common.enabled") : tr("common.disabled");
@@ -561,7 +562,7 @@ public final class BlackjackCommand implements TabExecutor {
     }
 
     private static Component missingTableMessage(String tableId) {
-        return tr("blackjack.table.missing", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED);
+        return tr("blackjack.table.missing", Map.of("id", Component.text(tableId, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED);
     }
 
     private boolean ensureEditable(CommandSender sender, BlackjackTableDraft draft) {
@@ -610,7 +611,7 @@ public final class BlackjackCommand implements TabExecutor {
     ) {
         switch (result.status()) {
             case TABLE_NOT_FOUND -> messageService.send(sender,
-                    tr("blackjack.table.missing", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+                    tr("blackjack.table.missing", Map.of("id", Component.text(tableId, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
             case ALREADY_ENABLED -> messageService.send(sender, tr("blackjack.setup.already-enabled"));
             case NOT_ENABLED -> messageService.send(sender, tr("blackjack.setup.already-disabled"));
             case WORLD_NOT_LOADED -> messageService.send(sender, tr("blackjack.setup.world-missing"));
@@ -651,7 +652,7 @@ public final class BlackjackCommand implements TabExecutor {
                 new WorkflowStep(tr("blackjack.workflow.enable"),
                         "/blackjack setup enable " + tableId)
         );
-        Component output = tr("blackjack.table.created", Map.of("id", Component.text(tableId))).color(NamedTextColor.GREEN)
+        Component output = tr("blackjack.table.created", Map.of("id", Component.text(tableId, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY)
                 .append(Component.newline())
                 .append(Component.newline())
                 .append(tr("blackjack.workflow.order").color(NamedTextColor.YELLOW));
@@ -751,7 +752,7 @@ public final class BlackjackCommand implements TabExecutor {
     }
 
     private static Component invalidDefinitionMessage(String tableId, List<String> details) {
-        Component output = tr("blackjack.table.not-ready", Map.of("id", Component.text(tableId, NamedTextColor.WHITE))).color(NamedTextColor.RED)
+        Component output = tr("blackjack.table.not-ready", Map.of("id", Component.text(tableId, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
                 .append(Component.newline())
                 .append(tr("blackjack.validation.heading").color(NamedTextColor.YELLOW));
         for (String detail : details) {

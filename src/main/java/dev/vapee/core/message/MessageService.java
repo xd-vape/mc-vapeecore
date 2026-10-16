@@ -74,7 +74,7 @@ public final class MessageService {
     public void send(Audience audience, Component message) {
         Objects.requireNonNull(audience, "audience").sendMessage(
                 localize(audience, deserialize(Objects.requireNonNull(prefixSupplier.get(), "messagePrefix")))
-                        .append(localize(audience, Objects.requireNonNull(message, "message")))
+                        .append(localize(audience, Objects.requireNonNull(message, "message")).colorIfAbsent(MessageStyle.BODY))
         );
     }
 }

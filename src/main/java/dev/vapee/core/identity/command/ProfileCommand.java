@@ -1,5 +1,6 @@
 package dev.vapee.core.identity.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.format.PlaytimeFormatter;
@@ -132,6 +133,6 @@ public final class ProfileCommand implements TabExecutor {
     }
 
     private void line(CommandSender sender, String label, Component value) {
-        messageService.send(sender, tr(label, java.util.Map.of("value", value)).color(NamedTextColor.GRAY));
+        messageService.send(sender, tr(label, java.util.Map.of("value", value.colorIfAbsent(MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
     }
 }

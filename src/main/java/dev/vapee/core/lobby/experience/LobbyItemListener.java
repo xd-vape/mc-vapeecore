@@ -54,7 +54,9 @@ public final class LobbyItemListener implements Listener {
         }
         if (event.getHand() != EquipmentSlot.HAND
                 || (event.getAction() != Action.RIGHT_CLICK_AIR
-                && event.getAction() != Action.RIGHT_CLICK_BLOCK)) {
+                && event.getAction() != Action.RIGHT_CLICK_BLOCK
+                && event.getAction() != Action.LEFT_CLICK_AIR
+                && event.getAction() != Action.LEFT_CLICK_BLOCK)) {
             return;
         }
 

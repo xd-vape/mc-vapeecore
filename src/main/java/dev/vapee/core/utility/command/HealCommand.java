@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -96,8 +97,8 @@ public final class HealCommand implements TabExecutor {
         boolean self = sender instanceof Player player
                 && player.getUniqueId().equals(target.getUniqueId());
         messageSender.accept(sender, self
-                ? tr("utility.heal.self").color(NamedTextColor.GREEN)
-                : tr("utility.heal.other", java.util.Map.of("player", Component.text(target.getName(), NamedTextColor.WHITE))).color(NamedTextColor.GREEN));
+                ? tr("utility.heal.self").color(MessageStyle.BODY)
+                : tr("utility.heal.other", java.util.Map.of("player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
         return true;
     }
 
@@ -161,7 +162,7 @@ public final class HealCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private void error(CommandSender sender, Component message) {

@@ -203,7 +203,7 @@ public final class ClanCommandHarness {
         check(all(actor).contains("Unknown clan command: <red>unknown</red>")
                         && all(actor).contains("Use /clan help to view all clan commands."),
                 "unknown command is identified and points to optional help");
-        check(hasLiteral(actor.received, "<red>unknown</red>", NamedTextColor.WHITE),
+        check(hasLiteral(actor.received, "<red>unknown</red>", NamedTextColor.AQUA),
                 "unknown user input remains literal component text");
 
         ClanMenuFixture choices = new ClanMenuFixture();
@@ -264,15 +264,15 @@ public final class ClanCommandHarness {
         clear(unsafeTarget);
         run(choicesCommand, owner, "invite", unsafeTarget.id.toString());
         check(all(owner).contains("<blue>Target</blue>")
-                        && hasLiteral(owner.received, "<blue>Target</blue>", NamedTextColor.WHITE),
+                        && hasLiteral(owner.received, "<blue>Target</blue>", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
                 "unsafe-looking player name remains literal in command feedback");
         check(all(unsafeTarget).contains("<green>Owner</green>")
                         && all(unsafeTarget).contains("<red>Safe</red> [<X>]")
                         && hasSuggestion(unsafeTarget, "/clan accept <X>")
                         && hasSuggestion(unsafeTarget, "/clan deny <X>"),
                 "invite notification explains owner, clan name, tag, accept, and deny");
-        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", NamedTextColor.WHITE)
-                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", NamedTextColor.GOLD)
+        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
+                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
                         && hasLiteral(unsafeTarget.received, "<X>", NamedTextColor.AQUA),
                 "invite notification keeps all user data as literal components");
         check(allClicksSuggest(unsafeTarget.received), "invite notification uses suggestions, never run-command");

@@ -11,6 +11,7 @@ public final class FriendsLobbyItemAction implements LobbyItemAction {
     private final Supplier<FriendMenu> menu;
     public FriendsLobbyItemAction(Supplier<FriendMenu> menu) { this.menu = Objects.requireNonNull(menu); }
     @Override public boolean handleClick(Player player, Action click) {
+        if (click != Action.RIGHT_CLICK_AIR && click != Action.RIGHT_CLICK_BLOCK) return false;
         FriendMenu current = menu.get();
         return current != null && current.open(player);
     }

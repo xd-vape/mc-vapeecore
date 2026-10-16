@@ -20,7 +20,7 @@ public final class VisibilityLayoutHarness {
             f.visibilityClick(owner, owner.open, fixed.slot(MASTER), ClickType.LEFT);
             check(!f.settings.areLobbyPlayersVisible(owner.id).orElseThrow(), "moved feature toggles");
             f.visibilityClick(owner, owner.open, fixed.slot(MASTER, 1), ClickType.RIGHT);
-            check(f.settings.areLobbyPlayersVisible(owner.id).orElseThrow(), "detached status toggles same state");
+            check(f.settings.getVisibilityMode(owner.id).orElseThrow() == dev.vapee.core.player.settings.VisibilityMode.HIDDEN, "detached status cycles same persisted mode");
             f.visibilityClick(owner, owner.open, fixed.slot(MANAGE_PLAYERS), ClickType.LEFT);
             check(owner.open.getHolder() instanceof VisiblePlayersHolder && owner.open.getItem(paged.emptySlot()) != null, "managed list uses alternative layout");
             var expected = new ArrayList<UUID>();

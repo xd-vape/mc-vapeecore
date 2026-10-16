@@ -1,5 +1,6 @@
 package dev.vapee.core.utility.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.command.OnlineStaffTargetGuard;
@@ -150,7 +151,7 @@ public final class TeleportCommand implements TabExecutor {
             World world = request.explicitWorld() ? resolveWorld(request.world()) : sourceLocation.getWorld();
             if (world == null) {
                 if (request.explicitWorld()) {
-                    messageSender.accept(sender, tr("utility.teleport.world-unknown", java.util.Map.of("world", Component.text(request.world(), NamedTextColor.WHITE))).color(NamedTextColor.RED));
+                    messageSender.accept(sender, tr("utility.teleport.world-unknown", java.util.Map.of("world", Component.text(request.world(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
                 } else error(sender, tr("utility.teleport.no-world"));
                 return true;
             }
@@ -180,16 +181,16 @@ public final class TeleportCommand implements TabExecutor {
             return true;
         }
         Component destinationText;
-        if (target != null) destinationText = Component.text(target.getName(), NamedTextColor.WHITE);
+        if (target != null) destinationText = Component.text(target.getName(), MessageStyle.HIGHLIGHT);
         else {
             Component coordinates = Component.text(String.format(Locale.ROOT, "%.2f, %.2f, %.2f",
-                    destination.getX(), destination.getY(), destination.getZ()), NamedTextColor.WHITE);
+                    destination.getX(), destination.getY(), destination.getZ()), MessageStyle.HIGHLIGHT);
             destinationText = request.explicitWorld() ? tr("utility.teleport.world-destination",
-                    java.util.Map.of("coordinates", coordinates, "world", Component.text(destination.getWorld().getName(), NamedTextColor.WHITE))) : coordinates;
+                    java.util.Map.of("coordinates", coordinates, "world", Component.text(destination.getWorld().getName(), MessageStyle.HIGHLIGHT))) : coordinates;
         }
-        Component message = request.other() ? tr("utility.teleport.other", java.util.Map.of("player", Component.text(source.getName(), NamedTextColor.WHITE), "destination", destinationText))
+        Component message = request.other() ? tr("utility.teleport.other", java.util.Map.of("player", Component.text(source.getName(), MessageStyle.HIGHLIGHT), "destination", destinationText))
                 : tr("utility.teleport.self", java.util.Map.of("destination", destinationText));
-        messageSender.accept(sender, message.color(NamedTextColor.GREEN));
+        messageSender.accept(sender, message.color(MessageStyle.BODY));
         return true;
     }
 
@@ -292,7 +293,7 @@ public final class TeleportCommand implements TabExecutor {
     }
 
     private void playerNotOnline(CommandSender sender, String name) {
-        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, NamedTextColor.WHITE))).color(NamedTextColor.RED));
+        messageSender.accept(sender, tr("common.player-offline", java.util.Map.of("player", Component.text(name, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
     }
 
     private static Component teleportError(IllegalArgumentException exception) {
@@ -302,8 +303,8 @@ public final class TeleportCommand implements TabExecutor {
             case MIXED_COORDINATES -> tr("utility.teleport.parse.mixed");
             case NONFINITE_DESTINATION -> tr("utility.teleport.parse.destination");
             case NONFINITE_ROTATION -> tr("utility.teleport.parse.rotation");
-            case INVALID_COORDINATE -> tr("utility.teleport.parse.coordinate-value", java.util.Map.of("value", Component.text(failure.value())));
-            case INVALID_ROTATION -> tr("utility.teleport.parse.rotation-value", java.util.Map.of("value", Component.text(failure.value())));
+            case INVALID_COORDINATE -> tr("utility.teleport.parse.coordinate-value", java.util.Map.of("value", Component.text(failure.value(), MessageStyle.HIGHLIGHT)));
+            case INVALID_ROTATION -> tr("utility.teleport.parse.rotation-value", java.util.Map.of("value", Component.text(failure.value(), MessageStyle.HIGHLIGHT)));
         };
     }
 

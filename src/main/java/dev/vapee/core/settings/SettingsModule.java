@@ -97,6 +97,7 @@ public final class SettingsModule implements CoreModule {
                 messageService,
                 plugin.getLogger()
         );
+        newVisibilitySettingsListener.setBackOpener(org.bukkit.entity.Player::closeInventory);
         VisiblePlayersListener newVisiblePlayersListener = new VisiblePlayersListener(
                 newVisiblePlayersMenu,
                 newVisibilitySettingsMenu,
@@ -180,6 +181,10 @@ public final class SettingsModule implements CoreModule {
 
     public VisibilitySettingsMenu getVisibilitySettingsMenu() {
         return Objects.requireNonNull(visibilitySettingsMenu, "SettingsModule is not enabled");
+    }
+
+    public void setVisibilityBackOpener(java.util.function.Consumer<org.bukkit.entity.Player> opener) {
+        Objects.requireNonNull(visibilitySettingsListener, "SettingsModule is not enabled").setBackOpener(opener);
     }
 
     private void closeVisibilityMenus() {

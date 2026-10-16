@@ -1,5 +1,6 @@
 package dev.vapee.core.moderation.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.identity.PlayerIdentity;
@@ -36,11 +37,11 @@ public final class HistoryCommand extends AbstractModerationCommand {
 
     @Override protected void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
         List<ModerationRecord> history = context.service().getHistory(target.uniqueId());
-        if (history.isEmpty()) { context.send(sender, tr("moderation.history.empty", java.util.Map.of("player", Component.text(target.name())))); return; }
+        if (history.isEmpty()) { context.send(sender, tr("moderation.history.empty", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT)))); return; }
         int pages = (history.size() - 1) / PAGE_SIZE + 1;
         int page = page(args);
-        if (page > pages) { context.send(sender, tr("moderation.history.page-missing", java.util.Map.of("pages", Component.text(pages)))); return; }
-        context.send(sender, tr("moderation.history.heading", java.util.Map.of("player", Component.text(target.name()), "page", Component.text(page), "pages", Component.text(pages))));
+        if (page > pages) { context.send(sender, tr("moderation.history.page-missing", java.util.Map.of("pages", Component.text(pages, MessageStyle.HIGHLIGHT)))); return; }
+        context.send(sender, tr("moderation.history.heading", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "page", Component.text(page, MessageStyle.HIGHLIGHT), "pages", Component.text(pages, MessageStyle.HIGHLIGHT))));
         int offset = (page - 1) * PAGE_SIZE;
         Instant now = context.clock().instant();
         for (ModerationRecord record : history.subList(offset, offset + Math.min(history.size() - offset, PAGE_SIZE))) {
