@@ -84,6 +84,13 @@ public final class PlayerQuestState {
         activeQuests.putAll(replacements);
     }
 
+    /** Validated snapshot replacement, used by explicit administrative reconciliation and rollback. */
+    void restore(Collection<PlayerQuestProgress> entries) {
+        PlayerQuestState validated = of(entries);
+        activeQuests.clear();
+        activeQuests.putAll(validated.activeQuests);
+    }
+
     boolean clear() {
         if (activeQuests.isEmpty()) {
             return false;

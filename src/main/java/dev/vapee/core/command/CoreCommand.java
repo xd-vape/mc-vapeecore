@@ -78,7 +78,7 @@ public final class CoreCommand implements TabExecutor {
                     )),
                     new CommandHelpSection(tr("core.help.section.gameplay"), List.of(
                             new CommandHelpEntry("/quests", tr("core.help.quests.description"),
-                                    "vapeecore.quest.use", tr("core.help.quests.hint"))
+                                    "vapeecore.quest.use")
                     )),
                     new CommandHelpSection(tr("core.help.section.economy"), List.of(
                             new CommandHelpEntry("/coins", tr("core.help.coins.description"),
@@ -124,6 +124,7 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/history <player|uuid> [page]", tr("core.help.history.description"), "vapeecore.moderation.history")
                     )),
                     new CommandHelpSection(tr("core.help.section.administration"), List.of(
+                            new CommandHelpEntry("/core quest force [player]", tr("core.help.core.quest.description"), ADMIN_PERMISSION),
                             new CommandHelpEntry("/core reload", tr("core.help.core.reload.description"),
                                     ADMIN_PERMISSION),
                             new CommandHelpEntry("/setspawn", tr("core.help.setspawn.description"),
@@ -142,6 +143,7 @@ public final class CoreCommand implements TabExecutor {
     private final Supplier<RuntimeInfo> runtimeInfo;
     private final Function<UUID, Optional<String>> primaryGroup;
     private final Supplier<ReloadResult> reload;
+    private final TabExecutor questCommands;
 
     public CoreCommand(
             VapeeCore plugin,
@@ -151,16 +153,24 @@ public final class CoreCommand implements TabExecutor {
             PlayerService playerService,
             LuckPermsService luckPermsService,
             ReloadService reloadService,
-            CommandHelpRenderer helpRenderer
+            CommandHelpRenderer helpRenderer,
+            TabExecutor questCommands
     ) {
         this(messageService, helpRenderer, runtimeInfoSupplier(plugin, configService, moduleManager, playerService),
                 Objects.requireNonNull(luckPermsService, "luckPermsService")::getPrimaryGroup,
-                Objects.requireNonNull(reloadService, "reloadService")::reload);
+                Objects.requireNonNull(reloadService, "reloadService")::reload, questCommands);
     }
 
     CoreCommand(MessageService messageService, CommandHelpRenderer helpRenderer,
                 Supplier<RuntimeInfo> runtimeInfo, Function<UUID, Optional<String>> primaryGroup,
                 Supplier<ReloadResult> reload) {
+        this(messageService, helpRenderer, runtimeInfo, primaryGroup, reload, null);
+    }
+
+    CoreCommand(MessageService messageService, CommandHelpRenderer helpRenderer,
+                Supplier<RuntimeInfo> runtimeInfo, Function<UUID, Optional<String>> primaryGroup,
+                Supplier<ReloadResult> reload, TabExecutor questCommands) {
+        this.questCommands = questCommands;
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.helpRenderer = Objects.requireNonNull(helpRenderer, "helpRenderer");
         this.runtimeInfo = Objects.requireNonNull(runtimeInfo, "runtimeInfo");
@@ -189,6 +199,13 @@ public final class CoreCommand implements TabExecutor {
     ) {
         if (args.length == 0) {
             sendOverview(sender);
+            return true;
+        }
+
+        if (args[0].equalsIgnoreCase("quest")) {
+            if (!sender.hasPermission(ADMIN_PERMISSION)) messageService.send(sender, tr("core.quest.denied"));
+            else if (questCommands == null) messageService.send(sender, tr("core.quest.failed"));
+            else questCommands.onCommand(sender, command, label, java.util.Arrays.copyOfRange(args, 1, args.length));
             return true;
         }
 
@@ -231,6 +248,9 @@ public final class CoreCommand implements TabExecutor {
             @NotNull String alias,
             @NotNull String[] args
     ) {
+        if (args.length > 1 && args[0].equalsIgnoreCase("quest")
+                && sender.hasPermission(ADMIN_PERMISSION) && questCommands != null)
+            return questCommands.onTabComplete(sender, command, alias, java.util.Arrays.copyOfRange(args, 1, args.length));
         if (args.length != 1) {
             return List.of();
         }
@@ -241,6 +261,7 @@ public final class CoreCommand implements TabExecutor {
         List<String> options = new ArrayList<>(List.of("help", "version"));
         if (admin) {
             options.add("reload");
+            options.add("quest");
         }
         String prefix = input.toLowerCase(Locale.ROOT);
         return options.stream()

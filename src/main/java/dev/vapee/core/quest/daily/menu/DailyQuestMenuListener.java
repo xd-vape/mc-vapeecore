@@ -32,7 +32,7 @@ public final class DailyQuestMenuListener implements Listener {
             case NEXT -> {
                 if (top.getItem(slot) != null) menu.open(player, holder.page() + 1);
             }
-            default -> { }
+            case PAGE_INFO, RESET_INFO -> { }
         }
     }
     @EventHandler public void onInventoryDrag(InventoryDragEvent event) {

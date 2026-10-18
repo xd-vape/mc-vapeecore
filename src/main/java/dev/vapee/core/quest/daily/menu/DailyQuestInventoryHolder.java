@@ -28,6 +28,7 @@ public final class DailyQuestInventoryHolder implements InventoryHolder {
     private final Map<Integer, String> targets;
     public Optional<String> target(int slot) { return Optional.ofNullable(data().targets.get(slot)); }
     private Inventory inventory;
+    dev.vapee.core.ui.UiItemSpec resetClock;
 
     DailyQuestInventoryHolder(UUID owner, int page) {
         this(owner, page, Map.of(), DailyQuestMenu.DEFAULT_LAYOUT.menu());

@@ -108,6 +108,38 @@ public final class QuestService {
         return QuestAssignmentResult.REPLACED;
     }
 
+    /** Explicit admin operation: exact selection, retained progress, one commit before notification. */
+    public QuestAssignmentResult reconcileAssignments(UUID playerId, Collection<String> questIds) {
+        UUID id = Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(questIds, "questIds");
+        var loaded = playerService.getPlayer(id);
+        if (loaded.isEmpty()) return QuestAssignmentResult.PLAYER_NOT_LOADED;
+        var state = loaded.get().getQuestState();
+        var previous = state.snapshot();
+        if (previous.values().stream().anyMatch(progress -> progress.status() == QuestStatus.REWARD_PENDING))
+            return QuestAssignmentResult.PENDING_REWARD;
+        var selected = new LinkedHashSet<String>();
+        for (String questId : questIds) {
+            String validated = QuestDefinition.requireValidId(questId);
+            if (!selected.add(validated)) return QuestAssignmentResult.DUPLICATE_QUEST_ID;
+            if (definitionRegistry.findById(validated).isEmpty()) return QuestAssignmentResult.DEFINITION_NOT_FOUND;
+        }
+        var replacements = selected.stream().map(questId -> previous.getOrDefault(questId,
+                new PlayerQuestProgress(questId, 0L, QuestStatus.ACTIVE))).toList();
+        state.restore(replacements);
+        try {
+            playerService.savePlayer(id);
+        } catch (RuntimeException exception) {
+            state.restore(previous.values());
+            logger.log(Level.WARNING, "Forced quest selection for " + id
+                    + " could not be committed; prior assignments were restored.", exception);
+            return QuestAssignmentResult.PERSISTENCE_FAILED;
+        }
+        dirtyPlayers.remove(id);
+        notifyChanged(id);
+        return QuestAssignmentResult.REPLACED;
+    }
+
     public QuestAssignmentResult clearAssignments(UUID playerId) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
         Optional<CorePlayer> player = playerService.getPlayer(validatedPlayerId);
