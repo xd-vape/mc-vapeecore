@@ -23,6 +23,45 @@ Die Minecraft-Clientsprache entscheidet über eigene Plugin-Texte: `de` → Deut
 
 Kataloge dürfen flache semantische Keys (`common.close`) oder gleichwertige verschachtelte Sections verwenden. EN/DE müssen dieselben dynamischen Placeholder besitzen; Farbtags gehören nicht zu dieser Menge. Namen, Staff-Gründe und PM-/Chat-Body werden als literal Components eingesetzt und können keine MiniMessage-Tags injizieren.
 
+### Sprachkataloge gliedern und bestehende Dateien übernehmen
+
+Die gebündelten `lang/en.yml` und `lang/de.yml` haben dieselben Feature-Abschnitte und dieselbe Reihenfolge. Suche beispielsweise Friends → Requests and Notifications, Daily Quests → Reset Countdown oder Blackjack → Physical Table Setup. Große Bereiche sind in der IDE einklappbar. Unter einem Feature stehen höchstens drei Section-Ebenen; längere Namen bleiben teilweise gepunktet.
+
+```yaml
+daily-quests:
+  status:
+    completed: "Completed"
+
+clan:
+  owner: "Owner: <player>"
+  owner.transferred: "You are now the owner of clan <tag>."
+```
+
+Diese Beispiele erklären die Struktur, keine neue Übersetzung: Laufzeitkeys bleiben `daily-quests.status.completed`, `clan.owner` und `clan.owner.transferred`. Ein Key darf nicht zugleich String und Section sein. Zwei YAML-Pfade, die auf denselben Laufzeitkey führen, sind ebenfalls ungültig.
+
+Beim Bearbeiten nur den Textwert ändern. MiniMessage-Tags wie `<aqua>`/`</aqua>` korrekt paaren; dynamische Namen wie `<player>` oder `<time>` weder umbenennen noch entfernen. Zwei Leerzeichen zur Einrückung, keine Tabs, UTF-8 und doppelt zitierte Strings verwenden. YAML-Escapes und absichtliche Leerzeichen innerhalb eines Strings erhalten. Neue Keys im passenden Feature ergänzen, an gleicher Stelle in EN und DE, mit identischen dynamischen Placeholdern; nicht ans Dateiende anhängen.
+
+**Bestehende Installation:** Startup kopiert nur fehlende Sprachdateien. Bestehende Dateien, unbekannte eigene Keys und individuelle EN-/DE-Werte bleiben erhalten. Die neue Gliederung betrifft zunächst nur die gebündelten Resources. Alte flache Live-Overrides funktionieren weiter; die Umordnung ist freiwillig und geschieht ausdrücklich pro Datei.
+
+Für eine Übernahme im Entwickler-Checkout mit Java 21 und Maven:
+
+1. Andere Editoren/Deployments für diese Datei anhalten und den Dev-Server über den Projektablauf stoppen. Die Live-Datei als separaten Kandidaten kopieren, beispielsweise `dev-server/.vapeecore-dev/de.organized.yml`.
+2. Nur diesen Kandidaten von Hand nach dem Resource-Beispiel gliedern. Eigene Werte und unbekannte Keys vollständig mitnehmen; bei partiellen Overrides keine fehlenden gebündelten Keys hinzufügen. Kommentare beim Verschieben von Hand mitnehmen. EN und DE unabhängig behandeln; keine Sprache durch die andere oder durch Default-Texte ersetzen.
+3. Zuerst die Vorschau ausführen. Sie lädt beide Dateien mit dem tatsächlichen `TranslationCatalog`, vergleicht alle Schlüssel und jeden String exakt und schreibt weder Live-Datei noch Backup:
+
+```powershell
+pwsh -File .\scripts\adopt-language-catalog.ps1 `
+  -LiveFile .\dev-server\plugins\VapeeCore\lang\de.yml `
+  -CandidateFile .\dev-server\.vapeecore-dev\de.organized.yml `
+  -Offline -MavenRepository 'C:\Users\mehdi\.m2\repository'
+```
+
+4. Kandidaten einschließlich Kommentaren im Editor vergleichen. Die semantische Prüfung bewertet Schlüssel und Textwerte, nicht den Kommentarinhalt. Bei Missing/Added/Changed, ungültigem UTF-8, nicht unterstützten Werten, YAML-Kollisionen oder Duplikaten den Kandidaten korrigieren; nicht die Originaldatei löschen. Die Vorschau darf keine Unterschiede melden.
+5. Bewusst übernehmen: denselben Befehl mit zusätzlichem `-Apply` ausführen. Er validiert erneut, sichert die exakten ursprünglichen Bytes neben der Live-Datei als `de.yml.before-organization-*.bak` und ersetzt sie atomar mit den geprüften Kandidatenbytes. Kandidaten-Kommentare bleiben dadurch unverändert. Vor dem Austausch wird erneut geprüft, ob sich die Live-Datei geändert hat. Ohne unterstützten atomaren Dateiaustausch wird abgebrochen; es gibt keinen unsicheren Copy-Fallback. Ein bereits erzeugtes Backup bleibt erhalten und wird im Fehler genannt.
+6. Für `en.yml` separat wiederholen. Server starten bzw. nach späteren reinen Textänderungen `/core reload` ausführen. Beide Sprachdateien werden gemeinsam vorbereitet; bei Fehler bleibt der bisher aktive Snapshot erhalten. Aktive sprachabhängige Views erhalten den bestehenden Refresh, Inventartitel beim nächsten Öffnen.
+
+Das Werkzeug organisiert YAML nicht selbst und führt keine automatische Live-Migration durch. Es baut ausschließlich den vorhandenen produktiven Parser plus einen Test-/Entwickler-Validator; keine neue Laufzeit-Abhängigkeit. Die Live-Dateien dieses Projekts wurden durch die Resource-Umordnung nicht migriert. Für eine Wiederherstellung bei gestopptem Server das ausgegebene Byte-Backup verwenden.
+
 Bestehende operator-authored Strings und Lore-Listen gelten unverändert für alle Spieler. Für Lobby-Item-Namen/Lore und PM-/Join-/Quit-Formate sind Sprachmaps mit `en` als Fallback möglich:
 
 ```yaml
