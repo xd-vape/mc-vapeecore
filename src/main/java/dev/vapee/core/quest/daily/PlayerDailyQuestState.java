@@ -23,6 +23,10 @@ public final class PlayerDailyQuestState {
         return Optional.ofNullable(cycleId);
     }
 
+    void restore(Optional<DailyQuestCycleId> previous) {
+        cycleId = Objects.requireNonNull(previous, "previous").orElse(null);
+    }
+
     public void setCycleId(DailyQuestCycleId cycleId) {
         this.cycleId = Objects.requireNonNull(cycleId, "cycleId");
     }

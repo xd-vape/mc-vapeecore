@@ -68,7 +68,7 @@ public final class CoreCommandHarness {
         check(!player.text().contains("/quests") && !player.text().contains("Gameplay"), "quest help is permission filtered");
         player.permissions.add("vapeecore.quest.use");
         run(command, player, "core", "Gameplay", "help");
-        check(player.text().contains("/quests") && player.text().contains("Alias: /quest"), "quest help includes its alias");
+        check(player.text().contains("/quests") && !player.text().contains("Alias: /quest"), "quest help shows only the canonical command");
         player.permissions.remove("vapeecore.quest.use");
         player.permissions.add("vapeecore.moderation.warn");
         run(command, player, "core", "Moderation", "help");
@@ -116,6 +116,21 @@ public final class CoreCommandHarness {
             check(console.output.stream().noneMatch(CoreCommandHarness::hasClick), "reload component/error data remain literal for " + status);
         }
         check(reloads[0] == 5, "each permitted reload delegates exactly once");
+        int[] routed={0};var forwarded=new ArrayList<String>();
+        org.bukkit.command.TabExecutor quest=new org.bukkit.command.TabExecutor(){
+            public boolean onCommand(CommandSender s,org.bukkit.command.Command c,String label,String[] a){routed[0]++;forwarded.addAll(List.of(a));return true;}
+            public List<String> onTabComplete(CommandSender s,org.bukkit.command.Command c,String label,String[] a){return List.of("force");}
+        };
+        CoreCommand routedCore=new CoreCommand(messages,new CommandHelpRenderer(messages),
+                ()->new CoreCommand.RuntimeInfo("VapeeCore","test","Paper","1.21.11","21",28,2,false),
+                id->Optional.empty(),()->new ReloadResult(ReloadResult.Status.SUCCESS,null,7,7,1),quest);
+        routedCore.onCommand(player.sender,null,"core",new String[]{"quest","force"});
+        check(routed[0]==0,"core quest dispatcher gates admin before delegate");
+        check(routedCore.onTabComplete(player.sender,null,"core",new String[]{"quest",""}).isEmpty(),"core quest completion permission gated");
+        routedCore.onCommand(console.sender,null,"core",new String[]{"QuEsT","force","Tester"});
+        check(routed[0]==1 && forwarded.equals(List.of("force","Tester")),"core delegates full nested quest arguments exactly once");
+        check(routedCore.onTabComplete(console.sender,null,"core",new String[]{"quest","f"}).equals(List.of("force")),"core delegates nested quest completion");
+        check(routedCore.onTabComplete(console.sender,null,"core",new String[]{"q"}).equals(List.of("quest")),"admin root completion exposes quest");
         System.out.println("CoreCommandHarness passed " + checks + " checks.");
     }
 

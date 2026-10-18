@@ -25,10 +25,19 @@ public final class QuestMenuFixture {
     public int syncCalls;
     public int presentationCalls;
     public Instant now = Instant.parse("2026-10-03T12:00:00Z");
+    public LocalTime resetTime = LocalTime.MIDNIGHT;
+    public ZoneId zone = ZoneId.of("UTC");
+    public final List<Timer> timers = new ArrayList<>();
+    public final class Timer {
+        final Runnable update; boolean cancelled;
+        Timer(Runnable update) { this.update = update; }
+    }
+    public long runningTimers() { return timers.stream().filter(timer -> !timer.cancelled).count(); }
+    public void tick() { for (Timer timer : List.copyOf(timers)) if (!timer.cancelled) timer.update.run(); }
     public boolean enabled = true;
     public int perDay = 100;
     public final DailyQuestService daily = new DailyQuestService(domain.players, domain.quests, domain.registry,
-            () -> new DailyQuestConfig.State(enabled, perDay, LocalTime.MIDNIGHT, "UTC", ZoneId.of("UTC"), domain.registry.snapshot()),
+            () -> new DailyQuestConfig.State(enabled, perDay, resetTime, zone.getId(), zone, domain.registry.snapshot()),
             domain.logger);
 
     public QuestMenuFixture() throws Exception {
@@ -47,7 +56,9 @@ public final class QuestMenuFixture {
         }, domain.quests, domain.players, messages, id -> {
             TestPlayer player = online.get(id);
             return player != null && player.online ? player.player : null;
-        }, (holder, size, title) -> { Inventory result = inventory(holder, size); titles.put(result, title); return result; }, SpecItem::new, domain.logger, layout);
+        }, (holder, size, title) -> { Inventory result = inventory(holder, size); titles.put(result, title); return result; }, SpecItem::new, domain.logger, layout, daily::nextReset, () -> now, update -> {
+            Timer timer = new Timer(update); timers.add(timer); return () -> timer.cancelled = true;
+        });
         listener = new DailyQuestMenuListener(menu);
     }
 
@@ -92,6 +103,7 @@ public final class QuestMenuFixture {
         return spec(inventory, slot).lore().stream().map(QuestCompletionFixture::plain).reduce("", (a, b) -> a + "\n" + b);
     }
     public final class TestPlayer {
+        public String name = "Tester";
         public java.util.Locale locale = java.util.Locale.US;
         public final UUID id;
         public final Inventory bottom = inventory(null, 36);
@@ -108,6 +120,7 @@ public final class QuestMenuFixture {
             this.id = id;
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "getName" -> name;
                 case "locale" -> locale;
                 case "isOnline" -> online;
                 case "hasPermission" -> permission;
@@ -133,6 +146,20 @@ public final class QuestMenuFixture {
     }
     private static final class SpecItem extends ItemStack {
         private final UiItemSpec spec;
+        private Boolean glint;
         private SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
+        @Override public org.bukkit.inventory.meta.ItemMeta getItemMeta() {
+            Boolean[] copy = {glint};
+            return proxy(org.bukkit.inventory.meta.ItemMeta.class, (method, args) -> switch (method) {
+                case "setEnchantmentGlintOverride" -> { copy[0] = (Boolean) args[0]; yield null; }
+                case "getEnchantmentGlintOverride" -> copy[0];
+                case "hasEnchantmentGlintOverride" -> copy[0] != null;
+                default -> DEFAULT;
+            });
+        }
+        @Override public boolean setItemMeta(org.bukkit.inventory.meta.ItemMeta meta) {
+            glint = meta.hasEnchantmentGlintOverride() ? meta.getEnchantmentGlintOverride() : null;
+            return true;
+        }
     }
 }

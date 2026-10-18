@@ -98,8 +98,10 @@ public final class QuestLifecycleHarness {
 
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
         check(pluginYaml.contains("quests:") && pluginYaml.contains("vapeecore.quest.use:")
-                        && !pluginYaml.contains("questadmin"),
-                "quest view has one player permission and no admin command");
+                        && !pluginYaml.contains("questadmin")
+                        && !org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                                Path.of("src/main/resources/plugin.yml").toFile()).contains("commands.quests.aliases"),
+                "quest view has one player permission, no alias and no admin root command");
         check(Files.isRegularFile(Path.of("src/main/resources/daily-quests.yml")),
                 "DailyQuest adds exactly its own configuration resource");
 

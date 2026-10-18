@@ -44,6 +44,12 @@ public final class DailyQuestService {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
+    /** Presentation read only: scheduled reset, independent of pending rewards or assignment sync. */
+    public Instant nextReset(Instant now) {
+        DailyQuestConfig.State config = Objects.requireNonNull(configState.get(), "config state");
+        return cycleResolver.nextReset(now, config.zone(), config.resetTime());
+    }
+
     public DailyQuestSyncResult syncPlayer(UUID playerId, Instant now) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
         Instant validatedNow = Objects.requireNonNull(now, "now");
@@ -90,6 +96,35 @@ public final class DailyQuestService {
         }
         player.getDailyQuestState().setCycleId(currentCycle);
         return savedCycle.isPresent() ? DailyQuestSyncResult.ROTATED : DailyQuestSyncResult.INITIALIZED;
+    }
+
+    /** Explicit admin reconciliation; ordinary same-cycle synchronization stays unchanged. */
+    public DailyQuestSyncResult forcePlayer(UUID playerId, Instant now) {
+        UUID id = Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(now, "now");
+        DailyQuestConfig.State config = Objects.requireNonNull(configState.get(), "config state");
+        if (!config.enabled()) return DailyQuestSyncResult.DISABLED;
+        var loaded = playerService.getPlayer(id);
+        if (loaded.isEmpty()) return DailyQuestSyncResult.PLAYER_NOT_LOADED;
+        if (config.definitions().isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
+        CorePlayer player = loaded.get();
+        if (hasPendingReward(player)) return DailyQuestSyncResult.BLOCKED_PENDING_REWARD;
+        var current = cycleResolver.resolve(now, config.zone(), config.resetTime());
+        var selected = selector.select(id, current, config.definitions(), config.questsPerDay());
+        var previousCycle = player.getDailyQuestState().cycleId();
+        // The full profile write below commits cycle and assignment snapshot together.
+        player.getDailyQuestState().setCycleId(current);
+        try {
+            var result = questService.reconcileAssignments(id, selected);
+            if (result == QuestAssignmentResult.REPLACED) return DailyQuestSyncResult.ROTATED;
+            player.getDailyQuestState().restore(previousCycle);
+            return result == QuestAssignmentResult.PENDING_REWARD
+                    ? DailyQuestSyncResult.BLOCKED_PENDING_REWARD : DailyQuestSyncResult.ASSIGNMENT_FAILED;
+        } catch (RuntimeException exception) {
+            player.getDailyQuestState().restore(previousCycle);
+            logger.log(Level.WARNING, "Forced daily quest selection failed for " + id, exception);
+            return DailyQuestSyncResult.ASSIGNMENT_FAILED;
+        }
     }
 
     private boolean hasPendingReward(CorePlayer player) {

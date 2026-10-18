@@ -27,18 +27,18 @@ public final class QuestCommandHarness {
         });
         run(command, console, "quests");
         check(plain(output.getLast()).contains("permission"), "console also sees permission first");
-        permission[0] = true; run(command, console, "quest", "extra");
+        permission[0] = true; run(command, console, "quests", "extra");
         check(plain(output.getLast()).contains("Only players") && f.syncCalls == 0, "authorized console gets controlled player-only response before arity");
         p.permission = true;
         for (String sub : List.of("help", "reload", "claim", "reroll", "abandon", "accept", "page")) {
-            p.output.clear(); run(command, p.player, "quest", sub);
+            p.output.clear(); run(command, p.player, "quests", sub);
             check(p.received().contains("Invalid usage.") && p.received().contains("/quests") && f.syncCalls == 0,
                     "no extra command capability: " + sub);
         }
-        for (String alias : List.of("quests", "quest")) {
+        for (String alias : List.of("quests", "vapeecore:quests")) {
             int before = f.syncCalls;
             run(command, p.player, alias);
-            check(f.syncCalls == before + 1 && p.open != p.bottom, "both aliases reach real daily sync before menu");
+            check(f.syncCalls == before + 1 && p.open != p.bottom, "canonical and namespaced command reach real daily sync before menu");
             check(command.onTabComplete(p.player, null, alias, new String[]{""}).isEmpty()
                     && command.onTabComplete(console, null, alias, new String[]{"a", ""}).isEmpty(), "no subcommand completions");
         }

@@ -110,6 +110,7 @@ public final class MenuTestLayouts {
             .button(DailyQuestMenu.Action.PREVIOUS, 45)
             .button(DailyQuestMenu.Action.PAGE_INFO, 49)
             .button(DailyQuestMenu.Action.CLOSE, 50)
+            .button(DailyQuestMenu.Action.RESET_INFO, 51)
             .button(DailyQuestMenu.Action.REFRESH, 52)
             .button(DailyQuestMenu.Action.NEXT, 53)
             .build();

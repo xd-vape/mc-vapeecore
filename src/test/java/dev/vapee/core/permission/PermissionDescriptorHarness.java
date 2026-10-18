@@ -20,7 +20,7 @@ public final class PermissionDescriptorHarness {
     private record Root(String permission, List<String> aliases, String usage) { }
     private record Node(PermissionDefault defaultValue, Set<String> children) { }
     private static final Map<String, Root> ROOTS = Map.ofEntries(
-            Map.entry("quests", new Root("vapeecore.quest.use", List.of("quest"), "/quests")),
+            Map.entry("quests", new Root("vapeecore.quest.use", List.of(), "/quests")),
             Map.entry("mute", new Root("vapeecore.moderation.mute", List.of(), "/mute <player|uuid> <duration|permanent> <reason...>")),
             Map.entry("unmute", new Root("vapeecore.moderation.unmute", List.of(), "/unmute <player|uuid> [reason...]")),
             Map.entry("warn", new Root("vapeecore.moderation.warn", List.of(), "/warn <player|uuid> <reason...>")),

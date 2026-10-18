@@ -34,7 +34,7 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 |---|---:|---|---|
 | `vapeecore.message.use` | `true` | `/msg`, `/reply`, `/r` | Private Online-Nachrichten. |
 | `vapeecore.settings.use` | `true` | `/settings`, `/settings visibility …` | Eigenes Settings-Menü, Visibility-Filter und Added-Users-Liste verwalten. |
-| `vapeecore.quest.use` | `true` | `/quests`, `/quest` | Eigene Daily-Quests read-only anzeigen; Player-only, keine Children und keine Staff-/Rank-Anforderung. Rewards sind automatisch. |
+| `vapeecore.quest.use` | `true` | `/quests` | Eigene Daily-Quests read-only anzeigen; Player-only, keine Children und keine Staff-/Rank-Anforderung. Rewards sind automatisch. |
 | `vapeecore.social.ignore` | `true` | `/ignore`, `/unignore`, `/ignorelist` | Eigene Ignore-Liste verwalten. |
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
 | `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |

@@ -9,8 +9,6 @@ depend:
 
 commands:
   quests:
-    aliases:
-      - quest
     description: View your daily quests
     usage: /quests
     permission: vapeecore.quest.use
