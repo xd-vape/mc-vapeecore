@@ -7,30 +7,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$logRoot = Join-Path $projectRoot 'dev-server/.vapeecore-dev/harnesses'
+$logRoot = Join-Path $projectRoot 'target/verification/harnesses'
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 $results = [System.Collections.Generic.List[object]]::new()
 $classes = [System.Collections.Generic.List[string]]::new()
 $stage = 'Build/Classpath'
 $failure = $null
 
-function Resolve-MavenExecutable {
-    if ($env:MAVEN_HOME) {
-        $candidate = Join-Path $env:MAVEN_HOME 'bin/mvn.cmd'
-        if (Test-Path -LiteralPath $candidate) { return $candidate }
-    }
-    $command = Get-Command 'mvn.cmd' -ErrorAction SilentlyContinue
-    if ($command) { return $command.Source }
-    $jetBrainsRoot = Join-Path $env:ProgramFiles 'JetBrains'
-    if (Test-Path -LiteralPath $jetBrainsRoot) {
-        $candidate = Get-ChildItem -LiteralPath $jetBrainsRoot -Directory -Filter 'IntelliJ IDEA*' |
-            Sort-Object Name -Descending |
-            ForEach-Object { Join-Path $_.FullName 'plugins/maven-plugin/lib/maven3/bin/mvn.cmd' } |
-            Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-        if ($candidate) { return $candidate }
-    }
-    throw 'Maven was not found in MAVEN_HOME, PATH, or the IntelliJ installation.'
-}
+. (Join-Path $PSScriptRoot 'development-environment.ps1')
 
 function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments) {
     $info = [System.Diagnostics.ProcessStartInfo]::new()
@@ -58,13 +42,15 @@ function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments) {
 
 Push-Location -LiteralPath $projectRoot
 try {
+    $environment = Initialize-DevelopmentEnvironment
+    $env:VAPEECORE_PWSH = (Get-Process -Id $PID).Path
     $mavenArgs = @()
     if ($Offline) { $mavenArgs += '-o' }
     if ($MavenRepository) { $mavenArgs += "-Dmaven.repo.local=$MavenRepository" }
     $classpathFile = Join-Path $projectRoot 'target/harness-classpath.txt'
     # Never accept a stale classpath receipt after a failed resolver run.
     Remove-Item -LiteralPath $classpathFile -Force -ErrorAction SilentlyContinue
-    & (Resolve-MavenExecutable) @mavenArgs test-compile dependency:build-classpath "-Dmdep.outputFile=$classpathFile" *> (Join-Path $logRoot 'maven.log')
+    & $environment.Maven @mavenArgs test-compile dependency:build-classpath "-Dmdep.outputFile=$classpathFile" *> (Join-Path $logRoot 'maven.log')
     if ($LASTEXITCODE -ne 0) { throw "Maven test compilation/classpath failed ($LASTEXITCODE); see maven.log." }
     if (-not (Test-Path -LiteralPath $classpathFile)) { throw 'Maven did not produce the dependency classpath.' }
     $dependencies = (Get-Content -Raw -LiteralPath $classpathFile).Trim()
@@ -73,9 +59,8 @@ try {
     }
     $classpath = @((Join-Path $projectRoot 'target/test-classes'), (Join-Path $projectRoot 'target/classes'), $dependencies) -join [IO.Path]::PathSeparator
     $stage = 'Discovery'
-    $java = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/java.exe' } else { (Get-Command java.exe -ErrorAction Stop).Source }
-    $javap = Join-Path (Split-Path -Parent $java) 'javap.exe'
-    if (-not (Test-Path -LiteralPath $javap)) { throw 'A Java 21 JDK with javap is required (JAVA_HOME or PATH).' }
+    $java = $environment.Java
+    $javap = $environment.Javap
     $sourceRoot = Join-Path $projectRoot 'src/test/java'
     $candidates = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter '*Harness.java' |
         ForEach-Object {

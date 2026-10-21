@@ -1,3 +1,4 @@
+#requires -Version 7.0
 [CmdletBinding()]
 param(
     [ValidateRange(5, 120)]
@@ -12,30 +13,20 @@ $stateRoot = Join-Path $serverRoot '.vapeecore-dev'
 $pidFile = Join-Path $stateRoot 'server.pid'
 $stopRequestFile = Join-Path $stateRoot 'stop.request'
 
-function Resolve-JpsExecutable {
-    if ($env:JAVA_HOME) {
-        $jpsFromHome = Join-Path $env:JAVA_HOME 'bin\jps.exe'
-        if (Test-Path -LiteralPath $jpsFromHome) {
-            return $jpsFromHome
-        }
-    }
+. (Join-Path $PSScriptRoot 'development-environment.ps1')
 
-    $jpsCommand = Get-Command 'jps.exe' -ErrorAction SilentlyContinue
-    if ($jpsCommand) {
-        return $jpsCommand.Source
-    }
-
-    return $null
-}
+$null = Get-Java21Jdk
+$jps = Resolve-JavaTool 'jps'
 
 function Find-ManagedServerProcess {
-    $jps = Resolve-JpsExecutable
     if (-not $jps) {
         return $null
     }
 
     $marker = "-Dvapeecore.devServer=$projectRoot"
-    foreach ($line in (& $jps -lv 2>$null)) {
+    $processes = @(& $jps -lv 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Java processes with jps. Deployment was cancelled.' }
+    foreach ($line in $processes) {
         if ($line -like "*$marker*" -and $line -match '^(\d+)\s') {
             return [int]$Matches[1]
         }
@@ -44,12 +35,13 @@ function Find-ManagedServerProcess {
 }
 
 function Find-UnmanagedPaperProcess {
-    $jps = Resolve-JpsExecutable
     if (-not $jps) {
         return $null
     }
 
-    foreach ($line in (& $jps -lv 2>$null)) {
+    $processes = @(& $jps -lv 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect Java processes with jps. Deployment was cancelled.' }
+    foreach ($line in $processes) {
         if ($line -match '^(\d+)\s+.*(?:paper-[^\s]*\.jar|paperclip|Paperclip)') {
             return [int]$Matches[1]
         }

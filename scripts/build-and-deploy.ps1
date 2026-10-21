@@ -8,60 +8,19 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$pluginDirectory = Join-Path $projectRoot 'dev-server\plugins'
-$sourceJar = Join-Path $projectRoot 'target\vapeecore-1.0-SNAPSHOT.jar'
+$pluginDirectory = Join-Path $projectRoot 'dev-server/plugins'
+$sourceJar = Join-Path $projectRoot 'target/vapeecore-1.0-SNAPSHOT.jar'
 $destinationJar = Join-Path $pluginDirectory 'vapeecore-1.0-SNAPSHOT.jar'
 
-function Resolve-MavenExecutable {
-    if ($env:MAVEN_HOME) {
-        $mavenFromHome = Join-Path $env:MAVEN_HOME 'bin\mvn.cmd'
-        if (Test-Path -LiteralPath $mavenFromHome) {
-            return $mavenFromHome
-        }
-    }
-
-    $mavenCommand = Get-Command 'mvn.cmd' -ErrorAction SilentlyContinue
-    if ($mavenCommand) {
-        return $mavenCommand.Source
-    }
-
-    $jetBrainsRoot = Join-Path $env:ProgramFiles 'JetBrains'
-    if (Test-Path -LiteralPath $jetBrainsRoot) {
-        $bundledMaven = Get-ChildItem -LiteralPath $jetBrainsRoot -Directory -Filter 'IntelliJ IDEA*' |
-            Sort-Object Name -Descending |
-            ForEach-Object { Join-Path $_.FullName 'plugins\maven-plugin\lib\maven3\bin\mvn.cmd' } |
-            Where-Object { Test-Path -LiteralPath $_ } |
-            Select-Object -First 1
-        if ($bundledMaven) {
-            return $bundledMaven
-        }
-    }
-
-    throw 'Maven was not found in MAVEN_HOME, PATH, or the IntelliJ installation.'
-}
-
-& (Join-Path $PSScriptRoot 'stop-dev-server.ps1')
+# Validation has no server side effects. Stop Paper only after the complete gate passes.
+$shell = (Get-Process -Id $PID).Path
+$verifyArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'verify.ps1'))
+if ($Offline) { $verifyArgs += '-Offline' }
+if ($MavenRepository) { $verifyArgs += @('-MavenRepository', $MavenRepository) }
+& $shell @verifyArgs
+if ($LASTEXITCODE -ne 0) { throw 'Verification failed. The existing deployed plugin was not changed.' }
+& $shell -NoProfile -File (Join-Path $PSScriptRoot 'stop-dev-server.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Stopping Paper failed. Deployment was cancelled.' }
-
-$maven = Resolve-MavenExecutable
-Write-Host "Building VapeeCore with $maven"
-$mavenArgs = @()
-if ($Offline) { $mavenArgs += '-o' }
-if ($MavenRepository) { $mavenArgs += "-Dmaven.repo.local=$MavenRepository" }
-Push-Location -LiteralPath $projectRoot
-try {
-    & $maven @mavenArgs clean package
-    if ($LASTEXITCODE -ne 0) {
-        throw "Maven build failed with exit code $LASTEXITCODE. The existing deployed plugin was not changed."
-    }
-    & (Join-Path $PSScriptRoot 'run-harnesses.ps1') -Offline:$Offline -MavenRepository $MavenRepository
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Behavioral regression failed. The existing deployed plugin was not changed.'
-    }
-} finally {
-    Pop-Location
-}
-
 if (-not (Test-Path -LiteralPath $sourceJar)) {
     throw "Build succeeded but the expected JAR is missing: $sourceJar"
 }

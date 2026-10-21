@@ -1,3 +1,4 @@
+#requires -Version 7.0
 [CmdletBinding()]
 param()
 
@@ -9,21 +10,9 @@ $stateRoot = Join-Path $serverRoot '.vapeecore-dev'
 $pidFile = Join-Path $stateRoot 'server.pid'
 $stopRequestFile = Join-Path $stateRoot 'stop.request'
 
-function Resolve-JavaExecutable {
-    if ($env:JAVA_HOME) {
-        $javaFromHome = Join-Path $env:JAVA_HOME 'bin\java.exe'
-        if (Test-Path -LiteralPath $javaFromHome) {
-            return $javaFromHome
-        }
-    }
+. (Join-Path $PSScriptRoot 'development-environment.ps1')
 
-    $javaCommand = Get-Command 'java.exe' -ErrorAction SilentlyContinue
-    if ($javaCommand) {
-        return $javaCommand.Source
-    }
-
-    throw 'Java 21 was not found. Configure JAVA_HOME or add java.exe to PATH.'
-}
+$jdk = Get-Java21Jdk
 
 New-Item -ItemType Directory -Force -Path $stateRoot | Out-Null
 
@@ -46,7 +35,7 @@ if (-not $paperJar) {
 }
 
 $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
-$processInfo.FileName = Resolve-JavaExecutable
+$processInfo.FileName = $jdk.Java
 $processInfo.WorkingDirectory = $serverRoot
 $processInfo.UseShellExecute = $false
 $processInfo.RedirectStandardInput = $true
