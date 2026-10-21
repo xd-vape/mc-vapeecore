@@ -70,6 +70,8 @@ Es gibt keinen globalen Eventbus. Automatische GUI-Updates verwenden Ereignisse/
 
 ### A. Eine Spielereinstellung ergänzen
 
+Praktischer Pfad mit Friend-Presence-Beispiel, optionalen Status-Panes und unabhängigen Tests: [SETTINGS_DEVELOPMENT.md](SETTINGS_DEVELOPMENT.md).
+
 1. Fachlichen Default und State in `player/settings/PlayerSettings` definieren; Visibility-Unteroptionen gehören zu `PlayerVisibilitySettings`.
 2. Profil-Parsing, Legacy-Default und Serialisierung in `FilePlayerRepository` prüfen; Schemaänderungen mit `PlayerFileSchema` abstimmen. Es gibt keine separate Settings-Datei als konkurrierende Authority.
 3. Zugriff und Mutation in `PlayerSettingsService`: vorherigen Wert sichern, speichern, bei Fehler zurücknehmen, erst danach Change-Observer informieren.

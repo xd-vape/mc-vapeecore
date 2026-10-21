@@ -61,12 +61,16 @@ public final class SettingsMenuEntries {
                             context.visibilityMenuOpener().accept(player);
                             return SettingsMenuEntry.Result.OPENED;
                         })));
-        return definitions.entrySet().stream().filter(entry -> !layout.placement(entry.getKey()).isEmpty())
-                .map(entry -> {
-                    Definition feature = entry.getValue();
-                    return new SettingsMenuEntry(layout.placement(entry.getKey()).getFirst(),
-                            layout.actionSlot(entry.getKey(), 1).orElse(-1), feature.icon(), feature.status(), feature.action());
-                }).toList();
+        List<SettingsMenuEntry> entries = new ArrayList<>();
+        // Enum order is stable; Map.ofEntries has no iteration-order contract.
+        for (SettingsMenu.Action action : SettingsMenu.Action.values()) {
+            if (!SettingsMenu.FEATURE_ACTIONS.contains(action) || layout.placement(action).isEmpty()) continue;
+            Definition feature = definitions.get(action);
+            if (feature == null) throw new IllegalArgumentException("Missing Settings definition for " + action);
+            entries.add(new SettingsMenuEntry(layout.slot(action), layout.actionSlot(action, 1).orElse(-1),
+                    feature.icon(), feature.status(), feature.action()));
+        }
+        return List.copyOf(entries);
     }
 
     private static Definition toggle(Material material, Component name, List<Component> description,
