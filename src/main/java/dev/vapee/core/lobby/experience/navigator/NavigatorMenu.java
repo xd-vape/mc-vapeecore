@@ -308,9 +308,29 @@ public final class NavigatorMenu {
         if (!observingChanges) { warpService.addChangeListener(committedChanges); observingChanges = true; }
     }
     public void stopUpdates() {
-        messageService.localization().removeLocaleListener(localeChanges);
-        if (observingChanges) { warpService.removeChangeListener(committedChanges); observingChanges = false; }
+        RuntimeException failure = null;
+        try {
+            messageService.localization().removeLocaleListener(localeChanges);
+        } catch (RuntimeException exception) {
+            failure = exception;
+        }
+        // An add can take effect and throw before observingChanges is set.
+        observingChanges = false;
+        try {
+            warpService.removeChangeListener(committedChanges);
+        } catch (RuntimeException exception) {
+            if (failure == null) throw exception;
+            if (failure != exception) failure.addSuppressed(exception);
+        }
+        if (failure != null) throw failure;
     }
-    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void shutdown() {
+        try {
+            stopUpdates();
+        } finally {
+            closeOpenInventories();
+        }
+    }
 
 }

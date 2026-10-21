@@ -51,10 +51,8 @@ public final class VisibilityModuleHarness {
                         && settings.contains("new VisiblePlayersMenu(")
                         && settings.contains("new SettingsCommand(plugin"),
                 "Settings owns visibility menus and command UX");
-        check(settings.contains("closeVisibilityMenus()")
-                        && settings.contains("HandlerList.unregisterAll(newVisibilitySettingsListener)")
-                        && settings.contains("HandlerList.unregisterAll(newVisiblePlayersListener)"),
-                "Settings failure and disable paths clean visibility GUI lifecycle");
+        check(dev.vapee.core.settings.visibility.SettingsModuleLifecycleHarness.observerRollback() > 0,
+                "actual Settings rollback and retry preserve visibility menu ownership");
 
         String experience = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/lobby/experience/LobbyExperienceModule.java"));

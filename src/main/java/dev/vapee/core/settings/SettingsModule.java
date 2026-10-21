@@ -122,50 +122,41 @@ public final class SettingsModule implements CoreModule {
             plugin.getServer().getPluginManager().registerEvents(newVisiblePlayersListener, plugin);
             newSettingsCommand.setExecutor(newSettingsExecutor);
             newSettingsCommand.setTabCompleter(newSettingsExecutor);
+            newSettingsMenu.startUpdates();
+            newVisibilitySettingsMenu.startUpdates();
+            newVisiblePlayersMenu.startUpdates();
+
+            playerSettingsService = newPlayerSettingsService;
+            presentationService = newPresentationService;
+            settingsMenu = newSettingsMenu;
+            settingsListener = newSettingsListener;
+            visibilitySettingsMenu = newVisibilitySettingsMenu;
+            visibilitySettingsListener = newVisibilitySettingsListener;
+            visiblePlayersMenu = newVisiblePlayersMenu;
+            visiblePlayersListener = newVisiblePlayersListener;
+            settingsCommand = newSettingsCommand;
+            plugin.getLogger().info("Settings module enabled.");
         } catch (RuntimeException exception) {
-            HandlerList.unregisterAll(newSettingsListener);
-            HandlerList.unregisterAll(newVisibilitySettingsListener);
-            HandlerList.unregisterAll(newVisiblePlayersListener);
-            newSettingsCommand.setExecutor(null);
-            newSettingsCommand.setTabCompleter(null);
+            cleanup(newSettingsMenu, newVisibilitySettingsMenu, newVisiblePlayersMenu,
+                    newSettingsListener, newVisibilitySettingsListener, newVisiblePlayersListener,
+                    newSettingsCommand, exception);
+            clearRuntime();
             throw exception;
         }
-
-        playerSettingsService = newPlayerSettingsService;
-        presentationService = newPresentationService;
-        settingsMenu = newSettingsMenu;
-        settingsListener = newSettingsListener;
-        visibilitySettingsMenu = newVisibilitySettingsMenu;
-        visibilitySettingsListener = newVisibilitySettingsListener;
-        visiblePlayersMenu = newVisiblePlayersMenu;
-        visiblePlayersListener = newVisiblePlayersListener;
-        settingsCommand = newSettingsCommand;
-        newSettingsMenu.startUpdates(); newVisibilitySettingsMenu.startUpdates(); newVisiblePlayersMenu.startUpdates();
-        plugin.getLogger().info("Settings module enabled.");
     }
 
     @Override
     public void disable() {
-        closeVisibilityMenus();
-        try {
-            if (settingsMenu != null) settingsMenu.shutdown();
-        } catch (RuntimeException exception) {
-            plugin.getLogger().log(Level.WARNING, "Could not close all player settings menus.", exception);
+        RuntimeException failures = new IllegalStateException("Settings cleanup failed.");
+        cleanup(settingsMenu, visibilitySettingsMenu, visiblePlayersMenu, settingsListener,
+                visibilitySettingsListener, visiblePlayersListener, settingsCommand, failures);
+        clearRuntime();
+        if (failures.getSuppressed().length != 0) {
+            plugin.getLogger().log(Level.WARNING, "Could not release all Settings resources.", failures);
         }
-        if (settingsListener != null) {
-            HandlerList.unregisterAll(settingsListener);
-        }
-        if (visibilitySettingsListener != null) {
-            HandlerList.unregisterAll(visibilitySettingsListener);
-        }
-        if (visiblePlayersListener != null) {
-            HandlerList.unregisterAll(visiblePlayersListener);
-        }
-        if (settingsCommand != null) {
-            settingsCommand.setExecutor(null);
-            settingsCommand.setTabCompleter(null);
-        }
+    }
 
+    private void clearRuntime() {
         settingsCommand = null;
         visiblePlayersListener = null;
         visiblePlayersMenu = null;
@@ -189,16 +180,45 @@ public final class SettingsModule implements CoreModule {
         Objects.requireNonNull(visibilitySettingsListener, "SettingsModule is not enabled").setBackOpener(opener);
     }
 
-    private void closeVisibilityMenus() {
-        try {
-            if (visibilitySettingsMenu != null) visibilitySettingsMenu.shutdown();
-        } catch (RuntimeException exception) {
-            plugin.getLogger().log(Level.WARNING, "Could not close all visibility settings menus.", exception);
+    private void cleanup(SettingsMenu root, VisibilitySettingsMenu visibility, VisiblePlayersMenu players,
+                         SettingsListener rootListener, VisibilitySettingsListener visibilityListener,
+                         VisiblePlayersListener playersListener, PluginCommand command,
+                         RuntimeException failure) {
+        // Close owned views while their close handlers are still registered.
+        if (visibility != null) {
+            cleanupStep(failure, "visibility menu", visibility::shutdown);
         }
+        if (players != null) {
+            cleanupStep(failure, "visible players menu", players::shutdown);
+        }
+        if (root != null) {
+            cleanupStep(failure, "settings menu", root::shutdown);
+        }
+        if (rootListener != null) {
+            cleanupStep(failure, "settings listener",
+                    () -> HandlerList.unregisterAll(rootListener));
+        }
+        if (visibilityListener != null) {
+            cleanupStep(failure, "visibility listener",
+                    () -> HandlerList.unregisterAll(visibilityListener));
+        }
+        if (playersListener != null) {
+            cleanupStep(failure, "visible players listener",
+                    () -> HandlerList.unregisterAll(playersListener));
+        }
+        if (command != null) {
+            cleanupStep(failure, "command executor",
+                    () -> command.setExecutor(null));
+            cleanupStep(failure, "tab completer",
+                    () -> command.setTabCompleter(null));
+        }
+    }
+
+    private void cleanupStep(RuntimeException failure, String resource, Runnable release) {
         try {
-            if (visiblePlayersMenu != null) visiblePlayersMenu.shutdown();
-        } catch (RuntimeException exception) {
-            plugin.getLogger().log(Level.WARNING, "Could not close all visible players menus.", exception);
+            release.run();
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(new IllegalStateException("Could not release " + resource, cleanupFailure));
         }
     }
 

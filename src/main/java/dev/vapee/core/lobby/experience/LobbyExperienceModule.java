@@ -49,7 +49,12 @@ public final class LobbyExperienceModule implements CoreModule {
     private LobbyGlideService glideService;
     private LobbyGlideListener glideListener;
     private final MessageService messageService;
-    private final java.util.function.Consumer<Player> localeChanges = this::refreshLocaleItems;    private VisibilityLobbyItemAction visibilityAction;
+    private final java.util.function.Consumer<Player> localeChanges = this::refreshLocaleItems;
+    private final java.util.function.Consumer<EnableStage> enableCheckpoint;
+    private VisibilityLobbyItemAction visibilityAction;
+
+    // Package-local fault boundary for lifecycle tests; production supplies a no-op.
+    enum EnableStage { BEFORE_CALLBACKS, VISIBILITY_BACK_INSTALLED, SETTINGS_BACK_INSTALLED, RUNTIME_ACTIVE }
 
     private NavigatorMenu navigatorMenu;
     private LobbyExperienceListener experienceListener;
@@ -72,6 +77,15 @@ public final class LobbyExperienceModule implements CoreModule {
             UtilityModule utilityModule,
             MessageService messageService
     ) {
+        this(plugin, lobbyModule, playerModule, settingsModule, warpModule, visibilityModule,
+                activityModule, friendModule, utilityModule, messageService, stage -> { });
+    }
+
+    LobbyExperienceModule(JavaPlugin plugin, LobbyModule lobbyModule, PlayerModule playerModule,
+                          SettingsModule settingsModule, WarpModule warpModule, VisibilityModule visibilityModule,
+                          ActivityModule activityModule, FriendModule friendModule, UtilityModule utilityModule,
+                          MessageService messageService, java.util.function.Consumer<EnableStage> enableCheckpoint) {
+        this.enableCheckpoint = Objects.requireNonNull(enableCheckpoint, "enableCheckpoint");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.lobbyModule = Objects.requireNonNull(lobbyModule, "lobbyModule");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
@@ -136,6 +150,16 @@ public final class LobbyExperienceModule implements CoreModule {
                 newNavigatorMenu
         );
 
+        // Registry activation gates these suppliers until startup has completed enough to use them.
+        navigatorMenu = newNavigatorMenu;
+        playerMenu = newPlayerMenu;
+        playerMenuListener = newPlayerMenuListener;
+        playerSelectionListener = newSelectionListener;
+        experienceListener = newExperienceListener;
+        itemListener = newItemListener;
+        navigatorListener = newNavigatorListener;
+        glideService = newGlide;
+        glideListener = newGlideListener;
         try {
             utilityModule.getUtilityService().addFlightListener(newGlide);
             lobbyModule.getLobbyPlayerStateService().addStateListener(newGlide);
@@ -153,87 +177,115 @@ public final class LobbyExperienceModule implements CoreModule {
                 }
                 newVisibilityService.synchronizePlayer(player);
             }
-            navigatorMenu = newNavigatorMenu;
-            playerMenu = newPlayerMenu;
-            playerMenuListener = newPlayerMenuListener;
-            playerSelectionListener = newSelectionListener;
+            enableCheckpoint.accept(EnableStage.BEFORE_CALLBACKS);
             newPlayerMenu.startUpdates();
             settingsModule.setVisibilityBackOpener(player -> {
                 if (!newPlayerMenu.open(player)) player.closeInventory();
             });
+            enableCheckpoint.accept(EnableStage.VISIBILITY_BACK_INSTALLED);
             settingsModule.setSettingsBackOpener(player -> {
                 if (!newPlayerMenu.open(player)) {
                     player.closeInventory();
                 }
             });
+            enableCheckpoint.accept(EnableStage.SETTINGS_BACK_INSTALLED);
             newNavigatorMenu.startUpdates();
             visibilityAction = newVisibilityAction;
             registry.activate();
             messageService.localization().addLocaleListener(localeChanges);
-            experienceListener = newExperienceListener;
-            itemListener = newItemListener;
-            navigatorListener = newNavigatorListener;
             lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player ->
                     newPlayerService.isLoaded(player.getUniqueId())
                             && activityModule.getActivityService().getSessionForPlayer(player.getUniqueId()).isEmpty());
             lobbyModule.getLobbyPlayerStateService().refreshLobbyItems();
-            glideService = newGlide;
-            glideListener = newGlideListener;
             for (Player player : plugin.getServer().getOnlinePlayers()) newGlide.onPlayerAvailable(player);
+            enableCheckpoint.accept(EnableStage.RUNTIME_ACTIVE);
+            plugin.getLogger().info("Lobby experience module enabled.");
         } catch (RuntimeException exception) {
-            detachGlide(newGlide, newGlideListener);
-            glideService = null; glideListener = null;
-            settingsModule.setVisibilityBackOpener(Player::closeInventory);
-            registry.deactivate();
-            newPlayerMenu.shutdown();
-            HandlerList.unregisterAll(newPlayerMenuListener);
-            HandlerList.unregisterAll(newSelectionListener);
-            playerMenu = null; playerMenuListener = null; playerSelectionListener = null;
-            visibilityAction = null;
-            navigatorMenu = null;
-            experienceListener = null;
-            itemListener = null;
-            navigatorListener = null;
-            lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
-            newExperienceListener.deactivate();
-            HandlerList.unregisterAll(newNavigatorListener);
-            HandlerList.unregisterAll(newItemListener);
-            HandlerList.unregisterAll(newExperienceListener);
-            cleanupRuntime(newNavigatorMenu);
+            cleanupRuntime(exception);
             throw exception;
         }
-
-        plugin.getLogger().info("Lobby experience module enabled.");
     }
 
     @Override
     public void disable() {
-        if (glideService != null) detachGlide(glideService, glideListener);
-        glideService = null; glideListener = null;
-        settingsModule.setVisibilityBackOpener(Player::closeInventory);
-        settingsModule.setSettingsBackOpener(Player::closeInventory);
-        lobbyModule.getItemRegistry().deactivate();
-        if (playerMenu != null) playerMenu.shutdown();
-        if (playerMenuListener != null) HandlerList.unregisterAll(playerMenuListener);
-        if (playerSelectionListener != null) HandlerList.unregisterAll(playerSelectionListener);
-        playerMenu = null; playerMenuListener = null; playerSelectionListener = null;
-        visibilityAction = null;
-        lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false);
-        cleanupRuntime(navigatorMenu);
-        if (experienceListener != null) {
-            experienceListener.deactivate();
-            HandlerList.unregisterAll(experienceListener);
+        if (playerMenu == null && navigatorMenu == null && glideService == null) {
+            return;
         }
-        if (itemListener != null) {
-            HandlerList.unregisterAll(itemListener);
+        RuntimeException failures = new IllegalStateException("LobbyExperience cleanup failed.");
+        cleanupRuntime(failures);
+        if (failures.getSuppressed().length != 0) {
+            plugin.getLogger().log(Level.WARNING, "Could not release all LobbyExperience resources.", failures);
+        }
+    }
+
+    private void cleanupRuntime(RuntimeException failure) {
+        cleanupStep(failure, "item registry", () -> lobbyModule.getItemRegistry().deactivate());
+        cleanupStep(failure, "item refresh eligibility", () ->
+                lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false));
+        cleanupStep(failure, "visibility back callback", () -> settingsModule.setVisibilityBackOpener(Player::closeInventory));
+        cleanupStep(failure, "settings back callback", () -> settingsModule.setSettingsBackOpener(Player::closeInventory));
+        cleanupStep(failure, "locale observer", () -> messageService.localization().removeLocaleListener(localeChanges));
+        if (experienceListener != null) {
+            cleanupStep(failure, "experience callbacks", experienceListener::deactivate);
+        }
+        if (playerMenu != null) {
+            cleanupStep(failure, "player menu", playerMenu::shutdown);
+        }
+        if (navigatorMenu != null) {
+            cleanupStep(failure, "navigator menu", navigatorMenu::shutdown);
+        }
+        if (glideService != null) {
+            LobbyGlideService ownedGlide = glideService;
+            cleanupStep(failure, "flight subscription",
+                    () -> utilityModule.getUtilityService().removeFlightListener(ownedGlide));
+            cleanupStep(failure, "lobby state subscription",
+                    () -> lobbyModule.getLobbyPlayerStateService().removeStateListener(ownedGlide));
+            cleanupStep(failure, "activity subscription",
+                    () -> activityModule.getActivityService().removeMembershipListener(ownedGlide));
+            cleanupStep(failure, "glide runtime", ownedGlide::shutdown);
+        }
+        if (glideListener != null) {
+            cleanupStep(failure, "glide listener",
+                    () -> HandlerList.unregisterAll(glideListener));
+        }
+        if (playerMenuListener != null) {
+            cleanupStep(failure, "player menu listener",
+                    () -> HandlerList.unregisterAll(playerMenuListener));
+        }
+        if (playerSelectionListener != null) {
+            cleanupStep(failure, "player selection listener",
+                    () -> HandlerList.unregisterAll(playerSelectionListener));
         }
         if (navigatorListener != null) {
-            HandlerList.unregisterAll(navigatorListener);
+            cleanupStep(failure, "navigator listener",
+                    () -> HandlerList.unregisterAll(navigatorListener));
         }
+        if (itemListener != null) {
+            cleanupStep(failure, "item listener",
+                    () -> HandlerList.unregisterAll(itemListener));
+        }
+        if (experienceListener != null) {
+            cleanupStep(failure, "experience listener",
+                    () -> HandlerList.unregisterAll(experienceListener));
+        }
+        glideService = null;
+        glideListener = null;
+        playerMenu = null;
+        playerMenuListener = null;
+        playerSelectionListener = null;
+        navigatorMenu = null;
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;
-        navigatorMenu = null;
+        visibilityAction = null;
+    }
+
+    private void cleanupStep(RuntimeException failure, String resource, Runnable release) {
+        try {
+            release.run();
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(new IllegalStateException("Could not release " + resource, cleanupFailure));
+        }
     }
 
     private void playFeedbackSound(Player player) {
@@ -244,27 +296,9 @@ public final class LobbyExperienceModule implements CoreModule {
         }
     }
 
-    private void detachGlide(LobbyGlideService service, LobbyGlideListener listener) {
-        utilityModule.getUtilityService().removeFlightListener(service);
-        lobbyModule.getLobbyPlayerStateService().removeStateListener(service);
-        activityModule.getActivityService().removeMembershipListener(service);
-        if (listener != null) HandlerList.unregisterAll(listener);
-        service.shutdown();
-    }
-
     private void refreshLocaleItems(Player player) {
         if (navigatorMenu != null && navigatorMenu.canAccess(player) && lobbyModule.getItemRegistry().isActive())
             lobbyModule.getLobbyItemService().applyLobbyItems(player);
     }
 
-    private void cleanupRuntime(NavigatorMenu activeNavigatorMenu) {
-        messageService.localization().removeLocaleListener(localeChanges);
-        if (activeNavigatorMenu != null) {
-            try {
-                activeNavigatorMenu.shutdown();
-            } catch (RuntimeException exception) {
-                plugin.getLogger().log(Level.WARNING, "Could not close all navigator inventories.", exception);
-            }
-        }
-    }
 }
