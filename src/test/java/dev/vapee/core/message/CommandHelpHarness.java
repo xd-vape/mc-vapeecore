@@ -257,7 +257,10 @@ public final class CommandHelpHarness {
         check(warp.sections().stream().map(section -> dev.vapee.core.i18n.I18nTestSupport.english(section.title())).toList()
                         .equals(List.of("Create & Edit", "Information", "Management")),
                 "warp help sections have the required order");
-        String warpText = render(warp);
+        Capture authorizedWarp = capture(Set.of(WarpCommand.PERMISSION));
+        new CommandHelpRenderer(authorizedWarp.messageService()).send(authorizedWarp.sender(), warp);
+        String warpText = authorizedWarp.singleText();
+        check(!render(warp).contains("/warp set <id>"), "Warp metadata also filters administrative entries for an unauthorized renderer");
         check(warpText.contains("/warp set <id>") && warpText.contains("/warp remove <id>"),
                 "warp help is structured and complete");
 

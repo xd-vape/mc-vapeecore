@@ -87,6 +87,8 @@ Für Chat- und Darstellungs-Platzhalter sowie LuckPerms-Meta siehe [FORMATTING.m
 
 ## Entwicklung
 
+See [Command development](docs/COMMAND_DEVELOPMENT.md) for root/subcommand ownership, the Warp extension pilot, authorization, help/completion and lifecycle tests.
+
 Benötigt werden ein vollständiges **JDK 21**, **Maven 3.6.3+** und **PowerShell 7+**. `JAVA_HOME` bzw. der Java-Launcher auf `PATH` bestimmt das JDK; Maven wird über `MAVEN_HOME` oder `PATH` gefunden. Auf Windows bleibt die vorhandene IntelliJ-Maven-Installation ein optionaler Fallback. Ein explizit falsches Home-Verzeichnis erzeugt eine Diagnose. Ohne `-MavenRepository` gilt die normale Maven-Konfiguration einschließlich `settings.xml`; `-Offline` setzt bereits vorhandene Abhängigkeiten voraus.
 
 1. Repository klonen und den Projektordner bzw. `pom.xml` in IntelliJ öffnen; Project SDK und Maven Runner auf JDK 21 stellen.
