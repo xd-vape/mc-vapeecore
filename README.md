@@ -4,7 +4,7 @@ VapeeCore ist ein modular aufgebautes Minecraft-Plugin für Paper. Es verbindet 
 
 ## Funktionen
 
-- **Lobby:** Spawn, konfigurierbare Teleports und Schutzregeln, NORMAL-/BUILD-Verhalten, Warp-Navigator, Sichtbarkeitsfilter, Freunde-Menü per eigenem Spielerkopf und anpassbare Hotbar-Items.
+- **Lobby:** Spawn, konfigurierbare Teleports und Schutzregeln, NORMAL-/BUILD-Verhalten, Warp-Navigator, Sichtbarkeitsfilter, Player Menu per eigenem Spielerkopf mit Freunde-/Settings-Zugang und anpassbare Hotbar-Items.
 - **Spieler:** bekannte Namen/UUIDs, Online-/Offline-Profile, gespeicherte Einstellungen, Ignore-Liste und Coins.
 - **Community:** Freundschaften und Anfragen, gefilterte Friend-Presence-Hinweise, Clans mit Einladungen und Mitgliederverwaltung, private Nachrichten und Reply.
 - **Moderation und Utility:** Mutes, Bans, Warnungen und Historie; berechtigungsgesteuerte Bewegungs-, Teleport- und Spielerwerkzeuge.
@@ -59,19 +59,19 @@ Bei Updates den vorhandenen `plugins/VapeeCore/`-Ordner behalten. Beim Startup e
 
 `lobby.yml` besitzt `config-version: 2`, die anderen fünf Dateien `config-version: 1` und werden beim Startup auf der festen Operator-Allowlist weiterentwickelt. Die Version nicht manuell erhöhen, um Defaults anzufordern: neue Keys werden mit einem entsprechenden Schema-Update ergänzt. Typkonflikte bewahren den Betreiberwert und erzeugen eine Warnung; der jeweilige Loader verwendet seine sicheren Fallbacks.
 
-Nach normalen Änderungen liest **`/core reload`** die sechs Operator-Configs und beide Sprachdateien über sieben Teilnehmer in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Neue Daily-Assignments entstehen erst beim nächsten regulären Sync.
+Nach normalen Änderungen liest **`/core reload`** die Operator-Configs und beide Sprachdateien über die in `VapeeCore` verdrahteten Teilnehmer in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Die heutige Daily-Auswahl bleibt im selben Cycle erhalten; neue Katalogeinträge werden beim nächsten Cycle ausgewählt. Für ausdrückliche Tests übernimmt `/core quest force [player]` die aktuelle Auswahl bis zur konfigurierten Anzahl, erhält Fortschritt weiterhin ausgewählter IDs und vergibt selbst keine Coins. Ausstehende Belohnungen blockieren Force; es verlangt `vapeecore.admin` und den bestehenden Online-Zielschutz.
 
 `warps.yml`, `blackjack.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind veränderliche **Persistence**, keine Operator-Config-Evolution. Sie besitzen ihre eigenen Datei-/Schema-Verträge. Verwende für Warps und Blackjack die Admin-Commands.
 
 ### Lobby-Items anpassen
 
-Die registrierten Items heißen `navigator`, `visibility`, `settings` und `friends`. Der Friends-Spielerkopf öffnet das bestehende Freunde-Menü mit der aktuellen Friend-Berechtigung; `/friend` bleibt verfügbar. Friends liegt im Standardlayout auf Slot 1. Material, Slot, Name, Lore, Aktivierung und optionaler eigener Spielerkopf stehen in `lobby.yml`:
+Die Java-Registrierungen heißen `player-menu`, `navigator`, `visibility`, `settings` und `friends`. Aktuelles Default-Beispiel: Player Menu auf Slot 0, Visibility auf 1, Navigator auf 8; die separaten Settings-/Friends-Items sind standardmäßig deaktiviert. Maßgeblich ist immer die Live-`lobby.yml`, keine funktionale Bindung an diese Positionen. Der optionale Friends-Kopf öffnet das bestehende Freunde-Menü mit der aktuellen Friend-Berechtigung; `/friend` bleibt verfügbar. Material, Slot, Name, Lore, Aktivierung und optionaler eigener Spielerkopf stehen in `lobby.yml`. Beispiel eines eigenen Navigator-Eintrags (aktive Slots müssen kollisionsfrei bleiben):
 
 ```yaml
 items:
   navigator:
     enabled: true
-    slot: 0
+    slot: 8
     material: PLAYER_HEAD
     head-owner: self
     name: "<aqua>Mein Navigator</aqua>"
@@ -81,32 +81,41 @@ items:
 
 `head-owner: self` verwendet bei `PLAYER_HEAD` das bereits vorhandene Online-Profil ohne zusätzlichen Lookup; bei anderen Materialien wird es ignoriert. Slots sind **0 bis 8**, aktivierte Items benötigen unterschiedliche Slots. Bei ungültigen Materialien oder Slots warnen sichere Fallbacks. Fremde Items werden nur in freie, nicht reservierte Storage-Slots verschoben; ohne freien Platz bleibt das fremde Item erhalten. Name/Lore verwenden MiniMessage; Farbtags dürfen implizit geschlossen werden. PDC-Identität und Click-Aktion bleiben in Java, unabhängig von Text und Material. Nicht registrierte YAML-IDs werden mit Warnung ignoriert. Ein aus dem vorhandenen `items`-Abschnitt entfernter Eintrag wird nach Reload entfernt; `enabled: false` deaktiviert ihn ebenfalls. Die ID `friends` beibehalten und für einen anderen Titel nur `name` ändern.
 
-Die zweite Sichtbarkeitsdarstellung liegt unter `items.visibility.filtered`. Nach `/core reload` werden die Items geladener NORMAL-Spieler in der Lobby aktualisiert; BUILD- und Activity-Inventare behalten ihre Zuständigkeit.
+Die zusätzlichen Sichtbarkeitsdarstellungen liegen unter `items.visibility.filtered` und `items.visibility.variants.hidden`. Rechtsklick wechselt ALL → FILTERED → HIDDEN. Nach `/core reload` werden die Items geladener NORMAL-Spieler in der Lobby aktualisiert; BUILD- und Activity-Inventare behalten ihre Zuständigkeit.
 
 Für Chat- und Darstellungs-Platzhalter sowie LuckPerms-Meta siehe [FORMATTING.md](docs/FORMATTING.md).
 
 ## Entwicklung
 
-Der Source ist nach Features unter `src/main/java/dev/vapee/core/` gegliedert. Die Main Class verdrahtet 27 Module explizit; Disable läuft rückwärts. Es gibt sechs Reload-Teilnehmer.
+Benötigt werden ein vollständiges **JDK 21**, **Maven 3.6.3+** und **PowerShell 7+**. `JAVA_HOME` bzw. der Java-Launcher auf `PATH` bestimmt das JDK; Maven wird über `MAVEN_HOME` oder `PATH` gefunden. Auf Windows bleibt die vorhandene IntelliJ-Maven-Installation ein optionaler Fallback. Ein explizit falsches Home-Verzeichnis erzeugt eine Diagnose. Ohne `-MavenRepository` gilt die normale Maven-Konfiguration einschließlich `settings.xml`; `-Offline` setzt bereits vorhandene Abhängigkeiten voraus.
+
+1. Repository klonen und den Projektordner bzw. `pom.xml` in IntelliJ öffnen; Project SDK und Maven Runner auf JDK 21 stellen.
+2. Für die reine JAR-Erstellung `mvn clean package` verwenden.
+3. Vor einem Commit die vollständige, **nicht deployende** Validierung ausführen:
 
 ```powershell
-mvn clean package
-pwsh -File .\scripts\run-harnesses.ps1
+pwsh -File .\scripts\verify.ps1
+# Optional: vorhandenes lokales Repository und Offline-Modus
+pwsh -File .\scripts\verify.ps1 -Offline -MavenRepository 'C:\path with spaces\maven-repository'
 ```
 
-Der Harness-Runner entdeckt ausführbare `*Harness.java` selbst, prüft die Bytecode-Mains und führt die Regression mit vollständigem Inventar aus. Ein Maven-Build allein führt diese eigenständigen Harnesses nicht aus.
+`verify.ps1` prüft die Voraussetzungen, baut mit `clean package` und ruft den bestehenden vollständigen Harness-Runner auf. Erfolg verlangt alle entdeckten Einstiege, positive Check-Zahlen und null fehlende/ungültige Ergebnisse. Logs und das aktuelle `results.json` liegen unter `target/verification/harnesses/`. Verify stoppt/startet keinen Server, deployed keine JAR und verändert keine Betreiberkonfiguration.
 
-Für die lokale Windows-/IntelliJ-Umgebung sind die Run-Konfigurationen **Build & Deploy VapeeCore**, **Start VapeeCore Dev Server** und **Stop VapeeCore Dev Server** vorhanden. Der offizielle Build-/Deploy-Workflow stoppt Paper sauber, baut die JAR, führt alle Harnesses aus und ersetzt erst nach erfolgreichem Gate die Dev-JAR:
+`scripts/run-harnesses.ps1` bleibt der direkte Einstieg für die vollständige eigenständige Behavioral Regression: Bytecode-Discovery statt gepflegter Klassenliste, ein Prozess pro Harness. **Maven allein führt diese Verhaltenstests nicht aus.** Bei kleinen Änderungen zunächst die betroffenen Harnesses mit der vom Runner erzeugten Classpath ausführen; vor dem Commit immer die komplette Validierung. Die integrierten Skript-Fehlertests können separat mit `pwsh -File ./scripts/tests/verification.Tests.ps1` gestartet werden.
+
+Für lokale Entwicklung `paper-*.jar` unter `dev-server/` und LuckPerms unter `dev-server/plugins/` bereitstellen sowie die Paper-EULA bearbeiten. Die eingecheckten IntelliJ-Konfigurationen heißen **Build & Deploy VapeeCore** und **Start VapeeCore Dev Server**; deren Interpreter-/JDK-Pfade gegebenenfalls auf die eigene Installation stellen. Stop ist ein separates Skript. Build & Deploy verwendet dieselbe vollständige Validierung, stoppt danach Paper sauber und ersetzt erst dann die Dev-JAR mit Größen-/SHA-256-Nachweis. Ein fehlgeschlagenes Gate lässt die bisher deployte JAR unverändert; der Server startet nicht automatisch:
 
 ```powershell
-pwsh -File .\scripts\build-and-deploy.ps1 -Offline -MavenRepository 'C:\Users\mehdi\.m2\repository'
+pwsh -File .\scripts\build-and-deploy.ps1
 pwsh -File .\scripts\start-dev-server.ps1
 pwsh -File .\scripts\stop-dev-server.ps1
 ```
 
-Für andere Rechner den Repository-Pfad passend wählen oder ohne Offline-Parameter arbeiten. `JAVA_HOME` muss auf das vollständige JDK zeigen. `dev-server/` und `target/` sind lokale, ignorierte Verzeichnisse.
+Alle Validierungs-/Deploy-Skripte unterstützen `-Offline` und `-MavenRepository`. `dev-server/` enthält lokale Welten, Plugins, Betreiber-YAML und Spielerdaten; `dev-server/.vapeecore-dev/` enthält die Serversteuerung. `target/` enthält nur generierte Build-/Validierungsdaten. Beide Verzeichnisse sind ignoriert. Bestehende Plugin-Daten bei Updates behalten.
 
-Der [Developer Guide](docs/DEVELOPER_GUIDE.md) beginnt mit **Common Changes / Where do I change this?**: typische Änderungen, konkrete Dateien, GUI-Layouts, Package-Navigation und Config-/Persistence-Grenzen.
+Die Entwicklungsskripte wurden unter Windows/PowerShell 7 ausgeführt. Plattformneutrale Pfade und `mvn`/JDK-Erkennung für Linux/macOS sind implementiert, dort aber nicht zur Laufzeit getestet. Die IntelliJ-Run-Konfigurationen bleiben Windows-Vorlagen.
+
+Der Source ist nach Features unter `src/main/java/dev/vapee/core/` gegliedert. `VapeeCore.java` ist die maßgebliche Modul-/Reload-Verdrahtung; Disable läuft rückwärts. Die [Architekturreferenz](docs/ARCHITECTURE.md) erklärt Owner, Commit-Grenzen und Erweiterungspfade für Settings, Commands, Config, Module, GUIs und Persistenz. **Common Changes / Where do I change this?** im [Developer Guide](docs/DEVELOPER_GUIDE.md#common-changes--where-do-i-change-this) führt zu konkreten Feature-Dateien.
 
 ## Roadmap
 
@@ -114,7 +123,8 @@ Geplante Weiterentwicklungen sind Staff-Interaction-/Teleport-Consent-UX und opt
 
 ## Dokumentation
 
-- [Developer Guide](docs/DEVELOPER_GUIDE.md): Architektur, Änderungen und lokale Entwicklung
+- [Architecture](docs/ARCHITECTURE.md): Zuständigkeiten, Lifecycle und Standard-Erweiterungspfade
+- [Developer Guide](docs/DEVELOPER_GUIDE.md): Feature-Details, Änderungen und lokale Entwicklung
 - [Permissions](docs/PERMISSIONS.md): Commands, Berechtigungen und Staff-Verträge
 - [Formatting](docs/FORMATTING.md): Chat, LuckPerms-Meta, Rankfarben und Clan-Templates
 - [Reports](reports/): historische technische Audits und Validierungsnachweise

@@ -4,6 +4,12 @@ Diese Datei ist die praktische Landkarte für Änderungen an VapeeCore. Der aktu
 
 VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-/Disable-Lifecycle, `ModuleManager` aktiviert Module in registrierter Reihenfolge und deaktiviert sie rückwärts. Abhängigkeiten werden explizit über Konstruktoren übergeben. Es gibt keine globalen Service-Singletons, keine Reflection-Discovery und keine statischen Player-State-Maps. Packages sind nach Features geschnitten. LuckPerms ist die Quelle für Gruppen und Permissions. Die öffentliche Rank-Presentation ist datengetrieben und besitzt keine hartkodierte Rank-Authority. Davon getrennt definiert `StaffHierarchyConfig.DEFAULT_GROUPS` bewusst sichere Schutz-Defaults (`builder`, `moderator`, `admin`, `owner`, aufsteigend); diese Staff-Hierarchie ist unabhängig vom öffentlichen Rank-Track und der LuckPerms-Vererbung.
 
+## Einstieg für Entwicklung
+
+[README – Entwicklung](../README.md#entwicklung) erklärt JDK 21, Maven 3.6.3+, PowerShell 7 und die lokale Einrichtung. [ARCHITECTURE.md](ARCHITECTURE.md) ist die kurze Referenz für Owner, Lifecycle, Transaktionen und konkrete Erweiterungspfade. Diese Datei bleibt die ausführliche Feature-Landkarte.
+
+Der offizielle Abschluss einer Änderung ist `pwsh -File ./scripts/verify.ps1`: Voraussetzungen → Maven `clean package` → vollständiger kanonischer Harness-Runner → geprüfter Ergebnisnachweis. Optional `-Offline` und `-MavenRepository '<lokales Repository>'`. Das verändert keinen Dev-Server. Maven allein baut lediglich; Build & Deploy verwendet Verify und ersetzt die Dev-JAR erst nach erfolgreicher Validierung und sauberem Serverstop. Aktuelle Discovery/Check-Zahlen stehen unter `target/verification/harnesses/results.json`, nicht in einer manuell gepflegten Klassenliste.
+
 ## Localization / i18n
 
 `LanguageResolver` verwendet ausschließlich `Locale.getLanguage().equals("de")`. Die Paper-API ist `Player.locale()`; der Listener liest `PlayerLocaleChangeEvent.locale()`. Nicht-Spieler und unbekannte Sprachen verwenden Englisch. Sprache wird weder persistiert noch zwischen Sends gecacht.
@@ -85,7 +91,7 @@ public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, A
 
 Für Kompositions-/Positionsänderungen ist keine zweite Listener-/Harness-Slotänderung nötig. Normale Menüs haben keine öffentlichen Spiegelkonstanten wie `*_SLOT`, `CONTENT_SIZE` oder `INVENTORY_SIZE`. `menu.layout()` beschreibt mögliche Positionen; bei paginierten Menüs löst der Listener ausschließlich `holder.actionAt(slot)` aus dem zuletzt fertig gerenderten Snapshot auf. Layout-Präsenz allein aktiviert keinen unsichtbaren Control-Slot. Target-Maps und tatsächliche Controls werden gemeinsam veröffentlicht; fremde Item-Materialien, Namen und Lore sind keine Authority.
 
-Danach neu bauen und `scripts/run-harnesses.ps1` ausführen. Default-Smokes prüfen die aktuelle Komposition dynamisch. Verhaltenstests prüfen erfolgreiche Mutation → automatisches Update und verwenden explizite Fixtures; interne Rerender-Aufrufe werden ohne erforderlichen Clock-Klick geprüft. `Action.REFRESH` bleibt als optionaler Java-Override erhalten, wird von keinem Produktions-Default platziert und ist keine Voraussetzung für automatische Updates. `/core reload` ist keine Chest-GUI-Konfiguration.
+Danach `scripts/verify.ps1` ausführen. Default-Smokes prüfen die aktuelle Komposition dynamisch. Verhaltenstests prüfen erfolgreiche Mutation → automatisches Update und verwenden explizite Fixtures; interne Rerender-Aufrufe werden ohne erforderlichen Clock-Klick geprüft. `Action.REFRESH` bleibt als optionaler Java-Override erhalten, wird von keinem Produktions-Default platziert und ist keine Voraussetzung für automatische Updates. `/core reload` ist keine Chest-GUI-Konfiguration.
 
 ### Pagination und automatische Updates
 
@@ -1222,21 +1228,21 @@ Für Fly, Speed, Gamemode, Heal, Feed, Ping, Clear und Enderchest entscheidet di
 
 `mvn clean package` kompiliert Produktion und Testquellen und baut die JAR. Die vorhandenen ausführbaren `main`-Harnesses werden dabei **nicht** von Maven/Surefire als Verhaltenstests ausgeführt.
 
-Die vollständige Behavioral Regression läuft mit PowerShell 7 und einem Java-21-JDK:
+Die offizielle vollständige Validierung läuft mit PowerShell 7, Maven 3.6.3+ und einem Java-21-JDK:
 
 ```powershell
-./scripts/run-harnesses.ps1
+./scripts/verify.ps1
 # Optional, wenn Abhängigkeiten bereits im lokalen Maven-Repository liegen:
-./scripts/run-harnesses.ps1 -Offline -MavenRepository 'C:\path with spaces\maven-repository'
+./scripts/verify.ps1 -Offline -MavenRepository 'C:\path with spaces\maven-repository'
 ```
 
-Der [kanonische Runner](../scripts/run-harnesses.ps1) löst Maven über MAVEN_HOME, PATH oder eine vorhandene IntelliJ-Installation auf; Java und javap kommen aus JAVA_HOME oder PATH. Er kompiliert mit `test-compile`, erstellt die Dependency-Classpath und untersucht rekursiv jede `src/test/java/**/*Harness.java`. Package-Pfad und Name müssen wie im bestehenden Repository der gleichnamigen Top-Level-Klasse entsprechen. `javap` bestätigt deren tatsächlich kompilierte `public static void main(String[])`- bzw. Varargs-Signatur. Kommentare, Strings, reine Support-Fixtures, verschachtelte und generierte Klassen werden dadurch nicht als zusätzliche Harnesses gezählt. Es gibt keine gepflegte Klassenliste und keine Skipped-Kategorie.
+Der [kanonische Runner](../scripts/run-harnesses.ps1) löst Maven über MAVEN_HOME, PATH oder eine vorhandene IntelliJ-Installation auf; Java wird über JAVA_HOME oder PATH gefunden; java.home bestimmt das vollständige JDK. java, javac und javap müssen Java 21 entsprechen. Ein falsches explizites JAVA_HOME/MAVEN_HOME wird mit einer Handlungsanweisung abgelehnt. Auf Nicht-Windows-Systemen werden java/javac/javap und mvn ohne .exe/.cmd verwendet; Laufzeitvalidierung erfolgte bislang nur unter Windows. Er kompiliert mit `test-compile`, erstellt die Dependency-Classpath und untersucht rekursiv jede `src/test/java/**/*Harness.java`. Package-Pfad und Name müssen wie im bestehenden Repository der gleichnamigen Top-Level-Klasse entsprechen. `javap` bestätigt deren tatsächlich kompilierte `public static void main(String[])`- bzw. Varargs-Signatur. Kommentare, Strings, reine Support-Fixtures, verschachtelte und generierte Klassen werden dadurch nicht als zusätzliche Harnesses gezählt. Es gibt keine gepflegte Klassenliste und keine Skipped-Kategorie.
 
 Jeder gefundene Einstiegspunkt läuft genau einmal in einem eigenen Java-Prozess, alphabetisch nach vollqualifiziertem Klassennamen und mit dem Projektverzeichnis als Arbeitsverzeichnis. Beispielsweise werden CoreCommandHarness, ReloadServiceHarness, ModerationCommandHarness und die Persistence-/Presentation-Harnesses automatisch aufgenommen. Die aktuelle Anzahl steht nach Discovery in der Ausgabe und im vollständigen Laufzeitinventar; neue ausführbare Harness-Dateien benötigen kein Listenupdate.
 
-Erfolg verlangt `Discovered == Executed == Passed`, `Failed == 0` und `Missing/Invalid == 0`. Jeder Prozess muss mit Exit-Code 0 enden und genau eine Ergebniszeile `<Klassenname> passed <positive Ganzzahl> checks.` auf stdout liefern. Prozess-/Startfehler, fehlende oder unlesbare Ergebnisse sowie Build-/Classpath-/Discovery-Fehler führen zu einem nichtnull Exit-Code. Nach einzelnen Harness-Fehlern laufen die übrigen Harnesses weiter. `TotalChecks` summiert die tatsächlich gemeldeten erfolgreichen Checks. Inventory, getrennte stdout/stderr-Logs, Maven-Log und `results.json` liegen ignoriert unter `dev-server/.vapeecore-dev/harnesses/`; frühere Einzeldateien können dort verbleiben, maßgeblich sind das aktuelle Inventar und results.json.
+Erfolg verlangt `Discovered == Executed == Passed`, `Failed == 0` und `Missing/Invalid == 0`. Jeder Prozess muss mit Exit-Code 0 enden und genau eine Ergebniszeile `<Klassenname> passed <positive Ganzzahl> checks.` auf stdout liefern. Prozess-/Startfehler, fehlende oder unlesbare Ergebnisse sowie Build-/Classpath-/Discovery-Fehler führen zu einem nichtnull Exit-Code. Nach einzelnen Harness-Fehlern laufen die übrigen Harnesses weiter. `TotalChecks` summiert die tatsächlich gemeldeten erfolgreichen Checks. Inventory, getrennte stdout/stderr-Logs, Maven-Log und `results.json` liegen ignoriert unter `target/verification/harnesses/`; frühere Einzeldateien können dort verbleiben, maßgeblich sind das aktuelle Inventar und results.json.
 
-Der [Build-and-Deploy-Workflow](../scripts/build-and-deploy.ps1) stoppt zunächst einen verwalteten Dev-Server sauber, führt `clean package` und anschließend verpflichtend den vollständigen Runner aus. Erst wenn beide erfolgreich sind, wird die gebaute JAR deployed. Es gibt keinen Skip-Harness-Schalter. Ein Build- oder Regression-Fehler lässt die bisher deployed JAR unverändert und startet keinen Server. Beide Skripte unterstützen dieselben optionalen Parameter `-Offline` und `-MavenRepository`.
+Der [Verify-Workflow](../scripts/verify.ps1) prüft Voraussetzungen, baut mit `clean package`, startet den kanonischen Runner und akzeptiert ausschließlich einen frischen vollständigen Erfolgsnachweis. Er hat keine Server-/Deployment-Aktionen. Der [Build-and-Deploy-Workflow](../scripts/build-and-deploy.ps1) ruft Verify auf, stoppt erst nach dessen Erfolg einen verwalteten Dev-Server sauber und ersetzt danach die gebaute JAR. Fehlgeschlagene Prozessinspektion mit jps oder ein fehlgeschlagener Stop verhindern das Ersetzen. Es gibt keinen Skip-Harness-Schalter. Ein Build- oder Regression-Fehler lässt die bisher deployed JAR unverändert und startet keinen Server. Verify, Runner und Build & Deploy unterstützen dieselben optionalen Parameter `-Offline` und `-MavenRepository`.
 
 ```powershell
 ./scripts/build-and-deploy.ps1 -Offline

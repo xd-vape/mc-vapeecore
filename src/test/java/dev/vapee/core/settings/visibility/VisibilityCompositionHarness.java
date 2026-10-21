@@ -19,8 +19,13 @@ public final class VisibilityCompositionHarness {
                     && VisibilityMenuFixture.visibilitySpec(d.open, defaults.visibilityMenu.layout().slot(action, 1))
                     .material().name().endsWith("STAINED_GLASS_PANE"), "default visible status pane " + action);
         }
-        check(defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS) == d.open.getSize() - 1,
-                "Manage Players chest is at the lower right corner");
+        int manageSlot = defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MANAGE_PLAYERS);
+        check(VisibilityMenuFixture.visibilitySpec(d.open, manageSlot).material() == org.bukkit.Material.CHEST,
+                "Manage Players chest renders at its owning layout placement");
+        defaults.visibilityClick(d, d.open, manageSlot, ClickType.RIGHT);
+        check(d.open.getHolder() instanceof VisiblePlayersHolder,
+                "current default Manage Players placement opens the owned player list");
+        defaults.visibilityMenu.open(d.player);
         var inventory = d.open;
         int master = defaults.visibilityMenu.layout().slot(VisibilitySettingsMenu.Action.MASTER, 1);
         defaults.visibilityClick(d, inventory, master, ClickType.RIGHT);
