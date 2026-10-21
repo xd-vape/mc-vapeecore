@@ -2,6 +2,8 @@
 
 Diese Referenz beschreibt den aktuellen modularen Monolithen. Der [Developer Guide](DEVELOPER_GUIDE.md) enthält Feature-Details; das [README](../README.md#entwicklung) den Einstieg und die Validierung. `docs/` beschreibt gepflegte Architektur, `reports/` historische Nachweise. Bevorzugte Konventionen sind ausdrücklich keine Behauptung, dass jede vorhandene Klasse ihnen bereits vollständig folgt.
 
+[CODE_STYLE.md](CODE_STYLE.md) ergänzt die Java-/Package-Konventionen. Der deterministische Maven-Formatter prüft aktuell ausschließlich die explizite Pilot-Allowlist; Formatierung ist keine Änderung fachlicher Ownership oder eine Package-Migration.
+
 ## Composition Root und Lifecycle
 
 **Aktuell:** `VapeeCore.java#onEnable` erstellt Konfiguration, Nachrichten und Module mit expliziten Konstruktorabhängigkeiten. Danach registriert es die Module bei `ModuleManager`. Die Registrierungsreihenfolge ist die Startreihenfolge, kein automatisch berechneter Dependency-Graph. Die konkrete Liste dort ist maßgeblich: Localization vor den Nachrichtenkonsumenten, Permission/Rank vor ihren Konsumenten, Player vor profilabhängigen Features, Quest vor DailyQuest, LobbyExperience nach seinen Menü-/Lobby-/Activity-/Warp-Abhängigkeiten.
@@ -128,5 +130,6 @@ An der vorhandenen Commit-Grenze Kandidat vollständig validieren, alte Datei sc
 | Menüs schützen Owner/Inventory/Active-Registry/Zielidentität | Settings-/Friend-/Clan-/Navigator-/Quest-Security-Harnesses; `GuiAuthoringAuditHarness` schützt Layout-Entkopplung |
 | Modulstart und Cleanup werden geprüft | Konkrete Settings-/Presence-Lifecycle-Tests, keine flächendeckende Garantie für alle Module |
 | Kleine Abhängigkeiten und dünne Adapter bevorzugen | Review-Konvention; große vorhandene Commands/Repositories und Modul-zu-Modul-Abhängigkeiten bleiben technische Schulden |
+| Mechanische Java-Formatierung reproduzierbar halten | Spotless-Check in Verify, ausschließlich die Pilot-Allowlist in `pom.xml`; keine Behauptung projektweiter Konformität |
 
-Vor einer Änderung erst Owner und Commit-Grenze bestimmen, dann fokussiert testen und abschließend `pwsh -File ./scripts/verify.ps1` ausführen. Die vollständige Discovery und die aktuellen Zahlen stehen in `target/verification/harnesses/results.json`; Maven allein führt die eigenständigen Harnesses nicht aus.
+Vor einer Änderung erst Owner und Commit-Grenze bestimmen, dann fokussiert testen, betroffene Pilotdateien bewusst formatieren und abschließend `pwsh -File ./scripts/verify.ps1` ausführen. Verify prüft Build, Pilot-Formatierung und vollständige Regression. Die vollständige Discovery und die aktuellen Zahlen stehen in `target/verification/harnesses/results.json`; Maven allein führt die eigenständigen Harnesses nicht aus.
