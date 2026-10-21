@@ -18,11 +18,14 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -34,6 +37,9 @@ public final class SettingsMenu {
 
 
     public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, BACK, REFRESH }
+    // All non-navigation actions use feature entries; adding a feature needs no second action list.
+    static final Set<Action> FEATURE_ACTIONS = Collections.unmodifiableSet(
+            EnumSet.complementOf(EnumSet.of(Action.CLOSE, Action.BACK, Action.REFRESH)));
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
             .setting(Action.SCOREBOARD, 11, 20)
             .setting(Action.SOUNDS, 12, 21)
@@ -86,7 +92,7 @@ public final class SettingsMenu {
     SettingsMenu(PlayerSettingsService playerSettingsService, MessageService messageService,
                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                  ItemRenderer itemRenderer, Logger logger, List<SettingsMenuEntry> entries, MenuLayout<Action> menuLayout) {
-        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of(Action.FRIEND_PRESENCE, Action.FRIEND_REQUESTS, Action.PRIVATE_MESSAGES, Action.SCOREBOARD, Action.SOUNDS, Action.VISIBILITY));
+        this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(FEATURE_ACTIONS);
         this.layout.requireFixed();
         this.entries = validateEntries(entries);
         this.playerSettingsService = Objects.requireNonNull(playerSettingsService, "playerSettingsService");
@@ -210,18 +216,27 @@ public final class SettingsMenu {
     }
 
     private List<SettingsMenuEntry> validateEntries(List<SettingsMenuEntry> entries) {
+        List<SettingsMenuEntry> snapshot = List.copyOf(entries);
         var slots = new java.util.HashSet<Integer>();
         layout.actionSlot(Action.CLOSE).ifPresent(slots::add);
         layout.actionSlot(Action.REFRESH).ifPresent(slots::add);
         layout.actionSlot(Action.BACK).ifPresent(slots::add);
-        for (var entry : entries) {
+        for (var entry : snapshot) {
             MenuLayout.validateSlot(layout.size(), entry.slot());
             if (entry.statusSlot() >= 0) MenuLayout.validateSlot(layout.size(), entry.statusSlot());
             if (!slots.add(entry.slot()) || entry.statusSlot() >= 0 && !slots.add(entry.statusSlot())) {
                 throw new IllegalArgumentException("Duplicate/reserved Settings tile slot");
             }
         }
-        return List.copyOf(entries);
+        for (Action action : FEATURE_ACTIONS) {
+            if (layout.placement(action).isEmpty()) continue;
+            int icon = layout.slot(action);
+            int status = layout.actionSlot(action, 1).orElse(-1);
+            if (snapshot.stream().noneMatch(entry -> entry.slot() == icon && entry.statusSlot() == status)) {
+                throw new IllegalArgumentException("Missing/mismatched Settings entry for " + action);
+            }
+        }
+        return snapshot;
     }
 
     private ItemStack createCloseItem() {
