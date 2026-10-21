@@ -49,6 +49,9 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
     public int failRegistration;
     public boolean failOnlineRead;
     public int sentMessages;
+    public BiFunction<String, Object[], Object> serverCalls = (method, args) -> {
+        throw new AssertionError("Unexpected server call: " + method);
+    };
     private final Server previousServer;
 
     public ModuleRuntimeFixture() throws Exception {
@@ -87,7 +90,8 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
                 if (failOnlineRead) throw new IllegalStateException("injected online read failure");
                 yield List.copyOf(online);
             }
-            default -> throw new AssertionError("Unexpected server call: " + method);
+            case "isPrimaryThread" -> true;
+            default -> serverCalls.apply(method, args);
         });
         set(plugin, "server", server);
         Field serverField = Bukkit.class.getDeclaredField("server");
@@ -148,7 +152,7 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
         } catch (ReflectiveOperationException exception) { throw new AssertionError(exception); }
     }
 
-    private static <T> T proxy(Class<T> type, BiFunction<String, Object[], Object> calls) {
+    public static <T> T proxy(Class<T> type, BiFunction<String, Object[], Object> calls) {
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, (target, method, args) -> switch (method.getName()) {
             case "hashCode" -> System.identityHashCode(target);
             case "equals" -> target == args[0];
@@ -165,4 +169,29 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
     }
 
     private static final class PluginShell extends JavaPlugin { }
+
+    /** Fails after an external subscription takes effect, including a partial add/remove. */
+    public static final class FaultSet<E> extends java.util.LinkedHashSet<E> {
+        public int additions;
+        public int failAdd;
+        public int failRemove;
+        public int removals;
+        public Runnable afterAdd = () -> { };
+        public final RuntimeException startupFailure = new IllegalStateException("injected observer startup failure");
+        public final RuntimeException cleanupFailure = new IllegalStateException("injected observer cleanup failure");
+
+        @Override public boolean add(E value) {
+            boolean added = super.add(value);
+            additions++;
+            afterAdd.run();
+            if (additions == failAdd) throw startupFailure;
+            return added;
+        }
+
+        @Override public boolean remove(Object value) {
+            boolean removed = super.remove(value);
+            if (++removals == failRemove) throw cleanupFailure;
+            return removed;
+        }
+    }
 }

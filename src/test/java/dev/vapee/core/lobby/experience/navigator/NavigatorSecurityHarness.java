@@ -12,8 +12,6 @@ import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.Inventory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -236,17 +234,8 @@ public final class NavigatorSecurityHarness {
                 "LobbyExperience remains existing non-reload module");
         check(java.util.Arrays.stream(LobbyExperienceModule.class.getConstructors()[0].getParameterTypes())
                         .anyMatch(type -> type == ActivityModule.class), "explicit activity dependency");
-        String source = Files.readString(Path.of("src/main/java/dev/vapee/core/lobby/experience/LobbyExperienceModule.java"));
-        check(source.contains("cleanupRuntime(newNavigatorMenu)") && source.contains("newExperienceListener.deactivate()"),
-                "failed enable cleans navigator and deactivates scheduled experience work");
-        for (String field : List.of("navigatorListener", "itemListener", "experienceListener")) {
-            String local = "new" + Character.toUpperCase(field.charAt(0)) + field.substring(1);
-            check(source.contains("HandlerList.unregisterAll(" + field + ")")
-                            && source.contains("HandlerList.unregisterAll(" + local + ")"),
-                    "disable and rollback unregister " + field);
-        }
-        check(source.indexOf("cleanupRuntime(navigatorMenu);") < source.indexOf("if (experienceListener != null)"),
-                "disable closes navigator before unregistering handlers");
+        check(dev.vapee.core.lobby.experience.LobbyExperienceLifecycleHarness.verifyLifecycle() > 0,
+                "actual module rollback and disable release Navigator, callbacks and owned handlers");
     }
 
     private static void check(boolean condition, String message) {

@@ -119,11 +119,18 @@ public final class PlayerMenu {
     void forget(UUID owner, Inventory inventory) { active.remove(owner, inventory); }
     public void startUpdates() { messages.localization().addLocaleListener(locales); }
     public void shutdown() {
-        messages.localization().removeLocaleListener(locales);
+        try {
+            messages.localization().removeLocaleListener(locales);
+        } finally {
+            closeOpenInventories();
+        }
+    }
+
+    private void closeOpenInventories() {
         try {
             for (var entry : List.copyOf(active.entrySet())) {
-                Player player = online.apply(entry.getKey());
                 try {
+                    Player player = online.apply(entry.getKey());
                     if (player != null && player.isOnline() && player.getOpenInventory().getTopInventory() == entry.getValue()) player.closeInventory();
                 } catch (RuntimeException exception) {
                     java.util.logging.Logger.getLogger(PlayerMenu.class.getName()).log(java.util.logging.Level.WARNING,
