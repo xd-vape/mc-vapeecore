@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /** Startup-only evolution of operator configuration; never discovers or migrates persistence files. */
@@ -48,6 +49,7 @@ public final class ConfigEvolution {
     private final Logger logger;
     private final Function<String, InputStream> resources;
     private final FileAccess files;
+    private final Map<String, Integer> supportedVersions;
 
     public ConfigEvolution(JavaPlugin plugin) {
         this(plugin.getDataFolder().toPath(), plugin.getLogger(), plugin::getResource);
@@ -58,18 +60,25 @@ public final class ConfigEvolution {
     }
 
     ConfigEvolution(Path directory, Logger logger, Function<String, InputStream> resources, FileAccess files) {
+        this(directory, logger, resources, files, MANAGED_CONFIGS);
+    }
+
+    // Package-local fixture seam for a future additive revision; public startup always uses MANAGED_CONFIGS.
+    ConfigEvolution(Path directory, Logger logger, Function<String, InputStream> resources, FileAccess files,
+                    Map<String, Integer> supportedVersions) {
         this.directory = Objects.requireNonNull(directory).toAbsolutePath().normalize();
         this.logger = Objects.requireNonNull(logger);
         this.resources = Objects.requireNonNull(resources);
         this.files = Objects.requireNonNull(files);
+        this.supportedVersions = Map.copyOf(supportedVersions);
     }
 
     public void evolveAll() {
-        for (String name : MANAGED_CONFIGS.keySet().stream().sorted().toList()) evolve(name);
+        for (String name : supportedVersions.keySet().stream().sorted().toList()) evolve(name);
     }
 
     public boolean evolve(String name) {
-        Integer supported = MANAGED_CONFIGS.get(name);
+        Integer supported = supportedVersions.get(name);
         if (supported == null) throw new IllegalArgumentException("Not an operator configuration: " + name);
         Path target = directory.resolve(name);
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return false; // The owning loader creates new installs.
@@ -153,8 +162,13 @@ public final class ConfigEvolution {
                     logger.warning(name + ": atomic replacement unavailable; using recoverable replacement with " + backup);
                     try { files.replace(temporary, target, false); }
                     catch (IOException failure) {
-                        try { Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING); }
-                        catch (IOException restoreFailure) { failure.addSuppressed(restoreFailure); }
+                        try { files.restore(backup, target); }
+                        catch (IOException restoreFailure) {
+                            failure.addSuppressed(restoreFailure);
+                            logger.log(Level.SEVERE, "Could not restore operator configuration " + target
+                                    + "; exact original backup retained at " + backup
+                                    + ". Manual reconciliation required.", restoreFailure);
+                        }
                         throw failure;
                     }
                 }
@@ -245,6 +259,9 @@ public final class ConfigEvolution {
     /** Filesystem boundary for exercising failed writes and atomic-move fallback without replacing merge logic. */
     static class FileAccess {
         void write(Path target, byte[] content) throws IOException { Files.write(target, content); }
+        void restore(Path backup, Path target) throws IOException {
+            Files.copy(backup, target, StandardCopyOption.REPLACE_EXISTING);
+        }
         void replace(Path temporary, Path target, boolean atomic) throws IOException {
             if (atomic) Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             else Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);

@@ -92,6 +92,8 @@ Practical command extension steps and the bounded Warp metadata pattern: [COMMAN
 
 ### C. Einen Config-Wert ergänzen
 
+Konkrete Parser-/Snapshot-/Consumer-Schritte, Versionsentscheidungen und unabhängige Evolution-/Reload-Tests: [CONFIG_DEVELOPMENT.md](CONFIG_DEVELOPMENT.md).
+
 1. Passende Resource unter `src/main/resources/` ergänzen. `ConfigService`/`CoreConfigState` besitzt Core-Werte; Feature-Werte gehören dem vorhandenen Parser, z. B. `DailyQuestConfig`.
 2. Typ, Bereich und fehlenden Legacy-Wert validieren; die bestehende Feature-Regel für Warnung/Fallback oder striktes Prepare-Failure beibehalten. Nur validierte Werte in den Runtime-Snapshot aufnehmen.
 3. Bestehenden Reload-Plan um den vollständigen Snapshot erweitern. Neue Teilnehmer nur bei eigener Config-Verantwortung ausdrücklich in `VapeeCore` verdrahten. Vorherigen Snapshot für Rollback behalten.
