@@ -35,6 +35,8 @@ public final class SettingsListener implements Listener {
     private final Consumer<Player> soundFeedback;
     private final MessageService messageService;
     private final Logger logger;
+    private Consumer<Player> backOpener = Player::closeInventory;
+
 
     public SettingsListener(
             SettingsMenu settingsMenu,
@@ -95,6 +97,10 @@ public final class SettingsListener implements Listener {
         }
 
         int slot = event.getRawSlot();
+        if (settingsMenu.layout().actionAt(slot).orElse(null) == SettingsMenu.Action.BACK) {
+            backOpener.accept(player);
+            return;
+        }
         if (settingsMenu.layout().actionAt(slot).orElse(null) == SettingsMenu.Action.CLOSE) {
             player.closeInventory();
             return;
@@ -189,5 +195,9 @@ public final class SettingsListener implements Listener {
                     exception
             );
         }
+    }
+
+    public void setBackOpener(Consumer<Player> opener) {
+        backOpener = Objects.requireNonNull(opener, "opener");
     }
 }

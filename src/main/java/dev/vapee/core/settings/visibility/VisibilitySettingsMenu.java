@@ -32,15 +32,15 @@ public final class VisibilitySettingsMenu {
     private boolean observingChanges;
 
     public enum Action { MASTER, FRIENDS, STAFF, ADDED_USERS, GAME_PARTICIPANTS, MANAGE_PLAYERS, BACK, CLOSE, REFRESH }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(36, Action.class)
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
             .setting(Action.MASTER, 11, 20)
             .setting(Action.FRIENDS, 12, 21)
             .setting(Action.STAFF, 13, 22)
             .setting(Action.ADDED_USERS, 14, 23)
             .setting(Action.GAME_PARTICIPANTS, 15, 24)
-            .button(Action.MANAGE_PLAYERS, 35)
-            .button(Action.BACK, 27)
-            .button(Action.CLOSE, 31)
+            .button(Action.MANAGE_PLAYERS, 40)
+            .button(Action.BACK, 36)
+            .button(Action.CLOSE, 44)
 
             .build();
 

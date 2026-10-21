@@ -2,6 +2,7 @@ package dev.vapee.core.settings;
 
 import static dev.vapee.core.i18n.Translations.tr;
 
+import dev.vapee.core.settings.visibility.VisibilitySettingsMenu;
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
@@ -32,14 +33,15 @@ public final class SettingsMenu {
     private boolean observingChanges;
 
 
-    public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, REFRESH }
+    public enum Action { SCOREBOARD, SOUNDS, PRIVATE_MESSAGES, FRIEND_REQUESTS, VISIBILITY, FRIEND_PRESENCE, CLOSE, BACK, REFRESH }
     public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(45, Action.class)
             .setting(Action.SCOREBOARD, 11, 20)
             .setting(Action.SOUNDS, 12, 21)
             .setting(Action.PRIVATE_MESSAGES, 13, 22)
             .setting(Action.FRIEND_REQUESTS, 14, 23)
             .setting(Action.FRIEND_PRESENCE, 15, 24)
-            .button(Action.CLOSE, 40)
+            .button(Action.BACK, 36)
+            .button(Action.CLOSE, 44)
             .build();
 
     private static final Component TITLE = tr("settings.title").color(NamedTextColor.DARK_GRAY);
@@ -188,6 +190,13 @@ public final class SettingsMenu {
             validatedInventory.setItem(entry.slot(), itemRenderer.render(entry.icon().apply(settings)));
             if (entry.statusSlot() >= 0) validatedInventory.setItem(entry.statusSlot(), itemRenderer.render(entry.status().apply(settings)));
         }
+        place(validatedInventory, Action.BACK, itemRenderer.render(
+                new UiItemSpec(
+                            Material.ARROW,
+                            UiItems.text(tr("common.back"), NamedTextColor.YELLOW),
+                            List.of()
+                )
+        ));
         place(validatedInventory, Action.CLOSE, createCloseItem());
         place(validatedInventory, Action.REFRESH, itemRenderer.render(new UiItemSpec(
                 Material.CLOCK, UiItems.text(tr("common.refresh"), NamedTextColor.AQUA),
@@ -204,6 +213,7 @@ public final class SettingsMenu {
         var slots = new java.util.HashSet<Integer>();
         layout.actionSlot(Action.CLOSE).ifPresent(slots::add);
         layout.actionSlot(Action.REFRESH).ifPresent(slots::add);
+        layout.actionSlot(Action.BACK).ifPresent(slots::add);
         for (var entry : entries) {
             MenuLayout.validateSlot(layout.size(), entry.slot());
             if (entry.statusSlot() >= 0) MenuLayout.validateSlot(layout.size(), entry.statusSlot());

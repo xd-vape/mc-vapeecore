@@ -161,6 +161,11 @@ public final class LobbyExperienceModule implements CoreModule {
             settingsModule.setVisibilityBackOpener(player -> {
                 if (!newPlayerMenu.open(player)) player.closeInventory();
             });
+            settingsModule.setSettingsBackOpener(player -> {
+                if (!newPlayerMenu.open(player)) {
+                    player.closeInventory();
+                }
+            });
             newNavigatorMenu.startUpdates();
             visibilityAction = newVisibilityAction;
             registry.activate();
@@ -206,6 +211,7 @@ public final class LobbyExperienceModule implements CoreModule {
         if (glideService != null) detachGlide(glideService, glideListener);
         glideService = null; glideListener = null;
         settingsModule.setVisibilityBackOpener(Player::closeInventory);
+        settingsModule.setSettingsBackOpener(Player::closeInventory);
         lobbyModule.getItemRegistry().deactivate();
         if (playerMenu != null) playerMenu.shutdown();
         if (playerMenuListener != null) HandlerList.unregisterAll(playerMenuListener);

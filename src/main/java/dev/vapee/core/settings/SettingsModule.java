@@ -18,10 +18,12 @@ import dev.vapee.core.settings.visibility.VisibilitySettingsMenu;
 import dev.vapee.core.visibility.VisibilityModule;
 import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 public final class SettingsModule implements CoreModule {
@@ -198,5 +200,10 @@ public final class SettingsModule implements CoreModule {
         } catch (RuntimeException exception) {
             plugin.getLogger().log(Level.WARNING, "Could not close all visible players menus.", exception);
         }
+    }
+
+    public void setSettingsBackOpener(Consumer<Player> opener) {
+        Objects.requireNonNull(settingsListener,
+                "SettingsModule is not enabled").setBackOpener(opener);
     }
 }
