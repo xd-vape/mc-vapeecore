@@ -181,6 +181,8 @@ Friend und VisiblePlayers verwenden gebundene Holder mit Slot→UUID, Clan zusä
 
 ### Adding a config key / bumping a schema
 
+Der praktische Pfad einschließlich Dateikategorien, versionsabhängiger Startup-Evolution und Prepare/Apply/Rollback steht in [CONFIG_DEVELOPMENT.md](CONFIG_DEVELOPMENT.md).
+
 Betroffene Resource ergänzen, typisierten Fallback/Parser/immutable State in der owning Config und deren Consumer anpassen. Beispiel: `lobby/config/LobbyConfig.readState`/`State` + `LobbyModule.prepareReload`. Dann ausschließlich die betroffene Version in Resource und `config/ConfigEvolution.MANAGED_CONFIGS` erhöhen und Upgrade-/Fresh-/Idempotency-/Backup-Test ergänzen. Bestehende Werte werden nie mit neuen Defaults ersetzt. Keine Datendatei in die sechs Operator-Dateien aufnehmen. Bei einem registrierten neuen Lobby-Item wird der generische Item-Parser unverändert benutzt.
 
 ### Adding an existing-feature command / registering a module
