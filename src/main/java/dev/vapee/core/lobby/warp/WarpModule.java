@@ -16,6 +16,9 @@ public final class WarpModule implements CoreModule {
     private final MessageService messageService;
     private final CommandHelpRenderer commandHelpRenderer;
 
+    private final java.util.function.Consumer<BindingStage> bindingCheckpoint;
+    enum BindingStage { EXECUTOR_BOUND, COMPLETER_BOUND }
+
     private WarpConfig warpConfig;
     private WarpService warpService;
     private PluginCommand warpCommand;
@@ -25,6 +28,12 @@ public final class WarpModule implements CoreModule {
             MessageService messageService,
             CommandHelpRenderer commandHelpRenderer
     ) {
+        this(plugin, messageService, commandHelpRenderer, stage -> { });
+    }
+
+    WarpModule(JavaPlugin plugin, MessageService messageService, CommandHelpRenderer commandHelpRenderer,
+               java.util.function.Consumer<BindingStage> bindingCheckpoint) {
+        this.bindingCheckpoint = Objects.requireNonNull(bindingCheckpoint, "bindingCheckpoint");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.commandHelpRenderer = Objects.requireNonNull(commandHelpRenderer, "commandHelpRenderer");
@@ -52,29 +61,48 @@ public final class WarpModule implements CoreModule {
 
         try {
             newWarpCommand.setExecutor(executor);
+            bindingCheckpoint.accept(BindingStage.EXECUTOR_BOUND);
             newWarpCommand.setTabCompleter(executor);
+            bindingCheckpoint.accept(BindingStage.COMPLETER_BOUND);
+            warpConfig = newWarpConfig;
+            warpService = newWarpService;
+            warpCommand = newWarpCommand;
+            plugin.getLogger().info("Warp module enabled with " + loadedWarps.size() + " configured warp(s).");
         } catch (RuntimeException exception) {
-            newWarpCommand.setExecutor(null);
-            newWarpCommand.setTabCompleter(null);
-            newWarpService.clear();
+            cleanup(newWarpCommand, newWarpService, exception);
+            clearRuntime();
             throw exception;
         }
-
-        warpConfig = newWarpConfig;
-        warpService = newWarpService;
-        warpCommand = newWarpCommand;
-        plugin.getLogger().info("Warp module enabled with " + loadedWarps.size() + " configured warp(s).");
     }
 
     @Override
     public void disable() {
-        if (warpCommand != null) {
-            warpCommand.setExecutor(null);
-            warpCommand.setTabCompleter(null);
+        RuntimeException failure = cleanup(warpCommand, warpService, null);
+        clearRuntime();
+        if (failure != null) throw failure;
+    }
+
+    private RuntimeException cleanup(PluginCommand command, WarpService service, RuntimeException failure) {
+        if (command != null) {
+            failure = attempt(failure, () -> command.setExecutor(null));
+            failure = attempt(failure, () -> command.setTabCompleter(null));
         }
-        if (warpService != null) {
-            warpService.clear();
+        if (service != null) failure = attempt(failure, service::clear);
+        return failure;
+    }
+
+    // Same small module-local best-effort pattern as UtilityModule; no shared binding framework.
+    private static RuntimeException attempt(RuntimeException failure, Runnable cleanup) {
+        try {
+            cleanup.run();
+        } catch (RuntimeException exception) {
+            if (failure == null) return exception;
+            if (failure != exception) failure.addSuppressed(exception);
         }
+        return failure;
+    }
+
+    private void clearRuntime() {
         warpCommand = null;
         warpService = null;
         warpConfig = null;

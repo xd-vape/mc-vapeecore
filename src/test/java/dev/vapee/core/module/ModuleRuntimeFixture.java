@@ -47,6 +47,7 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
     public final PluginCommand command;
     public final MessageService messages;
     public int failRegistration;
+    public boolean missingCommand;
     public boolean failOnlineRead;
     public int sentMessages;
     public BiFunction<String, Object[], Object> serverCalls = (method, args) -> {
@@ -55,6 +56,10 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
     private final Server previousServer;
 
     public ModuleRuntimeFixture() throws Exception {
+        this("settings");
+    }
+
+    public ModuleRuntimeFixture(String commandName) throws Exception {
         logger.setUseParentHandlers(false);
         plugin = allocate(PluginShell.class);
         var description = new PluginDescriptionFile("VapeeCore", "test", plugin.getClass().getName());
@@ -64,7 +69,7 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
         set(plugin, "isEnabled", true);
         var constructor = PluginCommand.class.getDeclaredConstructor(String.class, Plugin.class);
         constructor.setAccessible(true);
-        command = constructor.newInstance("settings", plugin);
+        command = constructor.newInstance(commandName, plugin);
         PluginManager manager = proxy(PluginManager.class, (method, args) -> {
             if (!method.equals("registerEvents")) throw new AssertionError(method);
             Listener listener = (Listener) args[0];
@@ -84,7 +89,7 @@ public final class ModuleRuntimeFixture implements AutoCloseable {
         });
         Server server = proxy(Server.class, (method, args) -> switch (method) {
             case "getPluginManager" -> manager;
-            case "getPluginCommand" -> command;
+            case "getPluginCommand" -> missingCommand ? null : command;
             case "getPlayer" -> online.stream().filter(p -> p.getUniqueId().equals(args[0])).findFirst().orElse(null);
             case "getOnlinePlayers" -> {
                 if (failOnlineRead) throw new IllegalStateException("injected online read failure");

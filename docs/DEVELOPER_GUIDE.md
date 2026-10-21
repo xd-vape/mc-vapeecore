@@ -12,6 +12,8 @@ VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-
 
 Der offizielle Abschluss einer Änderung ist `pwsh -File ./scripts/verify.ps1`: Voraussetzungen → Maven `clean package` → `spotless:check` → vollständiger kanonischer Harness-Runner → geprüfter Ergebnisnachweis. Optional `-Offline` und `-MavenRepository '<lokales Repository>'`. Das verändert keinen Dev-Server. Maven allein baut lediglich; Build & Deploy verwendet Verify und ersetzt die Dev-JAR erst nach erfolgreicher Validierung und sauberem Serverstop. Aktuelle Discovery/Check-Zahlen stehen unter `target/verification/harnesses/results.json`, nicht in einer manuell gepflegten Klassenliste.
 
+Command extension reference: [COMMAND_DEVELOPMENT.md](COMMAND_DEVELOPMENT.md) covers command categories, the Warp pilot, help/completion consistency, permissions and registration/cleanup.
+
 ## Modul-Lifecycle und Ressourcenbesitz
 
 `ModuleManager` merkt sich nur erfolgreich gestartete Module und deaktiviert diese rückwärts. Wirft das aktuelle `enable()`, räumt dieses Modul seine Teilergebnisse selbst auf. Deshalb umfasst der geschützte Startbereich in `SettingsModule.enable()` nicht nur `registerEvents` und Executor/Completer, sondern auch `startUpdates()` aller drei Menüs und die Veröffentlichung der Felder. Nach einem Fehler bleiben die Getter gesperrt. Ein erneuter Start besitzt genau einen Satz Listener und Observer.

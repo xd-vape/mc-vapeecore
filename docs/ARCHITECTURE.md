@@ -79,6 +79,8 @@ Es gibt keinen globalen Eventbus. Automatische GUI-Updates verwenden Ereignisse/
 
 ### B. Einen Command ergänzen
 
+Practical command extension steps and the bounded Warp metadata pattern: [COMMAND_DEVELOPMENT.md](COMMAND_DEVELOPMENT.md).
+
 1. Bestehenden Root bevorzugen, wenn derselbe Anwendungsbereich und dieselbe Help-/Permission-Struktur passen: `/core quest force` wird von `CoreCommand` an `CoreQuestCommand` delegiert. Ein eigenständig auffindbarer Einstieg wie `/quests` hat seinen eigenen Root.
 2. Neue Roots/Permissions in `src/main/resources/plugin.yml` deklarieren; Permission-Defaults und Children bewusst wählen. Bestehende Nodes nicht beiläufig erweitern.
 3. Executor/Completer beim owning Modul registrieren und beim Disable/fehlgeschlagenen Enable zurücksetzen. `SettingsModule` zeigt dieses Binding; der Core-Root wird in `VapeeCore#registerCommands` verdrahtet.

@@ -33,34 +33,14 @@ import java.util.logging.Logger;
 public final class WarpCommand implements TabExecutor {
 
     public static final String PERMISSION = "vapeecore.warp.admin";
-    private static final List<String> SUBCOMMANDS = List.of(
-            "help", "set", "remove", "list", "info", "name", "icon", "show", "hide", "order"
-    );
     private static final CommandHelpPage HELP_PAGE = new CommandHelpPage(
-            tr("warp.help.title"),
-            null,
-            List.of(
-                    new CommandHelpSection(tr("warp.help.section.create-edit"), List.of(
-                            new CommandHelpEntry("/warp set <id>", tr("warp.help.warp.set.description")),
-                            new CommandHelpEntry("/warp name <id> <display name...>",
-                                    tr("warp.help.warp.name.name.description")),
-                            new CommandHelpEntry("/warp icon <id> <material>",
-                                    tr("warp.help.warp.icon.description"))
-                    )),
-                    new CommandHelpSection(tr("blackjack.help.section.information"), List.of(
-                            new CommandHelpEntry("/warp info <id>", tr("warp.help.warp.info.description")),
-                            new CommandHelpEntry("/warp list", tr("warp.help.warp.list.description"))
-                    )),
-                    new CommandHelpSection(tr("blackjack.help.section.management"), List.of(
-                            new CommandHelpEntry("/warp show <id>", tr("warp.help.warp.show.description")),
-                            new CommandHelpEntry("/warp hide <id>", tr("warp.help.warp.hide.description")),
-                            new CommandHelpEntry("/warp order <id> <order>",
-                                    tr("warp.help.warp.order.description")),
-                            new CommandHelpEntry("/warp remove <id>", tr("warp.help.warp.remove.description"))
-                    ))
-            ),
-            tr("warp.help.footer")
-    );
+            tr("warp.help.title"), null,
+            Arrays.stream(WarpSubcommand.Section.values()).map(section -> new CommandHelpSection(
+                    tr(section.titleKey), Arrays.stream(WarpSubcommand.values())
+                            .filter(action -> action.section == section)
+                            .map(action -> new CommandHelpEntry(action.syntax(), tr(action.descriptionKey), PERMISSION))
+                            .toList())).toList(),
+            tr("warp.help.footer"));
 
     private final Logger logger;
     private final WarpService warpService;
@@ -101,25 +81,54 @@ public final class WarpCommand implements TabExecutor {
         }
 
         try {
-            switch (args[0].toLowerCase(Locale.ROOT)) {
-                case "help" -> {
-                    if (args.length == 1) {
-                        helpRenderer.send(sender, HELP_PAGE);
-                    } else {
-                        sendInvalidUsage(sender, "/warp help");
-                    }
-                }
-                case "set" -> set(sender, args);
-                case "remove" -> remove(sender, args);
-                case "list" -> list(sender, args);
-                case "info" -> info(sender, args);
-                case "name" -> name(sender, args);
-                case "icon" -> icon(sender, args);
-                case "show" -> visibility(sender, args, true);
-                case "hide" -> visibility(sender, args, false);
-                case "order" -> order(sender, args);
-                default -> sendUnknown(sender, args[0]);
+            WarpSubcommand action = WarpSubcommand.find(args[0]);
+            if (action == null) {
+                sendUnknown(sender, args[0]);
+                return true;
             }
+            // Exhaustive expression: adding metadata requires an explicit execution decision.
+            return switch (action) {
+                case HELP -> {
+                    help(sender, args);
+                    yield true;
+                }
+                case SET -> {
+                    set(sender, args);
+                    yield true;
+                }
+                case REMOVE -> {
+                    remove(sender, args);
+                    yield true;
+                }
+                case LIST -> {
+                    list(sender, args);
+                    yield true;
+                }
+                case INFO -> {
+                    info(sender, args);
+                    yield true;
+                }
+                case NAME -> {
+                    name(sender, args);
+                    yield true;
+                }
+                case ICON -> {
+                    icon(sender, args);
+                    yield true;
+                }
+                case SHOW -> {
+                    visibility(sender, args, true);
+                    yield true;
+                }
+                case HIDE -> {
+                    visibility(sender, args, false);
+                    yield true;
+                }
+                case ORDER -> {
+                    order(sender, args);
+                    yield true;
+                }
+            };
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not update warp configuration.", exception);
             messageService.send(sender, tr("warp.save-failed"));
@@ -140,15 +149,12 @@ public final class WarpCommand implements TabExecutor {
         if (args.length == 1) {
             return rootSuggestions(args[0]);
         }
-        if (args.length == 2 && List.of("remove", "info", "name", "icon", "show", "hide", "order")
-                .contains(args[0].toLowerCase(Locale.ROOT))) {
-            String action = args[0].toLowerCase(Locale.ROOT);
-            return matches(warpService.getWarps().stream()
-                    .filter(warp -> !action.equals("show") || !warp.navigation().visible())
-                    .filter(warp -> !action.equals("hide") || warp.navigation().visible())
+        WarpSubcommand action = args.length == 0 ? null : WarpSubcommand.find(args[0]);
+        if (args.length == 2 && action != null && action.completesWarpId) {
+            return matches(warpService.getWarps().stream().filter(action::suggests)
                     .map(WarpPoint::id).toList(), args[1]);
         }
-        if (args.length == 3 && args[0].equalsIgnoreCase("icon")) {
+        if (args.length == 3 && action == WarpSubcommand.ICON) {
             return matches(Arrays.stream(Material.values())
                     .filter(WarpPoint::isDisplayableItem)
                     .map(Material::name)
@@ -158,13 +164,21 @@ public final class WarpCommand implements TabExecutor {
     }
 
     static List<String> rootSuggestions(String input) {
-        return matches(SUBCOMMANDS, input);
+        return matches(Arrays.stream(WarpSubcommand.values()).map(WarpSubcommand::token).toList(), input);
+    }
+
+    private void help(CommandSender sender, String[] args) {
+        if (args.length == 1) {
+            helpRenderer.send(sender, HELP_PAGE);
+        } else {
+            sendInvalidUsage(sender, WarpSubcommand.HELP.syntax());
+        }
     }
 
     private void set(CommandSender sender, String[] args) {
         if (args.length != 2 || !(sender instanceof Player player)) {
             if (args.length != 2) {
-                sendInvalidUsage(sender, "/warp set <id>");
+                sendInvalidUsage(sender, WarpSubcommand.SET.syntax());
             } else {
                 messageService.send(sender, tr("warp.player-only"));
             }
@@ -182,7 +196,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void remove(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, "/warp remove <id>");
+            sendInvalidUsage(sender, WarpSubcommand.REMOVE.syntax());
             return;
         }
         WarpResult result = warpService.removeWarp(args[1]);
@@ -195,7 +209,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void list(CommandSender sender, String[] args) {
         if (args.length != 1) {
-            sendInvalidUsage(sender, "/warp list");
+            sendInvalidUsage(sender, WarpSubcommand.LIST.syntax());
             return;
         }
         List<WarpPoint> warps = warpService.getWarps();
@@ -208,7 +222,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void info(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, "/warp info <id>");
+            sendInvalidUsage(sender, WarpSubcommand.INFO.syntax());
             return;
         }
         WarpPoint warp = warpService.getWarp(args[1]).orElse(null);
@@ -221,7 +235,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void name(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sendInvalidUsage(sender, "/warp name <id> <display name...>");
+            sendInvalidUsage(sender, WarpSubcommand.NAME.syntax());
             return;
         }
         WarpResult result = warpService.setDisplayName(args[1], String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
@@ -235,7 +249,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void icon(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendInvalidUsage(sender, "/warp icon <id> <material>");
+            sendInvalidUsage(sender, WarpSubcommand.ICON.syntax());
             return;
         }
         Material material = Material.matchMaterial(args[2]);
@@ -250,7 +264,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void visibility(CommandSender sender, String[] args, boolean visible) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, visible ? "/warp show <id>" : "/warp hide <id>");
+            sendInvalidUsage(sender, (visible ? WarpSubcommand.SHOW : WarpSubcommand.HIDE).syntax());
             return;
         }
         WarpResult result = warpService.setNavigatorVisible(args[1], visible);
@@ -264,7 +278,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void order(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendInvalidUsage(sender, "/warp order <id> <order>");
+            sendInvalidUsage(sender, WarpSubcommand.ORDER.syntax());
             return;
         }
         Integer value = parseOrder(args[2]);
@@ -312,7 +326,7 @@ public final class WarpCommand implements TabExecutor {
         messageService.send(sender, tr("warp.unknown", Map.of("command", Component.text(subcommand, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
                 .append(Component.newline())
                 .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/warp help", NamedTextColor.AQUA)));
+                .append(Component.text(WarpSubcommand.HELP.syntax(), NamedTextColor.AQUA)));
     }
 
     private void sendInvalidUsage(CommandSender sender, String syntax) {
@@ -332,8 +346,8 @@ public final class WarpCommand implements TabExecutor {
                         + coordinate(warp.position().y()) + ", "
                         + coordinate(warp.position().z()), NamedTextColor.GRAY));
         if (!existed) {
-            String nameCommand = "/warp name " + id + " <display name>";
-            String iconCommand = "/warp icon " + id + " <material>";
+            String nameCommand = WarpSubcommand.NAME.command() + " " + id + " <display name>";
+            String iconCommand = WarpSubcommand.ICON.command() + " " + id + " <material>";
             message = message.append(Component.newline())
                     .append(tr("warp.label.next").color(NamedTextColor.YELLOW))
                     .append(Component.text(nameCommand, NamedTextColor.AQUA)
