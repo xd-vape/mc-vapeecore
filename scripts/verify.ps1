@@ -22,6 +22,9 @@ try {
     if ($MavenRepository) { $mavenArgs += "-Dmaven.repo.local=$MavenRepository" }
     & $environment.Maven @mavenArgs clean package
     if ($LASTEXITCODE -ne 0) { throw "Maven build failed (exit $LASTEXITCODE)." }
+    & $environment.Maven @mavenArgs spotless:check
+    if ($LASTEXITCODE -ne 0) { throw "Formatting validation failed (exit $LASTEXITCODE). Run mvn spotless:apply and review the pilot diff." }
+    Write-Host 'Formatting validation: PASS (pilot allowlist only).'
 
     $shell = (Get-Process -Id $PID).Path
     $harnessArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'run-harnesses.ps1'))
@@ -37,7 +40,7 @@ try {
         @($summary.Results | Where-Object { $_.Status -ne 'PASS' -or $_.ExitCode -ne 0 -or $_.Checks -le 0 }).Count -gt 0) {
         throw 'Harness receipt is incomplete or unsuccessful. All discovered harnesses must execute and pass.'
     }
-    Write-Host "VERIFICATION SUCCEEDED: Build successful; $($summary.Passed) harnesses, $($summary.TotalChecks) checks; Failed=0 Missing/Invalid=0."
+    Write-Host "VERIFICATION SUCCEEDED: Build and formatting successful; $($summary.Passed) harnesses, $($summary.TotalChecks) checks; Failed=0 Missing/Invalid=0."
     exit 0
 } catch {
     Write-Host "VERIFICATION FAILED: $($_.Exception.Message)"

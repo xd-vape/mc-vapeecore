@@ -34,6 +34,11 @@ function Initialize-DevelopmentEnvironment {
 '@
     Write-Fixture 'scripts/fixture-maven.ps1' @'
 $root = Split-Path -Parent $PSScriptRoot
+if ($args -contains 'spotless:check') {
+    $args | ConvertTo-Json | Set-Content (Join-Path $root 'format-arguments.json')
+    if (Test-Path (Join-Path $root 'format-failure')) { exit 19 }
+    exit 0
+}
 $args | ConvertTo-Json | Set-Content (Join-Path $root 'build-arguments.json')
 if (Test-Path (Join-Path $root 'build-failure')) { exit 17 }
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'target') | Out-Null
@@ -68,10 +73,13 @@ exit 0
     $buildArgs = Get-Content (Join-Path $fixtureRoot 'build-arguments.json') -Raw | ConvertFrom-Json
     Assert ($buildArgs -contains '-o' -and $buildArgs -contains "-Dmaven.repo.local=$(Join-Path $fixtureRoot 'repository with spaces')") 'Build must forward offline and the exact custom repository.'
     Assert ($buildArgs -contains 'clean' -and $buildArgs -contains 'package') 'Verify must package the plugin.'
+    $formatArgs = Get-Content (Join-Path $fixtureRoot 'format-arguments.json') -Raw | ConvertFrom-Json
+    Assert ($formatArgs -contains 'spotless:check' -and $formatArgs -notcontains 'spotless:apply') 'Verify must check formatting without applying it.'
+    Assert ($formatArgs -contains '-o' -and $formatArgs -contains "-Dmaven.repo.local=$(Join-Path $fixtureRoot 'repository with spaces')") 'Formatting must receive offline and the exact custom repository.'
     $harnessArgs = Get-Content (Join-Path $fixtureRoot 'harness-arguments.json') -Raw | ConvertFrom-Json
     Assert ($harnessArgs.Offline -and $harnessArgs.Repository -eq (Join-Path $fixtureRoot 'repository with spaces')) 'Harness runner must receive offline and the custom repository.'
 
-    foreach ($failure in 'build-failure', 'harness-failure', 'missing-prerequisite', 'missing-receipt', 'incomplete-receipt', 'invalid-output', 'malformed-receipt') {
+    foreach ($failure in 'build-failure', 'format-failure', 'harness-failure', 'missing-prerequisite', 'missing-receipt', 'incomplete-receipt', 'invalid-output', 'malformed-receipt') {
         # Leave a valid old receipt first: even an exit-zero child without new output must fail.
         Assert ((Invoke-Fixture).Code -eq 0) "Fixture reset before $failure"
         Write-Fixture $failure 'fail'
@@ -79,12 +87,12 @@ exit 0
         $run = Invoke-Fixture
         Assert ($run.Code -ne 0 -and $run.Output.Contains('VERIFICATION FAILED')) "$failure must fail clearly."
         Assert (-not $run.Output.Contains('VERIFICATION SUCCEEDED')) "$failure must not claim success."
-        if ($failure -in 'build-failure', 'missing-prerequisite') {
+        if ($failure -in 'build-failure', 'format-failure', 'missing-prerequisite') {
             Assert (-not (Test-Path (Join-Path $fixtureRoot 'harness-arguments.json'))) "$failure must stop before regression."
         }
         if ($failure -eq 'missing-prerequisite') { Assert ($run.Output.Contains('JAVA_HOME')) 'Prerequisite failure must explain the remedy.' }
         Assert ((Server-Snapshot) -eq $before) "$failure must leave dev-server bytes unchanged."
-        if ($failure -in 'build-failure', 'harness-failure') {
+        if ($failure -in 'build-failure', 'format-failure', 'harness-failure') {
             $deploy = Invoke-Fixture 'build-and-deploy.ps1'
             Assert ($deploy.Code -ne 0 -and (Server-Snapshot) -eq $before) 'Deployment must reject validation failure without replacing the old JAR.'
             Assert (-not (Test-Path (Join-Path $fixtureRoot 'stop-called'))) 'A failed gate must not stop Paper.'

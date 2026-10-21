@@ -99,7 +99,9 @@ pwsh -File .\scripts\verify.ps1
 pwsh -File .\scripts\verify.ps1 -Offline -MavenRepository 'C:\path with spaces\maven-repository'
 ```
 
-`verify.ps1` prüft die Voraussetzungen, baut mit `clean package` und ruft den bestehenden vollständigen Harness-Runner auf. Erfolg verlangt alle entdeckten Einstiege, positive Check-Zahlen und null fehlende/ungültige Ergebnisse. Logs und das aktuelle `results.json` liegen unter `target/verification/harnesses/`. Verify stoppt/startet keinen Server, deployed keine JAR und verändert keine Betreiberkonfiguration.
+`verify.ps1` prüft die Voraussetzungen, baut mit `clean package`, prüft die Java-Formatierung und ruft danach den bestehenden vollständigen Harness-Runner auf. Erfolg verlangt eine bestandene Formatprüfung, alle entdeckten Einstiege, positive Check-Zahlen und null fehlende/ungültige Ergebnisse. Logs und das aktuelle `results.json` liegen unter `target/verification/harnesses/`. Verify stoppt/startet keinen Server, deployed keine JAR und verändert keine Betreiberkonfiguration.
+
+Der Arbeitsablauf ist **Bearbeiten → Formatieren → Formatprüfung → vollständige Verifikation → Commit**. `mvn spotless:apply` formatiert ausdrücklich, `mvn spotless:check` prüft ohne Quelländerung. Die fest versionierte Kombination Spotless 2.43.0 / Google Java Format 1.22.0 (AOSP) gilt vorerst ausschließlich für die sechs Dateien der Allowlist in `pom.xml`. `.editorconfig` liefert kompatible Editor-Defaults; andere Java-Dateien werden nicht automatisch umformatiert. Einrichtung, Einzeldatei-Auswahl, Offline-Cache und IntelliJ stehen in [CODE_STYLE.md](docs/CODE_STYLE.md). Verify selbst formatiert niemals automatisch.
 
 `scripts/run-harnesses.ps1` bleibt der direkte Einstieg für die vollständige eigenständige Behavioral Regression: Bytecode-Discovery statt gepflegter Klassenliste, ein Prozess pro Harness. **Maven allein führt diese Verhaltenstests nicht aus.** Bei kleinen Änderungen zunächst die betroffenen Harnesses mit der vom Runner erzeugten Classpath ausführen; vor dem Commit immer die komplette Validierung. Die integrierten Skript-Fehlertests können separat mit `pwsh -File ./scripts/tests/verification.Tests.ps1` gestartet werden.
 
@@ -124,6 +126,7 @@ Geplante Weiterentwicklungen sind Staff-Interaction-/Teleport-Consent-UX und opt
 ## Dokumentation
 
 - [Architecture](docs/ARCHITECTURE.md): Zuständigkeiten, Lifecycle und Standard-Erweiterungspfade
+- [Code Style](docs/CODE_STYLE.md): Java-/Package-Konventionen und begrenzter Formatter-Pilot
 - [Developer Guide](docs/DEVELOPER_GUIDE.md): Feature-Details, Änderungen und lokale Entwicklung
 - [Permissions](docs/PERMISSIONS.md): Commands, Berechtigungen und Staff-Verträge
 - [Formatting](docs/FORMATTING.md): Chat, LuckPerms-Meta, Rankfarben und Clan-Templates

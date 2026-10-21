@@ -1,0 +1,7 @@
+# Phase 2A formatter pilot only: preserve LF even with core.autocrlf=true.
+src/main/java/dev/vapee/core/quest/daily/menu/ResetCountdownFormatter.java text eol=lf
+src/main/java/dev/vapee/core/friend/FriendPair.java text eol=lf
+src/main/java/dev/vapee/core/presence/PresenceModule.java text eol=lf
+src/main/java/dev/vapee/core/quest/daily/menu/DailyQuestInventoryHolder.java text eol=lf
+src/test/java/dev/vapee/core/presence/PresenceLifecycleHarness.java text eol=lf
+src/test/java/dev/vapee/core/settings/visibility/SettingsModuleLifecycleHarness.java text eol=lf

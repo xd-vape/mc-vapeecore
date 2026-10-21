@@ -9,12 +9,11 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.social.SocialModule;
 import dev.vapee.core.social.SocialService;
+import java.util.Objects;
+import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.Objects;
-import java.util.UUID;
 
 public final class PresenceModule implements CoreModule {
     private final JavaPlugin plugin;
@@ -32,8 +31,7 @@ public final class PresenceModule implements CoreModule {
             PlayerModule playerModule,
             SocialModule socialModule,
             FriendModule friendModule,
-            MessageService messageService
-    ) {
+            MessageService messageService) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerModule = Objects.requireNonNull(playerModule, "playerModule");
         this.socialModule = Objects.requireNonNull(socialModule, "socialModule");
@@ -53,16 +51,16 @@ public final class PresenceModule implements CoreModule {
         SocialService socialService = socialModule.getSocialService();
         FriendService friendService = friendModule.getFriendService();
         PresenceService newService = new PresenceService();
-        FriendPresenceNotifier newNotifier = new FriendPresenceNotifier(
-                friendService,
-                playerSettingsService,
-                socialService,
-                plugin.getServer()::getPlayer,
-                messageService,
-                plugin.getLogger()
-        );
-        PresenceListener newListener = new PresenceListener(
-                newService, playerService, newNotifier, plugin.getLogger());
+        FriendPresenceNotifier newNotifier =
+                new FriendPresenceNotifier(
+                        friendService,
+                        playerSettingsService,
+                        socialService,
+                        plugin.getServer()::getPlayer,
+                        messageService,
+                        plugin.getLogger());
+        PresenceListener newListener =
+                new PresenceListener(newService, playerService, newNotifier, plugin.getLogger());
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newListener, plugin);
