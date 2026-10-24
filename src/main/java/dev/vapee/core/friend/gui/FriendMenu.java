@@ -322,14 +322,63 @@ public final class FriendMenu {
     }
 
     public void startUpdates() {
-        messages.localization().addLocaleListener(localeChanges);
-        if (!observingChanges) { friends.addChangeListener(committedChanges); observingChanges = true; }
+        if (observingChanges) {
+            return;
+        }
+        try {
+            messages.localization().addLocaleListener(localeChanges);
+            friends.addChangeListener(committedChanges);
+            observingChanges = true;
+        } catch (RuntimeException exception) {
+            try {
+                shutdown();
+            } catch (RuntimeException cleanupFailure) {
+                if (cleanupFailure != exception) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            }
+            throw exception;
+        }
     }
+
     public void stopUpdates() {
-        messages.localization().removeLocaleListener(localeChanges);
-        if (observingChanges) { friends.removeChangeListener(committedChanges); observingChanges = false; }
+        RuntimeException failure = null;
+        try {
+            messages.localization().removeLocaleListener(localeChanges);
+        } catch (RuntimeException exception) {
+            failure = new IllegalStateException("Could not remove FriendMenu locale observer", exception);
+        }
+        // An add can take effect and throw before observingChanges is set.
+        observingChanges = false;
+        try {
+            friends.removeChangeListener(committedChanges);
+        } catch (RuntimeException exception) {
+            RuntimeException changeFailure = new IllegalStateException(
+                    "Could not remove FriendMenu change observer", exception);
+            if (failure == null) {
+                failure = changeFailure;
+            } else {
+                failure.addSuppressed(changeFailure);
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
-    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+
+    public void shutdown() {
+        try {
+            stopUpdates();
+        } finally {
+            try {
+                closeOpenInventories();
+            } finally {
+                rerenderInventory = null;
+                renderingFor = null;
+                presenceTarget = null;
+            }
+        }
+    }
 
     public void targetPresenceChanged(UUID target, boolean online) {
         presenceTarget = target; presenceOnline = online;

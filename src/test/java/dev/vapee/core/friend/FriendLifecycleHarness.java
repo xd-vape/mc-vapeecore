@@ -45,21 +45,8 @@ public final class FriendLifecycleHarness {
                         && source.contains("new FileFriendRepository(file, plugin.getLogger())")
                         && source.contains("configService::getFriendLimits"),
                 "Friend uses central runtime data path and live config limit supplier");
-        check(source.contains("new FriendCommand(")
-                        && source.contains("new FriendMenu(")
-                        && source.contains("new FriendMenuListener(")
-                        && source.contains("registerEvents(listener, plugin)")
-                        && source.contains("command.setExecutor(executor)")
-                        && source.contains("command.setTabCompleter(executor)"),
-                "enable registers menu listener, command executor and tab completer");
-        check(source.contains("command.setExecutor(null)")
-                        && source.contains("command.setTabCompleter(null)")
-                        && source.contains("HandlerList.unregisterAll(listener)")
-                        && source.contains("HandlerList.unregisterAll(friendMenuListener)")
-                        && source.contains("friendMenu.shutdown()") && source.contains("menu.startUpdates()")
-                        && source.contains("friendService = null")
-                        && source.contains("requireNonNull(friendService"),
-                "disable and failed enable clean up GUI, listener and command");
+        // Registration, subscriptions, publication, rollback and disable are exercised through
+        // the actual FriendModule in FriendModuleLifecycleHarness, not spelling-sensitive text.
         check(!source.contains("runTask") && !source.contains("save("),
                 "FriendModule owns no scheduler or shutdown rewrite");
         check(!Files.exists(Path.of("src/main/resources/friends.yml")),
