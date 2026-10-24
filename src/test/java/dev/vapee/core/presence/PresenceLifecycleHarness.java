@@ -137,6 +137,8 @@ public final class PresenceLifecycleHarness {
                 ModuleRuntimeFixture.dependency(
                         FriendModule.class,
                         Map.of(
+                                "active",
+                                true,
                                 "friendService",
                                 new FriendService(
                                         new FriendRepository() {

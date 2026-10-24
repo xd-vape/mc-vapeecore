@@ -1,5 +1,7 @@
 # VapeeCore Developer Guide
 
+Modul-Erweiterungen und Lifecycle-Ownership: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) beschreibt den abgesicherten Friend-Piloten, Teilstart-Rollback, Observer-/Command-/GUI-Freigabe und unabhängige Tests. Die Registrierungsreihenfolge bleibt im Composition Root ausdrücklich festgelegt.
+
 Diese Datei ist die praktische Landkarte für Änderungen an VapeeCore. Der aktuelle Zielserver ist Paper 1.21.11 mit Java 21 und LuckPerms 5.5.x; gebaut wird mit Maven. Die Main Class ist `dev.vapee.core.VapeeCore`, das Base Package ist `dev.vapee.core`.
 
 VapeeCore ist ein modularer Monolith. `CoreModule` definiert den kleinen Enable-/Disable-Lifecycle, `ModuleManager` aktiviert Module in registrierter Reihenfolge und deaktiviert sie rückwärts. Abhängigkeiten werden explizit über Konstruktoren übergeben. Es gibt keine globalen Service-Singletons, keine Reflection-Discovery und keine statischen Player-State-Maps. Packages sind nach Features geschnitten. LuckPerms ist die Quelle für Gruppen und Permissions. Die öffentliche Rank-Presentation ist datengetrieben und besitzt keine hartkodierte Rank-Authority. Davon getrennt definiert `StaffHierarchyConfig.DEFAULT_GROUPS` bewusst sichere Schutz-Defaults (`builder`, `moderator`, `admin`, `owner`, aufsteigend); diese Staff-Hierarchie ist unabhängig vom öffentlichen Rank-Track und der LuckPerms-Vererbung.
@@ -187,7 +189,7 @@ Betroffene Resource ergänzen, typisierten Fallback/Parser/immutable State in de
 
 ### Adding an existing-feature command / registering a module
 
-Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService`/Identity-/Permission-Pfade benutzen, in `FriendModule.enable` Command und TabCompleter registrieren und in Failure/Disable entfernen. Neuen Descriptor/Permission nur bei tatsächlichem Bedarf in plugin.yml deklarieren und Dokumentation/Harness ergänzen. Neues Modul implementiert `module/CoreModule`, erhält konkrete Abhängigkeiten über Konstruktor und wird in `VapeeCore.onEnable` explizit nach seinen benötigten Modulen registriert. `ModuleManager` übernimmt Enable-Rollback und umgekehrtes Disable. Keine Reflection oder automatische Paketsuche; nur bei echter Operator-Config-Notwendigkeit einen ReloadParticipant in der expliziten Liste ergänzen.
+Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService`/Identity-/Permission-Pfade benutzen, in `FriendModule.enable` Command und TabCompleter registrieren und in Failure/Disable entfernen. Neuen Descriptor/Permission nur bei tatsächlichem Bedarf in plugin.yml deklarieren und Dokumentation/Harness ergänzen. Neues Modul implementiert `module/CoreModule`, erhält konkrete Abhängigkeiten über Konstruktor und wird in `VapeeCore.onEnable` explizit nach seinen benötigten Modulen registriert. `ModuleManager` deaktiviert bereits erfolgreich gestartete Module rückwärts; das fehlgeschlagene Modul muss seinen eigenen Teilstart bereinigen. Keine Reflection oder automatische Paketsuche; nur bei echter Operator-Config-Notwendigkeit einen ReloadParticipant in der expliziten Liste ergänzen.
 
 ### Weitere Änderungen
 

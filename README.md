@@ -131,6 +131,7 @@ Geplante Weiterentwicklungen sind Staff-Interaction-/Teleport-Consent-UX und opt
 - [Code Style](docs/CODE_STYLE.md): Java-/Package-Konventionen und begrenzter Formatter-Pilot
 - [Settings Development](docs/SETTINGS_DEVELOPMENT.md): Preferences, GUI-Einträge, Persistenz und Erweiterungstests
 - [Configuration Development](docs/CONFIG_DEVELOPMENT.md): Betreiberwerte, Versionierung, sichere Evolution und Reload
+- [Module Development](docs/MODULE_DEVELOPMENT.md): Abhängigkeiten, Ownership, Teilstart-Rollback und Lifecycle-Tests am Friend-Piloten
 - [Developer Guide](docs/DEVELOPER_GUIDE.md): Feature-Details, Änderungen und lokale Entwicklung
 - [Permissions](docs/PERMISSIONS.md): Commands, Berechtigungen und Staff-Verträge
 - [Formatting](docs/FORMATTING.md): Chat, LuckPerms-Meta, Rankfarben und Clan-Templates
