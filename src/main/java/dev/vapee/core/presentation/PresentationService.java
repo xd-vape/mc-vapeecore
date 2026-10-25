@@ -55,6 +55,7 @@ public final class PresentationService {
         Map<UUID, RenderedPresentation> rendered = renderPlayers(
                 presentationConfig.isNametagEnabled() ? online : List.of(validatedPlayer));
         updatePlayer(validatedPlayer, rendered.get(validatedPlayer.getUniqueId()), targets(online, rendered));
+        updateTablistOrder(online);
     }
 
     private void updatePlayer(Player player, RenderedPresentation presentation, List<NametagService.Target> targets) {
@@ -83,6 +84,15 @@ public final class PresentationService {
         Map<UUID, RenderedPresentation> rendered = renderPlayers(online);
         List<NametagService.Target> targets = targets(online, rendered);
         for (Player player : online) updatePlayer(player, rendered.get(player.getUniqueId()), targets);
+        updateTablistOrder(online);
+    }
+
+    private void updateTablistOrder(List<Player> online) {
+        try {
+            tablistService.updateOrder(online);
+        } catch (RuntimeException exception) {
+            logger.log(Level.WARNING, "Could not update tablist order; retrying on the next presentation refresh.", exception);
+        }
     }
 
     private Map<UUID, RenderedPresentation> renderPlayers(List<Player> online) {

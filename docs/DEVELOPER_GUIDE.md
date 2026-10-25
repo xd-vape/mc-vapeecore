@@ -425,6 +425,53 @@ Standardnamen. Nullable Header/Footer werden separat restauriert, ohne styled
 Components in Strings umzuwandeln. Quit, Disable und Reload verwenden dieselben
 Service-Pfade; es bleiben keine Player-Referenzen in den Ownership-Metadaten.
 
+### Rank-basierte Tablist-Reihenfolge
+
+PresentationModule übergibt denselben aktuellen RankService auch an TablistService. Ein
+erfolgreicher Einzel-Refresh und `updateAll()` ordnen den vollständigen aktuellen Online-Roster;
+der bestehende gemeinsame Presentation-Task übernimmt spätere LuckPerms-Änderungen und Quit-
+Übergänge. Es gibt keinen weiteren Scheduler oder dauerhaften Rank-Cache. Die einmaligen
+Rank-/Track-Snapshots gelten nur für diesen Refresh; ein Provider-Fehler wird geloggt und beim
+nächsten vorhandenen Refresh erneut versucht, ohne eine erfundene neutrale Rangfolge zu schreiben.
+
+Priorität stammt ausschließlich vom tatsächlichen primären LuckPerms-Rang. Explizite Gewichte
+werden absteigend verglichen, einschließlich gleicher, negativer und extremer Integer-Werte.
+Bei gleicher Priorität folgen der echte Minecraft-Username case-insensitive und schließlich UUID;
+Displayname, Prefix, Clan-Tag, Permission-Namen und Ranklabels sind keine Sortierquelle.
+
+Fehlende Gewichte verwenden den konfigurierten `ranks.track`: LuckPerms definiert dessen ersten
+Eintrag als niedrigsten und letzten als höchsten Rang. Bei vollständig ungewichteten Tracks
+gilt diese umgekehrte Reihenfolge. In einem mit Gewichten konsistenten Track liegen ungewichtete
+Ränge oberhalb ihres unteren gewichteten Ankers und unterhalb des nächsten größeren Gewichts.
+Gleiche begrenzende Gewichte ergeben dieselbe Priorität und damit alphabetische Ties. Es wird
+kein Track-Index als erfundenes numerisches LP-Gewicht verwendet. Ein gewichteter Online-Rang
+außerhalb des Tracks verhindert eine eindeutige Einordnung: bekannte Gewichte bleiben vorn,
+ungewichtete Track-Ränge folgen in Track-Reihenfolge. Bei doppelten Track-IDs oder widersprüchlichen
+gewichteten Ankern entfällt der uneindeutige Track-Fallback. Fehlende/unbekannte Primärränge
+bleiben neutral hinter eingeordneten Rängen und werden alphabetisch sortiert. Vollständige,
+konsistente Gewichte sind die bevorzugte Betreiberkonfiguration.
+
+TablistService setzt echte, eindeutige positive `Player#setPlayerListOrder`-Werte **N bis 1**.
+Der überprüfte Vanilla-1.21.11-Client sortiert diese absteigend, vor Spectator-Status, Teamname
+und Username. Nametag-Teams, Sidebar, Tablist-Templates, Farben, Header/Footer und Config-Schema
+bleiben unverändert. Die aktuelle API-Implementierung sendet `UPDATE_LIST_ORDER` an berechtigte
+Viewer. Alte oder modifizierte Clients können abweichendes Verhalten zeigen; API-/Paket-Prüfungen
+ersetzen keinen visuellen Minecraft-Clienttest.
+
+Order hat einen eigenen Ownership-Snapshot im bestehenden UUID-State. Nur ein tatsächlich nötiger
+und erfolgreicher Setter-Write erwirbt Ownership; unveränderte Werte senden keine neuen Order-
+Writes. Refresh behält den ersten Restore-Wert. Quit, Tablist-/Presentation-Disable, Reload und
+Shutdown restaurieren ihn nur, wenn der aktuelle Wert noch dem letzten eigenen entspricht.
+Fremde ersetzte Order-Werte bleiben erhalten. Wie bei den bisherigen Feldern bleibt ein aktiver
+Refresh der konfigurierte Writer; gleiche fremde Writes sind als Wert nicht unterscheidbar.
+
+Die [Paper-Javadocs](https://jd.papermc.io/paper/1.21.11/org/bukkit/entity/Player.html#setPlayerListOrder(int))
+nennen positive Werte. Der konkrete 1.21.11-Setter akzeptiert **0**, lehnt negative Werte ab und
+verwendet 0 als Standard. Dies wurde am installierten Paper-Bytecode und nativ geprüft: Cleanup
+kann sowohl 0 als auch frühere positive Werte exakt über die öffentliche API restaurieren.
+Tests und native Grenzen stehen im
+[Rank-Order-Bericht](../reports/architecture-modernization/RANK_BASED_TABLIST_ORDER.md).
+
 `ScoreboardService.ownsScoreboard(viewer)` prüft UUID-State **und** Identität des
 aktuell angezeigten Boards und wird auch von Update/Cleanup verwendet. Ein
 fremdes Board wird übersprungen; eigene Sidebar-Objectives bleiben getrennt pro
