@@ -6,7 +6,7 @@ Diese Referenz beschreibt den aktuellen modularen Monolithen. Der [Developer Gui
 
 ## Composition Root und Lifecycle
 
-Praktischer Erwerbs-/Cleanup-Pfad, Ownership-Tabelle und Contributor-Checkliste: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md). Der Friend-Pilot schützt Observer-Start, Veröffentlichung und finales Logging gemeinsam und weist doppeltes Enable ohne Veränderung der aktiven Runtime zurück.
+Praktischer Erwerbs-/Cleanup-Pfad, Ownership-Tabelle und Contributor-Checkliste: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md). Friend und Clan schützen Observer-Start, Veröffentlichung und finales Logging gemeinsam und weisen Double-/Reentrant-Enable ohne Veränderung der aktiven Runtime zurück. Clan behält verweigerte Freigaben für einen erneuten Cleanup-Versuch; ein neuer Start erwirbt erst nach erfolgreicher Bereinigung neue Ressourcen.
 
 [SERVICE_DEPENDENCIES.md](SERVICE_DEPENDENCIES.md) beschreibt die bevorzugte Grenze für spät verfügbare Services. Presence speichert vier typisierte Provider statt fremder Modulfelder, erfasst deren Ergebnisse einmal je Enable und behält sie für diese Aktivierung. Sein bisheriger Modul-Konstruktor bleibt ein kompatibler Adapter; Provider bedeuten keinen aktiven Hot-Swap.
 

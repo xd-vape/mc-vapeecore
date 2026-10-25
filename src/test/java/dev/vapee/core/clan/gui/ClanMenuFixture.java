@@ -128,6 +128,7 @@ final class ClanMenuFixture {
         boolean permitted = true;
         Inventory open;
         int closeCalls;
+        boolean failClose;
 
         TestPlayer(UUID id, String name, boolean online) {
             this.id = id;
@@ -141,7 +142,11 @@ final class ClanMenuFixture {
                 case "hasPermission" -> permitted;
                 case "openInventory" -> { open = (Inventory) args[0]; yield view(this, open); }
                 case "getOpenInventory" -> view(this, open == null ? bottom : open);
-                case "closeInventory" -> { closeCalls++; open = bottom; yield null; }
+                case "closeInventory" -> {
+                    closeCalls++;
+                    if (failClose) throw new IllegalStateException("injected owned inventory close failure");
+                    open = bottom; yield null;
+                }
                 case "sendMessage" -> {
                     if (args != null) for (Object arg : args) if (arg instanceof Component c) received.add(c);
                     yield null;

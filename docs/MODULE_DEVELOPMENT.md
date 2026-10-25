@@ -1,6 +1,6 @@
 # Module entwickeln und sicher betreiben
 
-Diese Anleitung beschreibt das vorhandene explizite Modulmodell und den abgesicherten Friend-Piloten. Sie behauptet nicht, dass alle älteren Module bereits jeden späten Fehler behandeln. Einstieg: [Architektur](ARCHITECTURE.md), [Code-Konventionen](CODE_STYLE.md), [Validierung](../README.md#entwicklung).
+Diese Anleitung beschreibt das vorhandene explizite Modulmodell und die abgesicherten Friend- und Clan-Beispiele. Sie behauptet nicht, dass alle älteren Module bereits jeden späten Fehler behandeln. Einstieg: [Architektur](ARCHITECTURE.md), [Code-Konventionen](CODE_STYLE.md), [Validierung](../README.md#entwicklung).
 
 ## Wann ein Modul sinnvoll ist
 
@@ -115,3 +115,42 @@ Persistenz gehört in Repository und Domain-Service, nicht in Command, GUI oder 
 | Native Paper Smoke | Wegwerfserver mit LuckPerms, isolierten Daten/JAR; Startup/Commands/GUI/Shutdown |
 
 Paper-API-/Console-Probes sind kein Minecraft-Clienttest. Nur tatsächlich ausgeführte Prüfungen und deren Grenzen berichten. Bestehende Module schrittweise nach realem Risiko verbessern; aus diesem Piloten keine projektweite Migration ableiten.
+
+## Clan als zweites geprüftes Lifecycle-Beispiel
+
+`ClanModule` behält seinen öffentlichen Konstruktor mit JavaPlugin, ConfigService, IdentityModule, MessageService und CommandHelpRenderer. Der aktuelle IdentityService wird einmal je Enable bezogen; es gibt keinen aktiven Service-Hot-Swap. Die 28 Produktionsmodule und sieben Reload-Teilnehmer bleiben unverändert: Clan startet nach Friend/Presence und vor Reward. Clan ist kein ReloadParticipant; `config::getClanLimits` bleibt ein Live-Supplier.
+
+| Ressource | Clan-Ownership |
+|---|---|
+| ClanService und FileClanRepository | Neue Runtime je erfolgreichem Start, aktuelles `clans.yml` lesen |
+| ClanMenu und ClanMenuListener | Eigene Views, Render-Kontext und genau eine Bukkit-Registrierung mit fünf Handlern |
+| ClanCommand | Eigene Executor-/Completer-Bindungen auf dem geliehenen Bukkit-Descriptor für `/clan` und `/clans` |
+| Locale- und ClanChange-Callbacks | Das Menü meldet genau seine beiden Callback-Instanzen an/ab |
+| Config, Identity, Messages/Localization, Help, Plugin/Server | Geliehen; Clan beendet oder leert diese Services nicht |
+| `clans.yml` | Domain/Repository-Commit, kein Disable-Save und kein Leeren der Datei |
+
+Wie bei Friend umfasst der geschützte Start Konstruktion, tatsächliche Listener-/Command-Bindung, Observer-Start, Veröffentlichung und finales Logging. `active` wird erst danach gesetzt; der öffentliche Service-Getter bleibt davor, bei fehlgeschlagenem Start und nach Disable gesperrt. Double-/Reentrant-Enable wird vor jedem neuen Erwerb zurückgewiesen. Ein package-lokaler No-op-Checkpoint im Produktionskonstruktor erlaubt Tests unmittelbar nach realen Registrierungseffekten; ein echter Logging-Handler prüft den späten Logfehler.
+
+### Unsichere Teilanmeldung und verweigerte Freigabe
+
+ClanMenu markiert jede Observer-Anmeldung **vor** dem externen Add als möglicherweise erworben. Das deckt sowohl Fehler vor als auch nach dessen Wirkung ab. Erst ein erfolgreich zurückgekehrtes Remove setzt diese Markierung zurück. Die tatsächlichen Callback-Sets bleiben die Wahrheit; die Markierung behauptet bei einer Exception nicht, dass ein Callback entfernt wurde. Ein erfolgreicher wiederholter Start fügt nichts doppelt hinzu.
+
+Beide Observer werden unabhängig abgemeldet. Shutdown schließt/detacht anschließend die eigenen aktuell angezeigten Inventare, auch wenn eine Abmeldung scheitert. Fremde Ersatzinventare bleiben offen. Ein einzelner Close-Fehler wird mit UUID/Ursache protokolliert; andere Viewer werden weiter bearbeitet und die Active-Map wird geleert. Render-/Rerender-/Presence-Kontext wird zurückgesetzt. Alte Holder, Klicks und Close-Events erhalten dadurch keine neue Autorität.
+
+Ein fehlgeschlagenes Observer-Remove bleibt retrybar. Vor einer neuen Anmeldung reconciliert das Menü ausstehende Freigaben. Das Modul verwendet einen gemeinsamen privaten Cleanup-Pfad: Menü-Shutdown bei noch registriertem Close-Listener → Handler-Abmeldung → Executor-Freigabe → Completer-Freigabe → veröffentlichte Runtime-Referenzen freigeben. Jeder Schritt besitzt eine eigene Fehlergrenze. Executor und Completer werden nur zurückgesetzt, solange sie noch der eigenen ClanCommand-Instanz gehören; fremde Ersatzbindungen werden nicht überschrieben.
+
+Gegenüber Friend ergänzt Clan einen kleinen privaten Cleanup-Retry-Datensatz. Nach fehlgeschlagener Freigabe hält er die bisherigen Ressourcen für einen erneuten Disable-/Enable-Versuch, während Service-Getter und veröffentlichte Runtime gesperrt bleiben. Ein neuer Start muss zuerst dieses Cleanup erfolgreich abschließen, bevor er neue Ressourcen erwirbt. Das ist kein zweiter Observer-Registry, Domain-Cache oder globales Lifecycle-Framework. Nach erfolgreichem Cleanup wird auch der Retry-Datensatz freigegeben.
+
+Startup-Exceptions bleiben dasselbe Objekt; Cleanup-Fehler kommen mit Ressourcenkontext als suppressed Ursachen hinzu. Normaler Disable aggregiert Fehler für den vorhandenen ModuleManager-Logging-Vertrag. Eine dauerhaft verweigernde externe Abmeldung kann Clan nicht erzwingen: verbleibende Registrierung und unvollständiges Cleanup müssen ausdrücklich gemeldet werden. Der Manager wird dafür nicht verändert. Bewusst extern gehaltene Java-Referenzen auf einen alten Service werden nicht widerrufen; seine ehemaligen Listener-/Menüregistrierungen verlieren ihre aktive Anbindung.
+
+### Clan-Nachweise für Änderungen
+
+- `ClanModuleLifecycleHarness`: echtes Modul/PluginCommand/HandlerLists, fünf Start-Checkpoints, fehlende Dependencies/Descriptor, partielle Observer-Anmeldung, echtes finales Logging, originale Exception, unabhängige Freigaben, Double-/Reentrant-Enable, Retry und frische Runtime mit aktuellem IdentityService und erneut gelesenen Clans.
+- `ClanMenuLifecycleHarness`: real gerenderte und exakt gebundene Inventare, Add/Remove-Fehler vor/nach Wirkung, sichere Mehrspieler-Schließung, verweigerte Freigabe/Retry, Locale-/Commit-Refresh, ausbleibender Refresh nach Save-Fehler, Render-Kontext und stale/forged/permission-revoked Views.
+- Bestehende Clan-Domain-, Service-, Persistenz-, Command-, Layout-, Localization-, Pagination- und Security-Harnesses bleiben maßgeblich. `ClanIntegrationHarness` verwendet für Cleanup das echte Modulverhalten statt bestimmter Quelltextschreibweisen.
+
+```powershell
+pwsh -File ./scripts/tests/clan-lifecycle.Tests.ps1 -Offline -MavenRepository 'C:\Users\mehdi\.m2\repository'
+```
+
+Die zehn temporär kompilierten Gegenproben prüfen echte Verhaltensfehler; positive Modul-/Menü-/ModuleExtension-Kontrollen laufen davor und danach. Receipts entstehen unter `target/verification/clan-lifecycle/`. Danach den vollständigen kanonischen Verifier ausführen. Nur Wegwerfdaten verwenden; weder `clans.yml`-Schema noch Gameplay, Layout, Übersetzungen oder Live-Installation gehören zum Lifecycle-Refactoring.
