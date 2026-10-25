@@ -127,6 +127,79 @@ try {
     }
     $output = & $shell -NoProfile -File (Join-Path $fixtureRoot 'scripts/prerequisite-check.ps1') java17 2>&1 | Out-String
     Assert ($LASTEXITCODE -ne 0 -and $output.Contains('Found: Java 17') -and $output.Contains('Expected: Java 21')) 'Real Java version check must explain an unsupported JDK.'
+
+    # Run the actual launcher through real shells; only the selected task bodies are disposable stubs.
+    $launcherRoot = Join-Path $fixtureRoot 'launcher project with spaces'
+    New-Item -ItemType Directory -Path (Join-Path $launcherRoot 'scripts') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $scriptsRoot 'run-development.ps1'), (Join-Path $scriptsRoot 'development-environment.ps1') -Destination (Join-Path $launcherRoot 'scripts')
+    $targets = @{ Verify='verify.ps1'; BuildAndDeploy='build-and-deploy.ps1'; Start='start-dev-server.ps1'; Stop='stop-dev-server.ps1' }
+    foreach ($task in $targets.Keys) {
+        $stub = @'
+#requires -Version 7.0
+param([switch]$Offline, [string]$MavenRepository)
+@{ Task = '__TASK__'; Major = $PSVersionTable.PSVersion.Major; Offline = [bool]$Offline; Repository = $MavenRepository } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot '../launch-result.json')
+if ('__TASK__' -eq 'Stop') { exit 29 }
+exit 0
+'@
+        [IO.File]::WriteAllText((Join-Path $launcherRoot ('scripts/' + $targets[$task])), $stub.Replace('__TASK__', $task))
+    }
+    $oldPowerShell = $env:VAPEECORE_PWSH
+    try {
+        $env:VAPEECORE_PWSH = $shell
+        $repository = Join-Path $launcherRoot 'repository with spaces'
+        $launcher = Join-Path $launcherRoot 'scripts/run-development.ps1'
+        $output = & $shell -NoProfile -File $launcher -Task Verify -Offline -MavenRepository $repository 2>&1 | Out-String
+        Assert ($LASTEXITCODE -eq 0) "Launcher Verify must succeed: $output"
+        $launched = Get-Content -LiteralPath (Join-Path $launcherRoot 'launch-result.json') -Raw | ConvertFrom-Json
+        Assert ($launched.Task -eq 'Verify' -and $launched.Major -ge 7) 'Launcher must use real PowerShell 7 for the selected task.'
+        Assert ($launched.Offline -and $launched.Repository -eq $repository) 'Launcher must preserve offline and repository arguments with spaces.'
+
+        $output = & $shell -NoProfile -File $launcher -Task Stop 2>&1 | Out-String
+        Assert ($LASTEXITCODE -eq 29) 'Launcher must preserve task failure exit codes.'
+        Remove-Item -LiteralPath (Join-Path $launcherRoot 'launch-result.json')
+        $output = & $shell -NoProfile -File $launcher -Task Start -Offline 2>&1 | Out-String
+        Assert ($LASTEXITCODE -ne 0 -and -not (Test-Path -LiteralPath (Join-Path $launcherRoot 'launch-result.json'))) 'Invalid Start options must fail before launching a task.'
+
+        $env:VAPEECORE_PWSH = Join-Path $launcherRoot 'missing-pwsh.exe'
+        $output = & $shell -NoProfile -File $launcher -Task Start 2>&1 | Out-String
+        Assert ($LASTEXITCODE -ne 0 -and $output.Contains('VAPEECORE_PWSH')) 'Explicit missing PowerShell must fail with an actionable diagnosis.'
+        if ($IsWindows) {
+            $windowsPowerShell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+            $env:VAPEECORE_PWSH = $windowsPowerShell
+            $output = & $shell -NoProfile -File $launcher -Task Start 2>&1 | Out-String
+            Assert ($LASTEXITCODE -ne 0 -and $output.Contains('PowerShell 7+ is required')) 'Explicit PowerShell 5 must not run the actual task.'
+
+            # Exercise the two committed IntelliJ configurations, including the real bootstrap interpreter.
+            $env:VAPEECORE_PWSH = $shell
+            foreach ($configuration in @('Build and Deploy VapeeCore', 'Start VapeeCore Dev Server')) {
+                $xmlPath = Join-Path $scriptsRoot "../.run/$configuration.run.xml"
+                [xml]$configurationXml = Get-Content -LiteralPath $xmlPath -Raw
+                $options = @{}
+                foreach ($option in $configurationXml.component.configuration.option) { $options[$option.name] = $option.value }
+                Assert (Test-Path -LiteralPath $options.INTERPRETER_PATH -PathType Leaf) "$configuration interpreter must actually exist."
+                $entry = $options.SCRIPT_PATH.Replace('$PROJECT_DIR$', $launcherRoot)
+                $interpreterArguments = @($options.INTERPRETER_OPTIONS -split ' ') + @($entry) + @($options.SCRIPT_OPTIONS -split ' ')
+                $output = & $options.INTERPRETER_PATH @interpreterArguments 2>&1 | Out-String
+                Assert ($LASTEXITCODE -eq 0) "$configuration must launch from Windows PowerShell: $output"
+                $launched = Get-Content -LiteralPath (Join-Path $launcherRoot 'launch-result.json') -Raw | ConvertFrom-Json
+                $expectedTask = if ($configuration -eq 'Start VapeeCore Dev Server') { 'Start' } else { 'BuildAndDeploy' }
+                Assert ($launched.Task -eq $expectedTask -and $launched.Major -ge 7) "$configuration must execute the correct task under PowerShell 7."
+            }
+        }
+    } finally { $env:VAPEECORE_PWSH = $oldPowerShell }
+
+    # Directory discovery must reject a JRE, another major and an incomplete JDK before selecting a full JDK 21.
+    . (Join-Path $scriptsRoot 'development-environment.ps1')
+    $installRoot = Join-Path $fixtureRoot 'installed java'
+    foreach ($version in @('jdk-17.0.12','jdk-210.0.1','jdk-21-incomplete','jdk-21.0.12.1')) {
+        $bin = Join-Path $installRoot "$version/bin"
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        $tools = if ($version -eq 'jdk-21-incomplete') { @('java') } else { @('java','javac','javap','jps') }
+        foreach ($tool in $tools) { [IO.File]::WriteAllText((Join-Path $bin "$tool.exe"), 'discovery fixture only') }
+    }
+    Assert ((Find-Java21Jdk @($installRoot)) -eq (Join-Path $installRoot 'jdk-21.0.12.1')) 'Discovery must select a complete JDK 21 only.'
+    Assert ($null -eq (Find-Java21Jdk @((Join-Path $installRoot 'absent')))) 'Missing install roots must not manufacture a JDK.'
     Write-Host "Verification script tests passed $checks checks."
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixtureRoot)

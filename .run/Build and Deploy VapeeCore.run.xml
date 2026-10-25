@@ -2,18 +2,15 @@
   <configuration default="false" name="Build &amp; Deploy VapeeCore" type="ShConfigurationType">
     <option name="SCRIPT_TEXT" value="" />
     <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
-    <option name="SCRIPT_PATH" value="$PROJECT_DIR$/scripts/build-and-deploy.ps1" />
-    <option name="SCRIPT_OPTIONS" value="" />
+    <option name="SCRIPT_PATH" value="$PROJECT_DIR$/scripts/run-development.ps1" />
+    <option name="SCRIPT_OPTIONS" value="-Task BuildAndDeploy" />
     <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
     <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
-    <option name="INTERPRETER_PATH" value="C:\Program Files\PowerShell\7\pwsh.exe" />
+    <option name="INTERPRETER_PATH" value="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" />
     <option name="INTERPRETER_OPTIONS" value="-NoProfile -ExecutionPolicy Bypass -File" />
     <option name="EXECUTE_IN_TERMINAL" value="false" />
     <option name="EXECUTE_SCRIPT_FILE" value="true" />
-    <envs>
-      <env name="JAVA_HOME" value="C:\Program Files\Java\jdk-21.0.12.1" />
-    </envs>
     <method v="2" />
   </configuration>
 </component>
