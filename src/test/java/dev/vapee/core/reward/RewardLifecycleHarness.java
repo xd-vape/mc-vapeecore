@@ -131,23 +131,12 @@ public final class RewardLifecycleHarness {
                 "RewardListener delegates quit persistence to flushPlayer before unload");
     }
 
-    private static void testShutdownStructure() throws IOException {
-        String moduleSource = Files.readString(
-                Path.of("src/main/java/dev/vapee/core/reward/RewardModule.java")
-        );
-        int cancel = moduleSource.indexOf("flushTask.cancel()");
-        int flush = moduleSource.indexOf("flushSafely();", cancel);
-        int unregister = moduleSource.indexOf("HandlerList.unregisterAll(rewardListener)", flush);
-        int clear = moduleSource.indexOf("rewardService.clearDirtyTracking()", unregister);
-        check(cancel >= 0 && cancel < flush && flush < unregister && unregister < clear,
-                "Reward shutdown cancels task, flushes, unregisters, then clears runtime state");
-        check(moduleSource.contains("runTaskTimer(")
-                        && count(moduleSource, "runTaskTimer(") == 1,
-                "RewardModule owns exactly one shared synchronous timer");
-        check(moduleSource.contains("this::flushSafely"),
-                "periodic task contains a lifecycle-safe exception boundary");
-        check(moduleSource.contains("public RewardService getRewardService()"),
-                "RewardModule exposes its service through constructor-injection architecture");
+    private static void testShutdownStructure() throws Exception {
+        var observed = RewardModuleLifecycleHarness.observeShutdown();
+        check(observed.cancelBeforeFlush(), "Reward shutdown cancels before flushing");
+        check(observed.flushBeforeUnregister(), "Reward shutdown flushes before unregistering");
+        check(observed.dirtyTrackingCleared(), "Reward shutdown releases dirty tracking");
+        check(observed.singleSynchronousTimer(), "Reward owns exactly one shared synchronous timer");
     }
 
     private static String rewardProductionSource() throws IOException {

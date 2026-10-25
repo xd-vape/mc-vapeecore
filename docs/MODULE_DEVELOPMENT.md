@@ -154,3 +154,24 @@ pwsh -File ./scripts/tests/clan-lifecycle.Tests.ps1 -Offline -MavenRepository 'C
 ```
 
 Die zehn temporär kompilierten Gegenproben prüfen echte Verhaltensfehler; positive Modul-/Menü-/ModuleExtension-Kontrollen laufen davor und danach. Receipts entstehen unter `target/verification/clan-lifecycle/`. Danach den vollständigen kanonischen Verifier ausführen. Nur Wegwerfdaten verwenden; weder `clans.yml`-Schema noch Gameplay, Layout, Übersetzungen oder Live-Installation gehören zum Lifecycle-Refactoring.
+
+## Task-Owner mit ausstehender Persistenz: Reward
+
+Der [repositoryweite Lifecycle-Audit](../reports/architecture-modernization/PHASE_05B_MODULE_LIFECYCLE_AUDIT.md) trennt bestätigte Defekte, starke Verdachtsfälle und Architekturbeobachtungen für alle 28 Module. Nur Reward wurde in dieser Phase geändert. Der Audit ist kein Nachweis, dass die übrigen Owner gegen alle Fehler abgesichert sind.
+
+`RewardModule` besitzt RewardService samt Dirty-UUIDs, einen LOWEST-Quit-Listener und genau einen synchronen 20-Tick-Flush-Task. EconomyService und PlayerService sind geliehen. Es besitzt weder Commands noch Menü-Observer oder eine eigene Persistenzdatei. Ein Fehler beim finalen Startup-Logging gehört nach dem Task-Erwerb weiterhin zum Teilstart und muss Listener und Task zurücknehmen.
+
+Ein fehlgeschlagenes `cancel()` darf weder den vorgesehenen Shutdown-Flush noch die unabhängige Listener-Freigabe blockieren. Reward deaktiviert zuerst seine Runtime-Autorität und versucht Cancellation, Flush, Unregister und eigenes Dirty-Cleanup einzeln. Startup behält die ursprüngliche Exception; Freigabefehler werden mit Ressourcenkontext angehängt. Verweigerte externe Freigaben bleiben sichtbar und retrybar. Ein neuer Start erwirbt erst nach erfolgreicher Bereinigung neue Ressourcen.
+
+Der Task prüft zusätzlich seine erfasste Service-Identität gegen die aktive Runtime. Ein alter Callback darf nach einem Neustart nicht über ein Modulfeld die neue Service-Generation flushen. Das ergänzt die tatsächliche Cancellation; es behauptet bei einem verweigerten Cancel keine erfolgreiche Abmeldung. Getter bleiben während Teilstart und nach Disable gesperrt; Double-/Reentrant-Enable wird vor Erwerb zurückgewiesen.
+
+Die bestehende Persistenzpolitik bleibt erhalten: Grants sind deferred, reguläre Batch-Fehler bleiben dirty für Retry, normaler Shutdown flusht vor Listener-Abmeldung. PlayerModule bleibt der spätere Persistenz-Fallback und wird nicht vom Consumer beendet. Ein sauberer Lifecycle ohne Dirty-State schreibt Profile nicht; ausstehende Rewards werden beim Shutdown ausdrücklich gespeichert. Extern gehaltene alte Service-Referenzen werden nicht widerrufen.
+
+`RewardModuleLifecycleHarness` prüft echte HandlerLists, ausführbare Task-Callbacks, temporäre Profil-Commits, verweigerte Freigaben, originale Exceptions, Guard-/Restart-Verhalten und Reverse-Rollback mit dem echten ModuleManager. `RewardLifecycleHarness` verwendet für Shutdown-Reihenfolge und Task-Anzahl ebenfalls das tatsächliche Modulverhalten. Die neun kompilierten Gegenproben laufen mit portablen Maven-Defaults:
+
+```powershell
+pwsh -File ./scripts/tests/reward-lifecycle.Tests.ps1
+pwsh -File ./scripts/verify.ps1
+```
+
+Receipts liegen unter `target/verification/reward-lifecycle/`. Ein nativer Neustart muss alle Consumer vorher stoppen und anschließend die Komposition mit aktuellen Services aufbauen; ein isolierter Reward-Neustart unter laufendem OnlineReward/Quest ist kein unterstützter Hot-Swap.
