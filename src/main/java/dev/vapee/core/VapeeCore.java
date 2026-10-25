@@ -98,7 +98,9 @@ public final class VapeeCore extends JavaPlugin {
         moderationModule = new ModerationModule(this, identityModule, rankModule, messageService);
         friendModule = new FriendModule(this, configService, playerModule, socialModule,
                 identityModule, messageService, commandHelpRenderer);
-        presenceModule = new PresenceModule(this, playerModule, socialModule, friendModule, messageService);
+        presenceModule = new PresenceModule(this, playerModule::getPlayerService,
+                playerModule::getPlayerSettingsService, socialModule::getSocialService,
+                friendModule::getFriendService, messageService);
         clanModule = new ClanModule(this, configService, identityModule, messageService, commandHelpRenderer);
         rewardModule = new RewardModule(this, playerModule, economyModule);
         onlineRewardModule = new OnlineRewardModule(

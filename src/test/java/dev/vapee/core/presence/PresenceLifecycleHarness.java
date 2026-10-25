@@ -151,7 +151,13 @@ public final class PresenceLifecycleHarness {
                                         FriendLimits.defaults(),
                                         FriendRequestPolicy.allowAll(),
                                         java.time.Clock.systemUTC())));
-        return new PresenceModule(f.plugin, f.playerModule, social, friend, f.messages);
+        return new PresenceModule(
+                f.plugin,
+                f.playerModule::getPlayerService,
+                f.playerModule::getPlayerSettingsService,
+                social::getSocialService,
+                friend::getFriendService,
+                f.messages);
     }
 
     private static void realModuleLifecycle() throws Exception {
