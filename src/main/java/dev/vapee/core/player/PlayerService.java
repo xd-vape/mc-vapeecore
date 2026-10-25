@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -125,21 +126,59 @@ public final class PlayerService {
     }
 
     public void saveAll() {
+        saveAll(false);
+    }
+
+    void saveAllOrThrow() {
+        saveAll(true);
+    }
+
+    private void saveAll(boolean requireComplete) {
         Collection<CorePlayer> playersToSave = List.copyOf(loadedPlayers.values());
-        logger.info("Saving " + playersToSave.size() + " loaded player(s).");
+        Map<UUID, RuntimeException> failures = new LinkedHashMap<>();
+        RuntimeException diagnosticFailure = null;
+        try {
+            logger.info("Saving " + playersToSave.size() + " loaded player(s).");
+        } catch (RuntimeException exception) {
+            diagnosticFailure = exception;
+        }
 
         for (CorePlayer player : playersToSave) {
             try {
                 repository.save(player);
             } catch (RuntimeException exception) {
-                logger.log(
-                        Level.SEVERE,
-                        "Player " + player.getUniqueId()
-                                + " could not be saved during save-all; continuing with remaining players.",
-                        exception
-                );
+                failures.put(player.getUniqueId(), exception);
+                try {
+                    logger.log(
+                            Level.SEVERE,
+                            "Player " + player.getUniqueId()
+                                    + " could not be saved during save-all; continuing with remaining players.",
+                            exception
+                    );
+                } catch (RuntimeException diagnostic) {
+                    if (diagnosticFailure == null) diagnosticFailure = diagnostic;
+                    else if (diagnosticFailure != diagnostic) diagnosticFailure.addSuppressed(diagnostic);
+                }
             }
         }
+        if (requireComplete && !failures.isEmpty()) {
+            SaveFailures incomplete = new SaveFailures(failures);
+            if (diagnosticFailure != null) incomplete.addSuppressed(diagnosticFailure);
+            throw incomplete;
+        }
+        if (diagnosticFailure != null) throw diagnosticFailure;
+    }
+
+    static final class SaveFailures extends IllegalStateException {
+        private final Map<UUID, RuntimeException> failures;
+
+        private SaveFailures(Map<UUID, RuntimeException> failures) {
+            super("Could not save player profiles " + failures.keySet() + ".");
+            this.failures = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(failures));
+            failures.forEach((id, cause) -> addSuppressed(new IllegalStateException("Player " + id, cause)));
+        }
+
+        Map<UUID, RuntimeException> failures() { return failures; }
     }
 
     void clearLoadedPlayers() {

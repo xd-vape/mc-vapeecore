@@ -28,6 +28,36 @@ A save rereads and validates the latest source, constructs canonical state for e
 
 `PlayerService` owns the loaded-player map. Loading an existing profile updates its runtime name/last-join without an immediate save. Loading a new profile saves its defaults before caching it. `findKnownPlayer` can read an offline profile without loading it into the cache. `savePlayer` saves the current loaded aggregate; `unloadPlayer` saves before eviction and retains the profile if saving throws. `saveAll` logs individual failures and continues with other profiles; it does not make several files one transaction.
 
+### PlayerModule shutdown and incomplete saves
+
+The public `void saveAll()` contract remains log-and-continue for individual persistence failures.
+PlayerModule uses a package-local strict variant of the same loop: every loaded profile is attempted,
+then an incomplete batch throws with its exact failed UUID-to-cause mapping. Logging failures are
+reported after the independent save attempts. Successful profiles remain committed. No successful
+Settings/Reward/Quest observer event is fabricated by the shutdown fallback.
+
+Shutdown first closes active getters and generation-specific listener authority, then independently
+attempts listener removal and all profile commits. Only complete saving permits clearing the loaded
+cache. On failure, the module privately retains the same PlayerService and aggregate objects for an
+explicit same-process `disable()` retry. Normal getters stay closed, and `enable()` refuses to replace
+the pending runtime. After deliberate reconciliation of the underlying storage conflict, a successful
+retry saves the retained in-memory values and releases the cache. Uncertain listener releases remain
+separately retryable; a listener error cannot skip persistence, and a save error cannot hide it.
+
+The SEVERE incomplete-shutdown diagnostic identifies affected profiles, original causes, required
+operator intervention and the JVM-exit limitation. ModuleManager catches disable errors, continues
+reverse shutdown and clears its enabled list; it neither schedules nor automatically retries pending
+Player saves. Retention works only while the module object and JVM remain alive. Complete server
+shutdown, forced termination, crash or power loss can still lose unresolved in-memory changes.
+This is not crash-safe storage, an emergency backup format or permission to remove recovery evidence.
+
+Repository validation, schema 1/legacy 0, unknown-field preservation, exact migration backups,
+candidate validation, atomic/fallback recovery and post-commit indexing are unchanged. Settings,
+Economy and Social keep their immediate transaction rules; Reward/Quest keep existing deferred
+flush rules. The Player shutdown fallback runs after its dependent modules in the existing order.
+See [module lifecycle guidance](MODULE_DEVELOPMENT.md) and the
+[Phase 5C evidence](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
+
 ## Add a player profile field
 
 1. Establish the domain owner, validation, missing-value behavior and mutation boundary. Keep a single authoritative value in `CorePlayer` or its existing domain component.
