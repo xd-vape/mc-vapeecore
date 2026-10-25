@@ -10,6 +10,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.logging.Logger;
 
 public final class PlayerListener implements Listener {
@@ -18,6 +19,7 @@ public final class PlayerListener implements Listener {
     private final ConfigService configService;
     private final MessageService messageService;
     private final Logger logger;
+    private final BooleanSupplier active;
 
     public PlayerListener(
             PlayerService playerService,
@@ -25,14 +27,21 @@ public final class PlayerListener implements Listener {
             MessageService messageService,
             Logger logger
     ) {
+        this(playerService, configService, messageService, logger, () -> true);
+    }
+
+    PlayerListener(PlayerService playerService, ConfigService configService,
+                   MessageService messageService, Logger logger, BooleanSupplier active) {
         this.playerService = Objects.requireNonNull(playerService, "playerService");
         this.configService = Objects.requireNonNull(configService, "configService");
         this.messageService = Objects.requireNonNull(messageService, "messageService");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.active = Objects.requireNonNull(active, "active");
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        if (!active.getAsBoolean()) return;
         try {
             playerService.loadPlayer(event.getPlayer().getUniqueId(), event.getPlayer().getName());
         } catch (RuntimeException exception) {
@@ -50,6 +59,7 @@ public final class PlayerListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        if (!active.getAsBoolean()) return;
         try {
             playerService.unloadPlayer(event.getPlayer().getUniqueId());
         } catch (RuntimeException exception) {

@@ -175,3 +175,59 @@ pwsh -File ./scripts/verify.ps1
 ```
 
 Receipts liegen unter `target/verification/reward-lifecycle/`. Ein nativer Neustart muss alle Consumer vorher stoppen und anschließend die Komposition mit aktuellen Services aufbauen; ein isolierter Reward-Neustart unter laufendem OnlineReward/Quest ist kein unterstützter Hot-Swap.
+
+## Player: Lifecycle mit eigenem Aggregate-Cache und Save-Verantwortung
+
+`PlayerModule` besitzt FilePlayerRepository, PlayerService mit geladenen CorePlayer-Aggregaten,
+PlayerSettingsService und genau einen Join-/Quit-Listener. ConfigService und MessageService sind
+geliehen. Repository, PlayerFileSchema und SafeFileWriter behalten Datei-, Schema-, Index- und
+Commit-Ownership. Es gibt weder einen zweiten Cache noch eine eigene Settings-/Notfalldatei.
+
+Der geschützte Start umfasst Storage-Initialisierung, Service-Konstruktion, tatsächliche
+Listener-Registrierung und Runtime-Veröffentlichung. Double-/Reentrant-Enable wird vor Erwerb
+abgewiesen. Getter sind auch während Veröffentlichung noch gesperrt. Ein Registrierungsfehler
+nach seiner Wirkung wird mit derselben Listener-Instanz zurückgenommen; die ursprüngliche
+Startup-Exception bleibt erhalten, weitere Cleanup-Ursachen werden angehängt.
+
+Beim Disable werden zuerst die öffentlichen Runtime-Referenzen und die Event-Autorität der
+exakten Service-Generation entzogen. Listener-Unregister und Profil-Speicherung haben unabhängige
+Fehlergrenzen. Auch wenn Bukkit eine Registrierung nicht freigibt, dürfen alte Join-/Quit-Callbacks
+keine Profile mehr laden, verändern oder entladen. Eine verweigerte Abmeldung wird weiterhin als
+Fehler gemeldet und bleibt für einen ausdrücklichen erneuten `disable()`-Aufruf erhalten.
+
+Anders als Friend/Clan besitzt Player einen noch ungespeicherten Aggregate-Cache. Anders als
+Reward besitzt es die Profile selbst und ist der späte Persistenz-Fallback nach seinen Consumers.
+`saveAll()` behält seinen öffentlichen void-/Log-and-continue-Vertrag. Der package-lokale strikte
+Shutdown-Aufruf versucht ebenfalls jedes Profil, meldet aber unvollständige Saves gesammelt mit
+exakten UUIDs und Originalursachen. Logging-Fehler dürfen spätere Save-Versuche nicht überspringen.
+Erst nach vollständigem Erfolg darf das Modul den Cache leeren.
+
+Bei einem Fehler hält PlayerModule denselben bisherigen PlayerService privat für einen Retry;
+Settings-/Repository-Veröffentlichung bleibt gesperrt. Ein neues `enable()` ist bis zum erfolgreichen
+expliziten `disable()`-Retry blockiert. Erfolgreich gespeicherte Profile sind bereits dauerhaft
+committed und können bei einem Retry nochmals gespeichert werden. Es gibt keine Transaktion über
+alle Spieler. Settings/Social/Economy behalten ihre bisherigen direkten Save-/Rollback-Grenzen;
+Reward/Quest ihre Dirty-/Flush-Verträge. Nicht alle Domain-Schreibvorgänge werden zum Shutdown
+verschoben, und die Reihenfolge der 28 Module sowie sieben Reload-Teilnehmer bleibt unverändert.
+
+**Grenze:** Ein privater In-Memory-Retry ist keine dauerhafte Crash-Recovery. ModuleManager meldet
+Disable-Fehler, fährt mit anderen Modulen fort und leert seine Enabled-Liste; er plant keinen Retry.
+Ein späteres `manager.disableAll()` wiederholt Player daher nicht automatisch. Ein schwerwiegender
+Shutdown-Hinweis nennt betroffene UUIDs, notwendigen Betreibereingriff und den Verlust ungespeicherter
+Änderungen beim JVM-Ende. Bei vollständigem Server-Shutdown, Crash oder Stromausfall kann der nur
+im Speicher gehaltene Stand verloren gehen. Verbraucher müssen vor einem modulweisen Neustart
+beendet und danach mit neuen Services verdrahtet werden; laufender Service-Hot-Swap ist nicht
+zugesichert.
+
+`PlayerModuleLifecycleHarness` prüft diese Grenzen mit dem echten Modul, Services, Listener,
+FilePlayerRepository, realen HandlerLists und Wegwerf-Profilen. Future-Schema-Konflikte und
+vorhandene Recovery-Marker werden niemals automatisch überschrieben oder gelöscht. Zehn
+temporär kompilierte Gegenproben ergänzen die kanonische Prüfung:
+
+```powershell
+pwsh -File ./scripts/tests/player-lifecycle.Tests.ps1
+pwsh -File ./scripts/verify.ps1
+```
+
+Receipts liegen unter `target/verification/player-lifecycle/`. Befunde und nachgewiesene Grenzen
+stehen im [Phase-5C-Bericht](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
