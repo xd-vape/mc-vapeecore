@@ -128,6 +128,7 @@ Geplante Weiterentwicklungen sind Staff-Interaction-/Teleport-Consent-UX und opt
 ## Dokumentation
 
 - [Architecture](docs/ARCHITECTURE.md): Zuständigkeiten, Lifecycle und Standard-Erweiterungspfade
+- [Persistence development](docs/PERSISTENCE_DEVELOPMENT.md): Profil-Felder, Settings-YAML, Schema, Migration, sichere Speicherung und Fehlerprüfungen
 - [Code Style](docs/CODE_STYLE.md): Java-/Package-Konventionen und begrenzter Formatter-Pilot
 - [Settings Development](docs/SETTINGS_DEVELOPMENT.md): Preferences, GUI-Einträge, Persistenz und Erweiterungstests
 - [Configuration Development](docs/CONFIG_DEVELOPMENT.md): Betreiberwerte, Versionierung, sichere Evolution und Reload

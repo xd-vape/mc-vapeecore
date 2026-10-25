@@ -1,12 +1,10 @@
 package dev.vapee.core.player.repository;
 
-import dev.vapee.core.player.settings.VisibilityMode;
 import dev.vapee.core.economy.CoinWallet;
 import dev.vapee.core.onlinereward.OnlineRewardProgress;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.persistence.SafeFileWriter;
 import dev.vapee.core.player.settings.PlayerSettings;
-import dev.vapee.core.player.settings.PlayerVisibilitySettings;
 import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestProgress;
 import dev.vapee.core.quest.PlayerQuestState;
@@ -149,21 +147,7 @@ public final class FilePlayerRepository implements PlayerRepository {
             configuration.set("name", player.getName());
             configuration.set("first-join", player.getFirstJoin().toEpochMilli());
             configuration.set("last-join", player.getLastJoin().toEpochMilli());
-            configuration.set("settings.scoreboard", player.getSettings().isScoreboardEnabled());
-            configuration.set("settings.sounds", player.getSettings().isSoundsEnabled());
-            configuration.set("settings.private-messages", player.getSettings().isPrivateMessagesEnabled());
-            configuration.set("settings.friend-requests", player.getSettings().isFriendRequestsEnabled());
-            configuration.set("settings.friend-presence-notifications",
-                    player.getSettings().isFriendPresenceNotificationsEnabled());
-            configuration.set("settings.lobby-players-visible", player.getSettings().isLobbyPlayersVisible());
-            PlayerVisibilitySettings visibility = player.getSettings().getVisibility();
-            configuration.set("settings.visibility.mode", visibility.getMode().name());
-            configuration.set("settings.visibility.show-friends", visibility.isShowFriends());
-            configuration.set("settings.visibility.show-staff", visibility.isShowStaff());
-            configuration.set("settings.visibility.show-added-users", visibility.isShowAddedUsers());
-            configuration.set("settings.visibility.show-game-participants", visibility.isShowGameParticipants());
-            configuration.set("settings.visibility.added-players", visibility.getAddedPlayers().stream()
-                    .map(UUID::toString).sorted().toList());
+            PlayerSettingsYamlCodec.write(player.getSettings(), configuration);
             configuration.set("economy.coins", player.getWallet().getCoins());
             player.getOnlineRewardProgress().getProcessedPlaytimeTicks().ifPresent(
                     ticks -> configuration.set("rewards.online.processed-playtime-ticks", ticks)
@@ -249,7 +233,7 @@ public final class FilePlayerRepository implements PlayerRepository {
 
         long firstJoinMillis = readEpochMillis(configuration, playerFile, "first-join");
         long lastJoinMillis = readEpochMillis(configuration, playerFile, "last-join");
-        PlayerSettings settings = readSettings(uniqueId, playerFile, configuration, document.root());
+        PlayerSettings settings = PlayerSettingsYamlCodec.read(uniqueId, playerFile, configuration, document.root(), logger);
         CoinWallet wallet = readWallet(playerFile, configuration);
         PlayerSocial social = readSocial(uniqueId, playerFile, configuration);
         OnlineRewardProgress onlineRewardProgress = readOnlineRewardProgress(
@@ -284,125 +268,6 @@ public final class FilePlayerRepository implements PlayerRepository {
             throw invalidPlayerFile(playerFile, "Missing or invalid '" + key + "'");
         }
         return ((Number) value).longValue();
-    }
-
-    private PlayerSettings readSettings(
-            UUID uniqueId,
-            Path playerFile,
-            YamlConfiguration configuration,
-            Map<Object, Object> source
-    ) {
-        PlayerSettings settings = PlayerSettings.defaults();
-        if (!configuration.contains("settings")) {
-            return settings;
-        }
-        if (!configuration.isConfigurationSection("settings")) {
-            logInvalidSetting(uniqueId, playerFile, "settings", "expected a YAML section");
-            return settings;
-        }
-
-        settings.setScoreboardEnabled(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.scoreboard",
-                settings.isScoreboardEnabled()
-        ));
-        settings.setSoundsEnabled(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.sounds",
-                settings.isSoundsEnabled()
-        ));
-        settings.setPrivateMessagesEnabled(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.private-messages",
-                settings.isPrivateMessagesEnabled()
-        ));
-        settings.setFriendRequestsEnabled(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.friend-requests",
-                settings.isFriendRequestsEnabled()
-        ));
-        settings.setFriendPresenceNotificationsEnabled(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.friend-presence-notifications",
-                settings.isFriendPresenceNotificationsEnabled()
-        ));
-        settings.setLobbyPlayersVisible(readBooleanSetting(
-                uniqueId,
-                playerFile,
-                configuration,
-                "settings.lobby-players-visible",
-                settings.isLobbyPlayersVisible()
-        ));
-        boolean modePresent = source.get("settings") instanceof Map<?, ?> rawSettings
-                && rawSettings.get("visibility") instanceof Map<?, ?> rawVisibility && rawVisibility.containsKey("mode");
-        readVisibilitySettings(uniqueId, playerFile, configuration, settings.getVisibility(), modePresent);
-        return settings;
-    }
-
-    private void readVisibilitySettings(UUID owner, Path file, YamlConfiguration configuration,
-                                        PlayerVisibilitySettings visibility, boolean modePresent) {
-        String prefix = "settings.visibility";
-        if (!configuration.contains(prefix)) return;
-        if (!configuration.isConfigurationSection(prefix)) {
-            logInvalidSetting(owner, file, prefix, "expected a YAML section");
-            return;
-        }
-        if (modePresent) {
-            Object raw = configuration.get(prefix + ".mode");
-            try {
-                if (!(raw instanceof String value)) throw new IllegalArgumentException("expected mode string");
-                visibility.setMode(VisibilityMode.valueOf(value));
-            } catch (IllegalArgumentException exception) {
-                logInvalidSetting(owner, file, prefix + ".mode", "expected ALL, FILTERED or HIDDEN; using HIDDEN");
-                visibility.setMode(VisibilityMode.HIDDEN);
-            }
-        }
-        visibility.setShowFriends(readBooleanSetting(owner, file, configuration,
-                prefix + ".show-friends", false));
-        visibility.setShowStaff(readBooleanSetting(owner, file, configuration,
-                prefix + ".show-staff", false));
-        visibility.setShowAddedUsers(readBooleanSetting(owner, file, configuration,
-                prefix + ".show-added-users", false));
-        visibility.setShowGameParticipants(readBooleanSetting(owner, file, configuration,
-                prefix + ".show-game-participants", false));
-        String addedKey = prefix + ".added-players";
-        if (!configuration.contains(addedKey)) return;
-        if (!configuration.isList(addedKey)) {
-            logInvalidSetting(owner, file, addedKey, "expected a list of UUID strings");
-            return;
-        }
-        List<?> entries = configuration.getList(addedKey);
-        if (entries == null) return;
-        for (Object entry : entries) {
-            if (!(entry instanceof String text)) {
-                logInvalidSetting(owner, file, addedKey, "expected a UUID string entry");
-                continue;
-            }
-            try {
-                UUID target = UUID.fromString(text);
-                if (!target.toString().equalsIgnoreCase(text)) {
-                    logInvalidSetting(owner, file, addedKey, "non-canonical UUID entry");
-                    continue;
-                }
-                if (target.equals(owner)) {
-                    logInvalidSetting(owner, file, addedKey, "own UUID is not allowed");
-                    continue;
-                }
-                visibility.addPlayer(owner, target); // Repeated UUIDs are harmlessly deduplicated.
-            } catch (IllegalArgumentException exception) {
-                logInvalidSetting(owner, file, addedKey, "invalid UUID entry");
-            }
-        }
     }
 
     private CoinWallet readWallet(Path playerFile, YamlConfiguration configuration) {
@@ -637,32 +502,6 @@ public final class FilePlayerRepository implements PlayerRepository {
     private void logInvalidDailyState(UUID uniqueId, Path playerFile, String key, String reason) {
         logger.warning("Invalid optional daily quest state '" + key + "' for " + uniqueId + " in "
                 + playerFile + ": " + reason + "; treating DailyQuest as uninitialized.");
-    }
-
-    private boolean readBooleanSetting(
-            UUID uniqueId,
-            Path playerFile,
-            YamlConfiguration configuration,
-            String key,
-            boolean defaultValue
-    ) {
-        if (!configuration.contains(key)) {
-            return defaultValue;
-        }
-
-        Object value = configuration.get(key);
-        if (value instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-
-        logInvalidSetting(uniqueId, playerFile, key, "expected a boolean");
-        return defaultValue;
-    }
-
-    private void logInvalidSetting(UUID uniqueId, Path playerFile, String key, String reason) {
-        logger.warning("Invalid player setting '" + key + "' for " + uniqueId + " in "
-                + playerFile + ": " + reason + "; using its default value."
-        );
     }
 
     private void logInvalidOptionalState(UUID uniqueId, Path playerFile, String key, String reason) {
