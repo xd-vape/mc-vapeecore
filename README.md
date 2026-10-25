@@ -138,3 +138,4 @@ Geplante Weiterentwicklungen sind Staff-Interaction-/Teleport-Consent-UX und opt
 - [Permissions](docs/PERMISSIONS.md): Commands, Berechtigungen und Staff-Verträge
 - [Formatting](docs/FORMATTING.md): Chat, LuckPerms-Meta, Rankfarben und Clan-Templates
 - [Reports](reports/): historische technische Audits und Validierungsnachweise
+- [Module Lifecycle Audit](reports/architecture-modernization/PHASE_05B_MODULE_LIFECYCLE_AUDIT.md): alle 28 Owner, getrennte Risikobefunde und gezielte Reward-Härtung
