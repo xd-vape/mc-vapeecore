@@ -10,6 +10,8 @@ Ein `CoreModule` besitzt die Lifecycle-Integration eines Features: Services erze
 
 ## Dependencies im Composition Root verdrahten
 
+Für direkte Services, typisierte Provider, vorhandene fachliche Capabilities und Callback-Grenzen siehe [SERVICE_DEPENDENCIES.md](SERVICE_DEPENDENCIES.md). Presence zeigt den späten Erwerb mit vier typisierten Providern und weiterhin kompatiblem Modul-Konstruktor.
+
 `VapeeCore.onEnable()` konstruiert und registriert die Module ausdrücklich. Konstruktoren speichern stabile Abhängigkeiten; fremde Runtime-Services werden während `enable()` bezogen. Deren Module müssen vorher starten und bleiben dadurch bis nach dem Consumer-Disable verfügbar. Die konkrete Produktionsliste ist maßgeblich, kein automatisch berechneter Dependency-Graph.
 
 Der Friend-Konstruktor bleibt unverändert:
