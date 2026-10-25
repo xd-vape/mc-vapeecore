@@ -19,6 +19,8 @@ import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.group.GroupManager;
+import net.luckperms.api.track.Track;
+import net.luckperms.api.track.TrackManager;
 import net.luckperms.api.cacheddata.CachedDataManager;
 import net.luckperms.api.cacheddata.CachedMetaData;
 import net.kyori.adventure.text.format.TextColor;
@@ -50,6 +52,8 @@ public final class PresentationFixture implements AutoCloseable {
     public final Map<UUID, String> prefixes = new HashMap<>();
     public final Map<UUID, String> groups = new HashMap<>();
     public final Map<String, String> groupColors = new HashMap<>();
+    public final Map<String, Integer> groupWeights = new HashMap<>();
+    public final Map<String, List<String>> tracks = new HashMap<>();
     public boolean failRankRead;
     public boolean failTaskSchedule;
     public final Board main = new Board();
@@ -122,19 +126,28 @@ public final class PresentationFixture implements AutoCloseable {
         });
         GroupManager groupManager = proxy(GroupManager.class, (method, args) -> {
             String id = (String) args[0];
-            if (!groupColors.containsKey(id)) return null;
+            if (!groupColors.containsKey(id) && !groupWeights.containsKey(id)) return null;
             return proxy(Group.class, (operation, values) -> switch (operation) {
                 case "getName", "getDisplayName" -> id;
-                case "getWeight" -> OptionalInt.empty();
+                case "getWeight" -> groupWeights.containsKey(id) ? OptionalInt.of(groupWeights.get(id)) : OptionalInt.empty();
                 case "getCachedData" -> proxy(CachedDataManager.class, (read, ignored) ->
                         proxy(CachedMetaData.class, (meta, keys) -> meta.equals("getMetaValue")
                                 && keys[0].equals(RankService.COLOR_META_KEY) ? groupColors.get(id) : null));
                 default -> throw new AssertionError(operation);
             });
         });
+        TrackManager trackManager = proxy(TrackManager.class, (method, args) -> {
+            if (!method.equals("getTrack")) throw new AssertionError(method);
+            List<String> ordered = tracks.get(args[0]);
+            return ordered == null ? null : proxy(Track.class, (operation, values) -> {
+                if (!operation.equals("getGroups")) throw new AssertionError(operation);
+                return ordered;
+            });
+        });
         luckPerms = new LuckPermsService(proxy(LuckPerms.class,
                 (method, args) -> method.equals("getUserManager") ? users
-                        : method.equals("getGroupManager") ? groupManager : null));
+                        : method.equals("getGroupManager") ? groupManager
+                        : method.equals("getTrackManager") ? trackManager : null));
         ranks = new RankService(config, luckPerms);
         economy = new EconomyService(players);
         lobby = new LobbyService(plugin, new LobbyConfig(plugin));
@@ -162,6 +175,8 @@ public final class PresentationFixture implements AutoCloseable {
         public boolean online = true;
         public final Set<UUID> hidden = new HashSet<>();
         public int writes, visibilityWrites;
+        public int order, orderWrites;
+        public boolean failOrderWrite;
         public boolean normalizeName, failHeaderWrite;
         public World currentWorld = world;
 
@@ -187,6 +202,13 @@ public final class PresentationFixture implements AutoCloseable {
                 }
                 case "playerListHeader" -> header;
                 case "playerListFooter" -> footer;
+                case "getPlayerListOrder" -> order;
+                case "setPlayerListOrder" -> {
+                    if (failOrderWrite) throw new IllegalStateException("injected order write failure");
+                    int value = (int) args[0];
+                    if (value < 0) throw new IllegalArgumentException("order cannot be negative");
+                    order = value; orderWrites++; yield null;
+                }
                 case "sendPlayerListHeader" -> {
                     if (failHeaderWrite) throw new IllegalStateException("injected external header write failure");
                     header = Objects.requireNonNull((Component) args[0]); writes++; yield null;

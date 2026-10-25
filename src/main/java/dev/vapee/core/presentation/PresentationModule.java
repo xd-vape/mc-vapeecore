@@ -117,7 +117,7 @@ public final class PresentationModule implements CoreModule, ReloadParticipant {
                 playerSettingsService,
                 lobbyService
         );
-        TablistService newTablistService = new TablistService(newPresentationConfig);
+        TablistService newTablistService = new TablistService(newPresentationConfig, rankService);
         PresentationService newPresentationService = new PresentationService(
                 plugin,
                 newPresentationConfig,
