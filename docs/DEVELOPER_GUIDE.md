@@ -1,5 +1,7 @@
 # VapeeCore Developer Guide
 
+Spieler-Persistenz erweitern: [PERSISTENCE_DEVELOPMENT.md](PERSISTENCE_DEVELOPMENT.md) erklärt Settings-Abbildung im package-lokalen `PlayerSettingsYamlCodec`, den vollständigen Profil-Commit, Schema-Ownership, Migration, Recovery und unabhängige Kompatibilitätstests.
+
 Service-Grenzen und spätere Runtime-Verfügbarkeit: [SERVICE_DEPENDENCIES.md](SERVICE_DEPENDENCIES.md) erläutert den Presence-Piloten, einmaligen Erwerb pro Aktivierung, Konstruktor-Kompatibilität und Generationstests.
 
 Modul-Erweiterungen und Lifecycle-Ownership: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) beschreibt den abgesicherten Friend-Piloten, Teilstart-Rollback, Observer-/Command-/GUI-Freigabe und unabhängige Tests. Die Registrierungsreihenfolge bleibt im Composition Root ausdrücklich festgelegt.
@@ -222,7 +224,7 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Navigator visibility / order | `WarpNavigation`, `WarpService`, `/warp show`, `/warp hide`, `/warp order` |
 | Navigator opening / click authorization | `NavigatorAccessPolicy` in LobbyExperience; online + loaded + lobby + NORMAL + no activity |
 | Player visibility policy/runtime | `dev.vapee.core.visibility.VisibilityModule`, `VisibilityPolicy`, `VisibilityService` |
-| Persistent visibility preferences | `PlayerVisibilitySettings`, `PlayerSettingsService`, `FilePlayerRepository` |
+| Persistent visibility preferences | `PlayerVisibilitySettings`, `PlayerSettingsService`, `PlayerSettingsYamlCodec`, `FilePlayerRepository` |
 | Settings menu und Visibility UX | `SettingsMenu`, `dev.vapee.core.settings.visibility`, `SettingsCommand` |
 | Warps | `dev.vapee.core.lobby.warp` |
 | Warp persistence | Live: `plugins/VapeeCore/warps.yml`, Code: `WarpConfig` |
@@ -246,7 +248,7 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | `/profile` und Online-/Offline-Profilansicht | `dev.vapee.core.identity` |
 | `/friend`, Friends-Regeln und zentrale Persistence | `dev.vapee.core.friend`, `friends.yml` |
 | Runtime-Presence und Friend-Join-/Leave-Benachrichtigungen | `dev.vapee.core.presence`, `PresenceModule`, `FriendPresenceNotifier` |
-| Presence-Benachrichtigungen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu.DEFAULT_LAYOUT`, `Action.FRIEND_PRESENCE` (Zustand im Feature-Item; Status optional) |
+| Presence-Benachrichtigungen erlauben/sperren | `PlayerSettingsService`, `PlayerSettingsYamlCodec`, `PlayerFileSchema`, `SettingsMenu.DEFAULT_LAYOUT`, `Action.FRIEND_PRESENCE` (Zustand im Feature-Item; Status optional) |
 | `/clan`, Clan-Regeln und zentrale Persistence | `dev.vapee.core.clan`, `clans.yml` |
 | Moderationshistorie, aktive Mute-/Ban-Abfragen und Widerruf | `dev.vapee.core.moderation.ModerationService`; Domain ohne Bukkit-/Identity-Abhängigkeiten |
 | Moderation Persistence und Schema | `FileModerationRepository`, `plugins/VapeeCore/moderation.yml` |
@@ -254,7 +256,7 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Ban-/Mute-Dauer und UTC-/History-/Notice-/Disconnect-Components | `ModerationDurationParser`, `ModerationComponents` |
 | Login-Ban-Enforcement vor Player-Join | `ModerationLoginListener`, synchroner `PlayerLoginEvent` |
 | Friends-GUI, Inventar-Schutz und Navigation | `dev.vapee.core.friend.gui.FriendMenu`, `FriendMenuHolder`, `FriendMenuListener` |
-| Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `FilePlayerRepository`, `SettingsMenu.DEFAULT_LAYOUT`, `Action.FRIEND_REQUESTS` (Zustand im Feature-Item; Status optional) |
+| Freundschaftsanfragen erlauben/sperren | `PlayerSettingsService`, `PlayerSettingsYamlCodec`, `PlayerFileSchema`, `SettingsMenu.DEFAULT_LAYOUT`, `Action.FRIEND_REQUESTS` (Zustand im Feature-Item; Status optional) |
 | Persönliches Player Menu und Zielspieler-Auswahl | `lobby.experience.player.PlayerMenu.DEFAULT_LAYOUT`, `PlayerMenuListener`, `PlayerSelectionListener`; Auswahl über `PlayerSettingsService` |
 | Friends-Limits | `ConfigService`, `config.yml` → `friends.limits` |
 | Gameplay-Coin-Rewards und gebündelte Persistence | `dev.vapee.core.reward` |
@@ -591,7 +593,7 @@ Der Join-Handler läuft auf `MONITOR`, prüft vor `markOnline` erneut den gelade
 
 `FriendPresenceNotifier` fragt ausschließlich `FriendService#getFriends(subject)` ab; Pending Requests und historische Beziehungen sind damit ausgeschlossen und die vom Service gelieferte UUID-Reihenfolge bleibt erhalten. Pro Empfänger gelten nacheinander: tatsächlicher Paper-Player vorhanden und online, geladenes Setting vorhanden und `true`, kein Ignore in irgendeiner Richtung. Der Name des Subjects kommt direkt aus dem Join-/Quit-Event und wird mit `Component.text` eingesetzt. Die Body-Texte sind exakt `Friend <name> is now online.` und `Friend <name> went offline.`; `MessageService` ergänzt nur den zentralen Prefix. Es wird kein Presence-Sound abgespielt. Ein Friend-Lookup-Fehler wird kontrolliert gewarnt; Lookup-, Settings-, Social- oder Sendefehler eines einzelnen Empfängers enthalten Subject-/Recipient-UUID im Log und lassen alle späteren Empfänger weiterlaufen. Der bereits vollzogene Presence-Übergang wird niemals zurückgerollt.
 
-`PlayerSettings.friendPresenceNotificationsEnabled` ist ein opt-in Boolean mit Default `false`. `FilePlayerRepository` speichert ihn als `settings.friend-presence-notifications`; fehlende Legacy-Keys bleiben `false`, ungültige optionale Werte warnen und fallen auf `false` zurück, ohne Eager-Rewrite. `PlayerSettingsService#areFriendPresenceNotificationsEnabled` liest nur geladene Settings. Der Setter verwendet dieselbe sofortige Ganzprofil-Persistence und denselben exakten Runtime-Rollback wie die übrigen Boolean-Toggles. Im Settings-Root werden das platzierte `Friend Presence`-Icon (`BELL`) und sein optionaler rot/grüner Status an den unabhängig definierten Positionen von `Action.FRIEND_PRESENCE` aus `SettingsMenu.DEFAULT_LAYOUT` gerendert; beide toggeln denselben Wert und behalten alle bestehenden Holder-, Inventory- und Klick-Sicherheitsgrenzen. Weitere Details und Verifikation stehen in `reports/27-notifications-presence/NOTIFICATIONS_PRESENCE.md`.
+`PlayerSettings.friendPresenceNotificationsEnabled` ist ein opt-in Boolean mit Default `false`. `PlayerSettingsYamlCodec` bildet ihn auf `settings.friend-presence-notifications` ab; `FilePlayerRepository` speichert das vollständige Profil; fehlende Legacy-Keys bleiben `false`, ungültige optionale Werte warnen und fallen auf `false` zurück, ohne Eager-Rewrite. `PlayerSettingsService#areFriendPresenceNotificationsEnabled` liest nur geladene Settings. Der Setter verwendet dieselbe sofortige Ganzprofil-Persistence und denselben exakten Runtime-Rollback wie die übrigen Boolean-Toggles. Im Settings-Root werden das platzierte `Friend Presence`-Icon (`BELL`) und sein optionaler rot/grüner Status an den unabhängig definierten Positionen von `Action.FRIEND_PRESENCE` aus `SettingsMenu.DEFAULT_LAYOUT` gerendert; beide toggeln denselben Wert und behalten alle bestehenden Holder-, Inventory- und Klick-Sicherheitsgrenzen. Weitere Details und Verifikation stehen in `reports/27-notifications-presence/NOTIFICATIONS_PRESENCE.md`.
 
 ### Friends-GUI (Phase 18B)
 

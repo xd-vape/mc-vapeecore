@@ -2,6 +2,8 @@
 
 Use this path for player preferences. Operator configuration follows a different lifecycle; see [ARCHITECTURE.md](ARCHITECTURE.md). Follow [CODE_STYLE.md](CODE_STYLE.md) and run `scripts/verify.ps1` before committing.
 
+The storage extension workflow, schema rules and failure checklist are in [PERSISTENCE_DEVELOPMENT.md](PERSISTENCE_DEVELOPMENT.md).
+
 ## Choose the right owner
 
 | Responsibility | Owner |
@@ -10,7 +12,7 @@ Use this path for player preferences. Operator configuration follows a different
 | Visibility mode, filters and selected UUIDs | `PlayerVisibilitySettings`; preserve its specialized result/mode contracts |
 | Reads, mutation, no-op, persistence rollback and commit notification | `PlayerSettingsService` |
 | Loaded profiles and save/unload boundary | `PlayerService` |
-| YAML serialization/deserialization and fallback | `player/repository/FilePlayerRepository` |
+| YAML serialization/deserialization and fallback | Package-local `player/repository/PlayerSettingsYamlCodec`; aggregate commit stays in `FilePlayerRepository` |
 | Owned paths, version checks, preservation and candidate comparison | `PlayerFileSchema` |
 | Atomic replacement / protected fallback | Existing `persistence/SafeFileWriter` |
 | Feature icon, optional status, text, state reader, action and post-save effect | `SettingsMenuEntries` |
@@ -26,7 +28,7 @@ The GUI reads current profile state; it does not own another preference cache, d
 
 1. **Domain:** add the default, field, constructor/default-factory plumbing and accessors to `PlayerSettings`. Choose the absent-key behavior deliberately.
 2. **Service:** add a loaded-profile reader and a setter delegating to the existing Boolean `updateSettings` helper. `false` means unavailable profile; an unchanged value returns `true` without save/event. A save exception restores the old value and propagates. Notify only after persistence succeeds. Independent observer exceptions do not undo the durable commit or stop subsequent observers.
-3. **Persistence:** add the explicit YAML write and read with the domain default in `FilePlayerRepository`, and the owned path in `PlayerFileSchema.OWNED_FIELDS`. These three definitions are intentionally explicit. Preserve old profiles, unknown siblings and unrelated aggregate data. A new optional field does not automatically require a version bump; justify migrations separately. Do not put profile fields into `ConfigEvolution`.
+3. **Persistence:** add the explicit YAML write and read with the domain default in `PlayerSettingsYamlCodec`, and the owned path in `PlayerFileSchema.OWNED_FIELDS`. These three definitions are intentionally explicit; Settings read/write mapping has one maintenance file. `FilePlayerRepository` still commits the complete aggregate. Preserve old profiles, unknown siblings and unrelated aggregate data. A new optional field does not automatically require a version bump; justify migrations separately. Do not put profile fields into `ConfigEvolution`.
 4. **GUI definition:** add the local `SettingsMenu.Action` identity and one definition in `SettingsMenuEntries`. Reuse its `toggle` helper for an ordinary Boolean: material, translated name/hints, current-state reader, service setter and any justified post-save presentation effect. Do not add another listener switch or feature-action allowlist.
 5. **Composition:** optionally place `.setting(Action.YOUR_FEATURE, iconSlot, statusSlot)` in the owning layout. Icon-only uses two arguments. Omitting the placement hides the feature without deleting domain support. Do not duplicate positions in listeners or tests.
 6. **Language:** add the feature's name/hints to both bundled catalogs; use `tr(...)` and literal/safe components. Existing operator overrides remain authoritative. Changing client language rerenders the view without saving preferences.
@@ -50,7 +52,7 @@ Navigation adds no profile field, YAML property or default. The optional root `V
 
 The existing preference is opt-in: `PlayerSettings` defaults it to **false**. `areFriendPresenceNotificationsEnabled(UUID)` reads only loaded profiles; `setFriendPresenceNotificationsEnabled(UUID, boolean)` uses the shared service transaction. The stored key is exactly **`settings.friend-presence-notifications`**.
 
-`FilePlayerRepository` writes the Boolean and reads only actual Boolean values. Missing values use the model default; invalid values warn and use that same default. Reads do not rewrite old files. `PlayerFileSchema` owns this path, preserves unknown siblings, and compares written candidate values against the canonical aggregate before replacement. Existing schema version remains **1**. `SafeFileWriter` first validates a temporary candidate, then attempts atomic replacement; unsupported atomic moves use protected backup/restore. Unresolved restoration blocks further reads/writes until reconciliation. GUI code owns none of that recovery logic.
+`PlayerSettingsYamlCodec` writes the Boolean and reads only actual Boolean values. Missing values use the model default; invalid values warn and use that same default. Reads do not rewrite old files. `FilePlayerRepository` coordinates the aggregate save. `PlayerFileSchema` owns this path, preserves unknown siblings, and compares written candidate values against the canonical aggregate before replacement. Existing schema version remains **1**. `SafeFileWriter` first validates a temporary candidate, then attempts atomic replacement; unsupported atomic moves use protected backup/restore. Unresolved restoration blocks further reads/writes until reconciliation. GUI code owns none of that recovery logic.
 
 The `FRIEND_PRESENCE` definition supplies the bell, translated name/hint, enabled/disabled icon/status and the service callback. Its positions come only from `DEFAULT_LAYOUT`. `FriendPresenceNotifier` reads the recipient's current preference when a real friend presence event is delivered; it also retains online/friend/ignore checks. Toggling a preference does not fabricate a presence event.
 

@@ -39,6 +39,8 @@ Commands und Listener bleiben Adapter. Eine Permission-Prüfung am Einstieg erse
 
 ## State und Persistenz
 
+Praktische Erweiterungs- und Prüfpfade: [PERSISTENCE_DEVELOPMENT.md](PERSISTENCE_DEVELOPMENT.md). `PlayerSettingsYamlCodec` kapselt ausschließlich Settings-/Visibility-Abbildung; `FilePlayerRepository`, `PlayerFileSchema` und `SafeFileWriter` behalten Aggregate-, Schema- und Commit-Ownership.
+
 | State | Eigentümer und Mutation | Persistenz / Commit-Verhalten |
 |---|---|---|
 | Geladene Profile | `PlayerService` verwaltet `CorePlayer` nach UUID, Load/Save/Unload | `PlayerRepository` / `FilePlayerRepository`, Schema in `PlayerFileSchema`; Unload speichert vor Entfernen |
@@ -77,7 +79,7 @@ Es gibt keinen globalen Eventbus. Automatische GUI-Updates verwenden Ereignisse/
 Praktischer Pfad mit Friend-Presence-Beispiel, optionalen Status-Panes und unabhängigen Tests: [SETTINGS_DEVELOPMENT.md](SETTINGS_DEVELOPMENT.md).
 
 1. Fachlichen Default und State in `player/settings/PlayerSettings` definieren; Visibility-Unteroptionen gehören zu `PlayerVisibilitySettings`.
-2. Profil-Parsing, Legacy-Default und Serialisierung in `FilePlayerRepository` prüfen; Schemaänderungen mit `PlayerFileSchema` abstimmen. Es gibt keine separate Settings-Datei als konkurrierende Authority.
+2. Settings-Parsing, Legacy-Default und Serialisierung in `PlayerSettingsYamlCodec` prüfen; Schemaänderungen mit `PlayerFileSchema` abstimmen. `FilePlayerRepository` speichert weiterhin das vollständige Profil. Es gibt keine separate Settings-Datei als konkurrierende Authority.
 3. Zugriff und Mutation in `PlayerSettingsService`: vorherigen Wert sichern, speichern, bei Fehler zurücknehmen, erst danach Change-Observer informieren.
 4. Sichtbare Einstellung über `SettingsMenuEntry` / `SettingsMenuEntries`, `SettingsMenu.Action` und das owning `DEFAULT_LAYOUT` ergänzen. Der vorhandene Listener delegiert an den Service; neue fachliche Aktionen benötigen tatsächlich einen Dispatch-Pfad. Verhalten wie Sidebar/Sound bleibt beim jeweiligen Besitzer.
 5. Texte an derselben Feature-Stelle in `src/main/resources/lang/en.yml` und `de.yml` ergänzen; `Translations.tr` mit sicheren Component-Platzhaltern verwenden.
