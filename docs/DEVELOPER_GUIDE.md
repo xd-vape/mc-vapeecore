@@ -4,7 +4,7 @@ Spieler-Persistenz erweitern: [PERSISTENCE_DEVELOPMENT.md](PERSISTENCE_DEVELOPME
 
 Service-Grenzen und spätere Runtime-Verfügbarkeit: [SERVICE_DEPENDENCIES.md](SERVICE_DEPENDENCIES.md) erläutert den Presence-Piloten, einmaligen Erwerb pro Aktivierung, Konstruktor-Kompatibilität und Generationstests.
 
-Modul-Erweiterungen und Lifecycle-Ownership: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) beschreibt den abgesicherten Friend-Piloten, Teilstart-Rollback, Observer-/Command-/GUI-Freigabe und unabhängige Tests. Die Registrierungsreihenfolge bleibt im Composition Root ausdrücklich festgelegt.
+Modul-Erweiterungen und Lifecycle-Ownership: [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) beschreibt die abgesicherten Friend-/Clan-Beispiele, Teilstart-Rollback, Observer-/Command-/GUI-Freigabe und unabhängige Tests. Clan bietet zusätzlich einen Retry für verweigerte Freigaben und schützt fremde Ersatz-Command-Bindungen. Die Registrierungsreihenfolge bleibt im Composition Root ausdrücklich festgelegt.
 
 Diese Datei ist die praktische Landkarte für Änderungen an VapeeCore. Der aktuelle Zielserver ist Paper 1.21.11 mit Java 21 und LuckPerms 5.5.x; gebaut wird mit Maven. Die Main Class ist `dev.vapee.core.VapeeCore`, das Base Package ist `dev.vapee.core`.
 

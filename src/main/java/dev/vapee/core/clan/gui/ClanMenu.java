@@ -32,6 +32,8 @@ public final class ClanMenu {
 
     private final dev.vapee.core.clan.ClanChangeListener committedChanges = affected -> affected.forEach(this::refreshActive);
     private boolean observingChanges;
+    private boolean localeSubscriptionPending;
+    private boolean clanSubscriptionPending;
 
     private Inventory rerenderInventory;
 
@@ -323,14 +325,63 @@ public final class ClanMenu {
     }
 
     public void startUpdates() {
-        messages.localization().addLocaleListener(localeChanges);
-        if (!observingChanges) { clans.addChangeListener(committedChanges); observingChanges = true; }
+        if (observingChanges) return;
+        try {
+            // A previous removal may have been refused; reconcile it before any new add.
+            if (localeSubscriptionPending || clanSubscriptionPending) stopUpdates();
+            localeSubscriptionPending = true;
+            messages.localization().addLocaleListener(localeChanges);
+            clanSubscriptionPending = true;
+            clans.addChangeListener(committedChanges);
+            observingChanges = true;
+        } catch (RuntimeException exception) {
+            try { shutdown(); }
+            catch (RuntimeException cleanupFailure) {
+                if (cleanupFailure != exception) exception.addSuppressed(cleanupFailure);
+            }
+            throw exception;
+        }
     }
     public void stopUpdates() {
-        messages.localization().removeLocaleListener(localeChanges);
-        if (observingChanges) { clans.removeChangeListener(committedChanges); observingChanges = false; }
+        observingChanges = false;
+        RuntimeException failure = null;
+        // Mark before add; only a successful remove proves that an uncertain subscription is gone.
+        if (localeSubscriptionPending) {
+            try {
+                messages.localization().removeLocaleListener(localeChanges);
+                localeSubscriptionPending = false;
+            } catch (RuntimeException exception) {
+                failure = new IllegalStateException("Could not remove ClanMenu locale observer", exception);
+            }
+        }
+        if (clanSubscriptionPending) {
+            try {
+                clans.removeChangeListener(committedChanges);
+                clanSubscriptionPending = false;
+            } catch (RuntimeException exception) {
+                RuntimeException changeFailure = new IllegalStateException("Could not remove ClanMenu change observer", exception);
+                if (failure == null) failure = changeFailure;
+                else failure.addSuppressed(changeFailure);
+            }
+        }
+        if (failure != null) throw failure;
     }
-    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+    public void shutdown() {
+        RuntimeException failure = null;
+        try { stopUpdates(); }
+        catch (RuntimeException exception) { failure = exception; }
+        try { closeOpenInventories(); }
+        catch (RuntimeException exception) {
+            if (failure == null) failure = exception;
+            else if (failure != exception) failure.addSuppressed(exception);
+        } finally {
+            rerenderInventory = null;
+            renderingFor = null;
+            presenceTarget = null;
+            presenceOnline = false;
+        }
+        if (failure != null) throw failure;
+    }
 
     public void targetPresenceChanged(UUID target, boolean online) {
         presenceTarget = target; presenceOnline = online;
