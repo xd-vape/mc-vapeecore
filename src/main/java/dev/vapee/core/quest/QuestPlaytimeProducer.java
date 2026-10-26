@@ -20,36 +20,52 @@ public final class QuestPlaytimeProducer {
     private final BiConsumer<UUID, Long> progress;
     private final Logger logger;
     private final Map<UUID, Long> samples = new HashMap<>();
+    private final java.util.function.BooleanSupplier authorized;
 
     public QuestPlaytimeProducer(PlayerService players, QuestProgressReporter reporter, Logger logger) {
+        this(players, reporter, logger, () -> true);
+    }
+
+    QuestPlaytimeProducer(PlayerService players, QuestProgressReporter reporter, Logger logger,
+                          java.util.function.BooleanSupplier authorized) {
         this(id -> players.getPlayer(id).isPresent(),
-                (id, minutes) -> reporter.report(id, KEY, minutes), logger);
+                (id, minutes) -> reporter.report(id, KEY, minutes), logger, authorized);
         Objects.requireNonNull(players, "players");
         Objects.requireNonNull(reporter, "reporter");
     }
 
     QuestPlaytimeProducer(Predicate<UUID> loaded, BiConsumer<UUID, Long> progress, Logger logger) {
+        this(loaded, progress, logger, () -> true);
+    }
+
+    private QuestPlaytimeProducer(Predicate<UUID> loaded, BiConsumer<UUID, Long> progress, Logger logger,
+                                  java.util.function.BooleanSupplier authorized) {
         this.loaded = Objects.requireNonNull(loaded, "loaded");
         this.progress = Objects.requireNonNull(progress, "progress");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.authorized = Objects.requireNonNull(authorized, "authorized");
     }
 
     public void seed(Player player) {
+        if (!authorized.getAsBoolean()) return;
         UUID id = player.getUniqueId();
-        if (!player.isOnline() || !loaded.test(id)) return;
+        if (!authorized.getAsBoolean() || !player.isOnline() || !loaded.test(id)) return;
+        if (!authorized.getAsBoolean()) return;
         seed(id, player.getStatistic(Statistic.PLAY_ONE_MINUTE));
     }
 
     void seed(UUID id, long ticks) {
-        if (loaded.test(id)) samples.put(id, Math.max(0L, ticks));
+        if (authorized.getAsBoolean() && loaded.test(id)) samples.put(id, Math.max(0L, ticks));
     }
 
     public void sample(Player player) {
+        if (!authorized.getAsBoolean()) return;
         UUID id = player.getUniqueId();
-        if (loaded.test(id)) sample(id, player.getStatistic(Statistic.PLAY_ONE_MINUTE));
+        if (authorized.getAsBoolean() && loaded.test(id)) sample(id, player.getStatistic(Statistic.PLAY_ONE_MINUTE));
     }
 
     void sample(UUID id, long ticks) {
+        if (!authorized.getAsBoolean()) return;
         Objects.requireNonNull(id, "id");
         if (!loaded.test(id)) return;
         long current = Math.max(0L, ticks);

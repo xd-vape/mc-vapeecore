@@ -58,6 +58,17 @@ flush rules. The Player shutdown fallback runs after its dependent modules in th
 See [module lifecycle guidance](MODULE_DEVELOPMENT.md) and the
 [Phase 5C evidence](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
 
+### Quest shutdown flush and the original aggregate
+
+Quest's public log-and-continue flush is not evidence that every dirty profile committed. Its
+package-local strict lifecycle flush attempts each UUID independently and reports original causes;
+failed saves keep Quest dirty tracking. Incomplete cleanup privately retains the original QuestService
+and its borrowed PlayerService, with inactive getters, for an explicit same-process disable retry.
+It never reconstructs unsaved progress from older disk or clears RewardService tracking. PlayerModule
+still saves the same aggregate later; only a successful save-before-eviction/cache release establishes
+that handoff. If both owners fail, their retained memory is not durable and JVM exit can lose it.
+See [Quest lifecycle and flush guidance](MODULE_DEVELOPMENT.md#quest-lifecycle-und-flush-sicherheit).
+
 ## Add a player profile field
 
 1. Establish the domain owner, validation, missing-value behavior and mutation boundary. Keep a single authoritative value in `CorePlayer` or its existing domain component.

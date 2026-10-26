@@ -176,22 +176,15 @@ public final class QuestLifecycleHarness {
                 "QuestListener delegates one controlled quit save before player unload");
     }
 
-    private static void testTaskAndShutdownStructure() throws IOException {
+    private static void testTaskAndShutdownStructure() throws Exception {
         String moduleSource = normalizeLineEndings(Files.readString(
                 Path.of("src/main/java/dev/vapee/core/quest/QuestModule.java")
         ));
         check(count(moduleSource, "runTaskTimer(") == 1,
                 "QuestModule owns exactly one shared scheduler task and no task per player");
-        check(moduleSource.contains("this::flushSafely")
-                        && moduleSource.contains("QUEST_FLUSH_INTERVAL_TICKS,\n                    QUEST_FLUSH_INTERVAL_TICKS"),
-                "shared task uses the central one-hundred-tick delay and period");
-
-        int cancel = moduleSource.indexOf("flushTask.cancel()");
-        int flush = moduleSource.indexOf("flushSafely();", cancel);
-        int unregister = moduleSource.indexOf("HandlerList.unregisterAll(questListener)", flush);
-        int clear = moduleSource.indexOf("questService.clearDirtyTracking()", unregister);
-        check(cancel >= 0 && cancel < flush && flush < unregister && unregister < clear,
-                "Quest shutdown cancels task, flushes, unregisters, then clears runtime state");
+        // Actual cadence, final sampling/silencing, persistence and independent failed-cancel cleanup.
+        QuestModuleLifecycleHarness.assertTaskAndShutdownLifecycle();
+        checks += 2;
         check(moduleSource.contains("public QuestService getQuestService()")
                         && moduleSource.contains("public QuestDefinitionRegistry getDefinitionRegistry()"),
                 "QuestModule exposes its service and future definition registration boundary");
