@@ -15,7 +15,7 @@ public final class OnlineRewardLifecycleHarness {
     private OnlineRewardLifecycleHarness() {
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         testModuleBoundaryAndOrder();
         testTaskAndShutdownStructure();
         testFeatureBoundaries();
@@ -62,15 +62,16 @@ public final class OnlineRewardLifecycleHarness {
                 "reload keeps OnlineReward outside the seven participants");
     }
 
-    private static void testTaskAndShutdownStructure() throws IOException {
+    private static void testTaskAndShutdownStructure() throws Exception {
         String moduleSource = normalizeLineEndings(Files.readString(
                 Path.of("src/main/java/dev/vapee/core/onlinereward/OnlineRewardModule.java")
         ));
         check(count(moduleSource, "runTaskTimer(") == 1,
                 "OnlineRewardModule owns exactly one shared scheduler task");
-        check(moduleSource.contains("this::processOnlinePlayers")
-                        && moduleSource.contains("PROCESS_INTERVAL_TICKS,\n                    PROCESS_INTERVAL_TICKS"),
-                "shared task uses the central twenty-tick delay and period");
+        // Replaces callback spelling and cancel-before-clear source assertions with real effects:
+        // twenty-tick cadence, revoke-before-cancel, release, transition getters and stale callbacks.
+        OnlineRewardModuleLifecycleHarness.assertTaskLifecycle();
+        checks += 2;
         check(moduleSource.contains("getOnlinePlayers()"),
                 "shared task iterates the server online-player collection");
         check(moduleSource.contains("getStatistic(Statistic.PLAY_ONE_MINUTE)"),
@@ -79,12 +80,6 @@ public final class OnlineRewardLifecycleHarness {
                         && moduleSource.contains("continuing with other online players"),
                 "unexpected per-player failures cannot cancel processing for other players");
 
-        int cancel = moduleSource.indexOf("processingTask.cancel()");
-        int clearTask = moduleSource.indexOf("processingTask = null", cancel);
-        int clearRenderer = moduleSource.indexOf("messageRenderer = null", clearTask);
-        int clearService = moduleSource.indexOf("onlineRewardService = null", clearRenderer);
-        check(cancel >= 0 && cancel < clearTask && clearTask < clearRenderer && clearRenderer < clearService,
-                "shutdown cancels processing before clearing runtime references");
         check(!moduleSource.contains("Listener") && !moduleSource.contains("savePlayer("),
                 "OnlineReward owns neither a quit listener nor a duplicate persistence write");
     }

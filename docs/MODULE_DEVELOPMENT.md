@@ -231,3 +231,58 @@ pwsh -File ./scripts/verify.ps1
 
 Receipts liegen unter `target/verification/player-lifecycle/`. Befunde und nachgewiesene Grenzen
 stehen im [Phase-5C-Bericht](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
+
+## OnlineReward: ein Task mit exakter Service-Generation
+
+`OnlineRewardModule` besitzt genau einen OnlineRewardService, einen MessageRenderer und einen
+synchronen Bukkit-Verarbeitungstask mit 20 Ticks Verzögerung und Periode. PlayerService,
+RewardService, ConfigService und MessageService sind geliehen. Das Modul besitzt weder einen
+weiteren Profil-Cache noch Repository, Quit-Listener, Command, Menü oder Reward-Flush-Task.
+
+Enable weist aktive, reentrante und während Cleanup eintreffende Aufrufe vor dem Erwerb ab.
+Dependency-Erwerb, lokale Service-/Renderer-Konstruktion, Task-Anmeldung und finales Logging
+liegen in derselben Fehlergrenze. Erst danach werden Runtime und aktiver Getter freigegeben.
+Bei einem Fehler bleibt dasselbe Exception-Objekt primär; Cancellation-/Statusfehler werden
+mit Kontext als suppressed Ursachen angehängt. Die fehlgeschlagene Runtime verarbeitet nichts.
+
+Der Callback erfasst seinen eigenen Service und Renderer. Er darf nur arbeiten, solange `active`
+gesetzt ist und der veröffentlichte Service exakt dieser Instanz entspricht. Diese Prüfung gilt
+auch nach dem externen Statistikzugriff und vor Benachrichtigungen. Alte Tasks erhalten beim
+Re-enable keine Autorität über die neue Generation. Das bleibt das vorhandene Main-Thread-Modell,
+keine asynchrone Verarbeitung und kein zweiter Scheduler.
+
+Disable sperrt zuerst Getter und Callback-Autorität und gibt die veröffentlichten Referenzen
+frei. Anschließend wird ausschließlich das eigene Task-Handle abgebrochen und `isCancelled()`
+geprüft. Auch eine Cancellation, die erst wirkt und danach wirft, bleibt als Fehler sichtbar;
+bestätigte Freigabe benötigt aber keinen Retry. Bei verweigerter oder nicht verifizierbarer
+Cancellation bleibt nur das genaue Task-Handle als `pendingCancellation` erhalten. Der verbliebene
+Callback ist inert. Ein weiteres Disable oder Enable versucht diese Freigabe erneut; vor einem
+erfolgreichen Abschluss wird kein neuer Task erworben. Wiederholtes erfolgreiches Disable ist still.
+
+Eine Scheduler-Implementierung, die einen Task registriert und **vor Rückgabe des Handles** wirft,
+liefert dem Modul keine exakt bekannte Ressource für Cancellation. Der erfasste Callback bleibt
+auch dann inaktiv. Das Modul verwendet ausdrücklich kein `cancelTasks(plugin)`, weil dies fremde
+Tasks desselben Plugins betreffen würde. Dieser kontrolliert reproduzierte Außenstellenfehler ist
+keine Zusage vollständiger Freigabe ohne Handle. Native Paper-Akzeptanz prüft den normalen Pfad.
+
+OnlineReward-Disable grantet, speichert und flusht nichts. Wallet und OnlineRewardProgress bleiben
+im bestehenden CorePlayer-Aggregat. RewardModule besitzt Dirty-UUIDs, Quit-/Batch-Flush und seinen
+Shutdown-Flush; PlayerModule besitzt die Profile und den späteren Aggregate-Save. Rückwärts stoppt
+OnlineReward vor Reward vor Player, nachdem Quest/DailyQuest beendet wurden. Consumer müssen vor
+einem vollständigen Neustart beendet und mit den neuen Services verdrahtet werden. Bewusst extern
+gehaltene alte Java-Service-Referenzen werden nicht widerrufen. Crash oder fehlgeschlagene Saves
+besitzen weiterhin keine allgemeine Exactly-once-/Mehrdatei-Transaktion.
+
+`OnlineRewardModuleLifecycleHarness` prüft die echten Module/Services mit ausführbaren Scheduler-
+Callbacks, Before-/After-effect-Cancellation, Startup-Logging, Generationen und temporären echten
+Spielerdateien. Die vorhandene OnlineRewardLifecycleHarness behält Cadence, Modulreihenfolge und
+Spieler-Isolation; nur zwei Schreibweisen-Assertions verwenden jetzt diesen Verhaltensnachweis.
+Zehn kompilierte Gegenproben laufen separat:
+
+```powershell
+pwsh -File ./scripts/tests/online-reward-lifecycle.Tests.ps1
+pwsh -File ./scripts/verify.ps1
+```
+
+Receipts: `target/verification/online-reward-lifecycle/`. Reproduktionen, Grenzen und native
+Akzeptanz stehen im [Phase-5E-Bericht](../reports/architecture-modernization/PHASE_05E_ONLINE_REWARD_LIFECYCLE.md).
