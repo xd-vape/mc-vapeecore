@@ -31,8 +31,17 @@ import java.util.logging.Logger;
 
 /** Read-only quest view with a scoped presentation-only reset clock. */
 public final class DailyQuestMenu {
-    private final dev.vapee.core.quest.QuestChangeListener committedChanges = this::refreshActive;
+    private dev.vapee.core.quest.QuestChangeListener committedChanges;
     private boolean observingChanges;
+    private boolean localeSubscriptionPending;
+    private boolean questSubscriptionPending;
+    private boolean changingUpdates;
+    private boolean retired;
+    private boolean closingViews;
+    private Object activation = new Object();
+    private Object observerActivation;
+    private Object countdownActivation;
+    private java.util.function.BooleanSupplier authorized = () -> true;
 
     private Inventory rerenderInventory;
 
@@ -103,7 +112,7 @@ public final class DailyQuestMenu {
     private final InventoryFactory inventories;
     private final ItemRenderer items;
     private Player renderingFor;
-    private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
+    private java.util.function.Consumer<Player> localeChanges;
     private final Logger logger;
     private final Map<UUID, Inventory> active = new HashMap<>();
     private final Function<Instant, Instant> nextReset;
@@ -116,13 +125,20 @@ public final class DailyQuestMenu {
 
     public DailyQuestMenu(JavaPlugin plugin, DailyQuestService daily, QuestService quests,
                           PlayerService players, MessageService messages) {
+        this(plugin, daily, quests, players, messages, () -> true);
+    }
+
+    public DailyQuestMenu(JavaPlugin plugin, DailyQuestService daily, QuestService quests,
+                          PlayerService players, MessageService messages,
+                          java.util.function.BooleanSupplier authorized) {
         this(id -> daily.syncPlayer(id, Instant.now()), quests, players, messages, plugin.getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
                 UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT, daily::nextReset, Instant::now,
                 update -> {
                     var task = plugin.getServer().getScheduler().runTaskTimer(plugin, update, 20L, 20L);
-                    return task::cancel;
+                    return new TaskCancellation(task);
                 });
+        this.authorized = Objects.requireNonNull(authorized, "authorized");
     }
 
     DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
@@ -148,6 +164,8 @@ public final class DailyQuestMenu {
 
     public void open(Player player, int requestedPage) {
         Objects.requireNonNull(player, "player");
+        if (!isAvailable()) return;
+        Object opening = activation;
         if (!player.hasPermission(PERMISSION)) {
             deny(player, tr("daily-quests.denied"));
             return;
@@ -177,7 +195,7 @@ public final class DailyQuestMenu {
                     tr("daily-quests.previous-pending").color(NamedTextColor.YELLOW));
             case CURRENT, INITIALIZED, ROTATED -> { }
         }
-        if (!canUse(player)) return;
+        if (opening != activation || !isAvailable() || !canUse(player)) return;
         Player previousViewer = renderingFor; renderingFor = player;
         try {
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
@@ -213,43 +231,60 @@ public final class DailyQuestMenu {
         DailyQuestInventoryHolder renderedHolder = holder;
         layout.actionSlot(Action.RESET_INFO).ifPresent(slot -> renderedHolder.recordAction(slot, Action.RESET_INFO));
         holder.finishRender();
+        if (opening != activation || !isAvailable()) return;
         var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
-                && player.getOpenInventory().getTopInventory() == inventory && canUse(player)) {
+                && player.getOpenInventory().getTopInventory() == inventory && canUse(player)
+                && opening == activation && isAvailable()) {
             active.put(player.getUniqueId(), inventory);
             ensureCountdownTask();
         }
-        } finally { renderingFor = previousViewer; }
+        } finally { renderingFor = opening == activation && isAvailable() ? previousViewer : null; }
     }
 
     public boolean isActive(Player player, Inventory inventory, DailyQuestInventoryHolder holder) {
-        return player != null && inventory != null && holder != null
+        return isAvailable() && player != null && inventory != null && holder != null
                 && holder.owner().equals(player.getUniqueId()) && inventory.getHolder() == holder
                 && holder.isBoundTo(inventory) && active.get(player.getUniqueId()) == inventory
                 && player.getOpenInventory().getTopInventory() == inventory;
     }
 
     boolean canUse(Player player) {
-        return player.isOnline() && player.hasPermission(PERMISSION)
+        return isAvailable() && player.isOnline() && player.hasPermission(PERMISSION)
                 && players.getPlayer(player.getUniqueId()).isPresent();
     }
+
+    public boolean isAvailable() { return !retired && !closingViews && authorized.getAsBoolean(); }
 
     void forgetIfActive(UUID owner, Inventory inventory) { active.remove(owner, inventory); stopCountdownIfEmpty(); }
     void forget(UUID owner) { active.remove(owner); stopCountdownIfEmpty(); }
     int activeCount() { return active.size(); }
 
     public void closeOpenInventories() {
+        if (closingViews) return;
+        closingViews = true;
+        RuntimeException failure = new IllegalStateException("DailyQuest view cleanup failed; views detached");
         try {
-            for (var entry : List.copyOf(active.entrySet())) {
+            var views = List.copyOf(active.entrySet());
+            active.clear(); // Reentrant close callbacks never see an authoritative old view.
+            for (var entry : views) {
                 try {
                     Player player = onlinePlayer.apply(entry.getKey());
                     if (player != null && player.isOnline()
                             && player.getOpenInventory().getTopInventory() == entry.getValue()) player.closeInventory();
                 } catch (RuntimeException exception) {
-                    logger.log(Level.WARNING, "Could not close daily quest menu for " + entry.getKey(), exception);
+                    try { logger.log(Level.WARNING, "Could not close daily quest menu for " + entry.getKey(), exception); }
+                    catch (RuntimeException diagnostic) { failure.addSuppressed(diagnostic); }
                 }
             }
-        } finally { active.clear(); stopCountdownIfEmpty(); }
+        } finally {
+            renderingFor = null;
+            rerenderInventory = null;
+            try { cancelCountdown(); }
+            catch (RuntimeException exception) { failure.addSuppressed(exception); }
+            closingViews = false;
+        }
+        if (failure.getSuppressed().length != 0) throw failure;
     }
 
     private void deny(Player player, Component reason) {
@@ -295,6 +330,7 @@ public final class DailyQuestMenu {
     }
 
     public void refreshActive(UUID owner) {
+        if (!isAvailable()) return;
         Inventory inventory = active.get(owner);
         if (inventory == null || rerenderInventory != null) return;
         Player player = onlinePlayer.apply(owner);
@@ -312,16 +348,65 @@ public final class DailyQuestMenu {
     }
 
     public void startUpdates() {
-        messages.localization().addLocaleListener(localeChanges);
-        if (!observingChanges) { quests.addChangeListener(committedChanges); observingChanges = true; }
-        ensureCountdownTask();
+        if (changingUpdates) throw new IllegalStateException("DailyQuest menu updates are changing lifecycle");
+        if (observingChanges) return;
+        if (hasPendingCleanup()) stopUpdates();
+        changingUpdates = true;
+        Object started = new Object();
+        activation = started;
+        retired = false;
+        observerActivation = started;
+        localeChanges = viewer -> { if (observes(started)) refreshActive(viewer.getUniqueId()); };
+        committedChanges = owner -> { if (observes(started)) refreshActive(owner); };
+        try {
+            localeSubscriptionPending = true;
+            messages.localization().addLocaleListener(localeChanges);
+            questSubscriptionPending = true;
+            quests.addChangeListener(committedChanges);
+            observingChanges = true;
+            ensureCountdownTask();
+        } catch (RuntimeException exception) {
+            try { shutdown(); }
+            catch (RuntimeException cleanup) { if (cleanup != exception) exception.addSuppressed(cleanup); }
+            throw exception;
+        } finally { changingUpdates = false; }
     }
     public void stopUpdates() {
-        cancelCountdown();
-        messages.localization().removeLocaleListener(localeChanges);
-        if (observingChanges) { quests.removeChangeListener(committedChanges); observingChanges = false; }
+        retired = true;
+        activation = new Object();
+        observerActivation = null;
+        observingChanges = false;
+        RuntimeException failure = new IllegalStateException("DailyQuest menu update cleanup failed");
+        try { cancelCountdown(); }
+        catch (RuntimeException exception) { failure.addSuppressed(exception); }
+        if (localeSubscriptionPending) {
+            try { messages.localization().removeLocaleListener(localeChanges); localeSubscriptionPending = false; }
+            catch (RuntimeException exception) { failure.addSuppressed(new IllegalStateException("DailyQuest locale unsubscribe", exception)); }
+        }
+        if (questSubscriptionPending) {
+            try { quests.removeChangeListener(committedChanges); questSubscriptionPending = false; }
+            catch (RuntimeException exception) { failure.addSuppressed(new IllegalStateException("DailyQuest quest unsubscribe", exception)); }
+        }
+        if (failure.getSuppressed().length != 0) throw failure;
     }
-    public void shutdown() { stopUpdates(); closeOpenInventories(); }
+    public void shutdown() {
+        RuntimeException failure = null;
+        try { stopUpdates(); } catch (RuntimeException exception) { failure = exception; }
+        try { closeOpenInventories(); }
+        catch (RuntimeException exception) {
+            if (failure == null) failure = exception;
+            else if (failure != exception) failure.addSuppressed(exception);
+        }
+        if (failure != null) throw failure;
+    }
+
+    public boolean hasPendingCleanup() {
+        return localeSubscriptionPending || questSubscriptionPending || cancelCountdown != null;
+    }
+
+    private boolean observes(Object started) {
+        return observingChanges && observerActivation == started && isAvailable();
+    }
 
     private void renderResetClock(Player player, Inventory inventory, Instant instant) {
         layout.actionSlot(Action.RESET_INFO).ifPresent(slot -> {
@@ -338,19 +423,51 @@ public final class DailyQuestMenu {
     }
 
     private void ensureCountdownTask() {
-        if (observingChanges && cancelCountdown == null && !active.isEmpty()
-                && layout.actionSlot(Action.RESET_INFO).isPresent())
-            cancelCountdown = countdownScheduler.repeat(this::updateCountdowns);
+        if (!observingChanges || !isAvailable() || active.isEmpty()
+                || layout.actionSlot(Action.RESET_INFO).isEmpty()) return;
+        if (cancelCountdown != null) {
+            if (countdownActivation == null) throw new IllegalStateException("DailyQuest countdown cancellation requires retry");
+            return;
+        }
+        Object started = new Object();
+        countdownActivation = started;
+        try {
+            cancelCountdown = Objects.requireNonNull(countdownScheduler.repeat(() -> {
+                if (countdownActivation == started && isAvailable()) updateCountdowns();
+            }), "DailyQuest countdown scheduler returned no cancellation handle");
+        } catch (RuntimeException exception) { countdownActivation = null; throw exception; }
     }
 
     private void stopCountdownIfEmpty() { if (active.isEmpty()) cancelCountdown(); }
     private void cancelCountdown() {
-        if (cancelCountdown != null) { Runnable cancel = cancelCountdown; cancelCountdown = null; cancel.run(); }
+        countdownActivation = null;
+        if (cancelCountdown == null) return;
+        Runnable cancel = cancelCountdown;
+        RuntimeException failure = null;
+        boolean completed = false;
+        try { cancel.run(); completed = true; }
+        catch (RuntimeException exception) { failure = exception; }
+        if (cancel instanceof TaskCancellation nativeCancellation) {
+            try { completed = nativeCancellation.task.isCancelled(); }
+            catch (RuntimeException exception) {
+                completed = false;
+                if (failure == null) failure = exception; else failure.addSuppressed(exception);
+            }
+        }
+        if (completed) cancelCountdown = null;
+        else if (failure == null) failure = new IllegalStateException("DailyQuest countdown cancellation was not confirmed");
+        if (failure != null) throw failure;
+    }
+
+    private static final class TaskCancellation implements Runnable {
+        private final org.bukkit.scheduler.BukkitTask task;
+        private TaskCancellation(org.bukkit.scheduler.BukkitTask task) { this.task = task; }
+        @Override public void run() { task.cancel(); }
     }
 
     /** Iterates only registered open views; never syncs quests or persists player state. */
     private void updateCountdowns() {
-        if (!observingChanges) return;
+        if (!observingChanges || !isAvailable()) return;
         Instant instant = now.get();
         for (var entry : List.copyOf(active.entrySet())) {
             UUID owner = entry.getKey(); Inventory inventory = entry.getValue();
@@ -366,7 +483,8 @@ public final class DailyQuestMenu {
                 renderResetClock(player, inventory, instant);
             } catch (RuntimeException exception) {
                 forgetIfActive(owner, inventory);
-                logger.log(Level.WARNING, "Could not update daily reset clock for " + owner, exception);
+                try { logger.log(Level.WARNING, "Could not update daily reset clock for " + owner, exception); }
+                catch (RuntimeException diagnostic) { exception.addSuppressed(diagnostic); }
             }
         }
         stopCountdownIfEmpty();

@@ -362,3 +362,77 @@ pwsh -File ./scripts/verify.ps1
 Neue Testquellen werden mit Google Java Format 1.22.0/AOSP formatiert; die sechs Datei-Pilot-Allowlist
 bleibt unverändert. Receipts: `target/verification/quest-lifecycle/`. Reproduktionen, native Grenzen
 und Ergebnisse: [Phase-5F-Bericht](../reports/architecture-modernization/PHASE_05F_QUEST_LIFECYCLE.md).
+
+## DailyQuest: Lifecycle, Observer und zwei Tasks
+
+`DailyQuestModule` besitzt Config/Service, zwei Listener, die eigenen Executor-/Completer-Bindungen
+auf `/quests`, die Kataloginstallation beim Start und einen synchronen 1200-Tick-Sync. PlayerService,
+QuestService samt Dirty-Tracking, QuestDefinitionRegistry und MessageService/Localization sind
+geliehen. DailyQuest speichert keine Profile, leert keine Quest-Marker und deaktiviert keine Owner.
+Die 28 Module starten ausdrücklich wie bisher; rückwärts stoppt DailyQuest vor Quest/Reward/Player.
+
+Ein geschützter Start erwirbt die aktuellen geliehenen Dienste einmal, lädt/validiert Config,
+erfasst den bisherigen Registry-Snapshot, baut Service/Menü/Listener/Command, installiert den Katalog,
+registriert beide Listener, bindet Executor und Completer, startet Menü-Observer und Sync-Task und
+protokolliert den Start. Erst danach wird die Runtime aktiv und der Getter geöffnet. Double-/Reentrant-
+Enable sowie Enable während einer unvollständigen Bereinigung werden vor neuem Erwerb zurückgewiesen.
+
+Jede Aktivierung hat ihre genaue Runtime-Identität. Sync und Join-Listener erfassen diese Identität;
+Menü und Command prüfen dieselbe Berechtigung. Ein alter Task darf weder die neue Runtime finden noch
+seinen alten Service weiter synchronisieren. Direkt konstruierte Menüs/Listener behalten kompatible
+Konstruktoren. Ein heruntergefahrenes Menü öffnet keine neuen Views; `startUpdates()` kann es nach
+vollständiger Freigabe ausdrücklich reaktivieren. Die neuen Observer und der Countdown erhalten dabei
+neue Identitäten, sodass abgefangene alte Callbacks inaktiv bleiben.
+
+Das Menü besitzt exakt einen Locale-Observer und einen Quest-Commit-Observer. Es markiert den Erwerb
+**vor** jedem externen Add. Dadurch bleibt ein Add, das nach seiner Wirkung wirft, bereinigbar.
+Erfolgreiches wiederholtes Start fügt nichts hinzu. Stop widerruft zuerst die Callback-Berechtigung,
+versucht den Countdown-Abbruch und beide Removes unabhängig. Erst ein zurückgekehrtes Remove bestätigt
+die Freigabe; eine Exception behält die genaue Callback-Referenz für Retry, auch nach möglicher Wirkung.
+Es gibt keinen zweiten globalen Observer-Registry.
+
+Der zweite Task ist der bestehende bedingte gemeinsame 20-Tick-Countdown: kein Viewer bedeutet keinen
+Task, mehrere Viewer teilen einen Task, der letzte Close beendet ihn. Er rendert nur die Reset-Uhr;
+keine Assignments, Cycles, Rewards oder Persistenz. Vor Cancellation wird seine Generation widerrufen.
+Der native BukkitTask-Adapter prüft `isCancelled()` auch nach geworfener Cancellation. Verweigerte,
+unwirksame oder nicht bestätigbare Abbrüche behalten den Handle; ein weiterer operativer Countdown
+startet erst nach dessen Freigabe. Der kompatible schmale Runnable-Cancel-Adapter bestätigt durch
+erfolgreiche Rückkehr; bei Exception bleibt er pending. Ein Scheduler, der registriert und vor Rückgabe
+des Handles wirft oder `null` liefert, erlaubt keine garantierte exakte Cancellation. Der eingefangene
+Callback bleibt inaktiv; eine pluginweite `cancelTasks(plugin)`-Bereinigung ist kein Ersatz.
+
+Shutdown schließt die öffentliche Runtime zuerst und bearbeitet Haupttask, Menü-Shutdown, beide
+Listener und beide Command-Bindungen unabhängig. Das Menü detacht seine Active-Map vor Close-Aufrufen,
+schließt nur das exakt aktuell angezeigte eigene Inventar und bearbeitet weitere Viewer auch nach
+Close-/Diagnosefehlern. Render-Kontext wird geleert. Ein fehlgeschlossener physischer View bleibt ohne
+Aktionsberechtigung; fremde oder inzwischen gewechselte Inventare bleiben offen. Holder-, Owner-,
+Current-Top-, Permission- und Click-/Drag-Schutz sowie Layout/Pagination bleiben erhalten.
+
+Executor und Completer haben getrennte Ownership-Prüfungen: nur bei exakter eigener Command-Instanz
+wird der jeweilige Setter mit `null` aufgerufen. Bukkit behält den Descriptor; `setExecutor(null)`
+stellt den Plugin-Fallback her, der Completer wird `null`. Fremde Ersatzbindungen bleiben auch beim
+Cleanup-Retry erhalten. Listener-Freigabe wird an den tatsächlichen HandlerLists bestätigt. Beim
+Startfehler bleibt dieselbe Exception primär; unabhängige Fehler werden suppressed angehängt. Beim
+Disable wird ein gesammelter Fehler gemeldet. Unaufgelöste Ressourcen bleiben privat für ein erneutes
+`disable()` erhalten, ohne Getter/Callbacks zu öffnen. Wiederholtes erfolgreiches Disable hat keine
+weiteren externen Effekte.
+
+`QuestDefinitionRegistry.replaceAll()` validiert vollständig und tauscht anschließend eine immutable
+Map aus. Startup-Rollback stellt die erfassten vorherigen Definitionen nur wieder her, wenn die genaue
+eigene installierte Map noch aktuell ist. Ein unabhängig ausgetauschter Katalog wird erhalten und als
+unvollständige Bereinigung mit beiden Snapshots sichtbar gehalten; automatische Übernahme fremder
+Ownership wäre falsch. Normales Disable leert den geliehenen Katalog ausdrücklich nicht.
+
+Reload bleibt einer der sieben Teilnehmer. Prepare mutiert nichts, Apply ersetzt Registry/Config und
+schließt die Views, Rollback stellt beide vorherigen Snapshots wieder her. Ein Plan gilt nur für seine
+noch aktive Runtime. Einzelne physische Close-Fehler bleiben Best-Effort mit Diagnose und Detachment;
+geschlossene Views können durch Config-Rollback nicht wieder geöffnet werden. Module, Tasks und
+Observer bleiben beim Reload dieselben. Dauerhaft verweigerte externe Operationen, der Verlust
+privater Retry-Information beim JVM-Ende und die globale ModuleManager-Retry-Policy bleiben Grenzen.
+
+`DailyQuestModuleLifecycleHarness`, `DailyQuestMenuLifecycleHarness` und die erhaltenen Domain-/GUI-
+Harnesses messen echte HandlerLists, PluginCommand-Bindungen, Observer-Sets, Callback-Effekte und
+isolierte Profile. Ergänzend kompiliert `scripts/tests/daily-quest-lifecycle.Tests.ps1` temporäre
+Mutationen und instrumentiert echte finale API-Klassen ausschließlich im Wegwerf-Overlay für Fehler
+vor/nach Setter- und Reload-Wirkungen. Vollständige Nachweise und native Testgrenzen stehen im
+[Phase-5G-Bericht](../reports/architecture-modernization/PHASE_05G_DAILY_QUEST_LIFECYCLE.md).
