@@ -338,18 +338,8 @@ public final class QuestService {
 
     public void flushPlayer(UUID playerId) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
-        if (!dirtyPlayers.contains(validatedPlayerId)) {
-            return;
-        }
-        if (!playerService.isLoaded(validatedPlayerId)) {
-            dirtyPlayers.remove(validatedPlayerId);
-            return;
-        }
-
         try {
-            playerService.savePlayer(validatedPlayerId);
-            dirtyPlayers.remove(validatedPlayerId);
-            notifyChanged(validatedPlayerId);
+            flushPlayerOrThrow(validatedPlayerId);
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
@@ -360,10 +350,50 @@ public final class QuestService {
         }
     }
 
+    private void flushPlayerOrThrow(UUID playerId) {
+        UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
+        if (!dirtyPlayers.contains(validatedPlayerId)) {
+            return;
+        }
+        if (!playerService.isLoaded(validatedPlayerId)) {
+            dirtyPlayers.remove(validatedPlayerId);
+            return;
+        }
+
+        playerService.savePlayer(validatedPlayerId);
+        dirtyPlayers.remove(validatedPlayerId);
+        notifyChanged(validatedPlayerId);
+    }
+
     public void flushAll() {
         for (UUID playerId : List.copyOf(dirtyPlayers)) {
             flushPlayer(playerId);
         }
+    }
+
+    // Lifecycle callers need an actual completion signal, without changing public flush semantics.
+    void flushAllOrThrow() {
+        var failures = new java.util.LinkedHashMap<UUID, RuntimeException>();
+        for (UUID playerId : List.copyOf(dirtyPlayers)) {
+            try {
+                flushPlayerOrThrow(playerId);
+            } catch (RuntimeException exception) {
+                failures.put(playerId, exception);
+            }
+        }
+        if (!failures.isEmpty()) throw new FlushFailures(failures);
+    }
+
+    static final class FlushFailures extends IllegalStateException {
+        private final java.util.Map<UUID, RuntimeException> failures;
+
+        private FlushFailures(java.util.Map<UUID, RuntimeException> failures) {
+            super("Incomplete Quest flush for player(s) " + failures.keySet() + ".");
+            this.failures = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(failures));
+            failures.forEach((id, cause) -> addSuppressed(new IllegalStateException("Quest player " + id, cause)));
+        }
+
+        java.util.Map<UUID, RuntimeException> failures() { return failures; }
     }
 
     boolean isDirty(UUID playerId) {

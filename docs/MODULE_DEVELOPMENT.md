@@ -286,3 +286,79 @@ pwsh -File ./scripts/verify.ps1
 
 Receipts: `target/verification/online-reward-lifecycle/`. Reproduktionen, Grenzen und native
 Akzeptanz stehen im [Phase-5E-Bericht](../reports/architecture-modernization/PHASE_05E_ONLINE_REWARD_LIFECYCLE.md).
+
+## Quest lifecycle und Flush-Sicherheit
+
+QuestModule besitzt Registry, QuestService samt Dirty-UUIDs, ProgressReporter, Playtime-Samples,
+einen Listener mit MONITOR-Join/LOWEST-Quit und genau einen synchronen 100-Tick-Task. PlayerService,
+RewardService, Messages/Localization und Bukkit sind geliehen. Profil-Dateien, Wallets und Reward-
+Dirty-Tracking bleiben bei ihren bisherigen Ownern. DailyQuest leiht Registry/Service und muss vor
+Quest stoppen; die explizite Modulreihenfolge bleibt die Grenze für diesen Vertrag.
+
+Der geschützte Start umfasst Dependency-Erwerb, lokale Konstruktion, tatsächliche Listener-
+Registrierung, Seeding, Task-Anmeldung und finales Logging. Getter werden erst danach verfügbar.
+Ein zweites oder reentrantes Enable verändert keine gültige erste Runtime. Fehlgeschlagener Start
+gibt die bekannten eigenen Ressourcen zurück und erhält dieselbe ursprüngliche Exception;
+Cleanup-Ursachen werden mit Kontext angehängt. Er erzeugt weder Shutdown-Progress noch Flush-Arbeit.
+
+Ein kleiner privater RuntimeResources-Datensatz hält ausschließlich die eigenen Ressourcen dieser
+Generation. Task und Listener benötigen aktive, exakt identische Runtime-Autorität. Der Producer
+prüft sie nochmals nach externem Statistikzugriff; ein reentrantes Disable kann deshalb keine alten
+Samples wiederbeleben. Die bisherigen öffentlichen Listener-/Producer-Konstruktoren bleiben
+kompatibel; die Aktivierungsprüfung ist eine package-lokale Modul-Anbindung, kein neuer Scheduler.
+
+Normaler Disable entzieht zuerst Getter, Task und Listener die Autorität. Der Reporter wird
+stummgeschaltet, bevor der letzte Online-Sample abgeschlossene Minutengrenzen meldet. Danach läuft
+der strikte Quest-Flush, dann Listener-Freigabe und bei sicher abgeschlossener Verarbeitung die
+Sample-Freigabe. Task-Cancellation, Sampling, Flush und Unregister haben unabhängige Fehlergrenzen.
+Eine verweigerte Cancellation oder ein Sample-/Logger-Fehler darf weder andere Spieler noch den
+Flush überspringen. Eine verweigerte Listener-Freigabe darf bereits anstehende Saves nicht verlieren.
+
+`QuestService.flushPlayer()`/`flushAll()` behalten ihren öffentlichen Log-and-continue-Vertrag.
+Der package-lokale `flushAllOrThrow()` liefert der Lifecycle-Grenze einen tatsächlichen Abschluss:
+jede Dirty-UUID wird unabhängig versucht, Fehler behalten UUID und Originalursache. Erfolgreiche
+Saves entfernen nur ihre Marker und melden den Commit; fehlgeschlagene Saves behalten die Marker.
+Ein noch geladener CorePlayer ist kein Disk-Commit. Bei bereits ungeladenen UUIDs gilt weiterhin
+der bestehende Save-before-eviction-/erfolgreiche Player-Shutdown-Vertrag als Persistenz-Handoff.
+
+Unvollständiges Cleanup hält dieselbe alte QuestService-/PlayerService-Beziehung privat, nicht
+einen kopierten Profil-Snapshot. Normale Getter bleiben geschlossen; Enable verlangt zunächst
+einen erfolgreichen ausdrücklichen `disable()`-Retry. Ein Retry wiederholt nur ausstehende Freigaben
+und Persistenz; bei ausstehendem finalem Sampling bleiben dieselben Baselines erhalten. Bereits
+gemeldete Minuten und erfolgreich abgeschlossene Quests werden dadurch nicht erneut vergeben.
+Ein wiederholtes finales Sample kann spätere noch verfügbare Statistik lesen; dies ist ausdrücklich
+ein Cleanup-Versuch der alten Runtime, keine wieder freigeschaltete Task-/Listener-Autorität.
+
+Reporter und Listener bleiben nach Retirement inaktiv, selbst wenn Bukkit die Freigabe verweigert.
+Cancellation und Unregister werden anhand der exakten Handle-/Listener-Zustände bestätigt.
+Wirft ein Scheduler nach Registrierung vor Rückgabe des Handles, bleibt dessen Callback inert;
+eine exakte Freigabe ohne Handle wird nicht garantiert. Plugin-weites `cancelTasks(plugin)` wird
+nicht verwendet. Bewusst extern gehaltene Java-Service-Referenzen werden nicht widerrufen.
+
+Quest beendet weder Reward noch Player, leert keine fremden Dirty-Marker und lädt keine Ersatz-
+Snapshots aus alter Disk. Bei späterem erfolgreichen Player-Shutdown kann derselbe Aggregate-
+Stand bereits gespeichert sein. Scheitert auch Player, behält dessen Modul den ursprünglichen
+Cache für einen eigenen Same-JVM-Retry. ModuleManager meldet Fehler, fährt rückwärts fort und
+plant keinen Retry. Retention ist keine Crash-Recovery; ein JVM-Ende kann ungespeicherte Änderungen
+verlieren, und eine nicht lesbare letzte Statistik ist kein rekonstruierbarer Fortschrittsbeweis.
+
+Die bestehende Producer-Reihenfolge „Sample vorrücken → Fortschritt melden“ ist nicht transaktional.
+Ein unerwarteter Report-Fehler kann den betreffenden Minutenübergang verbrauchen. Ein pauschaler
+Retry könnte nach Teilmutationen Rewards wiederholen; eine solche Domain-Transaktion bleibt
+separat zu untersuchen. Schema, ACTIVE/REWARD_PENDING/COMPLETED, RewardSource.QUEST und Gründe,
+OnlineRewardProgress sowie reguläre Quest-/DailyQuest-APIs bleiben unverändert.
+
+`QuestModuleLifecycleHarness` prüft echte Module, Services, HandlerLists, Callbacks und reale
+temporäre Profile; `QuestLifecycleFixture` kontrolliert nur Außenstellenfehler. Die bisherige
+QuestLifecycleHarness behält ihren Einstieg und alle Domain-/Order-/Prioritätsverträge; zwei
+Textschreibweisen verwenden nun tatsächliche Cadence-/Shutdown-Beobachtungen. Zwölf separat
+kompilierte Gegenproben ergänzen die kanonische Prüfung:
+
+```powershell
+pwsh -File ./scripts/tests/quest-lifecycle.Tests.ps1
+pwsh -File ./scripts/verify.ps1
+```
+
+Neue Testquellen werden mit Google Java Format 1.22.0/AOSP formatiert; die sechs Datei-Pilot-Allowlist
+bleibt unverändert. Receipts: `target/verification/quest-lifecycle/`. Reproduktionen, native Grenzen
+und Ergebnisse: [Phase-5F-Bericht](../reports/architecture-modernization/PHASE_05F_QUEST_LIFECYCLE.md).
