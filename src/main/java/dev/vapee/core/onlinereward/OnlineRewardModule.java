@@ -26,6 +26,10 @@ public final class OnlineRewardModule implements CoreModule {
     private OnlineRewardService onlineRewardService;
     private OnlineRewardMessageRenderer messageRenderer;
     private BukkitTask processingTask;
+    private boolean active;
+    private boolean enabling;
+    private boolean cleaning;
+    private BukkitTask pendingCancellation;
 
     public OnlineRewardModule(
             JavaPlugin plugin,
@@ -48,72 +52,110 @@ public final class OnlineRewardModule implements CoreModule {
 
     @Override
     public void enable() {
-        OnlineRewardService newService = new OnlineRewardService(
-                configService,
-                playerModule.getPlayerService(),
-                rewardModule.getRewardService(),
-                plugin.getLogger()
-        );
-        OnlineRewardMessageRenderer newRenderer = new OnlineRewardMessageRenderer(
-                messageService,
-                plugin.getLogger()
-        );
+        if (active || enabling || cleaning) {
+            throw new IllegalStateException("OnlineReward module is already enabled or changing lifecycle");
+        }
+        enabling = true;
         BukkitTask newTask = null;
-
         try {
-            onlineRewardService = newService;
-            messageRenderer = newRenderer;
+            if (pendingCancellation != null) {
+                RuntimeException failure = new IllegalStateException("Previous OnlineReward cleanup is incomplete.");
+                if (cancelTask(pendingCancellation, failure)) pendingCancellation = null;
+                if (failure.getSuppressed().length != 0) throw failure;
+            }
+            OnlineRewardService newService = new OnlineRewardService(
+                    configService,
+                    playerModule.getPlayerService(),
+                    rewardModule.getRewardService(),
+                    plugin.getLogger()
+            );
+            OnlineRewardMessageRenderer newRenderer = new OnlineRewardMessageRenderer(
+                    messageService,
+                    plugin.getLogger()
+            );
             newTask = plugin.getServer().getScheduler().runTaskTimer(
                     plugin,
-                    this::processOnlinePlayers,
+                    () -> processOnlinePlayers(newService, newRenderer),
                     PROCESS_INTERVAL_TICKS,
                     PROCESS_INTERVAL_TICKS
             );
+            plugin.getLogger().info(
+                    "OnlineReward module enabled with one shared "
+                            + PROCESS_INTERVAL_TICKS + "-tick processing task."
+            );
+            onlineRewardService = newService;
+            messageRenderer = newRenderer;
             processingTask = newTask;
+            active = true;
         } catch (RuntimeException exception) {
-            if (newTask != null) {
-                newTask.cancel();
-            }
-            processingTask = null;
-            messageRenderer = null;
-            onlineRewardService = null;
+            clearRuntime();
+            if (newTask != null && !cancelTask(newTask, exception)) pendingCancellation = newTask;
             throw exception;
+        } finally {
+            enabling = false;
         }
-
-        plugin.getLogger().info(
-                "OnlineReward module enabled with one shared "
-                        + PROCESS_INTERVAL_TICKS + "-tick processing task."
-        );
     }
 
     @Override
     public void disable() {
-        if (processingTask != null) {
-            processingTask.cancel();
+        if (enabling || cleaning) {
+            throw new IllegalStateException("OnlineReward module is already changing lifecycle");
         }
+        cleaning = true;
+        BukkitTask task = pendingCancellation == null ? processingTask : pendingCancellation;
+        clearRuntime(); // Revoke this generation before calling external cancellation code.
+        RuntimeException failure = new IllegalStateException("OnlineReward cleanup failed.");
+        try {
+            pendingCancellation = task != null && !cancelTask(task, failure) ? task : null;
+            if (failure.getSuppressed().length != 0) throw failure;
+        } finally {
+            cleaning = false;
+        }
+    }
+
+    private static boolean cancelTask(BukkitTask task, RuntimeException failure) {
+        try {
+            task.cancel();
+        } catch (RuntimeException exception) {
+            failure.addSuppressed(new IllegalStateException("Could not cancel OnlineReward processing task", exception));
+        }
+        try {
+            if (task.isCancelled()) return true;
+            failure.addSuppressed(new IllegalStateException("OnlineReward processing task cancellation is unconfirmed"));
+        } catch (RuntimeException exception) {
+            failure.addSuppressed(new IllegalStateException("Could not confirm OnlineReward task cancellation", exception));
+        }
+        return false;
+    }
+
+    private void clearRuntime() {
+        active = false;
         processingTask = null;
         messageRenderer = null;
         onlineRewardService = null;
     }
 
     public OnlineRewardService getOnlineRewardService() {
-        return Objects.requireNonNull(onlineRewardService, "OnlineRewardModule is not enabled");
+        return Objects.requireNonNull(active ? onlineRewardService : null, "OnlineRewardModule is not enabled");
     }
 
-    private void processOnlinePlayers() {
-        OnlineRewardService currentService = onlineRewardService;
-        OnlineRewardMessageRenderer currentRenderer = messageRenderer;
-        if (currentService == null || currentRenderer == null) {
+    private boolean owns(OnlineRewardService service) {
+        return active && onlineRewardService == service;
+    }
+
+    private void processOnlinePlayers(OnlineRewardService currentService, OnlineRewardMessageRenderer currentRenderer) {
+        if (!owns(currentService)) {
             return;
         }
 
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             try {
-                OnlineRewardProcessResult result = currentService.process(
-                        player.getUniqueId(),
-                        (long) player.getStatistic(Statistic.PLAY_ONE_MINUTE)
-                );
-                if (result.status() == OnlineRewardProcessStatus.REWARDED) {
+                if (!owns(currentService)) return;
+                var playerId = player.getUniqueId();
+                long playtimeTicks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+                if (!owns(currentService)) return;
+                OnlineRewardProcessResult result = currentService.process(playerId, playtimeTicks);
+                if (owns(currentService) && result.status() == OnlineRewardProcessStatus.REWARDED) {
                     currentRenderer.notifyReward(
                             player,
                             configService.getOnlineRewardConfig(),
