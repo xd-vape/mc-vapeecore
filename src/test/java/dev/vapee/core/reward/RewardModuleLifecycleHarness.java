@@ -240,10 +240,11 @@ public final class RewardModuleLifecycleHarness {
                     f.tasks.size() == 1 && f.runtime.handlerCount() == 0,
                     "refused cleanup blocks new acquisition");
             task.refuseCancel = false;
+            module.disable();
             module.enable();
             check(
                     task.cancelled && module.getRewardService() != old && f.activeTasks() == 1,
-                    "retry reconciles cleanup before fresh runtime");
+                    "explicit disable retry reconciles cleanup before fresh runtime");
             module.disable();
             released(f, module);
         }
@@ -487,8 +488,8 @@ public final class RewardModuleLifecycleHarness {
             check(
                     f.runtime.handlerCount() == 0
                             && f.activeTasks() == 0
-                            && rewards.dirtyPlayerCount() == 0,
-                    "flush failure cannot skip independent release");
+                            && rewards.dirtyPlayerCount() == 1,
+                    "flush failure retains dirty work and cannot skip independent resource release");
             unavailable(module);
             check(
                     f.players.isLoaded(player) && f.economy.getCoins(player).orElseThrow() == 17,

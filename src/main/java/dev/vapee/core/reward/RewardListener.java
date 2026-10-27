@@ -11,17 +11,24 @@ import java.util.UUID;
 public final class RewardListener implements Listener {
 
     private final RewardService rewardService;
+    private final java.util.function.BooleanSupplier authorized;
 
     public RewardListener(RewardService rewardService) {
+        this(rewardService, () -> true);
+    }
+
+    RewardListener(RewardService rewardService, java.util.function.BooleanSupplier authorized) {
         this.rewardService = Objects.requireNonNull(rewardService, "rewardService");
+        this.authorized = Objects.requireNonNull(authorized, "authorized");
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
+        if (!authorized.getAsBoolean()) return;
         flushPlayer(Objects.requireNonNull(event, "event").getPlayer().getUniqueId());
     }
 
     void flushPlayer(UUID uniqueId) {
-        rewardService.flushPlayer(uniqueId);
+        if (authorized.getAsBoolean()) rewardService.flushPlayer(uniqueId);
     }
 }
