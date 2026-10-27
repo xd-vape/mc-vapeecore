@@ -83,8 +83,12 @@ public final class SafeFileWriter {
                         files.deleteIfExists(target);
                     }
                 } catch (IOException | RuntimeException restoration) {
-                    failure.addSuppressed(restoration);
-                    logger.log(Level.SEVERE, "Could not restore " + target + "; recovery copy retained at " + backup, restoration);
+                    if (restoration != failure) failure.addSuppressed(restoration);
+                    try {
+                        logger.log(Level.SEVERE, "Could not restore " + target + "; recovery copy retained at " + backup, restoration);
+                    } catch (RuntimeException restorationDiagnostic) {
+                        if (restorationDiagnostic != failure) failure.addSuppressed(restorationDiagnostic);
+                    }
                     throw failure;
                 }
                 if (existed) cleanup(backup);
@@ -100,7 +104,11 @@ public final class SafeFileWriter {
             files.deleteIfExists(path);
         } catch (IOException | RuntimeException exception) {
             // Cleanup cannot undo a committed file or falsely trigger domain rollback.
-            logger.log(Level.WARNING, "Could not clean VapeeCore persistence artifact " + path, exception);
+            try {
+                logger.log(Level.WARNING, "Could not clean VapeeCore persistence artifact " + path, exception);
+            } catch (RuntimeException cleanupDiagnostic) {
+                if (cleanupDiagnostic != exception) exception.addSuppressed(cleanupDiagnostic);
+            }
         }
     }
 
