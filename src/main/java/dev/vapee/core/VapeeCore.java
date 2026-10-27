@@ -18,6 +18,7 @@ import dev.vapee.core.lobby.warp.WarpModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.ModerationModule;
 import dev.vapee.core.module.ModuleManager;
+import dev.vapee.core.module.ShutdownReport;
 import dev.vapee.core.onlinereward.OnlineRewardModule;
 import dev.vapee.core.permission.LuckPermsService;
 import dev.vapee.core.permission.PermissionModule;
@@ -50,6 +51,7 @@ public final class VapeeCore extends JavaPlugin {
     private dev.vapee.core.i18n.LocalizationModule localizationModule;
     private CommandHelpRenderer commandHelpRenderer;
     private ModuleManager moduleManager;
+    private RuntimeException shutdownDiagnosticFailure;
     private PermissionModule permissionModule;
     private RankModule rankModule;
     private PlayerModule playerModule;
@@ -220,8 +222,31 @@ public final class VapeeCore extends JavaPlugin {
         if (moduleManager != null) {
             moduleManager.disableAll();
         }
-
-        getLogger().info("VapeeCore disabled.");
+        ShutdownReport report = moduleManager == null ? null : moduleManager.getLastCleanupReport().orElse(null);
+        java.util.logging.Level level = java.util.logging.Level.INFO;
+        String message;
+        if (report == null) {
+            message = "VapeeCore disabled; no module cleanup attempt was recorded.";
+        } else if (!report.allCallsReturnedNormally()) {
+            level = java.util.logging.Level.SEVERE;
+            message = "VapeeCore cleanup incomplete during " + report.phase() + ": "
+                    + report.incompleteOutcomes().stream().map(ShutdownReport.ModuleOutcome::name).toList()
+                    + ". No automatic retry; unresolved in-memory data may be lost at JVM exit.";
+        } else if (report.startupFailure() != null) {
+            level = java.util.logging.Level.WARNING;
+            message = "VapeeCore disabled after startup failure; predecessor rollback calls returned normally.";
+        } else if (!report.diagnostics().isEmpty()) {
+            level = java.util.logging.Level.WARNING;
+            message = "VapeeCore module shutdown calls returned normally, but lifecycle diagnostics failed.";
+        } else {
+            message = "VapeeCore disabled; all module shutdown calls returned normally.";
+        }
+        try {
+            getLogger().log(level, message);
+        } catch (RuntimeException diagnostic) {
+            shutdownDiagnosticFailure = diagnostic;
+            if (moduleManager != null) moduleManager.recordCompletionDiagnostic(diagnostic);
+        }
     }
 
     private void registerCommands(

@@ -8,6 +8,70 @@ Ein `CoreModule` besitzt die Lifecycle-Integration eines Features: Services erze
 
 `CoreModule` hat nur `getName()`, `enable()` und `disable()`. `ModuleManager` startet in Registrierungsreihenfolge und beendet erfolgreiche Module rückwärts. Er nimmt ein Modul **erst nach zurückgekehrtem `enable()`** in seine gestartete Liste auf. Das fehlgeschlagene Modul muss seinen Teilstart selbst zurücknehmen; der Manager errät dessen erworbene Ressourcen nicht.
 
+## ModuleManager: sichere Diagnosen und beobachtbare Ergebnisse
+
+Der Manager validiert den getrimmten Namen einmal bei Registrierung und behält ihn zusammen mit der
+exakten Modulidentität. Doppelte Namen bleiben case-insensitiv verboten; dieselbe Instanz darf nicht
+unter einem neuen Namen nochmals registriert werden. Startup und Cleanup fragen `getName()` nicht
+erneut ab. Ein später geänderter oder werfender Getter darf keinen Disable-Aufruf überspringen.
+Registrieren und verschachtelte Lifecycle-Aufrufe sind während einer laufenden Transition gesperrt.
+
+Jede Manager-Diagnose hat eine eigene RuntimeException-Grenze. Fehlendes INFO darf weder Enable noch
+Disable verhindern; fehlgeschlagenes SEVERE darf keine Vorgänger überspringen. Modul- und Diagnosefehler
+werden getrennt aufgezeichnet. Bei Startup-Fehler bleibt genau dasselbe Exception-Objekt primär; alle
+zuvor erfolgreich gestarteten Module erhalten ihren Rollback rückwärts. Weitere Cleanup-/Diagnosefehler
+werden, soweit ohne Selbstreferenz, Duplikat oder neuen Zyklus möglich, suppressed angehängt und bleiben
+zusätzlich im Report erhalten. Es gibt kein rekursives Fehlerlogging. Fatal JVM Errors werden nicht
+wie gewöhnliche Diagnosefehler abgefangen und weiterverarbeitet.
+
+`getLastCleanupReport()`, `getLastShutdownReport()` und `getLastRollbackReport()` liefern optionale
+immutable `ShutdownReport`-Snapshots. Die Phase ist `SHUTDOWN` oder `STARTUP_ROLLBACK`; bei Rollback
+bleibt der ursprüngliche Startup-Fehler als Kontext erhalten. Jeder erwartete Eintrag besitzt exakte
+Modulreferenz, validierten Namen, Status und gegebenenfalls die ursprüngliche RuntimeException:
+
+| Status | Tatsächliche Aussage |
+|---|---|
+| `RETURNED_NORMALLY` | Der konkrete Disable-Aufruf kehrte normal zurück; kein allgemeiner Beweis interner Saves oder Ressourcenfreigabe |
+| `THREW_EXCEPTION` | Der Aufruf warf die gespeicherte RuntimeException; kein Beweis von Datenverlust oder noch vorhandenen Ressourcen |
+| `NOT_ATTEMPTED` | Der Manager erreichte diesen Aufruf nicht, etwa nach einem fatalen Abbruch |
+| `OUTCOME_UNKNOWN` | Ein Aufruf wurde begonnen, aber weder normaler Return noch gewöhnliche RuntimeException wurde beobachtet |
+
+`allCallsReturnedNormally()` prüft ausschließlich diese Returns. `completedWithoutReportedErrors()`
+verlangt zusätzlich keine Diagnosefehler und keinen Startup-Fehlerkontext. Diagnosefehler behalten
+Operation, optionale Modulidentität und Originalexception. Listen werden kopiert und unveränderlich
+veröffentlicht; Modul- und Throwable-Referenzen bleiben absichtlich original und können als Java-
+Objekte selbst mutable sein. Kein Report kopiert Profile, liest private Dirty-Sets per Reflection
+oder errät UUIDs aus Exceptions/Logs. Strukturierte Fakten je UUID benötigen später einen optionalen,
+von den jeweiligen Ownern getragenen Vertrag.
+
+Nach gewöhnlichem Shutdown/Rollback ist die Enabled-Liste leer, auch wenn einzelne Aufrufe warfen.
+`getObservedIncompleteOutcomes()` behält höchstens die letzte unvollständige Beobachtung je registrierter
+Instanz bis zum Ende der Manager-Lebensdauer. Das ist historische Fehleridentität, weder eine aktuelle
+Pending-State-Abfrage noch eine Retry-Queue. Ein späterer normaler Lifecycle schreibt frühere
+Beobachtungen nicht still um; sein eigener neuer Report erhält trotzdem ausschließlich seine Ergebnisse.
+Wiederholtes `disableAll()` ohne gestartete Module ist still, behält Reports und führt nichts erneut aus.
+
+Der ausdrücklich bestätigte bestehende Restart-Vertrag bleibt erhalten: ein vom Aufrufer verlangtes
+`enableAll()` nach gewöhnlich geworfenem Cleanup darf die ursprünglichen Module wieder ansprechen.
+Jeder Owner schützt seinen noch offenen Zustand selbst. Player/Reward/Quest weisen Pending-State vor
+einem Ersatz ihrer Services zurück; der Manager rekonstruiert oder verwirft diesen Zustand nicht.
+Eine Exception nach bereits erfolgter Freigabe sperrt daher nicht pauschal den bestehenden Restart.
+Nach `NOT_ATTEMPTED`/`OUTCOME_UNKNOWN` bleibt neuer Erwerb dagegen gesperrt, weil Abschluss nicht bekannt
+ist. Allgemeine Freigabe-Bestätigung oder koordinierte Reaktivierung gehören nicht zu diesem Vertrag.
+Der Manager garantiert keinen sicheren beliebigen Hot-Swap und startet niemals selbst neu.
+
+Root-Completion meldet normale Shutdown-Returns, Diagnosefehler, Startup-Rollback oder unvollständiges
+Cleanup unterschiedlich. Ein Root-Loggerfehler verändert keine Modul-Ergebnisse und wird bei vorhandenem
+Report als weiterer immutable Snapshot erfasst. Ohne Manager/Report wird kein Cleanup-Ergebnis erfunden.
+Paper kann weiterhin stoppen; private In-Memory-Arbeit kann beim JVM-Ende verloren gehen. Ein Report
+autorisiert keinen Retry nach Ende geliehener Dependencies und löst keine Saves oder Rewards aus.
+Tests, konkrete Owner-Fälle und native Grenzen: [Phase 5J-B](../reports/architecture-modernization/PHASE_05J_B_SHUTDOWN_REPORTING.md).
+
+`ModuleShutdownReportingHarness` verwendet den tatsächlichen Manager und Root sowie reale Player-/
+Reward-/Quest-Fixtures mit Wegwerf-Dateien. Kompilierte Gegenproben:
+`pwsh -File ./scripts/tests/module-shutdown-reporting.Tests.ps1`; Receipts liegen unter
+`target/verification/module-shutdown-reporting/`. Kanonische Discovery und frühere Einstiege bleiben.
+
 ## Dependencies im Composition Root verdrahten
 
 Für direkte Services, typisierte Provider, vorhandene fachliche Capabilities und Callback-Grenzen siehe [SERVICE_DEPENDENCIES.md](SERVICE_DEPENDENCIES.md). Presence zeigt den späten Erwerb mit vier typisierten Providern und weiterhin kompatiblem Modul-Konstruktor.
