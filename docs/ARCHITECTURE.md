@@ -22,6 +22,16 @@ Unabhängige Cleanup-Schritte laufen auch nach einem Runtime-Fehler weiter. Beim
 
 **Bevorzugt:** Ein weiterer `CoreModule` ist für eine eigene Lifecycle-Verantwortung sinnvoll. Ein reiner Algorithmus oder ein zusätzlicher Anwendungsfall gehört gewöhnlich in das bestehende Feature. Mehrere heutige Module erhalten ganze andere Module und holen deren Services während `enable`. Neue fachliche Zusammenarbeit soll das kleinste praktikable Service-Interface verwenden, sofern dessen Lebensdauer sauber verdrahtet werden kann. Kein Service-Locator, automatisches Scanning oder DI-Container.
 
+Der Manager behält die bei Registrierung validierten Namen und trennt jede Diagnose von den
+Lifecycle-Aufrufen. Gewöhnliche Loggerfehler dürfen weder Module überspringen noch die ursprüngliche
+Startup-Exception ersetzen. Immutable `ShutdownReport`-Snapshots unterscheiden tatsächliche Returns,
+Exceptions, nicht versuchte und unbekannte Aufrufe sowie Diagnosefehler. Ein normaler void-Return
+beweist keine vollständige interne Persistenz. Getrennte Getter erhalten letzten Shutdown/Rollback
+und beobachtete unvollständige Modulidentitäten; diese Beobachtungen sind keine Retry-Queue.
+Wiederholtes Stoppen versucht nichts automatisch erneut. Der ausdrückliche bisherige Restart bleibt
+mit den ursprünglichen Owner-Guards erhalten; unbestätigte unterbrochene Aufrufe blockieren neuen
+Erwerb. Vollständiger Vertrag: [ModuleManager-Ergebnisse](MODULE_DEVELOPMENT.md#modulemanager-sichere-diagnosen-und-beobachtbare-ergebnisse).
+
 ## Zuständigkeiten
 
 | Baustein | Verantwortung | Konkreter Einstieg |
