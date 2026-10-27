@@ -52,19 +52,20 @@ public final class RewardModule implements CoreModule {
         if (active || enabling || cleaning) {
             throw new IllegalStateException("Reward module is already enabled or changing lifecycle");
         }
+        if (pendingCleanup != null) {
+            throw new IllegalStateException("Previous Reward cleanup is incomplete; retry disable() with the original PlayerService before enable().",
+                    pendingCleanup.failure);
+        }
         enabling = true;
         RewardService newRewardService = null;
         RewardListener newRewardListener = null;
         BukkitTask newFlushTask = null;
         try {
-            if (pendingCleanup != null) {
-                RuntimeException failure = new IllegalStateException("Previous Reward cleanup is incomplete.");
-                if (!cleanup(pendingCleanup, false, failure)) throw failure;
-                pendingCleanup = null;
-            }
             newRewardService = new RewardService(economyModule.getEconomyService(),
                     playerModule.getPlayerService(), plugin.getLogger());
-            newRewardListener = new RewardListener(newRewardService);
+            RewardService listenerService = newRewardService;
+            newRewardListener = new RewardListener(listenerService,
+                    () -> active && rewardService == listenerService);
             plugin.getServer().getPluginManager().registerEvents(newRewardListener, plugin);
             enableCheckpoint.accept(EnableStage.LISTENER_REGISTERED);
             RewardService scheduledService = newRewardService;
@@ -86,9 +87,10 @@ public final class RewardModule implements CoreModule {
             );
             active = true;
         } catch (RuntimeException exception) {
-            CleanupResources acquired = new CleanupResources(newRewardService, newRewardListener, newFlushTask);
-            if (!cleanup(acquired, false, exception)) pendingCleanup = acquired;
             clearRuntime();
+            CleanupResources acquired = new CleanupResources(newRewardService, newRewardListener, newFlushTask);
+            cleanup(acquired, exception);
+            if (!acquired.released()) pendingCleanup = acquired;
             throw exception;
         } finally {
             enabling = false;
@@ -105,32 +107,51 @@ public final class RewardModule implements CoreModule {
         cleaning = true;
         CleanupResources resources = pendingCleanup == null
                 ? new CleanupResources(rewardService, rewardListener, flushTask) : pendingCleanup;
-        RuntimeException failure = new IllegalStateException("Reward cleanup failed.");
+        resources.flushPending |= flushRewards;
+        clearRuntime(); // Close getters and generation authority before calling external cleanup.
+        RuntimeException failure = new IllegalStateException("Reward cleanup incomplete; retry disable() with the original PlayerService."
+                + " Save outcomes may be uncertain; JVM exit can lose unresolved in-memory changes.");
         try {
-            pendingCleanup = cleanup(resources, flushRewards, failure) ? null : resources;
-            clearRuntime();
+            cleanup(resources, failure);
+            pendingCleanup = resources.released() ? null : resources;
             if (failure.getSuppressed().length != 0) throw failure;
         } finally {
             cleaning = false;
         }
     }
 
-    private boolean cleanup(CleanupResources resources, boolean flushRewards, RuntimeException failure) {
-        int failuresBefore = failure.getSuppressed().length;
-        if (resources.task() != null) {
-            cleanupStep(failure, "Reward flush task", resources.task()::cancel);
+    private void cleanup(CleanupResources resources, RuntimeException failure) {
+        if (resources.task != null && cancelTask(resources.task, failure)) resources.task = null;
+        // This obligation survives active=false. Startup rollback never invents persistence work.
+        if (resources.flushPending && resources.service != null) {
+            try {
+                resources.service.flushAllOrThrow();
+                resources.flushPending = false;
+            } catch (RuntimeException exception) {
+                failure.addSuppressed(new IllegalStateException("Could not complete pending Reward flush", exception));
+            }
         }
-        // Keep the existing shutdown flush while borrowed Economy/Player owners are still available.
-        if (flushRewards && resources.service() != null) {
-            cleanupStep(failure, "pending Reward flush", () -> flushSafely(resources.service()));
-        }
-        if (resources.listener() != null) {
-            cleanupStep(failure, "Reward quit listener", () -> HandlerList.unregisterAll(resources.listener()));
-        }
-        if (resources.service() != null) {
-            cleanupStep(failure, "Reward dirty tracking", resources.service()::clearDirtyTracking);
-        }
-        return failure.getSuppressed().length == failuresBefore;
+        if (resources.listener != null && unregister(resources.listener, failure)) resources.listener = null;
+        if (!resources.flushPending) resources.service = null;
+        resources.failure = failure;
+    }
+
+    private static boolean cancelTask(BukkitTask task, RuntimeException failure) {
+        cleanupStep(failure, "Reward flush task", task::cancel);
+        try {
+            if (task.isCancelled()) return true;
+            failure.addSuppressed(new IllegalStateException("Reward task cancellation is unconfirmed"));
+        } catch (RuntimeException exception) { failure.addSuppressed(exception); }
+        return false;
+    }
+
+    private boolean unregister(RewardListener listener, RuntimeException failure) {
+        cleanupStep(failure, "Reward quit listener", () -> HandlerList.unregisterAll(listener));
+        try {
+            if (HandlerList.getRegisteredListeners(plugin).stream().noneMatch(handler -> handler.getListener() == listener)) return true;
+            failure.addSuppressed(new IllegalStateException("Reward listener release is unconfirmed"));
+        } catch (RuntimeException exception) { failure.addSuppressed(exception); }
+        return false;
     }
 
     private static void cleanupStep(RuntimeException failure, String resource, Runnable release) {
@@ -164,6 +185,20 @@ public final class RewardModule implements CoreModule {
         }
     }
 
-    // Uncertain external releases stay retryable without exposing an active runtime.
-    private record CleanupResources(RewardService service, RewardListener listener, BukkitTask task) { }
+    // Retired exact ownership, not a second active Reward service or Player cache.
+    private static final class CleanupResources {
+        private RewardService service;
+        private RewardListener listener;
+        private BukkitTask task;
+        private boolean flushPending;
+        private RuntimeException failure;
+
+        private CleanupResources(RewardService service, RewardListener listener, BukkitTask task) {
+            this.service = service;
+            this.listener = listener;
+            this.task = task;
+        }
+
+        private boolean released() { return service == null && listener == null && task == null && !flushPending; }
+    }
 }

@@ -58,6 +58,27 @@ flush rules. The Player shutdown fallback runs after its dependent modules in th
 See [module lifecycle guidance](MODULE_DEVELOPMENT.md) and the
 [Phase 5C evidence](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
 
+### Reward strict shutdown flush and retry
+
+Reward's public flush methods retain their active-runtime log-and-continue API. Shutdown uses a
+package-local strict batch: every pending snapshot UUID gets at most one attempt, successful commits
+or valid save-before-clear handoffs remove their markers, failed UUIDs and the exact exceptions received
+from the repository boundary remain in an immutable aggregate failure. The strict loop does not log
+between players. A throwing upstream repository diagnostic may already have replaced its own IO cause;
+this Reward change cannot reconstruct that lost cause or fix SafeFileWriter's post-commit diagnostics.
+
+RewardModule retains the original service and an explicit pending-flush obligation after retirement.
+Getters/callbacks stay closed; explicit `disable()` retries while the original Player aggregate is still
+usable. Successful Player fallback may have committed the file despite retained Reward bookkeeping.
+After verified Player save-before-eviction/cache-clear, Reward can acknowledge the unloaded UUID without
+another save. Failed unload retains the cache and must not be mistaken for that handoff. Retry saves
+the current aggregate and never re-grants Coins. No second wallet, profile cache, schema or writer exists.
+
+An incomplete or uncertain save return is not proof that no bytes committed; dirty tracking, loaded
+state and independently read file values are separate evidence. Same-process retention is not recovery
+after JVM exit. ModuleManager's global policy is unchanged. Behavioral and native evidence:
+[Reward shutdown report](../reports/architecture-modernization/PHASE_05I_REWARD_STRICT_SHUTDOWN.md).
+
 ### Quest shutdown flush and the original aggregate
 
 Quest's public log-and-continue flush is not evidence that every dirty profile committed. Its

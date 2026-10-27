@@ -64,18 +64,8 @@ public final class RewardService {
 
     public void flushPlayer(UUID uniqueId) {
         UUID validatedUniqueId = Objects.requireNonNull(uniqueId, "uniqueId");
-        if (!dirtyPlayers.contains(validatedUniqueId)) {
-            return;
-        }
-        if (!playerService.isLoaded(validatedUniqueId)) {
-            // PlayerService unload persists before removing the player from its loaded map.
-            dirtyPlayers.remove(validatedUniqueId);
-            return;
-        }
-
         try {
-            playerService.savePlayer(validatedUniqueId);
-            dirtyPlayers.remove(validatedUniqueId);
+            flushPlayerOrThrow(validatedUniqueId);
         } catch (RuntimeException exception) {
             logger.log(
                     Level.WARNING,
@@ -90,6 +80,43 @@ public final class RewardService {
         for (UUID uniqueId : List.copyOf(dirtyPlayers)) {
             flushPlayer(uniqueId);
         }
+    }
+
+    private void flushPlayerOrThrow(UUID uniqueId) {
+        if (!dirtyPlayers.contains(uniqueId)) return;
+        if (!playerService.isLoaded(uniqueId)) {
+            // Only Player's successful save-before-eviction/cache-release contract permits this handoff.
+            dirtyPlayers.remove(uniqueId);
+            return;
+        }
+        playerService.savePlayer(uniqueId);
+        dirtyPlayers.remove(uniqueId);
+    }
+
+    // Lifecycle needs completion, while public active-runtime flushing remains log-and-continue.
+    void flushAllOrThrow() {
+        var failures = new java.util.LinkedHashMap<UUID, RuntimeException>();
+        for (UUID uniqueId : List.copyOf(dirtyPlayers)) {
+            try {
+                flushPlayerOrThrow(uniqueId);
+            } catch (RuntimeException exception) {
+                failures.put(uniqueId, exception);
+            }
+        }
+        if (!failures.isEmpty()) throw new FlushFailures(failures);
+    }
+
+    static final class FlushFailures extends IllegalStateException {
+        private final java.util.Map<UUID, RuntimeException> failures;
+
+        private FlushFailures(java.util.Map<UUID, RuntimeException> failures) {
+            super("Incomplete Reward flush for player(s) " + failures.keySet()
+                    + ". Save outcomes may be uncertain; retained work requires retry.");
+            this.failures = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(failures));
+            failures.forEach((id, cause) -> addSuppressed(new IllegalStateException("Reward player " + id, cause)));
+        }
+
+        java.util.Map<UUID, RuntimeException> failures() { return failures; }
     }
 
     boolean isDirty(UUID uniqueId) {
