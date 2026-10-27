@@ -54,7 +54,7 @@ public final class DailyQuestLifecycleHarness {
         String module = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/quest/daily/DailyQuestModule.java"));
         check(count(module, "runTaskTimer(") == 1
-                        && module.contains("syncTask.cancel()")
+                        && DailyQuestModuleLifecycleHarness.verifiesTaskCleanup()
                         && !module.contains("flushPlayer(")
                         && !module.contains("savePlayer("),
                 "DailyQuest has one global sync task, cancels it, and has no persistence task");
@@ -68,16 +68,10 @@ public final class DailyQuestLifecycleHarness {
         String pluginYaml = Files.readString(Path.of("src/main/resources/plugin.yml")).toLowerCase();
         check(!pluginYaml.contains("dailyquests:") && !pluginYaml.contains("vapeecore.daily"),
                 "no separate daily admin command or permission is added");
-        check(module.contains("registerEvents(newMenuListener, plugin)")
-                        && module.contains("HandlerList.unregisterAll(newMenuListener)")
-                        && module.contains("registry.replaceAll(previousDefinitions)")
-                        && module.contains("newCommand.setExecutor(null)")
-                        && module.contains("newCommand.setTabCompleter(null)"),
+        check(DailyQuestModuleLifecycleHarness.verifiesRollback(),
                 "failed enable cleans up both listeners, handlers, task and registry");
-        check(module.contains("menu.closeOpenInventories()") && module.contains("HandlerList.unregisterAll(menuListener)")
-                        && module.contains("command.setExecutor(null)") && module.contains("command.setTabCompleter(null)"),
+        check(DailyQuestModuleLifecycleHarness.verifiesShutdown(),
                 "disable closes views and releases UI registrations and command handlers");
-
         Path directory = Files.createTempDirectory("vapeecore-daily-reload-");
         Path file = directory.resolve("daily-quests.yml");
         try {
