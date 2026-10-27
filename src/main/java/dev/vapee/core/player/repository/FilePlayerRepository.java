@@ -565,8 +565,7 @@ public final class FilePlayerRepository implements PlayerRepository {
     }
 
     private IllegalStateException invalidStorage(String message) {
-        logger.severe(message);
-        return new IllegalStateException(message);
+        return reportPersistenceFailure(new IllegalStateException(message));
     }
 
     private IllegalStateException invalidPlayerFile(Path playerFile, String reason) {
@@ -575,17 +574,22 @@ public final class FilePlayerRepository implements PlayerRepository {
 
     private IllegalStateException invalidPlayerFile(Path playerFile, String reason, Throwable cause) {
         String message = "Invalid player file " + playerFile + ": " + reason + ". The file was left unchanged.";
-        if (cause == null) {
-            logger.severe(message);
-        } else {
-            logger.log(Level.SEVERE, message, cause);
-        }
-        return new IllegalStateException(message, cause);
+        return reportPersistenceFailure(new IllegalStateException(message, cause));
     }
 
     private IllegalStateException storageFailure(String operation, Path path, Throwable cause) {
         String message = "Could not " + operation + " at " + path + ".";
-        logger.log(Level.SEVERE, message, cause);
-        return new IllegalStateException(message, cause);
+        return reportPersistenceFailure(new IllegalStateException(message, cause));
+    }
+
+    private IllegalStateException reportPersistenceFailure(IllegalStateException failure) {
+        // Establish the intended persistence error before an external diagnostic can fail.
+        try {
+            if (failure.getCause() == null) logger.severe(failure.getMessage());
+            else logger.log(Level.SEVERE, failure.getMessage(), failure.getCause());
+        } catch (RuntimeException diagnostic) {
+            if (diagnostic != failure) failure.addSuppressed(diagnostic);
+        }
+        return failure;
     }
 }

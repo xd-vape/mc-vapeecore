@@ -64,8 +64,9 @@ Reward's public flush methods retain their active-runtime log-and-continue API. 
 package-local strict batch: every pending snapshot UUID gets at most one attempt, successful commits
 or valid save-before-clear handoffs remove their markers, failed UUIDs and the exact exceptions received
 from the repository boundary remain in an immutable aggregate failure. The strict loop does not log
-between players. A throwing upstream repository diagnostic may already have replaced its own IO cause;
-this Reward change cannot reconstruct that lost cause or fix SafeFileWriter's post-commit diagnostics.
+between players. Repository error constructors now establish their intended exception before logging,
+preserve the original storage/validation cause and attach a throwing diagnostic secondarily. Reward
+retains the exact exception received at that boundary; it does not reconstruct causes or replay grants.
 
 RewardModule retains the original service and an explicit pending-flush obligation after retirement.
 Getters/callbacks stay closed; explicit `disable()` retries while the original Player aggregate is still
@@ -135,6 +136,47 @@ Legacy reads/indexing perform no eager rewrite. Before the first successful lega
 
 Fallback protects an existing regular destination in `<uuid>.yml.vapeecore-recovery.bak` without overwriting older evidence. Failed replacement attempts restoration. Failed restoration retains the recovery copy, reports the failure and blocks subsequent reads/writes via `requireReconciled`. Reconcile source/recovery evidence deliberately before removing the marker; never silently delete it to make writes resume. Cleanup failures are warnings and cannot undo an already committed file or trigger false domain rollback.
 
+### Persistence results and diagnostic failures
+
+Distinguish four outcomes. A successful commit means the intended candidate validation and replacement
+returned successfully. A failure before commit preserves the original error and refuses publication.
+An external replacement that throws after possibly taking effect has an **uncertain outcome**: seeing
+new bytes independently does not turn that return into verified success. Finally, a confirmed commit
+with incomplete best-effort artifact cleanup remains a successful save.
+
+`SafeFileWriter` guards only its cleanup WARNING and failed-restoration SEVERE diagnostics. A logger
+RuntimeException cannot turn completed replacement into failed persistence, mask the primary replacement
+error or skip the existing recovery protections. Failed restoration is suppressed on the original
+replacement exception; a throwing diagnostic is secondary too. Cleanup exceptions retain diagnostic
+failures as suppressed information where available, without retrying replacement or introducing a
+diagnostic cache. This does not disable logging globally or catch fatal JVM Errors.
+
+A real atomic move consumes the candidate; a failed later cleanup attempt need not leave a temporary
+file. Any artifact actually left after failed deletion remains untouched. A successful fallback whose
+obsolete backup cannot be removed still leaves a recovery marker: the current save and name-index
+publication succeed, but subsequent reads/writes remain blocked until deliberate operator reconciliation.
+That is distinct from failed restoration, whose exact recovery copy must never be deleted automatically.
+Legacy migration backups keep their separate byte-exact ownership and conflict refusal.
+
+`FilePlayerRepository` constructs its `IllegalStateException` before attempting contextual diagnostics
+for storage, invalid-storage and invalid-player errors. Original causes and operation/path context remain;
+logger failures become suppressed. Validation is still fatal where previously required. Name indexing
+still occurs only after confirmed writer success, including successful saves with cleanup warnings;
+pre-commit and uncertain replacement failures cannot publish an attempted name.
+
+Immediate Economy, Settings and Social mutations retain their existing rollback boundary: genuine or
+uncertain failed save returns still roll back; confirmed commits with cleanup/diagnostic failure retain
+the new aggregate value and normal successful notifications. Reward/Quest strict flushes still isolate
+UUIDs and retain genuine failed dirty work. Player still saves before eviction and remains their later
+aggregate fallback. No schema, wallet algorithm, scheduler, repository interface or shutdown policy changes.
+
+Optional-state warnings in the Settings codec/repository and startup indexing/INFO diagnostics retain
+their existing behavior. They can still affect a permissive read or startup when the logger throws;
+this correction does not promise global diagnostic isolation. Uncertain effectful file failures can
+still leave immediate-domain RAM/disk disagreement and require reconciliation. There is no fsync,
+directory-sync, hardware or power-loss durability guarantee. Executable cases and limits are recorded
+in the [Phase 5J-A report](../reports/architecture-modernization/PHASE_05J_A_PERSISTENCE_DIAGNOSTICS.md).
+
 Settings mutate in memory before saving. A failed repository commit must throw so `PlayerSettingsService` restores the exact previous Boolean, mode or membership and emits no successful observer event. Unload must not evict after failed save; the name index must not publish an attempted rename. Preserve the exception and diagnostic chain. Other domains' deferred persistence remains intentional; extracting mapping does not change reward batching or quest retry behavior.
 
 ## Tests and contributor checklist
@@ -158,6 +200,11 @@ pwsh -File ./scripts/tests/player-settings-codec.Tests.ps1 -Offline -MavenReposi
 ```
 
 Each temporary variant must compile and fail its intended behavioral assertion. Ordinary-classpath positives run before and after; receipts are under `target/verification/player-settings-codec/`. This supplements the canonical verifier rather than replacing its discovery. Never use installed profiles, deployed JARs or existing backups as test fixtures.
+
+Persistence diagnostic integration coverage uses `PlayerPersistenceDiagnosticHarness` and
+`SafeFileWriterDiagnosticHarness`, real temporary NIO files and the existing `PersistenceFaults` seam.
+Run `pwsh -File ./scripts/tests/persistence-diagnostics.Tests.ps1` for compiled class-overlay controls;
+receipts are under `target/verification/persistence-diagnostics/`. Canonical discovery remains unchanged.
 
 ## Remaining boundaries
 
