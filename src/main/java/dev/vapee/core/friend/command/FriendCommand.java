@@ -18,6 +18,8 @@ import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.PlayerLookupResult;
 import dev.vapee.core.identity.PlayerLookupStatus;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.message.SocialChannel;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
@@ -67,18 +69,35 @@ public final class FriendCommand implements TabExecutor {
     private final Logger logger;
     private final Consumer<Player> openMenu;
     private final FriendMessages feedback;
+    private final PlayerNameFormatter names;
 
     public FriendCommand(JavaPlugin plugin, FriendService friends, PlayerIdentityService identities,
                          MessageService messages, CommandHelpRenderer helpRenderer, FriendMenu menu) {
+        this(plugin, friends, identities, messages, helpRenderer, menu, PlayerNameFormatter.neutral());
+    }
+
+    public FriendCommand(JavaPlugin plugin, FriendService friends, PlayerIdentityService identities,
+                         MessageService messages, CommandHelpRenderer helpRenderer, FriendMenu menu,
+                         PlayerNameFormatter names) {
         this(friends, identities, messages, helpRenderer,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getOnlinePlayers,
-                plugin.getServer()::getPlayer, plugin.getLogger(), Objects.requireNonNull(menu, "menu")::open);
+                plugin.getServer()::getPlayer, plugin.getLogger(), Objects.requireNonNull(menu, "menu")::open, names);
     }
 
     public FriendCommand(FriendService friends, PlayerIdentityService identities,
                          MessageService messages, CommandHelpRenderer helpRenderer,
                          Supplier<? extends Collection<? extends Player>> onlinePlayers,
                          Function<UUID, Player> onlinePlayer, Logger logger, Consumer<Player> openMenu) {
+        this(friends, identities, messages, helpRenderer, onlinePlayers, onlinePlayer, logger,
+                openMenu, PlayerNameFormatter.neutral());
+    }
+
+    public FriendCommand(FriendService friends, PlayerIdentityService identities,
+                         MessageService messages, CommandHelpRenderer helpRenderer,
+                         Supplier<? extends Collection<? extends Player>> onlinePlayers,
+                         Function<UUID, Player> onlinePlayer, Logger logger, Consumer<Player> openMenu,
+                         PlayerNameFormatter names) {
+        this.names = Objects.requireNonNull(names, "names");
         this.friends = Objects.requireNonNull(friends, "friends");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -87,7 +106,7 @@ public final class FriendCommand implements TabExecutor {
         Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.logger = Objects.requireNonNull(logger, "logger");
         this.openMenu = Objects.requireNonNull(openMenu, "openMenu");
-        this.feedback = new FriendMessages(messages, onlinePlayer, this::commandArgument);
+        this.feedback = new FriendMessages(messages, onlinePlayer, this::commandArgument, names);
     }
 
     @Override
@@ -108,7 +127,7 @@ public final class FriendCommand implements TabExecutor {
             }
             String action = args[0].toLowerCase(Locale.ROOT);
             if (!SUBCOMMANDS.contains(action)) {
-                messages.send(sender, tr("friends.command.unknown", java.util.Map.of("command", Component.text(args[0], MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
+                SocialChannel.FRIENDS.error(messages, sender, tr("friends.command.unknown", java.util.Map.of("command", Component.text(args[0], MessageStyle.HIGHLIGHT)))
                         .append(Component.newline())
                         .append(tr("friends.command.help-hint").color(NamedTextColor.YELLOW)));
                 return true;
@@ -208,10 +227,10 @@ public final class FriendCommand implements TabExecutor {
         send(player, tr("friends.command.count", java.util.Map.of("count", Component.text(ids.size(), MessageStyle.HIGHLIGHT), "maximum", Component.text(friends.getLimits().maxFriends(), MessageStyle.HIGHLIGHT))),
                 NamedTextColor.GOLD);
         if (ids.isEmpty()) {
-            send(player, tr("common.none"), NamedTextColor.GRAY);
+            messages.send(player, tr("common.none").color(MessageStyle.BODY));
         } else {
-            ids.stream().map(this::displayName).sorted(NAME_ORDER)
-                    .forEach(name -> sendName(player, name));
+            ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
+                    .forEach(id -> sendName(player, id));
         }
     }
 
@@ -248,7 +267,7 @@ public final class FriendCommand implements TabExecutor {
                 ? tr("friends.command.outgoing-heading") : tr("friends.command.pending-heading"), NamedTextColor.GOLD);
         ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
                 .forEach(id -> messages.send(player, Component.text("• ", NamedTextColor.GRAY)
-                        .append(Component.text(displayName(id), MessageStyle.HIGHLIGHT)).append(Component.space())
+                        .append(names.format(id, displayName(id))).append(Component.space())
                         .append(action.equals("accept") || action.equals("deny")
                                 ? FriendMessages.requestActions(id.toString())
                                 : FriendMessages.actionButton(action, commandArgument(id)))));
@@ -267,22 +286,22 @@ public final class FriendCommand implements TabExecutor {
         UUID self = player.getUniqueId();
         send(player, tr("friends.command.incoming"), NamedTextColor.GOLD);
         showNames(player, friends.getIncomingRequests(self).stream().map(FriendRequest::sender).toList());
-        send(player, tr("friends.command.outgoing"), NamedTextColor.GOLD);
+        messages.send(player, tr("friends.command.outgoing").color(MessageStyle.BODY));
         showNames(player, friends.getOutgoingRequests(self).stream().map(FriendRequest::recipient).toList());
     }
 
     private void showNames(Player player, List<UUID> ids) {
         if (ids.isEmpty()) {
-            send(player, tr("common.none"), NamedTextColor.GRAY);
+            messages.send(player, tr("common.none").color(MessageStyle.BODY));
         } else {
-            ids.stream().map(this::displayName).sorted(NAME_ORDER)
-                    .forEach(name -> sendName(player, name));
+            ids.stream().sorted(Comparator.comparing(this::displayName, NAME_ORDER).thenComparing(UUID::toString))
+                    .forEach(id -> sendName(player, id));
         }
     }
 
-    private void sendName(Player player, String name) {
+    private void sendName(Player player, UUID id) {
         messages.send(player, Component.text("• ", NamedTextColor.GRAY)
-                .append(Component.text(name, MessageStyle.HIGHLIGHT)));
+                .append(names.format(id, displayName(id))));
     }
 
     private String displayName(UUID uniqueId) {
@@ -294,7 +313,8 @@ public final class FriendCommand implements TabExecutor {
     }
 
     private void send(CommandSender sender, Component text, NamedTextColor color) {
-        messages.send(sender, text.color(color));
+        if (color == NamedTextColor.RED) SocialChannel.FRIENDS.error(messages, sender, text);
+        else SocialChannel.FRIENDS.send(messages, sender, text.color(MessageStyle.BODY));
     }
 
     private static List<String> matching(List<String> names, String prefix) {

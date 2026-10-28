@@ -265,15 +265,15 @@ public final class ClanCommandHarness {
         clear(unsafeTarget);
         run(choicesCommand, owner, "invite", unsafeTarget.id.toString());
         check(all(owner).contains("<blue>Target</blue>")
-                        && hasLiteral(owner.received, "<blue>Target</blue>", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
+                        && hasLiteral(owner.received, "<blue>Target</blue>", NamedTextColor.WHITE),
                 "unsafe-looking player name remains literal in command feedback");
         check(all(unsafeTarget).contains("<green>Owner</green>")
                         && all(unsafeTarget).contains("<red>Safe</red> [<X>]")
                         && hasClick(unsafeTarget, "/clan accept " + firstClan)
                         && hasClick(unsafeTarget, "/clan deny " + firstClan),
                 "invite notification explains owner, clan name, tag, accept, and deny");
-        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
-                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
+        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", NamedTextColor.WHITE)
+                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", NamedTextColor.GOLD)
                         && hasLiteral(unsafeTarget.received, "<X>", NamedTextColor.AQUA),
                 "invite notification keeps all user data as literal components");
         check(clickActionsMatchPurpose(unsafeTarget.received), "invite notification uses direct UUID actions");

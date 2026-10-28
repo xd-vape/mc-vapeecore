@@ -15,6 +15,16 @@ Eine gespeicherte Referenz macht den Consumer nicht zum Owner. Der Owner erzeugt
 
 Alle vier Services werden geliehen. Presence darf sie weder deaktivieren noch ihre Caches, Einstellungen oder Repository-Daten leeren. Presence besitzt nur PresenceService, FriendPresenceNotifier und die Listener-Registrierung. Der Notifier registriert selbst keine zusätzlichen Observer.
 
+### Gemeinsame Darstellung von Friend, Clan und Presence
+
+Prototype Step 01B ergänzt `message.PlayerNameFormatter`: Der Composition Root injiziert denselben schmalen, zustandslosen Formatter in FriendModule, ClanModule und PresenceModule. Sein typisierter `rankModule::getRankService`-Provider wird erst beim Formatieren eines Namens gelesen. Rank ist dann bereits gestartet. Bei einem erneuten Modulstart wird dadurch die aktuelle RankService-Runtime verwendet. Die vier oben beschriebenen Presence-Service-Provider behalten dagegen ihren beim Enable gebundenen Vertrag.
+
+`format(UUID, String)` nutzt bei jeder neuen Nachricht `RankService.getPrimaryRank(UUID)` und `RankInfo.effectiveColor()`. LuckPerms liest dabei ausschließlich geladene User und Gruppen; es gibt keinen Load, Cache, Task, Observer oder Schreibzugriff des Formatters. Fehlende User, Gruppen oder gültige Farbmetadaten ergeben Weiß. Namen bleiben `Component.text` und werden nie als MiniMessage interpretiert. Reale Actor-/Target-UUIDs werden bis zur Messaging-Grenze weitergereicht; ein beliebiger Name wird für die Darstellung nicht aufgelöst. Kompatible alte Konstruktoren liefern ohne Rank-Provider neutrale weiße Namen.
+
+`message.SocialChannel` ergänzt einmalig die übersetzbaren Präfixe `[Friends]` / `[Freunde]` in Gold beziehungsweise `[Clan]` in Dark Purple. Der Body bleibt grau, Fehler besitzen ein kurzes rotes lokalisiertes Label, Presence-Online behält seinen begrenzten grünen Status. Clan-Namen bleiben Gold und Tags Aqua. `MessageService.send()` liefert davor weiterhin den unveränderten konfigurierten globalen Präfix; `sendRaw()` wird hierfür nicht eingesetzt. Mehrzeilige Einladungen und Listen haben einen Kanalpräfix an der Überschrift; folgende Zeilen erhalten keinen weiteren. Help und editierbare Beispiele behalten ihr bestehendes Verhalten.
+
+Die Friend- und Clan-Accept/Deny-Buttons bleiben `RUN_COMMAND` mit kanonischen Spieler- beziehungsweise Clan-UUIDs. Cancel, Remove, Beispiele und destruktive Bestätigungen behalten ihre bisherigen Suggest-/Bestätigungsregeln. Modulreihenfolge, Reload, Permissions, Domain-Services und persistente Schemas ändern sich nicht. Ausführliche Nachweise und der noch offene Client-Test stehen im [Step-01B-Bericht](../reports/prototype/STEP_01B_SOCIAL_CHAT_STYLING.md).
+
 ## Die passende Grenze wählen
 
 | Form | Wann sie sinnvoll ist | Beispiel |

@@ -122,7 +122,7 @@ public final class FriendMenu {
         Player viewer = Objects.requireNonNull(player, "player");
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
         if (!viewer.hasPermission(FriendCommand.PERMISSION)) {
-            messages.send(viewer, tr("friends.denied").color(NamedTextColor.RED));
+            dev.vapee.core.message.SocialChannel.FRIENDS.error(messages, viewer, tr("friends.denied"));
             return false;
         }
         UUID owner = viewer.getUniqueId();

@@ -60,23 +60,23 @@ public final class FriendPresenceNotifierHarness {
         check(recipients.equals(List.of(first, last)),
                 "only online opted-in non-ignored friends receive notifications in source order");
         check(messages.stream().map(FriendPresenceNotifierHarness::plain).toList()
-                        .equals(List.of("Friend Alice is now online.", "Friend Alice is now online.")),
+                        .equals(List.of("[Friends] Friend Alice is now online.", "[Friends] Friend Alice is now online.")),
                 "online message is exact literal Adventure text");
         check(hasColoredText(messages.getFirst(), null, "Friend ", net.kyori.adventure.text.format.NamedTextColor.GRAY)
-                        && hasColoredText(messages.getFirst(), null, "Alice", net.kyori.adventure.text.format.NamedTextColor.AQUA)
+                        && hasColoredText(messages.getFirst(), null, "Alice", net.kyori.adventure.text.format.NamedTextColor.WHITE)
                         && hasColoredText(messages.getFirst(), null, " is now online.", net.kyori.adventure.text.format.NamedTextColor.GREEN),
-                "online component uses calm gray, aqua and green colors");
+                "online component uses gray body, neutral name fallback and limited green status");
         recipients.clear();
         messages.clear();
         notifier.notifyStatus(subject, "<red>Alice</red>", PresenceStatus.ONLINE);
-        check(plain(messages.getFirst()).equals("Friend <red>Alice</red> is now online."),
+        check(plain(messages.getFirst()).equals("[Friends] Friend <red>Alice</red> is now online."),
                 "subject name is literal and never parsed as MiniMessage");
 
         recipients.clear();
         messages.clear();
         notifier.notifyStatus(subject, "Alice", PresenceStatus.OFFLINE);
         check(recipients.equals(List.of(first, last))
-                        && messages.stream().allMatch(message -> plain(message).equals("Friend Alice went offline.")),
+                        && messages.stream().allMatch(message -> plain(message).equals("[Friends] Friend Alice went offline.")),
                 "offline message is exact and uses the same filters");
 
         List<UUID> continued = new ArrayList<>();

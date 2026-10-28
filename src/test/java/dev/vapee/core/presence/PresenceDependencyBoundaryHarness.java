@@ -494,7 +494,7 @@ public final class PresenceDependencyBoundaryHarness {
                                     .collect(java.util.stream.Collectors.toSet())
                                     .equals(expected),
                     label);
-            String text = online ? "Friend Subject is now online." : "Friend Subject went offline.";
+            String text = online ? "[Friends] Friend Subject is now online." : "[Friends] Friend Subject went offline.";
             check(
                     deliveries.stream().allMatch(value -> value.text.equals(text)),
                     "notifications use actual existing localized message flow");

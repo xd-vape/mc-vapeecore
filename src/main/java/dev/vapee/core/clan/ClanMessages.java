@@ -4,6 +4,8 @@ import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.message.SocialChannel;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -18,13 +20,23 @@ import java.util.function.Function;
 public final class ClanMessages {
     private final MessageService messages;
     private final Function<UUID, Player> onlinePlayer;
+    private final PlayerNameFormatter names;
 
     public ClanMessages(MessageService messages, Function<UUID, Player> onlinePlayer) {
+        this(messages, onlinePlayer, PlayerNameFormatter.neutral());
+    }
+
+    public ClanMessages(MessageService messages, Function<UUID, Player> onlinePlayer, PlayerNameFormatter names) {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
+        this.names = Objects.requireNonNull(names, "names");
     }
 
     public void report(Player actor, String action, String target, ClanResult result) {
+        report(actor, action, null, target, result);
+    }
+
+    public void report(Player actor, String action, UUID targetId, String target, ClanResult result) {
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(target, "target");
@@ -44,7 +56,9 @@ public final class ClanMessages {
                 case "disband" -> "clan.success.disband";
                 default -> throw new IllegalArgumentException("Unknown clan action: " + action);
             };
-            messages.send(actor, tr(key, java.util.Map.of("target", Component.text(target, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
+            Component value = java.util.Set.of("invite", "cancel", "kick", "transfer").contains(action)
+                    ? playerName(targetId, target) : Component.text(target, NamedTextColor.GOLD);
+            SocialChannel.CLAN.send(messages, actor, tr(key, java.util.Map.of("target", value)).color(MessageStyle.BODY));
             return;
         }
         String errorKey = switch (result) {
@@ -67,18 +81,22 @@ public final class ClanMessages {
             case CANNOT_TARGET_SELF -> "clan.error.self";
             case SUCCESS -> throw new IllegalStateException("Success handled above");
         };
-        messages.send(actor, tr(errorKey).color(NamedTextColor.RED));
+        SocialChannel.CLAN.error(messages, actor, tr(errorKey));
     }
 
     public void notifyOnline(UUID recipient, Component notice) {
         Player player = onlinePlayer.apply(recipient);
-        if (player != null && player.isOnline()) messages.send(player, notice);
+        if (player != null && player.isOnline()) SocialChannel.CLAN.send(messages, player, notice);
     }
 
     public void notifyInvite(UUID recipient, UUID clanId, String owner, String clanName, String tag) {
+        notifyInvite(recipient, clanId, null, owner, clanName, tag);
+    }
+
+    public void notifyInvite(UUID recipient, UUID clanId, UUID ownerId, String owner, String clanName, String tag) {
         Objects.requireNonNull(clanId, "clanId");
-        notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", Component.text(owner, MessageStyle.HIGHLIGHT),
-                "clan", Component.text(clanName, MessageStyle.HIGHLIGHT), "tag", Component.text(tag, NamedTextColor.AQUA))).color(MessageStyle.BODY)
+        notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", playerName(ownerId, owner),
+                "clan", Component.text(clanName, NamedTextColor.GOLD), "tag", Component.text(tag, NamedTextColor.AQUA))).color(MessageStyle.BODY)
                 .append(Component.newline())
                 .append(inviteButton(tr("common.accept"), "/clan accept " + clanId, NamedTextColor.GREEN, tr("clan.invite.accept-hover")))
                 .append(Component.space())
@@ -86,11 +104,15 @@ public final class ClanMessages {
     }
 
     public void notifyAccept(UUID owner, String playerName) {
-        notifyOnline(owner, tr("clan.invite.accepted", java.util.Map.of("player", Component.text(playerName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
+        notifyAccept(owner, null, playerName);
+    }
+
+    public void notifyAccept(UUID owner, UUID playerId, String playerName) {
+        notifyOnline(owner, tr("clan.invite.accepted", java.util.Map.of("player", playerName(playerId, playerName))).color(MessageStyle.BODY));
     }
 
     public void notifyKick(UUID target, String tag) {
-        notifyOnline(target, tr("clan.member.removed", java.util.Map.of("tag", Component.text(tag, MessageStyle.HIGHLIGHT))).color(NamedTextColor.YELLOW));
+        notifyOnline(target, tr("clan.member.removed", java.util.Map.of("tag", Component.text(tag, NamedTextColor.AQUA))).color(MessageStyle.BODY));
     }
 
     public void notifyTransfer(UUID target, String tag) {
@@ -101,5 +123,9 @@ public final class ClanMessages {
         return Component.text("[").append(label).append(Component.text("]")).color(color)
                 .clickEvent(ClickEvent.runCommand(command))
                 .hoverEvent(HoverEvent.showText(hover.color(NamedTextColor.GRAY)));
+    }
+
+    private Component playerName(UUID id, String literal) {
+        return id == null ? Component.text(literal, NamedTextColor.WHITE) : names.format(id, literal);
     }
 }

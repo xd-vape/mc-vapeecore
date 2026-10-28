@@ -322,9 +322,9 @@ public final class FriendCommandHarness {
         f.friends.addRelationshipListener((first, second) -> callbacks[0]++);
         for (String action : List.of("accept", "deny", "cancel", "remove")) {
             run(c, actor, action);
-            check(f.last().equals(action.equals("remove") ? "You do not have any friends yet."
+            check(f.last().equals("[Friends] " + (action.equals("remove") ? "You do not have any friends yet."
                     : action.equals("cancel") ? "You have no pending outgoing friend requests."
-                    : "You have no pending friend requests."), "action-specific empty " + action);
+                    : "You have no pending friend requests.")), "action-specific empty " + action);
         }
         for (String action : List.of("add", "accept", "deny", "cancel", "remove", "list", "requests", "help")) {
             run(c, actor, action, "one", "extra");

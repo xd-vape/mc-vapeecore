@@ -58,7 +58,7 @@ public final class FriendMenuListener implements Listener {
         if (!player.hasPermission(FriendCommand.PERMISSION)) {
             menu.forgetIfActive(player.getUniqueId(), top);
             if (player.getOpenInventory().getTopInventory() == top) player.closeInventory();
-            messages.send(player, tr("friends.menu.denied"));
+            dev.vapee.core.message.SocialChannel.FRIENDS.error(messages, player, tr("friends.menu.denied"));
             return;
         }
         if (event.getClickedInventory() != top) {
@@ -103,7 +103,7 @@ public final class FriendMenuListener implements Listener {
             logger.log(Level.SEVERE, "Could not process friend menu action for " + player.getUniqueId() + ".",
                     exception);
             player.closeInventory();
-            messages.send(player, tr("friends.menu.update-failed"));
+            dev.vapee.core.message.SocialChannel.FRIENDS.error(messages, player, tr("friends.menu.update-failed"));
         }
     }
 
