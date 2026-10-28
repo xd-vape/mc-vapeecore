@@ -19,6 +19,7 @@ public final class ClanCommandHarness {
     private static final PlainTextComponentSerializer PLAIN = PlainTextComponentSerializer.plainText();
     private static int checks;
     public static void main(String[] args) throws Exception {
+        directActions();
         commandUx();
         safeRelationArguments();
 
@@ -145,8 +146,8 @@ public final class ClanCommandHarness {
                         && all(actor).contains("Usage: /clan create <tag> <name...>")
                         && all(actor).contains("Example: /clan create BMW BMW Community"),
                 "create without arguments explains both missing values, syntax, and example");
-        check(hasSuggestion(actor, "/clan create <tag> <name...>")
-                        && hasSuggestion(actor, "/clan create BMW BMW Community"),
+        check(hasClick(actor, "/clan create <tag> <name...>")
+                        && hasClick(actor, "/clan create BMW BMW Community"),
                 "create usage and example are suggestable");
 
         clear(actor);
@@ -230,7 +231,7 @@ public final class ClanCommandHarness {
                         && all(recipient).contains("<red>Safe</red> [<X>]")
                         && all(recipient).contains("Use /clan accept <tag|uuid>"),
                 "accept without target lists one invite with name and tag");
-        check(hasSuggestion(recipient, "/clan accept <X>"),
+        check(hasClick(recipient, "/clan accept " + firstClan),
                 "single incoming invite exposes safe accept suggestion");
         check(hasLiteral(recipient.received, "<red>Safe</red>", NamedTextColor.GOLD)
                         && hasLiteral(recipient.received, "<X>", NamedTextColor.AQUA),
@@ -242,18 +243,18 @@ public final class ClanCommandHarness {
         run(choicesCommand, recipient, "accept");
         check(all(recipient).contains("<red>Safe</red> [<X>]")
                         && all(recipient).contains("Second Community [TWO]")
-                        && hasSuggestion(recipient, "/clan accept <X>")
-                        && hasSuggestion(recipient, "/clan accept TWO"),
+                        && hasClick(recipient, "/clan accept " + firstClan)
+                        && hasClick(recipient, "/clan accept " + secondClan),
                 "accept without target lists multiple actionable invitations");
-        check(allClicksSuggest(recipient.received), "accept choices never execute commands immediately");
+        check(clickActionsMatchPurpose(recipient.received), "accept choices run exact UUID actions; syntax stays editable");
 
         clear(recipient);
         run(choicesCommand, recipient, "deny");
         check(all(recipient).contains("Pending clan invites:")
-                        && hasSuggestion(recipient, "/clan deny <X>")
-                        && hasSuggestion(recipient, "/clan deny TWO"),
+                        && hasClick(recipient, "/clan deny " + firstClan)
+                        && hasClick(recipient, "/clan deny " + secondClan),
                 "deny without target lists deny suggestions");
-        check(allClicksSuggest(recipient.received), "deny choices never execute commands immediately");
+        check(clickActionsMatchPurpose(recipient.received), "deny choices run exact UUID actions; syntax stays editable");
         check(Set.copyOf(choicesCommand.onTabComplete(recipient.player, null, "clan",
                         new String[]{"accept", ""})).equals(Set.of("<X>", "TWO"))
                         && Set.copyOf(choicesCommand.onTabComplete(recipient.player, null, "clan",
@@ -264,18 +265,18 @@ public final class ClanCommandHarness {
         clear(unsafeTarget);
         run(choicesCommand, owner, "invite", unsafeTarget.id.toString());
         check(all(owner).contains("<blue>Target</blue>")
-                        && hasLiteral(owner.received, "<blue>Target</blue>", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
+                        && hasLiteral(owner.received, "<blue>Target</blue>", NamedTextColor.WHITE),
                 "unsafe-looking player name remains literal in command feedback");
         check(all(unsafeTarget).contains("<green>Owner</green>")
                         && all(unsafeTarget).contains("<red>Safe</red> [<X>]")
-                        && hasSuggestion(unsafeTarget, "/clan accept <X>")
-                        && hasSuggestion(unsafeTarget, "/clan deny <X>"),
+                        && hasClick(unsafeTarget, "/clan accept " + firstClan)
+                        && hasClick(unsafeTarget, "/clan deny " + firstClan),
                 "invite notification explains owner, clan name, tag, accept, and deny");
-        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
-                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", dev.vapee.core.message.MessageStyle.HIGHLIGHT)
+        check(hasLiteral(unsafeTarget.received, "<green>Owner</green>", NamedTextColor.WHITE)
+                        && hasLiteral(unsafeTarget.received, "<red>Safe</red>", NamedTextColor.GOLD)
                         && hasLiteral(unsafeTarget.received, "<X>", NamedTextColor.AQUA),
                 "invite notification keeps all user data as literal components");
-        check(allClicksSuggest(unsafeTarget.received), "invite notification uses suggestions, never run-command");
+        check(clickActionsMatchPurpose(unsafeTarget.received), "invite notification uses direct UUID actions");
 
         check(choices.clans.inviteMember(owner.id, twin.id) == ClanResult.SUCCESS,
                 "ambiguous outgoing target fixture");
@@ -286,7 +287,7 @@ public final class ClanCommandHarness {
                         && all(owner).contains("<blue>Target</blue>")
                         && all(owner).contains("Twin"),
                 "cancel without target lists current outgoing invitations");
-        check(hasSuggestion(owner, "/clan cancel " + twin.id),
+        check(hasClick(owner, "/clan cancel " + twin.id),
                 "ambiguous outgoing player uses UUID in cancel suggestion");
         check(Set.copyOf(choicesCommand.onTabComplete(owner.player, null, "clan",
                         new String[]{"cancel", ""})).equals(Set.of(
@@ -336,12 +337,12 @@ public final class ClanCommandHarness {
         clear(owner);
         run(choicesCommand, owner, "disband");
         check(all(owner).contains("/clan disband confirm")
-                        && hasSuggestion(owner, "/clan disband confirm")
+                        && hasClick(owner, "/clan disband confirm")
                         && choices.clans.getClan(firstClan).isPresent(),
                 "disband without confirmation exposes a suggestable safe command");
         clear(owner);
         run(choicesCommand, owner, "disband", "yes");
-        check(hasSuggestion(owner, "/clan disband confirm") && choices.clans.getClan(firstClan).isPresent(),
+        check(hasClick(owner, "/clan disband confirm") && choices.clans.getClan(firstClan).isPresent(),
                 "wrong disband confirmation never mutates clan state");
 
         ClanMenuFixture emptyOutgoing = new ClanMenuFixture();
@@ -377,7 +378,7 @@ public final class ClanCommandHarness {
                 "cancel keeps only outgoing relations and safe UUID fallbacks");
         run(c, owner, "cancel");
         for (var target : List.of(spaced, wrong, twin, missing)) {
-            check(hasSuggestion(owner, "/clan cancel " + target.id), "cancel button uses same safe formatter");
+            check(hasClick(owner, "/clan cancel " + target.id), "cancel button uses same safe formatter");
         }
         UUID clan = f.clans.getClanOf(owner.id).orElseThrow().id();
         check(f.clans.acceptInvite(spaced.id, clan) == ClanResult.SUCCESS, "seed spaced member");
@@ -389,8 +390,109 @@ public final class ClanCommandHarness {
         }
     }
 
+    private static void directActions() throws Exception {
+        java.nio.file.Path directory = java.nio.file.Files.createTempDirectory("vapeecore-clan-click-");
+        try {
+            for (String action : List.of("accept", "deny")) {
+                ClanMenuFixture f = new ClanMenuFixture();
+                var owner = f.player("Owner", true);
+                var second = f.player("OtherOwner", true);
+                var recipient = f.player("Recipient", true);
+                var unrelated = f.player("Unrelated", true);
+                java.nio.file.Path file = directory.resolve(action + ".yml");
+                ClanService service = new ClanService(new FileClanRepository(file), ClanLimits.defaults(),
+                        java.time.Clock.systemUTC(), UUID::randomUUID);
+                ClanCommand command = command(f, service);
+                run(command, owner, "create", "OLD", "Original Clan");
+                UUID original = service.getClanOf(owner.id).orElseThrow().id();
+                run(command, owner, "invite", recipient.id.toString());
+                List<ClickEvent> buttons = clicks(recipient.received);
+                check(buttons.size() == 2 && buttons.stream().allMatch(c -> c.action() == ClickEvent.Action.RUN_COMMAND),
+                        "invitation notification has two direct actions");
+                check(buttons.stream().map(ClickEvent::value).toList().equals(List.of(
+                                "/clan accept " + original, "/clan deny " + original)),
+                        "clan notification actions contain the exact clan UUID");
+                ClickEvent click = buttons.stream().filter(c -> c.value().startsWith("/clan " + action + " "))
+                        .findFirst().orElseThrow();
+                run(command, owner, "tag", "NEW");
+                run(command, second, "create", "OLD", "Other Clan");
+                UUID other = service.getClanOf(second.id).orElseThrow().id();
+                run(command, second, "invite", recipient.id.toString());
+                clear(recipient);
+                run(command, recipient, action);
+                check(hasClick(recipient, "/clan " + action + " " + original)
+                                && hasClick(recipient, "/clan " + action + " " + other),
+                        "incoming choices also target stable UUIDs after tag reuse");
+                byte[] pending = java.nio.file.Files.readAllBytes(file);
+                recipient.permitted = false;
+                click(command, recipient, click);
+                check(java.util.Arrays.equals(pending, java.nio.file.Files.readAllBytes(file)),
+                        "direct action does not bypass permission");
+                recipient.permitted = true;
+                click(command, unrelated, click);
+                check(java.util.Arrays.equals(pending, java.nio.file.Files.readAllBytes(file)),
+                        "copied invitation cannot grant unrelated membership");
+                click(command, recipient, click);
+                check(service.getClanOf(recipient.id).map(Clan::id).orElse(null) == null ||
+                                service.getClanOf(recipient.id).orElseThrow().id().equals(original),
+                        "old tag button never selects the other clan");
+                check(service.getClanOf(recipient.id).isPresent() == action.equals("accept")
+                                && service.getIncomingInvites(recipient.id).stream().noneMatch(i -> i.clanId().equals(original)),
+                        "click changes only the intended invitation via existing service");
+                if (action.equals("deny")) check(service.getIncomingInvites(recipient.id).stream().anyMatch(i -> i.clanId().equals(other)),
+                        "denying original invitation preserves unrelated pending invitation");
+                byte[] handled = java.nio.file.Files.readAllBytes(file);
+                click(command, recipient, click);
+                check(java.util.Arrays.equals(handled, java.nio.file.Files.readAllBytes(file)),
+                        "handled invitation cannot save or apply twice");
+                ClanSnapshot cold = new FileClanRepository(file).initialize();
+                check(cold.clans().stream().anyMatch(c -> c.id().equals(original)
+                                && c.members().stream().anyMatch(m -> m.playerId().equals(recipient.id))) == action.equals("accept"),
+                        "cold clan repository confirms final membership");
+            }
+            ClanMenuFixture f = new ClanMenuFixture();
+            var owner = f.player("Owner", true); var replacement = f.player("Replacement", true);
+            var recipient = f.player("Recipient", true);
+            java.nio.file.Path file = directory.resolve("disbanded.yml");
+            ClanService service = new ClanService(new FileClanRepository(file), ClanLimits.defaults(),
+                    java.time.Clock.systemUTC(), UUID::randomUUID);
+            ClanCommand command = command(f, service);
+            run(command, owner, "create", "OLD", "Original");
+            run(command, owner, "invite", recipient.id.toString());
+            ClickEvent stale = clicks(recipient.received).getFirst();
+            run(command, owner, "disband", "confirm");
+            run(command, replacement, "create", "OLD", "Replacement");
+            run(command, replacement, "invite", recipient.id.toString());
+            byte[] current = java.nio.file.Files.readAllBytes(file);
+            click(command, recipient, stale);
+            check(service.getClanOf(recipient.id).isEmpty() && java.util.Arrays.equals(current, java.nio.file.Files.readAllBytes(file)),
+                    "disbanded clan UUID cannot accept an unrelated tag replacement");
+            ClickEvent cancelled = clicks(recipient.received).stream().filter(c -> c.action() == ClickEvent.Action.RUN_COMMAND)
+                    .reduce((a, b) -> b).orElseThrow();
+            run(command, replacement, "cancel", recipient.id.toString());
+            byte[] absent = java.nio.file.Files.readAllBytes(file);
+            click(command, recipient, cancelled);
+            check(java.util.Arrays.equals(absent, java.nio.file.Files.readAllBytes(file)),
+                    "cancelled invitation direct action is rejected without a save");
+        } finally {
+            try (var paths = java.nio.file.Files.walk(directory)) {
+                for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.delete(path);
+            }
+        }
+    }
+
+    private static void click(ClanCommand command, ClanMenuFixture.TestPlayer actor, ClickEvent click) {
+        check(click.action() == ClickEvent.Action.RUN_COMMAND && click.value().startsWith("/clan "),
+                "execute only generated invitation command");
+        run(command, actor, click.value().substring("/clan ".length()).split(" "));
+    }
+
     private static ClanCommand command(ClanMenuFixture fixture) {
-        return new ClanCommand(fixture.clans, fixture.identity, fixture.messages,
+        return command(fixture, fixture.clans);
+    }
+
+    private static ClanCommand command(ClanMenuFixture fixture, ClanService service) {
+        return new ClanCommand(service, fixture.identity, fixture.messages,
                 new CommandHelpRenderer(fixture.messages), () -> fixture.players.values().stream()
                 .filter(player -> player.online).map(player -> player.player).toList(),
                 id -> { var player = fixture.players.get(id); return player != null && player.online
@@ -409,14 +511,18 @@ public final class ClanCommandHarness {
         return String.join("\n", player.received.stream().map(PLAIN::serialize).toList());
     }
     private static void clear(ClanMenuFixture.TestPlayer player) { player.received.clear(); }
-    private static boolean hasSuggestion(ClanMenuFixture.TestPlayer player, String command) {
-        return clicks(player.received).stream().anyMatch(click -> click.action() == ClickEvent.Action.SUGGEST_COMMAND
+    private static ClickEvent.Action expectedAction(String command) {
+        return command.matches("/clan (accept|deny) [0-9a-f-]{36}")
+                ? ClickEvent.Action.RUN_COMMAND : ClickEvent.Action.SUGGEST_COMMAND;
+    }
+    private static boolean hasClick(ClanMenuFixture.TestPlayer player, String command) {
+        return clicks(player.received).stream().anyMatch(click -> click.action() == expectedAction(command)
                 && click.value().equals(command));
     }
-    private static boolean allClicksSuggest(List<Component> messages) {
+    private static boolean clickActionsMatchPurpose(List<Component> messages) {
         List<ClickEvent> clicks = clicks(messages);
         return !clicks.isEmpty() && clicks.stream()
-                .allMatch(click -> click.action() == ClickEvent.Action.SUGGEST_COMMAND);
+                .allMatch(click -> click.action() == expectedAction(click.value()));
     }
     private static List<ClickEvent> clicks(List<Component> messages) {
         List<ClickEvent> result = new ArrayList<>();

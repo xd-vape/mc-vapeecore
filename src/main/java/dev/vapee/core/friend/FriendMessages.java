@@ -4,6 +4,8 @@ import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.message.SocialChannel;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.IdentityCommandArgument;
@@ -21,7 +23,7 @@ public final class FriendMessages {
 
     private final MessageService messages;
     private final Function<UUID, Player> onlinePlayer;
-    private final Function<UUID, String> commandArgument;
+    private final PlayerNameFormatter names;
 
     public FriendMessages(MessageService messages, Function<UUID, Player> onlinePlayer) {
         this(messages, onlinePlayer, UUID::toString);
@@ -29,9 +31,16 @@ public final class FriendMessages {
 
     public FriendMessages(MessageService messages, Function<UUID, Player> onlinePlayer,
                           Function<UUID, String> commandArgument) {
+        this(messages, onlinePlayer, commandArgument, PlayerNameFormatter.neutral());
+    }
+
+    public FriendMessages(MessageService messages, Function<UUID, Player> onlinePlayer,
+                          Function<UUID, String> commandArgument, PlayerNameFormatter names) {
         this.messages = Objects.requireNonNull(messages, "messages");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
-        this.commandArgument = Objects.requireNonNull(commandArgument, "commandArgument");
+        this.names = Objects.requireNonNull(names, "names");
+        // Retain the compatible constructor; direct request actions always target the UUID.
+        Objects.requireNonNull(commandArgument, "commandArgument");
     }
 
     public void report(Player actor, String action, UUID targetId, String targetName, FriendResult result) {
@@ -48,21 +57,21 @@ public final class FriendMessages {
                 case "remove" -> "friends.removed";
                 default -> throw new IllegalArgumentException("Unknown friend action: " + action);
             };
-            messages.send(actor, tr(key, java.util.Map.of("player", Component.text(targetName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
+            SocialChannel.FRIENDS.send(messages, actor, tr(key, java.util.Map.of("player", names.format(targetId, targetName))).color(MessageStyle.BODY));
             if (action.equals("add")) {
                 Player target = onlinePlayer.apply(targetId);
                 if (target != null && target.isOnline()) {
-                    messages.send(target, tr("friends.request.received", java.util.Map.of("player", Component.text(actor.getName(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY)
-                            .append(requestActions(commandArgument.apply(actor.getUniqueId()))));
+                    SocialChannel.FRIENDS.send(messages, target, tr("friends.request.received", java.util.Map.of("player", names.format(actor.getUniqueId(), actor.getName()))).color(MessageStyle.BODY)
+                            .append(requestActions(actor.getUniqueId().toString())));
                 }
             } else if (action.equals("accept")) {
-                notifyOnline(targetId, actor.getName(), "friends.request.accept-notice");
+                notifyOnline(targetId, actor.getUniqueId(), actor.getName(), "friends.request.accept-notice");
             }
             return;
         }
         if (result == FriendResult.AUTO_ACCEPTED) {
-            messages.send(actor, tr("friends.request.accepted", java.util.Map.of("player", Component.text(targetName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
-            notifyOnline(targetId, actor.getName(), "friends.request.auto-notice");
+            SocialChannel.FRIENDS.send(messages, actor, tr("friends.request.accepted", java.util.Map.of("player", names.format(targetId, targetName))).color(MessageStyle.BODY));
+            notifyOnline(targetId, actor.getUniqueId(), actor.getName(), "friends.request.auto-notice");
             return;
         }
         String messageKey = switch (result) {
@@ -78,7 +87,7 @@ public final class FriendMessages {
             case OUTGOING_LIMIT_REACHED -> "friends.error.outgoing-limit";
             default -> throw new IllegalStateException("Unexpected friend result: " + result);
         };
-        messages.send(actor, tr(messageKey).color(NamedTextColor.RED));
+        SocialChannel.FRIENDS.error(messages, actor, tr(messageKey));
     }
 
     public static String commandArgument(PlayerIdentityService identities, UUID id) {
@@ -93,14 +102,23 @@ public final class FriendMessages {
 
     public static Component actionButton(String action, String argument) {
         Component label = tr(switch (action) { case "accept" -> "common.accept"; case "deny" -> "common.deny"; case "cancel" -> "common.cancel"; case "remove" -> "common.remove"; default -> throw new IllegalArgumentException("Unknown friend button action: " + action); });
+        boolean direct = action.equals("accept") || action.equals("deny");
+        if (direct) {
+            UUID id = UUID.fromString(Objects.requireNonNull(argument, "argument"));
+            if (!id.toString().equalsIgnoreCase(argument)) {
+                throw new IllegalArgumentException("Direct friend actions require a canonical UUID");
+            }
+            argument = id.toString();
+        }
+        String command = "/friend " + action + " " + argument;
         return Component.text("[").append(label).append(Component.text("]")).color(action.equals("accept") ? NamedTextColor.GREEN : NamedTextColor.RED)
-                .clickEvent(ClickEvent.suggestCommand("/friend " + action + " " + argument));
+                .clickEvent(direct ? ClickEvent.runCommand(command) : ClickEvent.suggestCommand(command));
     }
 
-    private void notifyOnline(UUID targetId, String actorName, String key) {
+    private void notifyOnline(UUID targetId, UUID actorId, String actorName, String key) {
         Player target = onlinePlayer.apply(targetId);
         if (target != null && target.isOnline()) {
-            messages.send(target, tr(key, java.util.Map.of("player", Component.text(actorName, MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
+            SocialChannel.FRIENDS.send(messages, target, tr(key, java.util.Map.of("player", names.format(actorId, actorName))).color(MessageStyle.BODY));
         }
     }
 }

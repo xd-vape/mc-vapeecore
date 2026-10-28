@@ -52,7 +52,7 @@ public final class ClanMenuListener implements Listener {
                 || event.getClickedInventory() != top) return;
         if (!player.hasPermission(ClanCommand.PERMISSION)) {
             player.closeInventory();
-            messages.send(player, tr("clans.menu.denied").color(NamedTextColor.RED));
+            dev.vapee.core.message.SocialChannel.CLAN.error(messages, player, tr("clans.menu.denied"));
             return;
         }
         int slot = event.getRawSlot();
@@ -61,7 +61,7 @@ public final class ClanMenuListener implements Listener {
             ClickType click = event.getClick();
             UUID currentClanId = clans.getClanOf(player.getUniqueId()).map(Clan::id).orElse(null);
             if (!Objects.equals(holder.clanId().orElse(null), currentClanId)) {
-                messages.send(player, tr("clans.menu.changed").color(NamedTextColor.YELLOW));
+                dev.vapee.core.message.SocialChannel.CLAN.send(messages, player, tr("clans.menu.changed"));
                 menu.open(player, holder.view(), 0);
                 return;
             }
@@ -72,7 +72,7 @@ public final class ClanMenuListener implements Listener {
         } catch (RuntimeException exception) {
             logger.log(Level.SEVERE, "Could not process clan menu action for player " + player.getUniqueId(), exception);
             player.closeInventory();
-            messages.send(player, tr("clans.menu.update-failed").color(NamedTextColor.RED));
+            dev.vapee.core.message.SocialChannel.CLAN.error(messages, player, tr("clans.menu.update-failed"));
         }
     }
 
@@ -88,7 +88,7 @@ public final class ClanMenuListener implements Listener {
             display = menu.displayName(target);
             result = click == ClickType.SHIFT_RIGHT ? clans.kickMember(self, target)
                     : clans.transferOwnership(self, target);
-            feedback.report(player, action, display, result);
+            feedback.report(player, action, target, display, result);
             if (result == ClanResult.SUCCESS) {
                 if (action.equals("kick")) feedback.notifyKick(target, clan.tag());
                 else feedback.notifyTransfer(target, clan.tag());
@@ -101,12 +101,12 @@ public final class ClanMenuListener implements Listener {
             result = click == ClickType.LEFT ? clans.acceptInvite(self, target) : clans.denyInvite(self, target);
             feedback.report(player, action, display, result);
             if (result == ClanResult.SUCCESS && action.equals("accept") && source != null)
-                feedback.notifyAccept(source.ownerId(), player.getName());
+                feedback.notifyAccept(source.ownerId(), player.getUniqueId(), player.getName());
         } else if (holder.view() == ClanMenuView.INVITES && click == ClickType.RIGHT) {
             action = "cancel";
             display = menu.displayName(target);
             result = clans.cancelInvite(self, target);
-            feedback.report(player, action, display, result);
+            feedback.report(player, action, target, display, result);
         } else return;
         menu.refreshActive(player.getUniqueId());
     }

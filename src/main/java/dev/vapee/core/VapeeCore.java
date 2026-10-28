@@ -98,12 +98,13 @@ public final class VapeeCore extends JavaPlugin {
         economyModule = new EconomyModule(this, playerModule, rankModule, messageService, commandHelpRenderer);
         identityModule = new IdentityModule(this, playerModule, rankModule, economyModule, messageService);
         moderationModule = new ModerationModule(this, identityModule, rankModule, messageService);
+        var socialNames = new dev.vapee.core.message.PlayerNameFormatter(rankModule::getRankService);
         friendModule = new FriendModule(this, configService, playerModule, socialModule,
-                identityModule, messageService, commandHelpRenderer);
+                identityModule, messageService, commandHelpRenderer, socialNames);
         presenceModule = new PresenceModule(this, playerModule::getPlayerService,
                 playerModule::getPlayerSettingsService, socialModule::getSocialService,
-                friendModule::getFriendService, messageService);
-        clanModule = new ClanModule(this, configService, identityModule, messageService, commandHelpRenderer);
+                friendModule::getFriendService, messageService, socialNames);
+        clanModule = new ClanModule(this, configService, identityModule, messageService, commandHelpRenderer, socialNames);
         rewardModule = new RewardModule(this, playerModule, economyModule);
         onlineRewardModule = new OnlineRewardModule(
                 this,

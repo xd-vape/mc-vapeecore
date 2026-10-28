@@ -4,6 +4,8 @@ import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.message.SocialChannel;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.social.SocialService;
 import net.kyori.adventure.text.Component;
@@ -26,6 +28,7 @@ public final class FriendPresenceNotifier {
     private final BiPredicate<UUID, UUID> ignoreLookup;
     private final MessageSender messageSender;
     private final Logger logger;
+    private final PlayerNameFormatter names;
 
     public FriendPresenceNotifier(
             FriendService friendService,
@@ -35,6 +38,19 @@ public final class FriendPresenceNotifier {
             MessageService messageService,
             Logger logger
     ) {
+        this(friendService, playerSettingsService, socialService, onlinePlayer, messageService,
+                logger, PlayerNameFormatter.neutral());
+    }
+
+    public FriendPresenceNotifier(
+            FriendService friendService,
+            PlayerSettingsService playerSettingsService,
+            SocialService socialService,
+            Function<UUID, Player> onlinePlayer,
+            MessageService messageService,
+            Logger logger,
+            PlayerNameFormatter names
+    ) {
         this(
                 Objects.requireNonNull(friendService, "friendService")::getFriends,
                 onlinePlayer,
@@ -42,7 +58,7 @@ public final class FriendPresenceNotifier {
                         "playerSettingsService")::areFriendPresenceNotificationsEnabled,
                 Objects.requireNonNull(socialService, "socialService")::isKnownIgnoring,
                 Objects.requireNonNull(messageService, "messageService")::send,
-                logger
+                logger, names
         );
     }
 
@@ -54,6 +70,20 @@ public final class FriendPresenceNotifier {
             MessageSender messageSender,
             Logger logger
     ) {
+        this(friendLookup, onlinePlayer, notificationPreference, ignoreLookup, messageSender,
+                logger, PlayerNameFormatter.neutral());
+    }
+
+    FriendPresenceNotifier(
+            FriendLookup friendLookup,
+            Function<UUID, Player> onlinePlayer,
+            NotificationPreference notificationPreference,
+            BiPredicate<UUID, UUID> ignoreLookup,
+            MessageSender messageSender,
+            Logger logger,
+            PlayerNameFormatter names
+    ) {
+        this.names = Objects.requireNonNull(names, "names");
         this.friendLookup = Objects.requireNonNull(friendLookup, "friendLookup");
         this.onlinePlayer = Objects.requireNonNull(onlinePlayer, "onlinePlayer");
         this.notificationPreference = Objects.requireNonNull(notificationPreference, "notificationPreference");
@@ -75,7 +105,7 @@ public final class FriendPresenceNotifier {
             return;
         }
 
-        Component message = createMessage(validatedName, validatedStatus);
+        Component message = createMessage(validatedSubject, validatedName, validatedStatus);
         for (UUID recipientId : friends) {
             try {
                 UUID validatedRecipient = Objects.requireNonNull(recipientId, "recipientId");
@@ -95,10 +125,10 @@ public final class FriendPresenceNotifier {
         }
     }
 
-    private static Component createMessage(String subjectName, PresenceStatus status) {
-        return tr(status == PresenceStatus.ONLINE ? "friends.presence.online" : "friends.presence.offline",
-                java.util.Map.of("player", Component.text(subjectName, NamedTextColor.AQUA)))
-                .color(status == PresenceStatus.ONLINE ? NamedTextColor.GREEN : NamedTextColor.GRAY);
+    private Component createMessage(UUID subject, String subjectName, PresenceStatus status) {
+        return SocialChannel.FRIENDS.message(tr(status == PresenceStatus.ONLINE ? "friends.presence.online" : "friends.presence.offline",
+                java.util.Map.of("player", names.format(subject, subjectName)))
+                .color(NamedTextColor.GRAY));
     }
 
     @FunctionalInterface

@@ -32,7 +32,7 @@ public final class MessageStyleHarness {
                 friends.report(player, "add", UUID.randomUUID(), "<red>Steve", FriendResult.SUCCESS);
                 var result = output.getLast(); var plain = plain(result);
                 check(!plain.contains("VapeeCore") && plain.contains("<red>Steve"), "normal success has no plugin prefix and preserves literal target " + language);
-                check(hasColor(result, "<red>Steve", MessageStyle.HIGHLIGHT), "important literal target uses accent");
+                check(MessageColorAssertions.hasTextColor(result, "<red>Steve", NamedTextColor.WHITE), "literal target without a rank provider uses neutral white");
                 check(hasColor(result, language.equals(Locale.US) ? "Friend request" : "Freundschaftsanfrage", MessageStyle.BODY), "success body is restrained neutral");
                 messages.send(player, tr("common.command-denied").color(MessageStyle.ERROR));
                 check(hasColor(output.getLast(), "", MessageStyle.ERROR), "error remains visibly distinct");

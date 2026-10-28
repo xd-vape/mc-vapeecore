@@ -7,6 +7,7 @@ import dev.vapee.core.friend.gui.FriendMenu;
 import dev.vapee.core.friend.gui.FriendMenuListener;
 import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.settings.PlayerSettingsService;
@@ -30,6 +31,7 @@ public final class FriendModule implements CoreModule {
     private final IdentityModule identityModule;
     private final MessageService messageService;
     private final CommandHelpRenderer helpRenderer;
+    private final PlayerNameFormatter names;
     private final Consumer<EnableStage> enableCheckpoint;
 
     enum EnableStage {
@@ -47,13 +49,29 @@ public final class FriendModule implements CoreModule {
                         SocialModule socialModule, IdentityModule identityModule,
                         MessageService messageService, CommandHelpRenderer helpRenderer) {
         this(plugin, configService, playerModule, socialModule, identityModule,
-                messageService, helpRenderer, stage -> { });
+                messageService, helpRenderer, PlayerNameFormatter.neutral());
+    }
+
+    public FriendModule(JavaPlugin plugin, ConfigService configService, PlayerModule playerModule,
+                        SocialModule socialModule, IdentityModule identityModule,
+                        MessageService messageService, CommandHelpRenderer helpRenderer, PlayerNameFormatter names) {
+        this(plugin, configService, playerModule, socialModule, identityModule,
+                messageService, helpRenderer, stage -> { }, names);
     }
 
     FriendModule(JavaPlugin plugin, ConfigService configService, PlayerModule playerModule,
                  SocialModule socialModule, IdentityModule identityModule,
                  MessageService messageService, CommandHelpRenderer helpRenderer,
                  Consumer<EnableStage> enableCheckpoint) {
+        this(plugin, configService, playerModule, socialModule, identityModule,
+                messageService, helpRenderer, enableCheckpoint, PlayerNameFormatter.neutral());
+    }
+
+    private FriendModule(JavaPlugin plugin, ConfigService configService, PlayerModule playerModule,
+                 SocialModule socialModule, IdentityModule identityModule,
+                 MessageService messageService, CommandHelpRenderer helpRenderer,
+                 Consumer<EnableStage> enableCheckpoint, PlayerNameFormatter names) {
+        this.names = Objects.requireNonNull(names, "names");
         this.enableCheckpoint = Objects.requireNonNull(enableCheckpoint, "enableCheckpoint");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.configService = Objects.requireNonNull(configService, "configService");
@@ -88,13 +106,13 @@ public final class FriendModule implements CoreModule {
                     configService::getFriendLimits, policy, Clock.systemUTC());
             menu = new FriendMenu(plugin, service, identityModule.getIdentityService(), messageService);
             FriendMessages feedback = new FriendMessages(messageService, plugin.getServer()::getPlayer,
-                    id -> FriendMessages.commandArgument(identityModule.getIdentityService(), id));
+                    id -> FriendMessages.commandArgument(identityModule.getIdentityService(), id), names);
             listener = new FriendMenuListener(menu, service, feedback,
                     messageService, plugin.getLogger());
             command = Objects.requireNonNull(plugin.getCommand("friend"),
                     "Command 'friend' is missing from plugin.yml");
             FriendCommand executor = new FriendCommand(plugin, service,
-                    identityModule.getIdentityService(), messageService, helpRenderer, menu);
+                    identityModule.getIdentityService(), messageService, helpRenderer, menu, names);
             plugin.getServer().getPluginManager().registerEvents(listener, plugin);
             enableCheckpoint.accept(EnableStage.LISTENER_REGISTERED);
             command.setExecutor(executor);

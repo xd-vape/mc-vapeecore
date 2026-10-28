@@ -116,6 +116,7 @@ public final class PlayerSettingsYamlCodecHarness {
                                     "sounds",
                                     "private-messages",
                                     "friend-requests",
+                                    "friend-presence-notifications",
                                     "lobby-players-visible")
                             .contains(path);
             for (String raw :
@@ -157,7 +158,7 @@ public final class PlayerSettingsYamlCodecHarness {
         check(value.isSoundsEnabled(), context + ": sounds=true");
         check(value.isPrivateMessagesEnabled(), context + ": private messages=true");
         check(value.isFriendRequestsEnabled(), context + ": friend requests=true");
-        check(!value.isFriendPresenceNotificationsEnabled(), context + ": presence=false");
+        check(value.isFriendPresenceNotificationsEnabled(), context + ": presence=true");
         check(value.getVisibility().getMode() == VisibilityMode.ALL, context + ": mode=ALL");
         check(
                 !value.getVisibility().isShowFriends()

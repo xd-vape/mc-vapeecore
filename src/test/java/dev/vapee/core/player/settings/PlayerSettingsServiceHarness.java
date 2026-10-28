@@ -22,8 +22,8 @@ public final class PlayerSettingsServiceHarness {
         players.loadPlayer(owner, "Owner");
         int baselineSaves = repository.saves;
 
-        check(!settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow(),
-                "friend presence notifications default to opt-in disabled");
+        check(settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow(),
+                "friend presence notifications default to enabled");
         check(settings.areFriendPresenceNotificationsEnabled(UUID.randomUUID()).isEmpty(),
                 "unloaded presence setting read is empty");
         check(settings.areLobbyPlayersVisible(owner).orElseThrow()
@@ -39,7 +39,7 @@ public final class PlayerSettingsServiceHarness {
                 == AddedVisiblePlayerResult.OWNER_NOT_LOADED,
                 "unloaded owner mutations are controlled");
 
-        check(settings.setFriendPresenceNotificationsEnabled(owner, true)
+        check(settings.setFriendPresenceNotificationsEnabled(owner, false)
                 && settings.setLobbyPlayersVisible(owner, false)
                 && settings.setLobbyFriendsVisible(owner, true)
                 && settings.setLobbyStaffVisible(owner, true)
@@ -75,8 +75,8 @@ public final class PlayerSettingsServiceHarness {
                 () -> settings.setLobbyGameParticipantsVisible(owner, false),
                 () -> settings.areLobbyGameParticipantsVisible(owner).orElseThrow());
         assertBooleanRollback(repository, settings, owner, "friend-presence-notifications",
-                () -> settings.setFriendPresenceNotificationsEnabled(owner, false),
-                () -> settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow());
+                () -> settings.setFriendPresenceNotificationsEnabled(owner, true),
+                () -> !settings.areFriendPresenceNotificationsEnabled(owner).orElseThrow());
 
         repository.failNext = true;
         expectFailure(() -> settings.addLobbyVisiblePlayer(owner, target));

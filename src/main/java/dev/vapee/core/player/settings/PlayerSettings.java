@@ -6,7 +6,7 @@ public final class PlayerSettings {
     private static final boolean DEFAULT_SOUNDS_ENABLED = true;
     private static final boolean DEFAULT_PRIVATE_MESSAGES_ENABLED = true;
     private static final boolean DEFAULT_FRIEND_REQUESTS_ENABLED = true;
-    private static final boolean DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED = false;
+    private static final boolean DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED = true;
 
     private boolean scoreboardEnabled;
     private boolean soundsEnabled;

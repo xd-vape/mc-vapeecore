@@ -7,6 +7,7 @@ import dev.vapee.core.command.help.CommandHelpRenderer;
 import dev.vapee.core.config.ConfigService;
 import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
 import dev.vapee.core.module.CoreModule;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.HandlerList;
@@ -23,6 +24,7 @@ public final class ClanModule implements CoreModule {
     private final IdentityModule identity;
     private final MessageService messages;
     private final CommandHelpRenderer help;
+    private final PlayerNameFormatter names;
     private final Consumer<EnableStage> enableCheckpoint;
     private ClanService service;
     private ClanMenu menu;
@@ -39,11 +41,23 @@ public final class ClanModule implements CoreModule {
 
     public ClanModule(JavaPlugin plugin, ConfigService config, IdentityModule identity,
                       MessageService messages, CommandHelpRenderer help) {
-        this(plugin, config, identity, messages, help, stage -> { });
+        this(plugin, config, identity, messages, help, PlayerNameFormatter.neutral());
+    }
+
+    public ClanModule(JavaPlugin plugin, ConfigService config, IdentityModule identity,
+                      MessageService messages, CommandHelpRenderer help, PlayerNameFormatter names) {
+        this(plugin, config, identity, messages, help, stage -> { }, names);
     }
 
     ClanModule(JavaPlugin plugin, ConfigService config, IdentityModule identity,
                MessageService messages, CommandHelpRenderer help, Consumer<EnableStage> enableCheckpoint) {
+        this(plugin, config, identity, messages, help, enableCheckpoint, PlayerNameFormatter.neutral());
+    }
+
+    private ClanModule(JavaPlugin plugin, ConfigService config, IdentityModule identity,
+               MessageService messages, CommandHelpRenderer help, Consumer<EnableStage> enableCheckpoint,
+               PlayerNameFormatter names) {
+        this.names = Objects.requireNonNull(names, "names");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.config = Objects.requireNonNull(config, "config");
         this.identity = Objects.requireNonNull(identity, "identity");
@@ -74,12 +88,12 @@ public final class ClanModule implements CoreModule {
                     new FileClanRepository(plugin.getDataFolder().toPath().resolve("clans.yml")),
                     config::getClanLimits, Clock.systemUTC(), UUID::randomUUID);
             nextMenu = new ClanMenu(plugin, nextService, identities, messages);
-            ClanMessages feedback = new ClanMessages(messages, plugin.getServer()::getPlayer);
+            ClanMessages feedback = new ClanMessages(messages, plugin.getServer()::getPlayer, names);
             nextListener = new ClanMenuListener(nextMenu, nextService, feedback,
                     messages, plugin.getLogger());
             nextCommand = Objects.requireNonNull(plugin.getCommand("clan"),
                     "Command 'clan' is missing from plugin.yml");
-            nextBinding = new ClanCommand(plugin, nextService, identities, messages, help, nextMenu);
+            nextBinding = new ClanCommand(plugin, nextService, identities, messages, help, nextMenu, names);
             plugin.getServer().getPluginManager().registerEvents(nextListener, plugin);
             enableCheckpoint.accept(EnableStage.LISTENER_REGISTERED);
             nextCommand.setExecutor(nextBinding);

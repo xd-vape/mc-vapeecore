@@ -3,6 +3,7 @@ package dev.vapee.core.presence;
 import dev.vapee.core.friend.FriendModule;
 import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
@@ -23,6 +24,7 @@ public final class PresenceModule implements CoreModule {
     private final Supplier<SocialService> socialServiceProvider;
     private final Supplier<FriendService> friendServiceProvider;
     private final MessageService messageService;
+    private final PlayerNameFormatter names;
 
     private PresenceService service;
     private FriendPresenceNotifier notifier;
@@ -50,6 +52,25 @@ public final class PresenceModule implements CoreModule {
             Supplier<SocialService> socialServiceProvider,
             Supplier<FriendService> friendServiceProvider,
             MessageService messageService) {
+        this(
+                plugin,
+                playerServiceProvider,
+                playerSettingsServiceProvider,
+                socialServiceProvider,
+                friendServiceProvider,
+                messageService,
+                PlayerNameFormatter.neutral());
+    }
+
+    public PresenceModule(
+            JavaPlugin plugin,
+            Supplier<PlayerService> playerServiceProvider,
+            Supplier<PlayerSettingsService> playerSettingsServiceProvider,
+            Supplier<SocialService> socialServiceProvider,
+            Supplier<FriendService> friendServiceProvider,
+            MessageService messageService,
+            PlayerNameFormatter names) {
+        this.names = Objects.requireNonNull(names, "names");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.playerServiceProvider =
                 Objects.requireNonNull(playerServiceProvider, "playerServiceProvider");
@@ -92,9 +113,21 @@ public final class PresenceModule implements CoreModule {
                         socialService,
                         plugin.getServer()::getPlayer,
                         messageService,
-                        plugin.getLogger());
+                        plugin.getLogger(),
+                        names);
         PresenceListener newListener =
-                new PresenceListener(newService, playerService, newNotifier, plugin.getLogger());
+                new PresenceListener(
+                        newService,
+                        playerService,
+                        newNotifier,
+                        plugin.getLogger(),
+                        new FriendJoinSummary(
+                                        friendService,
+                                        newService,
+                                        socialService,
+                                        messageService,
+                                        playerSettingsService)
+                                ::send);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newListener, plugin);

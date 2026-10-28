@@ -9,6 +9,8 @@ import dev.vapee.core.clan.gui.ClanMenuView;
 import dev.vapee.core.command.help.*;
 import dev.vapee.core.identity.*;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.message.SocialChannel;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -59,18 +61,33 @@ public final class ClanCommand implements TabExecutor {
     private final Consumer<Player> openMenu;
     private final Consumer<Player> openInvites;
     private final ClanMessages feedback;
+    private final PlayerNameFormatter names;
 
     public ClanCommand(JavaPlugin plugin, ClanService clans, PlayerIdentityService identities,
                        MessageService messages, CommandHelpRenderer help, ClanMenu menu) {
+        this(plugin, clans, identities, messages, help, menu, PlayerNameFormatter.neutral());
+    }
+
+    public ClanCommand(JavaPlugin plugin, ClanService clans, PlayerIdentityService identities,
+                       MessageService messages, CommandHelpRenderer help, ClanMenu menu, PlayerNameFormatter names) {
         this(clans, identities, messages, help, plugin.getServer()::getOnlinePlayers,
                 plugin.getServer()::getPlayer, plugin.getLogger(), menu::open,
-                player -> menu.open(player, ClanMenuView.INVITES, 0));
+                player -> menu.open(player, ClanMenuView.INVITES, 0), names);
     }
 
     public ClanCommand(ClanService clans, PlayerIdentityService identities, MessageService messages,
                        CommandHelpRenderer help, Supplier<? extends Collection<? extends Player>> onlinePlayers,
                        Function<UUID, Player> onlinePlayer, Logger logger, Consumer<Player> openMenu,
                        Consumer<Player> openInvites) {
+        this(clans, identities, messages, help, onlinePlayers, onlinePlayer, logger, openMenu,
+                openInvites, PlayerNameFormatter.neutral());
+    }
+
+    public ClanCommand(ClanService clans, PlayerIdentityService identities, MessageService messages,
+                       CommandHelpRenderer help, Supplier<? extends Collection<? extends Player>> onlinePlayers,
+                       Function<UUID, Player> onlinePlayer, Logger logger, Consumer<Player> openMenu,
+                       Consumer<Player> openInvites, PlayerNameFormatter names) {
+        this.names = Objects.requireNonNull(names, "names");
         this.clans = Objects.requireNonNull(clans, "clans");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -79,7 +96,7 @@ public final class ClanCommand implements TabExecutor {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.openMenu = Objects.requireNonNull(openMenu, "openMenu");
         this.openInvites = Objects.requireNonNull(openInvites, "openInvites");
-        this.feedback = new ClanMessages(messages, Objects.requireNonNull(onlinePlayer, "onlinePlayer"));
+        this.feedback = new ClanMessages(messages, Objects.requireNonNull(onlinePlayer, "onlinePlayer"), names);
     }
 
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
@@ -147,9 +164,9 @@ public final class ClanCommand implements TabExecutor {
             return;
         }
         send(actor, clanIdentity(clan));
-        send(actor, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size(), MessageStyle.HIGHLIGHT), "maximum", Component.text(clans.getLimits().maxMembers(), MessageStyle.HIGHLIGHT))), MessageStyle.BODY);
-        send(actor, tr("clan.owner", java.util.Map.of("player", Component.text(displayName(clan.ownerId()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
-        send(actor, tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
+        messages.send(actor, tr("clan.member-capacity", java.util.Map.of("count", Component.text(clan.members().size(), MessageStyle.HIGHLIGHT), "maximum", Component.text(clans.getLimits().maxMembers(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
+        messages.send(actor, tr("clan.owner", java.util.Map.of("player", names.format(clan.ownerId(), displayName(clan.ownerId())))).color(MessageStyle.BODY));
+        messages.send(actor, tr("clan.id", java.util.Map.of("id", Component.text(clan.id().toString(), MessageStyle.HIGHLIGHT))).color(MessageStyle.BODY));
     }
 
     private void handleCreate(Player actor, UUID self, String[] args) {
@@ -231,7 +248,7 @@ public final class ClanCommand implements TabExecutor {
                 : clans.denyInvite(self, target.id());
         feedback.report(actor, action, target.tag(), result);
         if (result == ClanResult.SUCCESS && action.equals("accept")) {
-            feedback.notifyAccept(owner, actor.getName());
+            feedback.notifyAccept(owner, actor.getUniqueId(), actor.getName());
         }
     }
 
@@ -272,12 +289,12 @@ public final class ClanCommand implements TabExecutor {
             case "transfer" -> clans.transferOwnership(self, target.uniqueId());
             default -> throw new IllegalStateException("Unknown clan action");
         };
-        feedback.report(actor, action, target.name(), result);
+        feedback.report(actor, action, target.uniqueId(), target.name(), result);
         if (result == ClanResult.SUCCESS) {
             switch (action) {
                 case "invite" -> {
                     if (source != null) {
-                        feedback.notifyInvite(target.uniqueId(), actor.getName(), source.name(), source.tag());
+                        feedback.notifyInvite(target.uniqueId(), source.id(), actor.getUniqueId(), actor.getName(), source.name(), source.tag());
                     }
                 }
                 case "kick" -> feedback.notifyKick(target.uniqueId(), tag);
@@ -297,11 +314,11 @@ public final class ClanCommand implements TabExecutor {
         send(actor, tr("clan.command.invites-heading"), NamedTextColor.GOLD);
         for (ClanInvite invite : invites) {
             Clan source = clans.getClan(invite.clanId()).orElse(null);
-            String identifier = source == null ? invite.clanId().toString() : source.tag();
+            String identifier = invite.clanId().toString();
             Component identity = source == null
                     ? tr("clan.command.unknown-clan", java.util.Map.of("id", Component.text(invite.clanId().toString(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY)
                     : clanIdentity(source);
-            send(actor, identity.append(Component.space()).append(actionButton(action, identifier)));
+            messages.send(actor, identity.append(Component.space()).append(actionButton(action, identifier)));
         }
         sendUse(actor, "/clan " + action + " <tag|uuid>");
     }
@@ -321,7 +338,7 @@ public final class ClanCommand implements TabExecutor {
         for (ClanInvite invite : invites) {
             String display = displayName(invite.recipient());
             String argument = identityCommandArgument(invite.recipient());
-            send(actor, Component.text(display, MessageStyle.HIGHLIGHT)
+            messages.send(actor, names.format(invite.recipient(), display)
                     .append(Component.space())
                     .append(actionButton("cancel", argument)));
         }
@@ -338,9 +355,12 @@ public final class ClanCommand implements TabExecutor {
 
     private Component actionButton(String action, String argument) {
         Component label = tr(switch (action) { case "accept" -> "common.accept"; case "deny" -> "common.deny"; case "cancel" -> "common.cancel"; default -> throw new IllegalArgumentException("Unknown clan button action: " + action); });
-        return commandSuggestion(Component.text("[").append(label).append(Component.text("]")), "/clan " + action + " " + argument,
+        Component button = commandSuggestion(Component.text("[").append(label).append(Component.text("]")), "/clan " + action + " " + argument,
                 action.equals("deny") || action.equals("cancel") ? NamedTextColor.RED : NamedTextColor.GREEN,
-                tr("clan.command.hover." + action));
+                tr(action.equals("cancel") ? "clan.command.hover.cancel" : "clan.invite." + action + "-hover"));
+        if (action.equals("cancel")) return button;
+        // Incoming actions use the invitation's stable clan ID, never its mutable display tag.
+        return button.clickEvent(ClickEvent.runCommand("/clan " + action + " " + UUID.fromString(argument)));
     }
 
     private Component commandSuggestion(Component label, String command, NamedTextColor color, Component hover) {
@@ -354,23 +374,24 @@ public final class ClanCommand implements TabExecutor {
     }
 
     private void sendUsage(Player actor, String syntax) {
-        send(actor, tr("common.usage").color(NamedTextColor.YELLOW)
+        messages.send(actor, tr("common.usage").color(NamedTextColor.GRAY)
                 .append(commandSuggestion(syntax, NamedTextColor.AQUA, tr("common.command-insert"))));
     }
 
     private void sendExample(Player actor, String command) {
-        send(actor, tr("common.example").color(NamedTextColor.GRAY)
+        messages.send(actor, tr("common.example").color(NamedTextColor.GRAY)
                 .append(commandSuggestion(command, NamedTextColor.AQUA, tr("common.example-click"))));
     }
 
     private void sendUse(Player actor, String syntax) {
-        send(actor, tr("common.use-short").color(NamedTextColor.GRAY)
+        messages.send(actor, tr("common.use-short").color(NamedTextColor.GRAY)
                 .append(commandSuggestion(syntax, NamedTextColor.AQUA, tr("common.command-insert"))));
     }
 
     private void sendUnknownCommand(Player actor, String input) {
-        send(actor, tr("clan.command.unknown", java.util.Map.of("command", Component.text(input, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED));
-        send(actor, tr("clan.command.help", java.util.Map.of("command", commandSuggestion("/clan help", NamedTextColor.AQUA, tr("clan.command.help-hover")))).color(NamedTextColor.GRAY));
+        SocialChannel.CLAN.error(messages, actor, tr("clan.command.unknown", java.util.Map.of("command", Component.text(input, MessageStyle.HIGHLIGHT)))
+                .append(Component.newline())
+                .append(tr("clan.command.help", java.util.Map.of("command", commandSuggestion("/clan help", NamedTextColor.AQUA, tr("clan.command.help-hover")))).color(NamedTextColor.GRAY)));
     }
 
     private Clan resolveClan(String token) {
@@ -432,7 +453,8 @@ public final class ClanCommand implements TabExecutor {
     }
 
     private void send(CommandSender sender, Component text, NamedTextColor color) {
-        messages.send(sender, text.color(color));
+        if (color == NamedTextColor.RED) SocialChannel.CLAN.error(messages, sender, text);
+        else SocialChannel.CLAN.send(messages, sender, text.color(MessageStyle.BODY));
     }
-    private void send(CommandSender sender, Component text) { messages.send(sender, text); }
+    private void send(CommandSender sender, Component text) { SocialChannel.CLAN.send(messages, sender, text.color(MessageStyle.BODY)); }
 }

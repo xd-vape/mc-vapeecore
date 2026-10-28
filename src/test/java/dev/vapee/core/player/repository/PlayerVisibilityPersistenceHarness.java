@@ -37,8 +37,8 @@ public final class PlayerVisibilityPersistenceHarness {
         Path file = directory.resolve(owner + ".yml");
         Files.writeString(file, base("Legacy") + "settings:\n  lobby-players-visible: false\n");
         CorePlayer legacy = repository.findByUniqueId(owner).orElseThrow();
-        check(!legacy.getSettings().isFriendPresenceNotificationsEnabled(),
-                "legacy missing presence setting defaults to false");
+        check(legacy.getSettings().isFriendPresenceNotificationsEnabled(),
+                "legacy missing presence setting inherits enabled default");
         check(!Files.readString(file).contains("friend-presence-notifications"),
                 "legacy read does not eagerly rewrite the missing preference");
         var visibility = legacy.getSettings().getVisibility();
@@ -99,8 +99,8 @@ public final class PlayerVisibilityPersistenceHarness {
         String invalidSource = Files.readString(file);
         handler.messages.clear();
         CorePlayer loaded = repository.findByUniqueId(owner).orElseThrow();
-        check(!loaded.getSettings().isFriendPresenceNotificationsEnabled(),
-                "invalid presence preference falls back to false");
+        check(loaded.getSettings().isFriendPresenceNotificationsEnabled(),
+                "invalid presence preference falls back to enabled default");
         check(!loaded.getSettings().getVisibility().isShowFriends(),
                 "invalid boolean falls back to false");
         check(loaded.getSettings().getVisibility().getAddedPlayers().equals(Set.of(valid)),

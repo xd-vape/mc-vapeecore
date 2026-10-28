@@ -13,6 +13,7 @@
 # ==================================================
 
 common:
+  error-label: "Error: "
 
   # Navigation
   back: "Back"
@@ -533,12 +534,17 @@ social:
 # ==================================================
 
 friends:
+  prefix: "[Friends]"
+  join-summary:
+    none: "None of your friends are currently online."
+    one: "Currently, <online> of your <total> friends is online."
+    many: "Currently, <online> of your <total> friends are online."
 
   # General and GUI
   title: "Friends"
   menu:
-    denied: "<red>You do not have permission to use friends.</red>"
-    update-failed: "<red>The friends data could not be updated. Please try again.</red>"
+    denied: "You do not have permission to use friends."
+    update-failed: "The friends data could not be updated. Please try again."
   empty: "No friends yet"
   empty-hint: "Use /friend add \\<player> to get started."
   refresh-hint: "Update friends, requests and online status."
@@ -622,6 +628,7 @@ friends:
 # ==================================================
 
 clan:
+  prefix: "[Clan]"
 
   # General and GUI
   title: "Clan"

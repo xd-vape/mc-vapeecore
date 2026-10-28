@@ -50,7 +50,7 @@ Navigation adds no profile field, YAML property or default. The optional root `V
 
 ## Worked example: Friend Presence Notifications
 
-The existing preference is opt-in: `PlayerSettings` defaults it to **false**. `areFriendPresenceNotificationsEnabled(UUID)` reads only loaded profiles; `setFriendPresenceNotificationsEnabled(UUID, boolean)` uses the shared service transaction. The stored key is exactly **`settings.friend-presence-notifications`**.
+Friend presence defaults to **true** for new settings and missing YAML values. Every explicitly persisted Boolean remains authoritative, including **false**. Old serialized false cannot be distinguished from deliberate opt-out: existing users must enable it in the Settings menu. No bulk rewrite or schema migration occurs. `areFriendPresenceNotificationsEnabled(UUID)` reads only loaded profiles; `setFriendPresenceNotificationsEnabled(UUID, boolean)` uses the shared service transaction. The stored key is exactly **`settings.friend-presence-notifications`**.
 
 `PlayerSettingsYamlCodec` writes the Boolean and reads only actual Boolean values. Missing values use the model default; invalid values warn and use that same default. Reads do not rewrite old files. `FilePlayerRepository` coordinates the aggregate save. `PlayerFileSchema` owns this path, preserves unknown siblings, and compares written candidate values against the canonical aggregate before replacement. Existing schema version remains **1**. `SafeFileWriter` first validates a temporary candidate, then attempts atomic replacement; unsupported atomic moves use protected backup/restore. Unresolved restoration blocks further reads/writes until reconciliation. GUI code owns none of that recovery logic.
 

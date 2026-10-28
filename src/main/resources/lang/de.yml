@@ -13,6 +13,7 @@
 # ==================================================
 
 common:
+  error-label: "Fehler: "
 
   # Navigation
   back: "Zurück"
@@ -533,12 +534,17 @@ social:
 # ==================================================
 
 friends:
+  prefix: "[Freunde]"
+  join-summary:
+    none: "Momentan ist keiner deiner Freunde online."
+    one: "Aktuell ist <online> von <total> Freunden online."
+    many: "Aktuell sind <online> von <total> Freunden online."
 
   # General and GUI
   title: "Freunde"
   menu:
-    denied: "<red>Du hast keine Berechtigung für Freunde.</red>"
-    update-failed: "<red>Die Freundesdaten konnten nicht aktualisiert werden. Versuche es erneut.</red>"
+    denied: "Du hast keine Berechtigung für Freunde."
+    update-failed: "Die Freundesdaten konnten nicht aktualisiert werden. Versuche es erneut."
   empty: "Noch keine Freunde"
   empty-hint: "Nutze /friend add \\<player>, um zu beginnen."
   refresh-hint: "Aktualisiere Freunde, Anfragen und Online-Status."
@@ -622,6 +628,7 @@ friends:
 # ==================================================
 
 clan:
+  prefix: "[Clan]"
 
   # General and GUI
   title: "Clan"

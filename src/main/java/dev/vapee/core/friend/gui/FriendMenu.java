@@ -5,6 +5,7 @@ import static dev.vapee.core.i18n.Translations.tr;
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.CachedPlayerHeads;
 import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.friend.FriendRequest;
 import dev.vapee.core.friend.FriendService;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -78,6 +80,7 @@ public final class FriendMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final BiFunction<UUID, ItemStack, ItemStack> playerHeads;
     private Player renderingFor;
     private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Logger logger;
@@ -88,7 +91,8 @@ public final class FriendMenu {
         this(friends, identities, messages,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                UiItems::render, plugin.getLogger());
+                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT,
+                new CachedPlayerHeads(plugin.getServer())::apply);
     }
 
     FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
@@ -100,6 +104,15 @@ public final class FriendMenu {
     FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
                Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this(friends, identities, messages, onlinePlayer, inventoryFactory, itemRenderer, logger,
+                menuLayout, (id, item) -> item);
+    }
+
+    FriendMenu(FriendService friends, PlayerIdentityService identities, MessageService messages,
+               Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+               ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout,
+               BiFunction<UUID, ItemStack, ItemStack> playerHeads) {
+        this.playerHeads = Objects.requireNonNull(playerHeads, "playerHeads");
         this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.friends = Objects.requireNonNull(friends, "friends");
@@ -122,7 +135,7 @@ public final class FriendMenu {
         Player viewer = Objects.requireNonNull(player, "player");
         FriendMenuView selectedView = Objects.requireNonNull(view, "view");
         if (!viewer.hasPermission(FriendCommand.PERMISSION)) {
-            messages.send(viewer, tr("friends.denied").color(NamedTextColor.RED));
+            dev.vapee.core.message.SocialChannel.FRIENDS.error(messages, viewer, tr("friends.denied"));
             return false;
         }
         UUID owner = viewer.getUniqueId();
@@ -147,7 +160,9 @@ public final class FriendMenu {
             holder.bindInventory(inventory);
         }
         for (int index = first; index < end; index++) {
-            inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(selectedView, entries.get(index))));
+            Entry entry = entries.get(index);
+            inventory.setItem(layout.contentSlot(index - first),
+                    playerHeads.apply(entry.id(), itemRenderer.render(entryItem(selectedView, entry))));
         }
         if (entries.isEmpty()) {
             Component empty = switch (selectedView) {
