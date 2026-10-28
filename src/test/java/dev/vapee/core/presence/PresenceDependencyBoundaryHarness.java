@@ -483,20 +483,26 @@ public final class PresenceDependencyBoundaryHarness {
         }
 
         void expected(Generation generation, String label, boolean online) {
+            var notifications = deliveries.stream().filter(value -> !value.recipient.equals(SUBJECT)).toList();
+            var summaries = deliveries.stream().filter(value -> value.recipient.equals(SUBJECT)).toList();
+            check(summaries.equals(online
+                            ? List.of(new Delivery(SUBJECT, "Currently, 4 of your 7 friends are online."))
+                            : List.of()),
+                    "only a real join emits exactly one private summary, separate from friend status notifications");
             Set<UUID> expected =
                     generation.second
                             ? Set.of(B_FRIEND, PREFERENCE, IGNORED)
                             : Set.of(A_FRIEND, REVERSE_IGNORED);
             check(
-                    deliveries.size() == expected.size()
-                            && deliveries.stream()
+                    notifications.size() == expected.size()
+                            && notifications.stream()
                                     .map(Delivery::recipient)
                                     .collect(java.util.stream.Collectors.toSet())
                                     .equals(expected),
                     label);
             String text = online ? "[Friends] Friend Subject is now online." : "[Friends] Friend Subject went offline.";
             check(
-                    deliveries.stream().allMatch(value -> value.text.equals(text)),
+                    notifications.stream().allMatch(value -> value.text.equals(text)),
                     "notifications use actual existing localized message flow");
         }
 

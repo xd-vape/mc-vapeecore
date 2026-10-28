@@ -228,8 +228,11 @@ public final class PresenceLifecycleHarness {
                     "loaded join reaches online friend once through actual notifier and"
                             + " MessageService");
             check(
-                    a.messages.isEmpty() && unrelated.messages.isEmpty(),
-                    "no self or nonfriend notification");
+                    a.messages.size() == 1
+                            && plain(a.messages.getFirst())
+                                    .equals("Currently, 1 of your 1 friends is online.")
+                            && unrelated.messages.isEmpty(),
+                    "one prefix-free self summary after duplicate join; no self status or nonfriend notification");
             listener.onPlayerQuit(quitA);
             listener.onPlayerQuit(quitA);
             check(

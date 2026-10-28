@@ -5,6 +5,7 @@ import static dev.vapee.core.i18n.Translations.tr;
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItemSpec;
 import dev.vapee.core.ui.UiItems;
+import dev.vapee.core.ui.CachedPlayerHeads;
 import dev.vapee.core.ui.Pagination;
 import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
@@ -30,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -75,6 +77,7 @@ public final class VisiblePlayersMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final InventoryFactory inventoryFactory;
     private final ItemRenderer itemRenderer;
+    private final BiFunction<UUID, ItemStack, ItemStack> playerHeads;
     private Player renderingFor;
     private final java.util.function.Consumer<Player> localeChanges = viewer -> refreshActive(viewer.getUniqueId());
     private final Logger logger;
@@ -85,7 +88,8 @@ public final class VisiblePlayersMenu {
         this(settings, identities, messages,
                 Objects.requireNonNull(plugin, "plugin").getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                UiItems::render, plugin.getLogger());
+                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT,
+                new CachedPlayerHeads(plugin.getServer())::apply);
     }
 
     VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
@@ -97,6 +101,15 @@ public final class VisiblePlayersMenu {
     VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
                        MessageService messages, Function<UUID, Player> onlinePlayer,
                        InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout) {
+        this(settings, identities, messages, onlinePlayer, inventoryFactory, itemRenderer, logger,
+                menuLayout, (id, item) -> item);
+    }
+
+    VisiblePlayersMenu(PlayerSettingsService settings, PlayerIdentityService identities,
+                       MessageService messages, Function<UUID, Player> onlinePlayer,
+                       InventoryFactory inventoryFactory, ItemRenderer itemRenderer, Logger logger,
+                       MenuLayout<Action> menuLayout, BiFunction<UUID, ItemStack, ItemStack> playerHeads) {
+        this.playerHeads = Objects.requireNonNull(playerHeads, "playerHeads");
         this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
         this.settings = Objects.requireNonNull(settings, "settings");
@@ -146,7 +159,9 @@ public final class VisiblePlayersMenu {
             holder.bindInventory(inventory);
         }
         for (int index = first; index < end; index++) {
-            inventory.setItem(layout.contentSlot(index - first), itemRenderer.render(entryItem(entries.get(index))));
+            Entry entry = entries.get(index);
+            inventory.setItem(layout.contentSlot(index - first),
+                    playerHeads.apply(entry.id(), itemRenderer.render(entryItem(entry))));
         }
         if (entries.isEmpty()) {
             placeDisplay(inventory, layout.emptySlot(), item(Material.PAPER, tr("visibility.empty"), NamedTextColor.GRAY,

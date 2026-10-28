@@ -116,7 +116,18 @@ public final class PresenceModule implements CoreModule {
                         plugin.getLogger(),
                         names);
         PresenceListener newListener =
-                new PresenceListener(newService, playerService, newNotifier, plugin.getLogger());
+                new PresenceListener(
+                        newService,
+                        playerService,
+                        newNotifier,
+                        plugin.getLogger(),
+                        new FriendJoinSummary(
+                                        friendService,
+                                        newService,
+                                        socialService,
+                                        messageService,
+                                        playerSettingsService)
+                                ::send);
 
         try {
             plugin.getServer().getPluginManager().registerEvents(newListener, plugin);

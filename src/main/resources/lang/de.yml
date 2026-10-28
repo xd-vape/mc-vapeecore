@@ -535,6 +535,10 @@ social:
 
 friends:
   prefix: "[Freunde]"
+  join-summary:
+    none: "Momentan ist keiner deiner Freunde online."
+    one: "Aktuell ist <online> von <total> Freunden online."
+    many: "Aktuell sind <online> von <total> Freunden online."
 
   # General and GUI
   title: "Freunde"
