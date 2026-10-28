@@ -112,7 +112,7 @@ For an intentionally approved new setting, add its domain/default/accessors, ser
 | Paths under `settings` | Existing default / behavior |
 |---|---|
 | `scoreboard`, `sounds`, `private-messages`, `friend-requests` | `true`, obtained from `PlayerSettings.defaults()` |
-| `friend-presence-notifications` | `false`, obtained from the same domain object |
+| `friend-presence-notifications` | `true` when missing; explicitly persisted `false` remains false |
 | `lobby-players-visible` | Legacy Boolean; domain default `true`. `true` maps to ALL, `false` to FILTERED |
 | `visibility.mode` | Explicit ALL/FILTERED/HIDDEN wins over the legacy Boolean |
 | `visibility.show-friends`, `show-staff`, `show-added-users`, `show-game-participants` | Existing filter defaults `false`; independent of the selected mode |

@@ -250,7 +250,7 @@ public final class FriendCommand implements TabExecutor {
                 .forEach(id -> messages.send(player, Component.text("• ", NamedTextColor.GRAY)
                         .append(Component.text(displayName(id), MessageStyle.HIGHLIGHT)).append(Component.space())
                         .append(action.equals("accept") || action.equals("deny")
-                                ? FriendMessages.requestActions(commandArgument(id))
+                                ? FriendMessages.requestActions(id.toString())
                                 : FriendMessages.actionButton(action, commandArgument(id)))));
     }
 

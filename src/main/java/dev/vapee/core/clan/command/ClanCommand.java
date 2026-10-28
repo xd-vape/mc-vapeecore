@@ -277,7 +277,7 @@ public final class ClanCommand implements TabExecutor {
             switch (action) {
                 case "invite" -> {
                     if (source != null) {
-                        feedback.notifyInvite(target.uniqueId(), actor.getName(), source.name(), source.tag());
+                        feedback.notifyInvite(target.uniqueId(), source.id(), actor.getName(), source.name(), source.tag());
                     }
                 }
                 case "kick" -> feedback.notifyKick(target.uniqueId(), tag);
@@ -297,7 +297,7 @@ public final class ClanCommand implements TabExecutor {
         send(actor, tr("clan.command.invites-heading"), NamedTextColor.GOLD);
         for (ClanInvite invite : invites) {
             Clan source = clans.getClan(invite.clanId()).orElse(null);
-            String identifier = source == null ? invite.clanId().toString() : source.tag();
+            String identifier = invite.clanId().toString();
             Component identity = source == null
                     ? tr("clan.command.unknown-clan", java.util.Map.of("id", Component.text(invite.clanId().toString(), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY)
                     : clanIdentity(source);
@@ -338,9 +338,12 @@ public final class ClanCommand implements TabExecutor {
 
     private Component actionButton(String action, String argument) {
         Component label = tr(switch (action) { case "accept" -> "common.accept"; case "deny" -> "common.deny"; case "cancel" -> "common.cancel"; default -> throw new IllegalArgumentException("Unknown clan button action: " + action); });
-        return commandSuggestion(Component.text("[").append(label).append(Component.text("]")), "/clan " + action + " " + argument,
+        Component button = commandSuggestion(Component.text("[").append(label).append(Component.text("]")), "/clan " + action + " " + argument,
                 action.equals("deny") || action.equals("cancel") ? NamedTextColor.RED : NamedTextColor.GREEN,
-                tr("clan.command.hover." + action));
+                tr(action.equals("cancel") ? "clan.command.hover.cancel" : "clan.invite." + action + "-hover"));
+        if (action.equals("cancel")) return button;
+        // Incoming actions use the invitation's stable clan ID, never its mutable display tag.
+        return button.clickEvent(ClickEvent.runCommand("/clan " + action + " " + UUID.fromString(argument)));
     }
 
     private Component commandSuggestion(Component label, String command, NamedTextColor color, Component hover) {

@@ -9,7 +9,7 @@ Eine gespeicherte Referenz macht den Consumer nicht zum Owner. Der Owner erzeugt
 | Presence-Abhängigkeit | Owner / Verfügbarkeit | Verwendung durch Presence |
 |---|---|---|
 | PlayerService | PlayerModule; nach dessen Enable bis zum Disable | Geladene Profile bei Seeding und Join prüfen |
-| PlayerSettingsService | PlayerModule; dieselbe Modul-Lebensdauer | Opt-in des Empfängers lesen |
+| PlayerSettingsService | PlayerModule; dieselbe Modul-Lebensdauer | Aktuelle Benachrichtigungseinstellung des Empfängers lesen |
 | SocialService | SocialModule; nach dessen Enable bis zum Disable | Ignore-Beziehungen in beiden Richtungen lesen |
 | FriendService | FriendModule; Getter erst nach erfolgreichem Enable, nach Disable gesperrt | Aktuelle Freunde des Subjects lesen |
 

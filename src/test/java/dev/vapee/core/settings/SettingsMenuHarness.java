@@ -37,12 +37,9 @@ public final class SettingsMenuHarness {
         for (var entry : features.entrySet()) {
             int slot = entry.getKey();
             check(spec(top, slot).material() == entry.getValue(), "correct feature icon at " + slot);
-            boolean presence = slot == MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE);
             int statusSlot = statuses.get(slot);
-            check(spec(top, statusSlot).material() == (presence
-                            ? Material.RED_STAINED_GLASS_PANE : Material.LIME_STAINED_GLASS_PANE)
-                            && spec(top, statusSlot).name().color().equals(presence
-                            ? NamedTextColor.RED : NamedTextColor.GREEN),
+            check(spec(top, statusSlot).material() == Material.LIME_STAINED_GLASS_PANE
+                            && spec(top, statusSlot).name().color().equals(NamedTextColor.GREEN),
                     "correct default status at named feature status slot " + slot);
         }
         check(text(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD)).equals("Scoreboard") && text(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SOUNDS)).equals("Sounds")
@@ -57,8 +54,8 @@ public final class SettingsMenuHarness {
         int populated = 0;
         for (int slot = 0; slot < top.getSize(); slot++) if (top.getItem(slot) != null) populated++;
         check(populated == 14 && java.util.stream.IntStream.range(0, top.getSize()).allMatch(slot -> top.getItem(slot) == null || f.menu.entryAt(slot).isPresent() || f.menu.layout().actionAt(slot).isPresent()), "only functional items; no filler or fake settings");
-        check(text(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1)).equals("Disabled") && spec(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1)).material() == Material.RED_STAINED_GLASS_PANE,
-                "friend presence is visibly opt-in by default");
+        check(text(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1)).equals("Enabled") && spec(top, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1)).material() == Material.LIME_STAINED_GLASS_PANE,
+                "friend presence is visibly enabled by default");
         f.settings.setLobbyPlayersVisible(p.id, false);
         f.settings.setScoreboardEnabled(p.id, false);
         f.menu.refresh(p.player, top);
@@ -80,10 +77,10 @@ public final class SettingsMenuHarness {
         int[] panes = {MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SCOREBOARD, 1), MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.SOUNDS, 1), MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.PRIVATE_MESSAGES, 1), MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_REQUESTS, 1), MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE, 1)};
         for (int i = 0; i < icons.length; i++) {
             check(f.click(p, top, icons[i], ClickType.LEFT).isCancelled(), "left click is protected");
-            check(text(top, panes[i]).equals(icons[i] == MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE) ? "Enabled" : "Disabled"),
+            check(text(top, panes[i]).equals("Disabled"),
                     "icon toggles and refreshes status");
             check(f.click(p, top, panes[i], ClickType.RIGHT).isCancelled(), "right click is protected");
-            check(text(top, panes[i]).equals(icons[i] == MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE) ? "Disabled" : "Enabled"),
+            check(text(top, panes[i]).equals("Enabled"),
                     "status toggles same setting");
         }
         check(f.repository.saves == baseline + 10, "all toggles persist immediately");
@@ -118,7 +115,7 @@ public final class SettingsMenuHarness {
             int baseline = f.repository.saves;
             f.repository.failNext = true;
             f.click(p, top, slot, ClickType.LEFT);
-            check(text(top, statusSlot).equals(slot == MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.FRIEND_PRESENCE) ? "Disabled" : "Enabled")
+            check(text(top, statusSlot).equals("Enabled")
                             && f.repository.saves == baseline,
                     "failed toggle restores actual runtime state at " + slot);
             check(f.presentationCalls == 0 && f.soundCalls == 0 && p.open == top,

@@ -75,13 +75,14 @@ public final class ClanMessages {
         if (player != null && player.isOnline()) messages.send(player, notice);
     }
 
-    public void notifyInvite(UUID recipient, String owner, String clanName, String tag) {
+    public void notifyInvite(UUID recipient, UUID clanId, String owner, String clanName, String tag) {
+        Objects.requireNonNull(clanId, "clanId");
         notifyOnline(recipient, tr("clan.invite.received", java.util.Map.of("owner", Component.text(owner, MessageStyle.HIGHLIGHT),
                 "clan", Component.text(clanName, MessageStyle.HIGHLIGHT), "tag", Component.text(tag, NamedTextColor.AQUA))).color(MessageStyle.BODY)
                 .append(Component.newline())
-                .append(inviteButton(tr("common.accept"), "/clan accept " + tag, NamedTextColor.GREEN, tr("clan.invite.accept-hover")))
+                .append(inviteButton(tr("common.accept"), "/clan accept " + clanId, NamedTextColor.GREEN, tr("clan.invite.accept-hover")))
                 .append(Component.space())
-                .append(inviteButton(tr("common.deny"), "/clan deny " + tag, NamedTextColor.RED, tr("clan.invite.deny-hover"))));
+                .append(inviteButton(tr("common.deny"), "/clan deny " + clanId, NamedTextColor.RED, tr("clan.invite.deny-hover"))));
     }
 
     public void notifyAccept(UUID owner, String playerName) {
@@ -98,7 +99,7 @@ public final class ClanMessages {
 
     private Component inviteButton(Component label, String command, NamedTextColor color, Component hover) {
         return Component.text("[").append(label).append(Component.text("]")).color(color)
-                .clickEvent(ClickEvent.suggestCommand(command))
+                .clickEvent(ClickEvent.runCommand(command))
                 .hoverEvent(HoverEvent.showText(hover.color(NamedTextColor.GRAY)));
     }
 }

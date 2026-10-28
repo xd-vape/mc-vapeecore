@@ -115,6 +115,7 @@ public final class PresenceLifecycleHarness {
                 "Presence does not alter seven reload participants");
 
         realModuleLifecycle();
+        friendDelivery();
         String listenerSource =
                 Files.readString(
                         Path.of("src/main/java/dev/vapee/core/presence/PresenceListener.java"));
@@ -126,6 +127,207 @@ public final class PresenceLifecycleHarness {
                         && !listenerSource.contains("World"),
                 "presence listener does not own global messages or unrelated events");
         System.out.println("PresenceLifecycleHarness passed " + checks + " checks.");
+    }
+
+    private static void friendDelivery() throws Exception {
+        Path directory = Files.createTempDirectory("vapeecore-presence-delivery-");
+        try (var f = new ModuleRuntimeFixture()) {
+            ModuleRuntimeFixture.set(f.plugin, "dataFolder", directory.toFile());
+            Path configPath = directory.resolve("config.yml");
+            Files.writeString(configPath, "debug: false\n");
+            var ctor =
+                    dev.vapee.core.config.ConfigService.class.getDeclaredConstructor(
+                            Path.class, Logger.class);
+            ctor.setAccessible(true);
+            var config = ctor.newInstance(configPath, f.logger);
+            config.load();
+            PlayerModule owner = new PlayerModule(f.plugin, config, f.messages);
+            owner.enable();
+            var players = owner.getPlayerService();
+            var settings = owner.getPlayerSettingsService();
+            var social = new SocialService(players, f.logger);
+            var friends =
+                    new FriendService(
+                            new dev.vapee.core.friend.FileFriendRepository(
+                                    directory.resolve("friends.yml"), f.logger),
+                            FriendLimits.defaults(),
+                            FriendRequestPolicy.allowAll(),
+                            java.time.Clock.systemUTC());
+            class Actor {
+                final UUID id = UUID.randomUUID();
+                final List<net.kyori.adventure.text.Component> messages = new ArrayList<>();
+                final org.bukkit.entity.Player player;
+
+                Actor(String name) {
+                    player =
+                            ModuleRuntimeFixture.proxy(
+                                    org.bukkit.entity.Player.class,
+                                    (method, args) ->
+                                            switch (method) {
+                                                case "getUniqueId" -> id;
+                                                case "getName" -> name;
+                                                case "isOnline" -> true;
+                                                case "locale" -> java.util.Locale.US;
+                                                case "sendMessage" -> {
+                                                    for (Object arg : args)
+                                                        if (arg
+                                                                instanceof
+                                                                net.kyori.adventure.text.Component
+                                                                                c) messages.add(c);
+                                                    yield null;
+                                                }
+                                                default -> throw new AssertionError(method);
+                                            });
+                }
+            }
+            Actor a = new Actor("Alpha"), b = new Actor("Beta"), unrelated = new Actor("Other");
+            var playerListener = (dev.vapee.core.player.PlayerListener) f.registered.getFirst();
+            var joinA =
+                    new org.bukkit.event.player.PlayerJoinEvent(
+                            a.player, net.kyori.adventure.text.Component.empty());
+            var joinB =
+                    new org.bukkit.event.player.PlayerJoinEvent(
+                            b.player, net.kyori.adventure.text.Component.empty());
+            var quitA =
+                    new org.bukkit.event.player.PlayerQuitEvent(
+                            a.player, net.kyori.adventure.text.Component.empty());
+            playerListener.onPlayerJoin(joinB);
+            playerListener.onPlayerJoin(joinA);
+            check(
+                    settings.areFriendPresenceNotificationsEnabled(b.id).orElseThrow(),
+                    "new PlayerModule profile enables friend presence");
+            check(
+                    friends.sendRequest(a.id, b.id) == dev.vapee.core.friend.FriendResult.SUCCESS
+                            && friends.acceptRequest(b.id, a.id)
+                                    == dev.vapee.core.friend.FriendResult.SUCCESS,
+                    "real friends persisted before presence events");
+            playerListener.onPlayerQuit(quitA);
+            f.online.add(b.player);
+            f.online.add(unrelated.player);
+            PresenceModule presence =
+                    new PresenceModule(
+                            f.plugin,
+                            owner::getPlayerService,
+                            owner::getPlayerSettingsService,
+                            () -> social,
+                            () -> friends,
+                            f.messages);
+            presence.enable();
+            var listener = (PresenceListener) f.registered.getLast();
+            check(
+                    b.messages.isEmpty(),
+                    "enable seeds loaded online friend without synthetic join notification");
+            listener.onPlayerJoin(joinA);
+            check(b.messages.isEmpty(), "unloaded subject cannot emit premature join");
+            playerListener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            check(
+                    b.messages.size() == 1
+                            && plain(b.messages.getLast()).contains("Friend Alpha is now online."),
+                    "loaded join reaches online friend once through actual notifier and"
+                            + " MessageService");
+            check(
+                    a.messages.isEmpty() && unrelated.messages.isEmpty(),
+                    "no self or nonfriend notification");
+            listener.onPlayerQuit(quitA);
+            listener.onPlayerQuit(quitA);
+            check(
+                    players.isLoaded(a.id)
+                            && b.messages.size() == 2
+                            && plain(b.messages.getLast()).contains("Friend Alpha went offline."),
+                    "LOWEST quit delivers once while original profile remains loaded");
+            playerListener.onPlayerQuit(quitA);
+            check(!players.isLoaded(a.id), "NORMAL Player quit saves and unloads after presence");
+            settings.setFriendPresenceNotificationsEnabled(b.id, false);
+            byte[] optedOut =
+                    Files.readAllBytes(directory.resolve("players").resolve(b.id + ".yml"));
+            playerListener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerQuit(quitA);
+            playerListener.onPlayerQuit(quitA);
+            check(b.messages.size() == 2, "persisted disabled preference suppresses join and quit");
+            var cold =
+                    new dev.vapee.core.player.repository.FilePlayerRepository(
+                            directory.resolve("players"), f.logger);
+            check(
+                    !cold.findByUniqueId(b.id)
+                                    .orElseThrow()
+                                    .getSettings()
+                                    .isFriendPresenceNotificationsEnabled()
+                            && java.util.Arrays.equals(
+                                    optedOut,
+                                    Files.readAllBytes(
+                                            directory.resolve("players").resolve(b.id + ".yml"))),
+                    "historical explicit false stays false and is not rewritten by delivery or"
+                            + " read");
+            settings.setFriendPresenceNotificationsEnabled(b.id, true);
+            social.ignore(b.id, a.id);
+            playerListener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerQuit(quitA);
+            playerListener.onPlayerQuit(quitA);
+            check(b.messages.size() == 2, "recipient Ignore suppresses both transitions");
+            social.unignore(b.id, a.id);
+            playerListener.onPlayerJoin(joinA);
+            social.ignore(a.id, b.id);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerQuit(quitA);
+            check(b.messages.size() == 2, "subject Ignore also suppresses both transitions");
+            social.unignore(a.id, b.id);
+            playerListener.onPlayerQuit(quitA);
+            players.unloadPlayer(b.id);
+            playerListener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerQuit(quitA);
+            playerListener.onPlayerQuit(quitA);
+            check(
+                    b.messages.size() == 2,
+                    "online adapter with unloaded recipient cannot bypass loaded preference"
+                            + " contract");
+            playerListener.onPlayerJoin(joinB);
+            check(
+                    settings.areFriendPresenceNotificationsEnabled(b.id).orElseThrow(),
+                    "explicit true survives profile reload");
+            playerListener.onPlayerJoin(joinA);
+            listener.onPlayerJoin(joinA);
+            listener.onPlayerQuit(quitA);
+            playerListener.onPlayerQuit(quitA);
+            check(
+                    b.messages.size() == 4,
+                    "existing Settings toggle re-enables subsequent join and quit");
+            check(
+                    players.getPlayer(b.id).orElseThrow().getSettings().isSoundsEnabled()
+                            && players.getPlayer(b.id)
+                                    .orElseThrow()
+                                    .getSettings()
+                                    .isScoreboardEnabled(),
+                    "notification preference leaves unrelated settings unchanged");
+            presence.disable();
+            check(
+                    f.handlerCount() == 2,
+                    "Presence releases its exact handlers while Player remains active");
+            owner.disable();
+            check(
+                    f.handlerCount() == 0
+                            && new dev.vapee.core.friend.FileFriendRepository(
+                                                    directory.resolve("friends.yml"), f.logger)
+                                            .initialize()
+                                            .friendships()
+                                            .size()
+                                    == 1,
+                    "shutdown preserves friendship and releases Player handlers");
+        } finally {
+            try (var paths = Files.walk(directory)) {
+                for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList())
+                    Files.delete(path);
+            }
+        }
+    }
+
+    private static String plain(net.kyori.adventure.text.Component component) {
+        return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                .serialize(component);
     }
 
     private static PresenceModule module(ModuleRuntimeFixture f) {

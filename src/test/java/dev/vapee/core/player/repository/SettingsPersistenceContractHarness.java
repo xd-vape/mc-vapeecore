@@ -53,7 +53,7 @@ public final class SettingsPersistenceContractHarness {
         check(defaults.isSoundsEnabled(), "frozen sounds default true");
         check(defaults.isPrivateMessagesEnabled(), "frozen private messages default true");
         check(defaults.isFriendRequestsEnabled(), "frozen friend requests default true");
-        check(!defaults.isFriendPresenceNotificationsEnabled(), "frozen presence default false");
+        check(defaults.isFriendPresenceNotificationsEnabled(), "presence default enabled");
         check(
                 defaults.getVisibility().getMode() == VisibilityMode.ALL,
                 "frozen visibility mode ALL");
@@ -95,12 +95,12 @@ public final class SettingsPersistenceContractHarness {
             Files.writeString(file, BASE + settings);
             byte[] original = Files.readAllBytes(file);
             check(
-                    !repository
+                    repository
                             .findByUniqueId(owner)
                             .orElseThrow()
                             .getSettings()
                             .isFriendPresenceNotificationsEnabled(),
-                    "missing/invalid presence uses false: " + settings.strip());
+                    "missing/invalid presence inherits enabled default: " + settings.strip());
             check(
                     Arrays.equals(original, Files.readAllBytes(file)),
                     "fallback read never rewrites bytes");
@@ -116,6 +116,13 @@ public final class SettingsPersistenceContractHarness {
                         .getSettings()
                         .isFriendPresenceNotificationsEnabled(),
                 "literal true deserializes at frozen presence path");
+        Files.writeString(file, BASE + "settings: {friend-presence-notifications: false}\n");
+        byte[] optedOut = Files.readAllBytes(file);
+        check(!repository.findByUniqueId(owner).orElseThrow().getSettings()
+                        .isFriendPresenceNotificationsEnabled(),
+                "explicit historical false remains disabled regardless of its original intent");
+        check(Arrays.equals(optedOut, Files.readAllBytes(file)),
+                "reading explicit opt-out never rewrites a profile");
         Files.writeString(file, BASE);
         repository.save(repository.findByUniqueId(owner).orElseThrow());
         var yaml = yaml(file);
@@ -143,7 +150,7 @@ public final class SettingsPersistenceContractHarness {
                 "exact existing YAML preference paths, no synthetic property");
         check(yaml.getInt("schema-version") == 1, "player schema remains version one");
         var changed = yaml(file);
-        changed.set(PRESENCE, true);
+        changed.set(PRESENCE, false);
         expectFailure(
                 () -> PlayerFileSchema.validateOwnedValues(changed, yaml),
                 "schema validates actual canonical presence value");
