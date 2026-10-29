@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Startup-only Navigator composition. No coordinates, player state or reload participation. */
+/** Navigator composition. External edits load at startup; editor commits apply locally. */
 public final class NavigatorConfig {
     public enum Type { WARP, MENU, UNAVAILABLE }
     private static final State LEGACY = new State(false, "root", Map.of());
@@ -44,6 +44,7 @@ public final class NavigatorConfig {
 
     public void initialize() {
         try {
+            new dev.vapee.core.persistence.SafeFileWriter(logger).requireReconciled(file);
             ConfigFiles.copyDefault(file, () -> NavigatorConfig.class.getResourceAsStream("/navigator.yml"),
                     () -> new IllegalStateException("Missing navigator.yml resource"));
             state = parse(Files.readString(file));
@@ -55,10 +56,18 @@ public final class NavigatorConfig {
     }
 
     public State getState() { return state; }
+    Path file() { return file; }
+    void apply(State next) { state = Objects.requireNonNull(next); }
     public static State legacy() { return LEGACY; }
     static State unavailable() { return UNAVAILABLE; }
 
     public static State parse(String source) {
+        return parse(source, false);
+    }
+
+    static State parseForEditing(String source) { return parse(source, true); }
+
+    private static State parse(String source, boolean editing) {
         var options = new LoaderOptions();
         options.setAllowDuplicateKeys(false);
         Map<String, Object> root = mapping(new Yaml(new SafeConstructor(options)).load(source), "navigator");
@@ -66,7 +75,7 @@ public final class NavigatorConfig {
         if (integer(root.getOrDefault("config-version", 1), "config-version", 1, 1) != 1)
             throw new IllegalArgumentException("Unsupported navigator version");
         boolean enabled = bool(root.getOrDefault("enabled", false), "enabled");
-        if (!enabled) return LEGACY;
+        if (!enabled && !editing) return LEGACY;
         String rootId = id(root.getOrDefault("root", "root"), "root");
         var menus = new LinkedHashMap<String, Menu>();
         Map<String, Object> definitions = mapping(root.getOrDefault("menus", Map.of()), "menus");
@@ -75,7 +84,12 @@ public final class NavigatorConfig {
             String path = "menus." + name;
             id(name, path);
             var menu = mapping(value, path);
-            keys(menu, Set.of("title", "entries"), path);
+            keys(menu, Set.of("title", "entries", "size", "icon", "back-slot"), path);
+            int size = menu.containsKey("size") ? integer(menu.get("size"), path + ".size", 27, 54) : 0;
+            if (size % 9 != 0) throw new IllegalArgumentException("Menu size must be 27, 36, 45 or 54");
+            Material menuIcon = Material.matchMaterial(string(menu.getOrDefault("icon", "COMPASS"), path + ".icon"));
+            if (!WarpPoint.isDisplayableItem(menuIcon)) throw new IllegalArgumentException("Invalid menu icon");
+            int back = integer(menu.getOrDefault("back-slot", -1), path + ".back-slot", -1, 53);
             var entries = new LinkedHashMap<String, Entry>();
             var positions = new HashSet<String>();
             var entryValues = mapping(menu.getOrDefault("entries", Map.of()), path + ".entries");
@@ -87,7 +101,7 @@ public final class NavigatorConfig {
                 keys(data, Set.of("type", "page", "slot", "icon", "name", "lore", "warp", "menu", "permission", "count"), entryPath);
                 Type type = Type.valueOf(string(data.get("type"), entryPath + ".type"));
                 int page = integer(data.getOrDefault("page", 0), entryPath + ".page", 0, 999);
-                int slot = integer(data.get("slot"), entryPath + ".slot", 0, 44);
+                int slot = integer(data.get("slot"), entryPath + ".slot", 0, size == 0 ? 44 : size - 1);
                 if (!positions.add(page + ":" + slot)) throw new IllegalArgumentException("Duplicate page/slot at " + entryPath);
                 Material icon = Material.matchMaterial(string(data.get("icon"), entryPath + ".icon"));
                 if (!WarpPoint.isDisplayableItem(icon)) throw new IllegalArgumentException("Invalid item icon at " + entryPath);
@@ -121,8 +135,10 @@ public final class NavigatorConfig {
                 }
                 entries.put(entryId, new Entry(entryId, type, page, slot, icon, label, lore, target, permission, region, amount));
             });
-            menus.put(name, new Menu(name, text(menu.get("title"), path + ".title", false), entries));
+            menus.put(name, new Menu(name, text(menu.get("title"), path + ".title", false), entries, size, menuIcon, back));
         });
+        if (editing && menus.isEmpty() && !enabled)
+            menus.put(rootId, new Menu(rootId, LocalizedText.literal("Navigator"), Map.of(), 27, Material.COMPASS, -1));
         return new State(enabled, rootId, menus);
     }
 
@@ -133,8 +149,34 @@ public final class NavigatorConfig {
         boolean allowed(Player viewer) { return permission.isEmpty() || viewer.hasPermission(permission); }
     }
 
-    public record Menu(String id, LocalizedText title, Map<String, Entry> entries) {
-        public Menu { entries = Collections.unmodifiableMap(new LinkedHashMap<>(entries)); }
+    public record Menu(String id, LocalizedText title, Map<String, Entry> entries, int size, Material icon, int backSlot) {
+        public Menu(String id, LocalizedText title, Map<String, Entry> entries) { this(id, title, entries, 0, Material.COMPASS, -1); }
+        public Menu {
+            entries = Collections.unmodifiableMap(new LinkedHashMap<>(entries));
+            if (size != 0 && (size < 27 || size > 54 || size % 9 != 0)) throw new IllegalArgumentException("Invalid menu size");
+            if (!WarpPoint.isDisplayableItem(icon)) throw new IllegalArgumentException("Invalid menu icon");
+            int actual = size == 0 ? compatibleSize(entries, backSlot) : size;
+            boolean paged = entries.values().stream().map(Entry::page).distinct().count() > 1;
+            var positions = new HashSet<String>();
+            for (var entry : entries.values()) {
+                if (entry.page() < 0 || entry.page() > 999 || entry.slot() < 0 || entry.slot() >= actual
+                        || entry.slot() == backSlot || paged && (entry.slot() == actual - 9 || entry.slot() == actual - 1)
+                        || !positions.add(entry.page() + ":" + entry.slot())) throw new IllegalArgumentException("Invalid or colliding menu slot");
+            }
+            if (backSlot < -1 || backSlot >= actual || paged && (backSlot == actual - 9 || backSlot == actual - 1))
+                throw new IllegalArgumentException("Invalid Back slot");
+        }
+        public int inventorySize() { return size == 0 ? compatibleSize(entries, backSlot) : size; }
+        private static int compatibleSize(Map<String, Entry> entries, int back) {
+            boolean paged = entries.values().stream().map(Entry::page).distinct().count() > 1;
+            for (int candidate = 27; candidate <= 54; candidate += 9) {
+                final int n = candidate;
+                if (back < n && entries.values().stream().allMatch(e -> e.slot() < n
+                        && (!paged || e.slot() != n - 9 && e.slot() != n - 1))
+                        && (!paged || back != n - 9 && back != n - 1)) return n;
+            }
+            throw new IllegalArgumentException("No compatible menu geometry");
+        }
     }
 
     public record State(boolean enabled, String root, Map<String, Menu> menus) {

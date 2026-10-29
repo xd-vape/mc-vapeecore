@@ -75,6 +75,9 @@ public final class NavigatorListener implements Listener {
             return;
         }
         if (holder.backAt(slot)) { navigatorMenu.back(player, holder); return; }
+        if (event.getClick() == ClickType.RIGHT && holder.emptyBackAt(slot)) {
+            navigatorMenu.back(player, holder); return;
+        }
         if (holder.entryAt(slot).isPresent()) {
             navigatorMenu.activateEntry(player, holder, holder.entryAt(slot).orElseThrow());
             return;

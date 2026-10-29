@@ -276,6 +276,7 @@ navigator:
   teleport-hint: "Click to teleport."
   title: "Warp Navigator"
   menu-hint: "Click to open."
+  back-hint: "Right-click an empty slot to go back."
   unavailable-hint: "Currently unavailable."
   unavailable: "<gray>This destination is currently unavailable.</gray>"
   destination-missing: "<gray>This destination is no longer available.</gray>"

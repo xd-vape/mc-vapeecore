@@ -223,7 +223,7 @@ final class NavigatorFixture {
         String output() { return received.stream().map(NavigatorFixture::plain).reduce("", (a, b) -> a + b); }
     }
 
-    private static final class SpecItem extends ItemStack {
+    static final class SpecItem extends ItemStack {
         final UiItemSpec spec;
         int amount = 1;
         SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
@@ -233,7 +233,11 @@ final class NavigatorFixture {
     }
 
     private static World world(String name) {
-        return proxy(World.class, (method, args) -> method.equals("getName") ? name : DEFAULT);
+        return proxy(World.class, (method, args) -> switch (method) {
+            case "getName" -> name;
+            case "getUID" -> UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            default -> DEFAULT;
+        });
     }
 
     private static final Object DEFAULT = new Object();

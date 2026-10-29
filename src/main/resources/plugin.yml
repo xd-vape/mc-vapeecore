@@ -8,6 +8,10 @@ depend:
   - LuckPerms
 
 commands:
+  navigator:
+    description: Edit and preview the Navigator in game
+    usage: /navigator help
+    permission: vapeecore.navigator.admin
   quests:
     description: View your daily quests
     usage: /quests
@@ -337,6 +341,9 @@ permissions:
     default: op
   vapeecore.navigator.builder:
     description: Allows viewing and using configured local Builder destinations
+    default: op
+  vapeecore.navigator.admin:
+    description: Edit Navigator menus, entries and optional player-count regions
     default: op
   vapeecore.rank.view:
     description: Allows viewing an online player's server rank

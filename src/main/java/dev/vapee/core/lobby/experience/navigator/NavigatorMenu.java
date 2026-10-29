@@ -29,7 +29,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class NavigatorMenu {
-    static final int BACK_SLOT = 48;
+    private final Map<UUID, NavigatorConfig.State> previews = new HashMap<>();
+    private java.util.function.Predicate<Player> previewAccess = player -> false;
+    public void previewAccess(java.util.function.Predicate<Player> access) { previewAccess = Objects.requireNonNull(access); }
+    private NavigatorConfig.State current(Player player) {
+        var preview = previews.get(player.getUniqueId());
+        return preview != null && previewAccess.test(player) ? preview : configuration.get();
+    }
+    public boolean preview(Player player, NavigatorConfig.State state) {
+        if (!previewAccess.test(player)) return false;
+        previews.put(player.getUniqueId(), state);
+        return openConfigured(player, state.root(), List.of(), 0, state);
+    }
+    public void endPreview(Player player) { previews.remove(player.getUniqueId()); close(player); }
     private final Supplier<NavigatorConfig.State> configuration;
     private final Supplier<? extends java.util.Collection<? extends Player>> onlinePlayers;
     private final dev.vapee.core.lobby.warp.WarpChangeListener committedChanges = () -> java.util.List.copyOf(this.activeInventories.keySet()).forEach(this::refreshActive);
@@ -39,18 +51,14 @@ public final class NavigatorMenu {
 
 
     public enum Action { PREVIOUS, PAGE_INFO, CLOSE, NEXT }
-    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(54, Action.class)
+    public static final MenuLayout<Action> DEFAULT_LAYOUT = MenuLayout.builder(27, Action.class)
             .content(List.of(
                     0, 1, 2, 3, 4, 5, 6, 7, 8,
                     9, 10, 11, 12, 13, 14, 15, 16, 17,
-                    18, 19, 20, 21, 22, 23, 24, 25, 26,
-                    27, 28, 29, 30, 31, 32, 33, 34, 35,
-                    36, 37, 38, 39, 40, 41, 42, 43, 44))
-            .emptyState(22)
-            .button(Action.PREVIOUS, 45)
-            .button(Action.PAGE_INFO, 49)
-            .button(Action.CLOSE, 50)
-            .button(Action.NEXT, 53)
+                    19, 20, 21, 22, 23, 24, 25))
+            .emptyState(13)
+            .button(Action.PREVIOUS, 18)
+            .button(Action.NEXT, 26)
             .build();
 
     private static final Component TITLE = tr("navigator.title").color(NamedTextColor.DARK_GRAY);
@@ -82,7 +90,7 @@ public final class NavigatorMenu {
                          dev.vapee.core.message.MessageService messages, Supplier<NavigatorConfig.State> configuration) {
         this(warpService, accessPolicy, plugin.getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT, messages, configuration,
+                NavigatorMenu::renderIcon, plugin.getLogger(), DEFAULT_LAYOUT, messages, configuration,
                 plugin.getServer()::getOnlinePlayers);
     }
 
@@ -130,6 +138,7 @@ public final class NavigatorMenu {
     }
 
     public boolean open(Player player, int requestedPage) {
+        previews.remove(player.getUniqueId());
         NavigatorConfig.State current = configuration.get();
         if (current.enabled()) return openConfigured(player, current.root(), List.of(), requestedPage, current);
         Player previousViewer = renderingFor; renderingFor = player;
@@ -244,6 +253,7 @@ public final class NavigatorMenu {
             }
         } finally {
             activeInventories.clear();
+            previews.clear();
         }
     }
 
@@ -269,6 +279,7 @@ public final class NavigatorMenu {
 
     void forget(UUID owner) {
         activeInventories.remove(owner);
+        previews.remove(owner);
     }
 
     void close(Player player) {
@@ -319,7 +330,7 @@ public final class NavigatorMenu {
         }
         if (!canAccess(player)) { activeInventories.remove(owner, inventory); player.closeInventory(); return; }
         try {
-            NavigatorConfig.State current = configuration.get();
+            NavigatorConfig.State current = current(player);
             if (holder.configuration() != null && holder.configuration() != current
                     || holder.configuration() == null && current.enabled()) {
                 open(player); return;
@@ -365,7 +376,7 @@ public final class NavigatorMenu {
     }
 
     boolean validateView(Player player, NavigatorInventoryHolder holder) {
-        NavigatorConfig.State current = configuration.get();
+        NavigatorConfig.State current = current(player);
         if (holder.configuration() == null && !current.enabled()) return true;
         if (holder.configuration() == current && current.enabled() && routeAllowed(player, holder.menuId(), holder.parents(), current))
             return true;
@@ -376,19 +387,19 @@ public final class NavigatorMenu {
 
     void openPage(Player player, NavigatorInventoryHolder holder, int page) {
         if (holder.configuration() == null) open(player, page);
-        else openConfigured(player, holder.menuId(), holder.parents(), page, configuration.get());
+        else openConfigured(player, holder.menuId(), holder.parents(), page, current(player));
     }
 
     void back(Player player, NavigatorInventoryHolder holder) {
         var parents = holder.parents();
         if (parents.isEmpty()) return;
         var parent = parents.getLast();
-        openConfigured(player, parent.menuId(), parents.subList(0, parents.size() - 1), parent.page(), configuration.get());
+        openConfigured(player, parent.menuId(), parents.subList(0, parents.size() - 1), parent.page(), current(player));
     }
 
     void activateEntry(Player player, NavigatorInventoryHolder holder, String id) {
         if (!validateView(player, holder)) return;
-        var state = configuration.get();
+        var state = current(player);
         var entry = state.menus().get(holder.menuId()).entries().get(id);
         if (entry == null || !entry.allowed(player)) {
             messageService.send(player, tr("navigator.unavailable"));
@@ -401,8 +412,9 @@ public final class NavigatorMenu {
                 parents.add(new NavigatorInventoryHolder.Breadcrumb(holder.menuId(), holder.getPage(), entry.id()));
                 openConfigured(player, entry.target(), parents, 0, state);
             }
-            case UNAVAILABLE -> messageService.send(player, tr("navigator.unavailable"));
+            case UNAVAILABLE -> { }
             case WARP -> {
+                if (previews.containsKey(player.getUniqueId())) return;
                 var result = warpService.teleportFromNavigator(player, entry.target());
                 switch (result) {
                     case SUCCESS -> close(player);
@@ -449,47 +461,42 @@ public final class NavigatorMenu {
             NavigatorInventoryHolder holder = new NavigatorInventoryHolder(player.getUniqueId(), pagination.page(),
                     menuId, ids, state, parents);
             Inventory inventory;
-            if (rerenderInventory != null && rerenderInventory.getSize() == DEFAULT_LAYOUT.size()
+            if (rerenderInventory != null && rerenderInventory.getSize() == menu.inventorySize()
                     && rerenderInventory.getHolder() instanceof NavigatorInventoryHolder existing) {
                 inventory = rerenderInventory; existing.beginRender(holder); holder = existing;
                 for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
             } else {
-                inventory = inventoryFactory.create(holder, DEFAULT_LAYOUT.size(),
+                inventory = inventoryFactory.create(holder, menu.inventorySize(),
                         Component.text(menu.title().resolve(messageService.localization().locale(player)), NamedTextColor.DARK_GRAY));
                 holder.bindInventory(inventory);
             }
+            renderingParents = !parents.isEmpty();
             for (var entry : visible) inventory.setItem(entry.slot(), createConfiguredItem(player, entry));
-            if (visible.isEmpty()) placeDisplay(inventory, DEFAULT_LAYOUT.emptySlot(),
-                    createItem(Material.GRAY_DYE, tr("navigator.empty"), NamedTextColor.GRAY, List.of()));
+            if (visible.isEmpty()) placeDisplay(inventory, menu.inventorySize() / 2,
+                    createItem(Material.GRAY_DYE, tr("navigator.empty"), NamedTextColor.GRAY,
+                            parents.isEmpty() ? List.of() : List.of(tr("navigator.back-hint"))));
             if (pagination.hasPrevious()) placeConfigured(inventory, Action.PREVIOUS,
                     createItem(Material.ARROW, tr("common.previous-page"), NamedTextColor.YELLOW, List.of()));
-            if (pagination.hasMultiplePages()) placeConfigured(inventory, Action.PAGE_INFO,
-                    createItem(Material.PAPER, tr("common.page", Map.of("current", Component.text(pagination.page() + 1),
-                            "total", Component.text(pagination.pageCount()))), NamedTextColor.AQUA,
-                            List.of(tr(entries.size() == 1 ? "navigator.count.one" : "navigator.count.many",
-                                    Map.of("count", Component.text(entries.size()))))));
-            if (!parents.isEmpty()) inventory.setItem(BACK_SLOT,
+            if (!parents.isEmpty() && menu.backSlot() >= 0) inventory.setItem(menu.backSlot(),
                     createItem(Material.ARROW, tr("common.back"), NamedTextColor.YELLOW, List.of()));
-            placeConfigured(inventory, Action.CLOSE, createItem(Material.BARRIER, tr("common.close"), NamedTextColor.RED, List.of()));
             if (pagination.hasNext()) placeConfigured(inventory, Action.NEXT,
                     createItem(Material.ARROW, tr("common.next-page"), NamedTextColor.YELLOW, List.of()));
             holder.finishRender();
             var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
             if (opened == null || opened.getTopInventory() != inventory || player.getOpenInventory().getTopInventory() != inventory)
                 return false;
-            if (!canAccess(player) || configuration.get() != state || !routeAllowed(player, menuId, parents, state)) {
+            if (!canAccess(player) || current(player) != state || !routeAllowed(player, menuId, parents, state)) {
                 close(player); return false;
             }
             activeInventories.put(player.getUniqueId(), inventory);
             return true;
-        } finally { renderingFor = previousViewer; }
+        } finally { renderingFor = previousViewer; renderingParents = false; }
     }
 
     private void placeConfigured(Inventory inventory, Action action, ItemStack item) {
-        DEFAULT_LAYOUT.actionSlot(action, 0).ifPresent(slot -> {
-            inventory.setItem(slot, item);
-            ((NavigatorInventoryHolder) inventory.getHolder()).recordAction(slot, action);
-        });
+        int slot = action == Action.PREVIOUS ? inventory.getSize() - 9 : inventory.getSize() - 1;
+        inventory.setItem(slot, item);
+        ((NavigatorInventoryHolder) inventory.getHolder()).recordAction(slot, action);
     }
 
     private ItemStack createConfiguredItem(Player player, NavigatorConfig.Entry entry) {
@@ -507,9 +514,25 @@ public final class NavigatorMenu {
         }
         lore.add(tr(!available ? "navigator.unavailable-hint" : entry.type() == NavigatorConfig.Type.MENU
                 ? "navigator.menu-hint" : "navigator.teleport-hint"));
+        if (renderingParents) lore.add(tr("navigator.back-hint"));
         ItemStack item = createItem(entry.icon(), Component.text(entry.name().resolve(locale)),
                 available ? NamedTextColor.AQUA : NamedTextColor.GRAY, lore);
         if (count >= 0 && entry.stackAmount()) item.setAmount(NavigatorRegion.stackAmount(count, item.getMaxStackSize()));
+        return item;
+    }
+
+    private boolean renderingParents;
+    /** Navigator-only tooltip policy; item names/lore and other menus are untouched. */
+    static ItemStack renderIcon(UiItemSpec spec) {
+        ItemStack item = UiItems.render(spec);
+        var meta = item.getItemMeta();
+        if (meta != null) {
+            meta.addItemFlags(org.bukkit.inventory.ItemFlag.HIDE_ATTRIBUTES,
+                    org.bukkit.inventory.ItemFlag.HIDE_ENCHANTS, org.bukkit.inventory.ItemFlag.HIDE_UNBREAKABLE,
+                    org.bukkit.inventory.ItemFlag.HIDE_ADDITIONAL_TOOLTIP, org.bukkit.inventory.ItemFlag.HIDE_DYE,
+                    org.bukkit.inventory.ItemFlag.HIDE_ARMOR_TRIM);
+            item.setItemMeta(meta);
+        }
         return item;
     }
 

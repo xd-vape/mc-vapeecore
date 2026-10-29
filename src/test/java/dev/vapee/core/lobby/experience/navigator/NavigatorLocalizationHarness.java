@@ -17,19 +17,19 @@ public final class NavigatorLocalizationHarness {
         Inventory deInventory = german.open;
         Inventory enInventory = english.open;
         java.util.function.BiFunction<Inventory, Integer, String> text = NavigatorFixture::text;
-        int close = f.menu.layout().slot(NavigatorMenu.Action.CLOSE);
-        check(text.apply(deInventory, close).equals("Schließen"), "German viewer's own close item");
-        check(text.apply(enInventory, close).equals("Close"), "simultaneous English viewer");
+        int close = 13;
+        check(text.apply(deInventory, close).equals("Keine Ziele verfügbar"), "German viewer's empty state without Close");
+        check(text.apply(enInventory, close).equals("No Destinations Available"), "simultaneous English viewer");
         check(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(f.titles.get(deInventory)).equals(I18nTestSupport.text(german.player, dev.vapee.core.i18n.Translations.tr("navigator.title"))), "German inventory title resolves for owner");
         check(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(f.titles.get(enInventory)).equals(I18nTestSupport.english("navigator.title")), "English inventory title resolves for owner");
         Object holder = deInventory.getHolder();
         f.messages.localization().localeChanged(german.player, Locale.US);
         check(german.open == deInventory && deInventory.getHolder() == holder, "locale event preserves exact inventory and holder binding");
-        check(text.apply(deInventory, close).equals("Close"), "locale event immediately rerenders active items");
-        check(text.apply(enInventory, close).equals("Close"), "other viewer is unaffected by locale event");
+        check(text.apply(deInventory, close).equals("No Destinations Available"), "locale event immediately rerenders active items");
+        check(text.apply(enInventory, close).equals("No Destinations Available"), "other viewer is unaffected by locale event");
         f.menu.stopUpdates();
         f.messages.localization().localeChanged(german.player, Locale.GERMANY);
-        check(text.apply(deInventory, close).equals("Close"), "disabled observer never updates old views");
+        check(text.apply(deInventory, close).equals("No Destinations Available"), "disabled observer never updates old views");
         System.out.println("NavigatorLocalizationHarness passed " + checks + " checks.");
     }
     private static void check(boolean condition, String label) { checks++; if (!condition) throw new AssertionError(label); }

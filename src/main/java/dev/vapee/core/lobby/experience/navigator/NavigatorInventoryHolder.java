@@ -39,7 +39,8 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
     NavigatorInventoryHolder(UUID owner, int page, String menuId, Map<Integer, String> entries,
                              NavigatorConfig.State configuration, java.util.List<Breadcrumb> parents) {
         this(owner, page, Map.of());
-        NavigatorMenu.DEFAULT_LAYOUT.validateTargets(entries.keySet());
+        var menu = configuration.menus().get(menuId);
+        entries.keySet().forEach(slot -> dev.vapee.core.ui.MenuLayout.validateSlot(menu.inventorySize(), slot));
         this.configuration = Objects.requireNonNull(configuration);
         this.menuId = Objects.requireNonNull(menuId);
         this.entryIdsBySlot = Map.copyOf(entries);
@@ -50,7 +51,11 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
     String menuId() { return data().menuId; }
     java.util.List<Breadcrumb> parents() { return data().parents; }
     Optional<String> entryAt(int slot) { return Optional.ofNullable(data().entryIdsBySlot.get(slot)); }
-    boolean backAt(int slot) { return configuration() != null && !parents().isEmpty() && slot == NavigatorMenu.BACK_SLOT; }
+    boolean backAt(int slot) { return configuration() != null && !parents().isEmpty()
+            && slot == configuration().menus().get(menuId()).backSlot(); }
+    boolean emptyBackAt(int slot) { return configuration() != null && !parents().isEmpty()
+            && slot >= 0 && slot < getInventory().getSize() && entryAt(slot).isEmpty()
+            && actionAt(slot).isEmpty() && getInventory().getItem(slot) == null; }
 
     public NavigatorInventoryHolder(UUID ownerUniqueId, int page, Map<Integer, String> warpIdsBySlot) {
         this(ownerUniqueId, page, warpIdsBySlot, NavigatorMenu.DEFAULT_LAYOUT);

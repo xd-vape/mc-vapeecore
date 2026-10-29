@@ -42,6 +42,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("unignore", new Root("vapeecore.social.ignore", List.of(), "/unignore <player|uuid>")),
             Map.entry("ignorelist", new Root("vapeecore.social.ignore", List.of(), "/ignorelist")),
             Map.entry("warp", new Root("vapeecore.warp.admin", List.of(), "/warp help")),
+            Map.entry("navigator", new Root("vapeecore.navigator.admin", List.of(), "/navigator help")),
             Map.entry("build", new Root("vapeecore.utility.build", List.of(), "/build")),
             Map.entry("fly", new Root("vapeecore.utility.fly", List.of(), "/fly [player]")),
             Map.entry("speed", new Root("vapeecore.utility.speed", List.of(), "/speed <1-10> [player]")),
@@ -106,6 +107,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.social.ignore", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.warp.admin", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.navigator.builder", new Node(PermissionDefault.OP, Set.of())),
+            Map.entry("vapeecore.navigator.admin", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.rank.view", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.ranks.view", new Node(PermissionDefault.TRUE, Set.of()))
     );
@@ -116,7 +118,7 @@ public final class PermissionDescriptorHarness {
             if (stream == null) throw new AssertionError("missing descriptor");
             descriptor = new PluginDescriptionFile(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
-        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 36, "exact 36 command roots");
+        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 37, "exact 37 command roots");
         check(descriptor.getDepend().equals(List.of("LuckPerms")), "required LP dependency");
         Set<String> identifiers = new HashSet<>(ROOTS.keySet());
         for (var entry : ROOTS.entrySet()) {
@@ -132,7 +134,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 50, "all 50 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 51, "all 51 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");

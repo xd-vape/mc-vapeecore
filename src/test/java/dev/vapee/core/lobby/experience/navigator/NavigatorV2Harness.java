@@ -28,29 +28,29 @@ public final class NavigatorV2Harness {
     private static NavigatorInventoryHolder holder(NavigatorFixture.TestPlayer p) { return (NavigatorInventoryHolder) p.open.getHolder(); }
     private static void navigation() throws Exception {
         var f = fixture(); var p = f.player();
-        check(f.menu.open(p.player) && p.open.getSize() == 54 && plain(f.title).equals("Navigator"), "configured root opens through existing menu");
+        check(f.menu.open(p.player) && p.open.getSize() == 27 && plain(f.title).equals("Navigator"), "configured compact root preserves explicit slots");
         check(holder(p).menuId().equals("root") && holder(p).entryAt(20).orElseThrow().equals("spawn"), "trusted entry ID mapping");
         check(p.open.getItem(24) == null && holder(p).entryAt(24).isEmpty(), "Builder absent without permission");
         var root = p.open;
         f.click(p, root, 22, ClickType.RIGHT);
         check(holder(p).menuId().equals("games") && plain(f.title).equals("Activities"), "right click enters child");
-        check(p.open.getItem(48) != null && holder(p).backAt(48), "child has trusted Back control");
+        check(p.open.getItem(0) == null && holder(p).emptyBackAt(0) && !holder(p).backAt(0), "child has empty-slot Back without an icon");
         f.click(p, root, 20, ClickType.LEFT);
         check(p.teleports == 0 && holder(p).menuId().equals("games"), "old root cannot teleport");
         f.listener.onInventoryClose(new InventoryCloseEvent(view(p, root)));
         check(f.menu.isActive(p.player, p.open, holder(p)), "late parent close retains child");
-        f.click(p, p.open, 53, ClickType.LEFT);
+        f.click(p, p.open, 26, ClickType.LEFT);
         check(holder(p).getPage() == 1 && holder(p).entryAt(20).orElseThrow().equals("more"), "submenu pagination uses configured page groups");
         f.click(p, p.open, 20, ClickType.LEFT);
-        check(holder(p).menuId().equals("nested") && text(p.open, 22).equals("No Destinations Available"), "nested empty menu opens");
-        f.click(p, p.open, 48, ClickType.LEFT);
+        check(holder(p).menuId().equals("nested") && text(p.open, 13).equals("No Destinations Available"), "nested empty menu opens");
+        f.click(p, p.open, 0, ClickType.RIGHT);
         check(holder(p).menuId().equals("games") && holder(p).getPage() == 1, "Back restores actual parent page");
-        f.click(p, p.open, 45, ClickType.LEFT);
+        f.click(p, p.open, 18, ClickType.LEFT);
         check(holder(p).getPage() == 0, "previous page stays inside submenu");
-        int teleports = p.teleports; f.click(p, p.open, 24, ClickType.LEFT);
-        check(p.teleports == teleports && p.output().contains("currently unavailable"), "placeholder inert with clear feedback");
-        f.click(p, p.open, 48, ClickType.RIGHT);
-        check(holder(p).menuId().equals("root") && p.open.getItem(48) == null, "Back reaches root without phantom parent");
+        int teleports = p.teleports; int messages = p.received.size(); f.click(p, p.open, 24, ClickType.LEFT);
+        check(p.teleports == teleports && p.received.size() == messages && lore(p,24).contains("Currently unavailable."), "placeholder inert with clear lore and no chat spam");
+        f.click(p, p.open, 0, ClickType.RIGHT);
+        check(holder(p).menuId().equals("root") && !holder(p).emptyBackAt(0), "Back reaches root without phantom parent");
         f.click(p, p.open, 20, ClickType.LEFT);
         check(p.teleports == 1 && p.open == p.bottom && p.target.getX() == 0, "direct authoritative Warp teleport and close");
         f.configured.set(NavigatorConfig.legacy()); f.menu.open(p.player);
@@ -91,7 +91,7 @@ public final class NavigatorV2Harness {
         check(p.teleports == 2 && holder(p).menuId().equals("root") && p.open.getItem(22) == null, "revoked parent permission blocks child actions and Back route");
         f.configured.set(NavigatorConfig.unavailable()); f.menu.open(p.player);
         check(p.open.getItem(24) == null && holder(p).entryAt(24).isEmpty()
-                        && holder(p).getWarpId(0).isEmpty() && text(p.open,22).equals("No Destinations Available"),
+                        && holder(p).getWarpId(0).isEmpty() && text(p.open,13).equals("No Destinations Available"),
                 "invalid V2 cannot leak gated Warp through legacy fallback");
         f.configured.set(NavigatorConfig.parse(NavigatorConfigHarness.CONFIG));
         for (String denied : List.of("offline","unloaded","build","activity","world")) {
@@ -131,7 +131,7 @@ public final class NavigatorV2Harness {
         p.hidden.add(target.id);target.vanished=true;f.menu.refreshActive(p.id);
         check(lore(p,20).stream().anyMatch(line->line.contains("70 players")),"count respects visibility and vanish");
         p.locale=Locale.GERMANY;f.messages.localization().localeChanged(p.player,Locale.GERMANY);
-        check(lore(p,20).stream().anyMatch(line->line.contains("70 Spieler")) && text(p.open,48).equals("Zurück") && text(p.open,50).equals("Schließen"),"German counts, Back and Close localize in place");
+        check(lore(p,20).stream().anyMatch(line->line.contains("70 Spieler")) && lore(p,20).contains("Rechtsklick auf einen leeren Platz: zurück.") && p.open.getItem(0) == null,"German counts and non-spamming Back hint localize in place");
         f.menu.open(p.player);check(plain(f.title).equals("Navigator") && text(p.open,22).equals("Aktivitäten"),"configured German names");
         f.click(p,p.open,22,ClickType.LEFT);check(plain(f.title).equals("Aktivitäten"),"configured German child title");
         f.configured.set(NavigatorConfig.parse(counted.replace("stack-amount: true","stack-amount: false")));

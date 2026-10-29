@@ -57,6 +57,7 @@ public final class LobbyExperienceModule implements CoreModule {
     enum EnableStage { BEFORE_CALLBACKS, VISIBILITY_BACK_INSTALLED, SETTINGS_BACK_INSTALLED, RUNTIME_ACTIVE }
 
     private NavigatorMenu navigatorMenu;
+    private dev.vapee.core.lobby.experience.navigator.NavigatorEditor navigatorEditor;
     private LobbyExperienceListener experienceListener;
     private LobbyItemListener itemListener;
     private NavigatorListener navigatorListener;
@@ -122,6 +123,8 @@ public final class LobbyExperienceModule implements CoreModule {
         navigatorConfig.initialize();
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy,
                 messageService, navigatorConfig::getState);
+        var newNavigatorEditor = new dev.vapee.core.lobby.experience.navigator.NavigatorEditor(plugin,
+                newWarpService, newNavigatorMenu, navigatorConfig, messageService);
         var newGlide = new LobbyGlideService(plugin, newAccessPolicy, utilityModule.getUtilityService());
         var newGlideListener = new LobbyGlideListener(newGlide);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
@@ -155,6 +158,7 @@ public final class LobbyExperienceModule implements CoreModule {
 
         // Registry activation gates these suppliers until startup has completed enough to use them.
         navigatorMenu = newNavigatorMenu;
+        navigatorEditor = newNavigatorEditor;
         playerMenu = newPlayerMenu;
         playerMenuListener = newPlayerMenuListener;
         playerSelectionListener = newSelectionListener;
@@ -164,6 +168,8 @@ public final class LobbyExperienceModule implements CoreModule {
         glideService = newGlide;
         glideListener = newGlideListener;
         try {
+            newNavigatorEditor.register(plugin.getCommand("navigator"));
+            plugin.getServer().getPluginManager().registerEvents(newNavigatorEditor, plugin);
             utilityModule.getUtilityService().addFlightListener(newGlide);
             lobbyModule.getLobbyPlayerStateService().addStateListener(newGlide);
             activityModule.getActivityService().addMembershipListener(newGlide);
@@ -237,6 +243,10 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorMenu != null) {
             cleanupStep(failure, "navigator menu", navigatorMenu::shutdown);
         }
+        if (navigatorEditor != null) {
+            cleanupStep(failure, "navigator editor", navigatorEditor::shutdown);
+            cleanupStep(failure, "navigator editor listener", () -> HandlerList.unregisterAll(navigatorEditor));
+        }
         if (glideService != null) {
             LobbyGlideService ownedGlide = glideService;
             cleanupStep(failure, "flight subscription",
@@ -277,6 +287,7 @@ public final class LobbyExperienceModule implements CoreModule {
         playerMenuListener = null;
         playerSelectionListener = null;
         navigatorMenu = null;
+        navigatorEditor = null;
         navigatorListener = null;
         itemListener = null;
         experienceListener = null;
