@@ -36,6 +36,8 @@ final class NavigatorFixture {
     final NavigatorListener listener;
     Component title;
     final MessageService messages;
+    final java.util.concurrent.atomic.AtomicReference<NavigatorConfig.State> configured =
+            new java.util.concurrent.atomic.AtomicReference<>(NavigatorConfig.legacy());
 
     NavigatorFixture() throws Exception {
         this(MenuTestLayouts.NAVIGATOR);
@@ -63,7 +65,8 @@ final class NavigatorFixture {
         menu = new NavigatorMenu(warps, access,
                 id -> players.containsKey(id) ? players.get(id).player : null,
                 (holder, size, heading) -> { title = heading; Inventory result = inventory(holder, size); titles.put(result, heading); return result; },
-                SpecItem::new, logger, layout, messages);
+                SpecItem::new, logger, layout, messages, configured::get,
+                () -> players.values().stream().map(candidate -> candidate.player).toList());
         listener = new NavigatorListener(warps, messages, menu);
     }
 
@@ -158,6 +161,11 @@ final class NavigatorFixture {
         org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause;
         Float fallDistance;
         Vector velocity;
+        final Set<String> permissions = new HashSet<>();
+        final Set<UUID> hidden = new HashSet<>();
+        boolean vanished;
+        boolean invisible;
+        double x = 100, y = 64, z = 100;
 
         TestPlayer() {
             player = proxy(Player.class, (method, args) -> switch (method) {
@@ -165,6 +173,12 @@ final class NavigatorFixture {
                 case "locale" -> locale;
                 case "isOnline" -> online;
                 case "getWorld" -> currentWorld;
+                case "getLocation" -> new Location(currentWorld, x, y, z);
+                case "hasPermission" -> permissions.contains(args[0]);
+                case "canSee" -> !hidden.contains(((Player) args[0]).getUniqueId());
+                case "isInvisible" -> invisible;
+                case "getMetadata" -> vanished ? List.of(proxy(org.bukkit.metadata.MetadataValue.class,
+                        (name, values) -> name.equals("asBoolean") ? true : DEFAULT)) : List.of();
                 case "openInventory" -> {
                     if (cancelNextOpen) { cancelNextOpen = false; yield null; }
                     Inventory old = open;
@@ -211,7 +225,11 @@ final class NavigatorFixture {
 
     private static final class SpecItem extends ItemStack {
         final UiItemSpec spec;
+        int amount = 1;
         SpecItem(UiItemSpec spec) { super(); this.spec = spec; }
+        @Override public int getAmount() { return amount; }
+        @Override public void setAmount(int value) { amount = value; }
+        @Override public int getMaxStackSize() { return spec.material() == org.bukkit.Material.DIAMOND_PICKAXE ? 1 : 64; }
     }
 
     private static World world(String name) {

@@ -118,7 +118,10 @@ public final class LobbyExperienceModule implements CoreModule {
         VisibilityService newVisibilityService = visibilityModule.getVisibilityService();
         NavigatorAccessPolicy newAccessPolicy = new NavigatorAccessPolicy(newPlayerService, newLobbyService,
                 lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
-        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy, messageService);
+        var navigatorConfig = new dev.vapee.core.lobby.experience.navigator.NavigatorConfig(plugin);
+        navigatorConfig.initialize();
+        NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy,
+                messageService, navigatorConfig::getState);
         var newGlide = new LobbyGlideService(plugin, newAccessPolicy, utilityModule.getUtilityService());
         var newGlideListener = new LobbyGlideListener(newGlide);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(

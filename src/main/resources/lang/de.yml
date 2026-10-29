@@ -275,6 +275,13 @@ navigator:
   empty: "Keine Ziele verfügbar"
   teleport-hint: "Klicke zum Teleportieren."
   title: "Warp-Navigator"
+  menu-hint: "Klicken zum Öffnen."
+  unavailable-hint: "Momentan nicht verfügbar."
+  unavailable: "<gray>Dieses Ziel ist momentan nicht verfügbar.</gray>"
+  destination-missing: "<gray>Dieses Ziel ist nicht mehr verfügbar.</gray>"
+  players:
+    one: "<count> Spieler in diesem Bereich."
+    many: "<count> Spieler in diesem Bereich."
 
 warp:
 

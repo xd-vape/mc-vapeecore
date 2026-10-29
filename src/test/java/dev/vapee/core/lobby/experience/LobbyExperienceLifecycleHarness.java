@@ -55,7 +55,30 @@ public final class LobbyExperienceLifecycleHarness {
 
     public static void main(String[] args) throws Exception {
         verifyLifecycle();
+        verifyNavigatorV2Lifecycle();
         System.out.println("LobbyExperienceLifecycleHarness passed " + checks + " checks.");
+    }
+
+    private static void verifyNavigatorV2Lifecycle() throws Exception {
+        for (var stage : LobbyExperienceModule.EnableStage.values()) {
+            try (var f = new Fixture()) {
+                java.nio.file.Files.writeString(f.navigatorData.resolve("navigator.yml"),
+                        "enabled: true\nroot: root\nmenus:\n  root:\n    title: Navigator\n    entries: {}\n");
+                RuntimeException primary = new IllegalStateException("V2 injected " + stage);
+                var fail = new boolean[]{true};
+                var module = f.module(point -> { if (point == stage && fail[0]) throw primary; });
+                int baseline = f.runtime.handlerCount();
+                RuntimeException actual = null;
+                try { module.enable(); } catch (RuntimeException expected) { actual = expected; }
+                check(actual == primary, "configured V2 preserves startup failure at " + stage);
+                f.inactive(module, baseline);
+                fail[0] = false;
+                module.enable();
+                check(f.registry.isActive(), "configured V2 retry activates existing registry");
+                module.disable();
+                f.inactive(module, baseline);
+            }
+        }
     }
 
     public static int verifyLifecycle() throws Exception {
@@ -211,6 +234,7 @@ public final class LobbyExperienceLifecycleHarness {
 
     private static final class Fixture implements AutoCloseable {
         final ModuleRuntimeFixture runtime = new ModuleRuntimeFixture();
+        final Path navigatorData = java.nio.file.Files.createTempDirectory("navigator-lifecycle-");
         final SettingsModule settings = SettingsModuleLifecycleHarness.module(runtime);
         final LobbyItemRegistry registry = new LobbyItemRegistry();
         final LobbyConfig config =
@@ -256,6 +280,7 @@ public final class LobbyExperienceLifecycleHarness {
         int closes;
 
         Fixture() throws Exception {
+            ModuleRuntimeFixture.set(runtime.plugin, "dataFolder", navigatorData.toFile());
             settings.enable();
         }
 
@@ -430,6 +455,9 @@ public final class LobbyExperienceLifecycleHarness {
         public void close() throws Exception {
             settings.disable();
             runtime.close();
+            try (var paths = java.nio.file.Files.walk(navigatorData)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.delete(path);
+            }
         }
     }
 

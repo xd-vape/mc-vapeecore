@@ -1,0 +1,51 @@
+# Opt-in: false preserves the flat Warp Navigator. Restart after editing.
+# No /core reload participation or ConfigEvolution. Existing files are never overwritten.
+# Coordinates and administrative Warp state stay in warps.yml.
+config-version: 1
+enabled: false
+root: root
+# Fixed 54 slots. Entries use 0..44; the bottom row 45..53 is reserved.
+# Optional page groups 0..999 are sorted, skipping groups with no permitted entries.
+# Text is literal: a string or an en/de map. Lore is a list of those values.
+menus:
+  root:
+    title: {en: Navigator, de: Navigator}
+    entries:
+      spawn:
+        type: WARP
+        slot: 20
+        icon: COMPASS
+        name: {en: Spawn, de: Spawn}
+        warp: spawn
+      activities:
+        type: MENU
+        slot: 22
+        icon: NETHER_STAR
+        name: {en: Activities, de: Aktivitäten}
+        menu: activities
+      builder:
+        type: UNAVAILABLE
+        slot: 24
+        icon: DIAMOND_PICKAXE
+        name: {en: Builder, de: Bauserver}
+        permission: vapeecore.navigator.builder
+  activities:
+    title: {en: Activities, de: Aktivitäten}
+    entries:
+      parkour:
+        type: WARP
+        slot: 20
+        icon: FEATHER
+        name: {en: Parkour, de: Parkour}
+        warp: parkour
+        # Configure real world/bounds before adding an optional counter:
+        # count:
+        #   world: your_world
+        #   min: {x: 0, y: 60, z: 0}
+        #   max: {x: 20, y: 100, z: 20}
+        #   stack-amount: true
+      future:
+        type: UNAVAILABLE
+        slot: 24
+        icon: GRAY_DYE
+        name: {en: More activities, de: Weitere Aktivitäten}

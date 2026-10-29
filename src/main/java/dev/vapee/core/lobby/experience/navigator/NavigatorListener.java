@@ -61,16 +61,22 @@ public final class NavigatorListener implements Listener {
         }
 
         int slot = event.getRawSlot();
+        if (!navigatorMenu.validateView(player, holder)) return;
         if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.PREVIOUS && holder.getPage() > 0) {
-            navigatorMenu.open(player, holder.getPage() - 1);
+            navigatorMenu.openPage(player, holder, holder.getPage() - 1);
             return;
         }
         if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.NEXT) {
-            navigatorMenu.open(player, holder.getPage() + 1);
+            navigatorMenu.openPage(player, holder, holder.getPage() + 1);
             return;
         }
         if (holder.actionAt(slot).orElse(null) == NavigatorMenu.Action.CLOSE) {
             navigatorMenu.close(player);
+            return;
+        }
+        if (holder.backAt(slot)) { navigatorMenu.back(player, holder); return; }
+        if (holder.entryAt(slot).isPresent()) {
+            navigatorMenu.activateEntry(player, holder, holder.entryAt(slot).orElseThrow());
             return;
         }
         holder.getWarpId(slot).ifPresent(warpId -> teleport(player, warpId, holder.getPage()));
@@ -109,6 +115,8 @@ public final class NavigatorListener implements Listener {
             navigatorMenu.close(player);
             return;
         }
+
+        if (!navigatorMenu.validateView(player, holder)) { event.setCancelled(true); return; }
 
         int topSize = topInventory.getSize();
         if (event.getRawSlots().stream().anyMatch(slot -> slot >= 0 && slot < topSize)) {

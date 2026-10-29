@@ -28,7 +28,29 @@ public final class NavigatorInventoryHolder implements InventoryHolder {
     private final UUID ownerUniqueId;
     private final int page;
     private final Map<Integer, String> warpIdsBySlot;
+    private NavigatorConfig.State configuration;
+    private String menuId;
+    private Map<Integer, String> entryIdsBySlot = Map.of();
+    private java.util.List<Breadcrumb> parents = java.util.List.of();
     private Inventory inventory;
+
+    record Breadcrumb(String menuId, int page, String entryId) { }
+
+    NavigatorInventoryHolder(UUID owner, int page, String menuId, Map<Integer, String> entries,
+                             NavigatorConfig.State configuration, java.util.List<Breadcrumb> parents) {
+        this(owner, page, Map.of());
+        NavigatorMenu.DEFAULT_LAYOUT.validateTargets(entries.keySet());
+        this.configuration = Objects.requireNonNull(configuration);
+        this.menuId = Objects.requireNonNull(menuId);
+        this.entryIdsBySlot = Map.copyOf(entries);
+        this.parents = java.util.List.copyOf(parents);
+    }
+
+    NavigatorConfig.State configuration() { return data().configuration; }
+    String menuId() { return data().menuId; }
+    java.util.List<Breadcrumb> parents() { return data().parents; }
+    Optional<String> entryAt(int slot) { return Optional.ofNullable(data().entryIdsBySlot.get(slot)); }
+    boolean backAt(int slot) { return configuration() != null && !parents().isEmpty() && slot == NavigatorMenu.BACK_SLOT; }
 
     public NavigatorInventoryHolder(UUID ownerUniqueId, int page, Map<Integer, String> warpIdsBySlot) {
         this(ownerUniqueId, page, warpIdsBySlot, NavigatorMenu.DEFAULT_LAYOUT);

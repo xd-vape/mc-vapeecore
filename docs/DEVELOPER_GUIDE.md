@@ -154,7 +154,7 @@ Alle Java-Pfade in dieser Tabelle beginnen mit `src/main/java/dev/vapee/core/`.
 | Settings-Layout ändern | `settings/SettingsMenu.DEFAULT_LAYOUT`; Render/Click verwenden denselben Entry |
 | Neue Friend-GUI-Action | `friend/gui/FriendMenu.entryItem`/Footer + `FriendMenuListener.navigate`/View-Aktion + `FriendService` |
 | Neue Clan-GUI-Action | `clan/gui/ClanMenu` + `ClanMenuListener.navigate`/`mutate`; `ClanService` bleibt Authority |
-| Neuer Navigator-Eintrag | Bestehendes `/warp` bzw. `lobby/warp/WarpService`, Anzeige `lobby/experience/navigator/NavigatorMenu.createWarpItem` |
+| Neuer Navigator-Eintrag | V2: `navigator.yml`; Legacy: `/warp` bzw. `WarpService`. Koordinaten bleiben immer in `warps.yml`. |
 | Neue Visibility-GUI-Action | `settings/visibility/VisibilitySettingsMenu` + `VisibilitySettingsListener`; Personen über `VisiblePlayersHolder` UUIDs |
 | Neue DailyQuest-GUI-Action | `quest/daily/menu/DailyQuestMenu` + `DailyQuestMenuListener`; Quest-Domain bleibt im Service |
 | Neue Config-Option | Resource + owning typed Config + `config/ConfigEvolution.MANAGED_CONFIGS` Versionsbump |
@@ -220,7 +220,7 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Utility-Modul-Lifecycle und Command-Registrierung | `dev.vapee.core.utility.UtilityModule` |
 | Lobby hotbar items | Live `lobby.yml` → `items`; Validierung `LobbyItemsConfig`, Ownership `LobbyItemService` |
 | Warp Navigator item material/name/lore | Live `lobby.yml` → `items.navigator` |
-| Warp Navigator GUI | `NavigatorMenu` und `NavigatorListener` |
+| Warp Navigator GUI | `NavigatorMenu`, `NavigatorListener`; optionale V2-Komposition in `navigator.yml` |
 | Navigator visibility / order | `WarpNavigation`, `WarpService`, `/warp show`, `/warp hide`, `/warp order` |
 | Navigator opening / click authorization | `NavigatorAccessPolicy` in LobbyExperience; online + loaded + lobby + NORMAL + no activity |
 | Player visibility policy/runtime | `dev.vapee.core.visibility.VisibilityModule`, `VisibilityPolicy`, `VisibilityService` |
@@ -912,7 +912,17 @@ Phase 30C: Die sieben Menüs Friend, Clan, Settings, VisibilitySettings, Visible
 
 ## Lobby & Navigation Completion (Phase 28)
 
-`WarpModule` besitzt weiterhin `WarpConfig`, `WarpService` und den administrativen `/warp`-Root. `LobbyExperienceModule` besitzt Compass-Interaktion, `NavigatorMenu` und `NavigatorListener`. Es bezieht zusätzlich das bereits früher gestartete `ActivityModule` für die kleine konkrete `NavigatorAccessPolicy`; es gibt keine Reverse Dependency. Aktuell gibt es 27 Module, sieben Reload-Teilnehmer, 36 Root-Commands und 49 Permission-Nodes. Warp ist kein ReloadParticipant; Admin-Mutationen wirken sofort, `/core reload` lädt `warps.yml` nicht neu.
+### Navigator V2 (Prototype Step 03)
+
+Der bestehende Navigator unterstützt optional `navigator.yml`: lokale WARP-Einträge nach autoritativer Warp-ID, MENU-Untermenüs mit echtem Eltern-/Seiten-Rückweg und sichtbare, nicht ausführbare UNAVAILABLE-Einträge. Der Default ist deaktiviert und erhält die flache Warp-Liste. Bei fehlerhafter aktiver Konfiguration erscheint eine sichere leere Ansicht; gesperrte Ziele dürfen nicht über einen Legacy-Fallback öffentlich werden. YAML-Änderungen benötigen einen Neustart. Es gibt weiterhin 27 Module und genau sieben Reload-Teilnehmer.
+
+V2 verwendet dieselbe NavigatorMenu-Instanz, denselben gebundenen Holder, Listener, AccessPolicy und Active-Registry. Der Holder speichert zusätzlich Konfigurationssnapshot, Menü-/Entry-ID und Breadcrumbs. Ein Klick prüft aktuelle Konfiguration, Entry-Permission und alle MENU-Links des benutzten Pfads. `vapeecore.navigator.builder` hat Default `op`; keine hartcodierten LuckPerms-Gruppen. WarpService und administrative Warp-Semantik bleiben unverändert.
+
+Optionale Spielerzahlen verwenden explizite inklusive Welt-/Cuboid-Grenzen und nur aktuell online sichtbare Spieler. Sie entstehen beim Öffnen bzw. bestehenden View-Refresh, ohne Polling, Offline-Scan oder zweiten Cache. Die optionale Stackgröße wird auf Materiallimit/64 begrenzt; die Lore zeigt die vollständige Zahl. Titel/Namen/Lore nutzen literal LocalizedText und EN/DE-Kataloge. Vollständiges Schema, Privatsphäregrenzen, Restart-Vertrag und Tests: [Step-03-Bericht](../reports/prototype/STEP_03_NAVIGATOR_V2.md).
+
+Die folgenden Phase-28-Details beschreiben den weiterhin erhaltenen Legacy-Modus und die gemeinsamen Warp-/Security-Verträge.
+
+`WarpModule` besitzt weiterhin `WarpConfig`, `WarpService` und den administrativen `/warp`-Root. `LobbyExperienceModule` besitzt Compass-Interaktion, `NavigatorMenu` und `NavigatorListener`. Es bezieht zusätzlich das bereits früher gestartete `ActivityModule` für die kleine konkrete `NavigatorAccessPolicy`; es gibt keine Reverse Dependency. Aktuell gibt es 27 Module, sieben Reload-Teilnehmer, 36 Root-Commands und 50 Permission-Nodes. Warp ist kein ReloadParticipant; Admin-Mutationen wirken sofort, `/core reload` lädt `warps.yml` nicht neu.
 
 `WarpPoint` enthält ID, literal Display Name, Item-Icon, `WarpPosition` und den immutable Record `WarpNavigation(visible, order)`. Der kompatible Vier-Argument-Konstruktor und neue `/warp set`-Ziele verwenden `visible=true`, `order=0`. Hidden bedeutet ausschließlich im Compass verborgen: Existenz, Admin-Verwaltung und generische `WarpService#teleport`-Semantik bleiben erhalten. Weder Lobby-Spawn noch bestimmte IDs sind reserviert oder automatisch erzeugt.
 
@@ -1246,7 +1256,7 @@ Der [Verify-Workflow](../scripts/verify.ps1) prüft Voraussetzungen, baut mit `c
 ./scripts/stop-dev-server.ps1
 ```
 
-Der separate Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x prüft Start aller 27 Module, sieben Reload-Teilnehmer, 36 Command-Roots und sauberen Shutdown in umgekehrter Reihenfolge. Aktuelle Descriptor-Verträge: 49 Permission-Nodes und 15 positive Child-Kanten. Live-YAMLs werden durch einen Build nicht mit Resource-Defaults überschrieben. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Der separate Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x prüft Start aller 27 Module, sieben Reload-Teilnehmer, 36 Command-Roots und sauberen Shutdown in umgekehrter Reihenfolge. Aktuelle Descriptor-Verträge: 50 Permission-Nodes und 15 positive Child-Kanten. Live-YAMLs werden durch einen Build nicht mit Resource-Defaults überschrieben. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 

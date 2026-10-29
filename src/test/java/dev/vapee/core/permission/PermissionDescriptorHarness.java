@@ -105,6 +105,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.settings.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.social.ignore", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.warp.admin", new Node(PermissionDefault.OP, Set.of())),
+            Map.entry("vapeecore.navigator.builder", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.rank.view", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.ranks.view", new Node(PermissionDefault.TRUE, Set.of()))
     );
@@ -131,7 +132,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 49, "all 49 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 50, "all 50 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");

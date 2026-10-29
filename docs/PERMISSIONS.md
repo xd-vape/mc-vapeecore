@@ -13,6 +13,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.economy.coins` | `true` | `/coins` | Eigene Coin-Balance anzeigen. |
 | `vapeecore.economy.admin` | `op` | `/coins get\|add\|remove\|set` | Liest bekannte Online-/Offline-Wallets; verändert nur geladene Online-Wallets. Child: `vapeecore.economy.coins`. |
 | `vapeecore.warp.admin` | `op` | `/warp …` | Verändert persistente Warp-Ziele. |
+| `vapeecore.navigator.builder` | `op` | Navigator-V2-Builder-Eintrag | Sichtbarkeit und Klickberechtigung für konfigurierte lokale Ziele; kein Rangname und kein Servertransfer. |
 
 ### Economy Commands (Phase 22)
 

@@ -335,6 +335,9 @@ permissions:
   vapeecore.warp.admin:
     description: Allows configuring warp destinations
     default: op
+  vapeecore.navigator.builder:
+    description: Allows viewing and using configured local Builder destinations
+    default: op
   vapeecore.rank.view:
     description: Allows viewing an online player's server rank
     default: true

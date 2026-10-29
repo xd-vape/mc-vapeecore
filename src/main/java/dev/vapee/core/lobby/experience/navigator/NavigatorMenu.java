@@ -24,10 +24,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class NavigatorMenu {
+    static final int BACK_SLOT = 48;
+    private final Supplier<NavigatorConfig.State> configuration;
+    private final Supplier<? extends java.util.Collection<? extends Player>> onlinePlayers;
     private final dev.vapee.core.lobby.warp.WarpChangeListener committedChanges = () -> java.util.List.copyOf(this.activeInventories.keySet()).forEach(this::refreshActive);
     private boolean observingChanges;
 
@@ -71,9 +75,15 @@ public final class NavigatorMenu {
     }
     public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy,
                          dev.vapee.core.message.MessageService messages) {
+        this(plugin, warpService, accessPolicy, messages, NavigatorConfig::legacy);
+    }
+
+    public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy,
+                         dev.vapee.core.message.MessageService messages, Supplier<NavigatorConfig.State> configuration) {
         this(warpService, accessPolicy, plugin.getServer()::getPlayer,
                 (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT, messages);
+                UiItems::render, plugin.getLogger(), DEFAULT_LAYOUT, messages, configuration,
+                plugin.getServer()::getOnlinePlayers);
     }
 
     NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
@@ -92,6 +102,17 @@ public final class NavigatorMenu {
                   Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
                   ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout,
                   dev.vapee.core.message.MessageService messages) {
+        this(warpService, accessPolicy, onlinePlayer, inventoryFactory, itemRenderer, logger, menuLayout,
+                messages, NavigatorConfig::legacy, List::of);
+    }
+
+    NavigatorMenu(WarpService warpService, NavigatorAccessPolicy accessPolicy,
+                  Function<UUID, Player> onlinePlayer, InventoryFactory inventoryFactory,
+                  ItemRenderer itemRenderer, Logger logger, MenuLayout<Action> menuLayout,
+                  dev.vapee.core.message.MessageService messages, Supplier<NavigatorConfig.State> configuration,
+                  Supplier<? extends java.util.Collection<? extends Player>> onlinePlayers) {
+        this.configuration = Objects.requireNonNull(configuration);
+        this.onlinePlayers = Objects.requireNonNull(onlinePlayers);
         this.messageService = Objects.requireNonNull(messages);
         this.layout = Objects.requireNonNull(menuLayout, "layout").validateActions(java.util.Set.of());
         this.layout.requirePaged();
@@ -109,6 +130,8 @@ public final class NavigatorMenu {
     }
 
     public boolean open(Player player, int requestedPage) {
+        NavigatorConfig.State current = configuration.get();
+        if (current.enabled()) return openConfigured(player, current.root(), List.of(), requestedPage, current);
         Player previousViewer = renderingFor; renderingFor = player;
         try {
         Player validatedPlayer = Objects.requireNonNull(player, "player");
@@ -295,7 +318,15 @@ public final class NavigatorMenu {
             activeInventories.remove(owner, inventory); return;
         }
         if (!canAccess(player)) { activeInventories.remove(owner, inventory); player.closeInventory(); return; }
-        try { rerenderInventory = inventory; open(player, holder.getPage()); }
+        try {
+            NavigatorConfig.State current = configuration.get();
+            if (holder.configuration() != null && holder.configuration() != current
+                    || holder.configuration() == null && current.enabled()) {
+                open(player); return;
+            }
+            rerenderInventory = inventory;
+            openPage(player, holder, holder.getPage());
+        }
         catch (RuntimeException exception) {
             activeInventories.remove(owner, inventory);
             if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
@@ -331,6 +362,155 @@ public final class NavigatorMenu {
         } finally {
             closeOpenInventories();
         }
+    }
+
+    boolean validateView(Player player, NavigatorInventoryHolder holder) {
+        NavigatorConfig.State current = configuration.get();
+        if (holder.configuration() == null && !current.enabled()) return true;
+        if (holder.configuration() == current && current.enabled() && routeAllowed(player, holder.menuId(), holder.parents(), current))
+            return true;
+        messageService.send(player, tr("navigator.unavailable"));
+        open(player);
+        return false;
+    }
+
+    void openPage(Player player, NavigatorInventoryHolder holder, int page) {
+        if (holder.configuration() == null) open(player, page);
+        else openConfigured(player, holder.menuId(), holder.parents(), page, configuration.get());
+    }
+
+    void back(Player player, NavigatorInventoryHolder holder) {
+        var parents = holder.parents();
+        if (parents.isEmpty()) return;
+        var parent = parents.getLast();
+        openConfigured(player, parent.menuId(), parents.subList(0, parents.size() - 1), parent.page(), configuration.get());
+    }
+
+    void activateEntry(Player player, NavigatorInventoryHolder holder, String id) {
+        if (!validateView(player, holder)) return;
+        var state = configuration.get();
+        var entry = state.menus().get(holder.menuId()).entries().get(id);
+        if (entry == null || !entry.allowed(player)) {
+            messageService.send(player, tr("navigator.unavailable"));
+            openPage(player, holder, holder.getPage());
+            return;
+        }
+        switch (entry.type()) {
+            case MENU -> {
+                var parents = new java.util.ArrayList<>(holder.parents());
+                parents.add(new NavigatorInventoryHolder.Breadcrumb(holder.menuId(), holder.getPage(), entry.id()));
+                openConfigured(player, entry.target(), parents, 0, state);
+            }
+            case UNAVAILABLE -> messageService.send(player, tr("navigator.unavailable"));
+            case WARP -> {
+                var result = warpService.teleportFromNavigator(player, entry.target());
+                switch (result) {
+                    case SUCCESS -> close(player);
+                    case NOT_FOUND, NOT_NAVIGABLE -> {
+                        messageService.send(player, tr("navigator.destination-missing"));
+                        openPage(player, holder, holder.getPage());
+                    }
+                    case WORLD_NOT_LOADED -> messageService.send(player, tr("warp.world-missing"));
+                    case TELEPORT_FAILED -> messageService.send(player, tr("warp.teleport-failed"));
+                    default -> messageService.send(player, tr("navigator.unavailable"));
+                }
+            }
+        }
+    }
+
+    private boolean routeAllowed(Player player, String menuId, List<NavigatorInventoryHolder.Breadcrumb> parents,
+                                 NavigatorConfig.State state) {
+        String current = state.root();
+        for (var parent : parents) {
+            if (!current.equals(parent.menuId()) || !state.menus().containsKey(current)) return false;
+            var link = state.menus().get(current).entries().get(parent.entryId());
+            if (link == null || link.type() != NavigatorConfig.Type.MENU || !link.allowed(player)) return false;
+            current = link.target();
+        }
+        return current.equals(menuId) && state.menus().containsKey(menuId);
+    }
+
+    private boolean openConfigured(Player player, String menuId, List<NavigatorInventoryHolder.Breadcrumb> parents,
+                                   int requestedPage, NavigatorConfig.State state) {
+        Objects.requireNonNull(player, "player");
+        if (!canAccess(player) || !state.enabled() || !routeAllowed(player, menuId, parents, state)) {
+            close(player); return false;
+        }
+        Player previousViewer = renderingFor; renderingFor = player;
+        try {
+            var menu = state.menus().get(menuId);
+            var entries = menu.entries().values().stream().filter(entry -> entry.allowed(player)).toList();
+            var pages = entries.isEmpty() ? List.of(0) : entries.stream().map(NavigatorConfig.Entry::page).distinct().sorted().toList();
+            Pagination pagination = Pagination.of(pages.size(), requestedPage, 1);
+            int configuredPage = pages.get(pagination.page());
+            var visible = entries.stream().filter(entry -> entry.page() == configuredPage).toList();
+            Map<Integer, String> ids = new LinkedHashMap<>();
+            visible.forEach(entry -> ids.put(entry.slot(), entry.id()));
+            NavigatorInventoryHolder holder = new NavigatorInventoryHolder(player.getUniqueId(), pagination.page(),
+                    menuId, ids, state, parents);
+            Inventory inventory;
+            if (rerenderInventory != null && rerenderInventory.getSize() == DEFAULT_LAYOUT.size()
+                    && rerenderInventory.getHolder() instanceof NavigatorInventoryHolder existing) {
+                inventory = rerenderInventory; existing.beginRender(holder); holder = existing;
+                for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
+            } else {
+                inventory = inventoryFactory.create(holder, DEFAULT_LAYOUT.size(),
+                        Component.text(menu.title().resolve(messageService.localization().locale(player)), NamedTextColor.DARK_GRAY));
+                holder.bindInventory(inventory);
+            }
+            for (var entry : visible) inventory.setItem(entry.slot(), createConfiguredItem(player, entry));
+            if (visible.isEmpty()) placeDisplay(inventory, DEFAULT_LAYOUT.emptySlot(),
+                    createItem(Material.GRAY_DYE, tr("navigator.empty"), NamedTextColor.GRAY, List.of()));
+            if (pagination.hasPrevious()) placeConfigured(inventory, Action.PREVIOUS,
+                    createItem(Material.ARROW, tr("common.previous-page"), NamedTextColor.YELLOW, List.of()));
+            if (pagination.hasMultiplePages()) placeConfigured(inventory, Action.PAGE_INFO,
+                    createItem(Material.PAPER, tr("common.page", Map.of("current", Component.text(pagination.page() + 1),
+                            "total", Component.text(pagination.pageCount()))), NamedTextColor.AQUA,
+                            List.of(tr(entries.size() == 1 ? "navigator.count.one" : "navigator.count.many",
+                                    Map.of("count", Component.text(entries.size()))))));
+            if (!parents.isEmpty()) inventory.setItem(BACK_SLOT,
+                    createItem(Material.ARROW, tr("common.back"), NamedTextColor.YELLOW, List.of()));
+            placeConfigured(inventory, Action.CLOSE, createItem(Material.BARRIER, tr("common.close"), NamedTextColor.RED, List.of()));
+            if (pagination.hasNext()) placeConfigured(inventory, Action.NEXT,
+                    createItem(Material.ARROW, tr("common.next-page"), NamedTextColor.YELLOW, List.of()));
+            holder.finishRender();
+            var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
+            if (opened == null || opened.getTopInventory() != inventory || player.getOpenInventory().getTopInventory() != inventory)
+                return false;
+            if (!canAccess(player) || configuration.get() != state || !routeAllowed(player, menuId, parents, state)) {
+                close(player); return false;
+            }
+            activeInventories.put(player.getUniqueId(), inventory);
+            return true;
+        } finally { renderingFor = previousViewer; }
+    }
+
+    private void placeConfigured(Inventory inventory, Action action, ItemStack item) {
+        DEFAULT_LAYOUT.actionSlot(action, 0).ifPresent(slot -> {
+            inventory.setItem(slot, item);
+            ((NavigatorInventoryHolder) inventory.getHolder()).recordAction(slot, action);
+        });
+    }
+
+    private ItemStack createConfiguredItem(Player player, NavigatorConfig.Entry entry) {
+        var locale = messageService.localization().locale(player);
+        boolean available = entry.type() != NavigatorConfig.Type.UNAVAILABLE
+                && (entry.type() != NavigatorConfig.Type.WARP || warpService.getWarp(entry.target())
+                    .filter(warp -> warp.navigation().visible()).isPresent());
+        var lore = new java.util.ArrayList<Component>();
+        entry.lore().forEach(line -> lore.add(Component.text(line.resolve(locale))));
+        long count = -1;
+        if (available && entry.region() != null) {
+            count = entry.region().count(player, onlinePlayers.get());
+            lore.add(tr(count == 1 ? "navigator.players.one" : "navigator.players.many",
+                    Map.of("count", Component.text(count, NamedTextColor.GREEN))));
+        }
+        lore.add(tr(!available ? "navigator.unavailable-hint" : entry.type() == NavigatorConfig.Type.MENU
+                ? "navigator.menu-hint" : "navigator.teleport-hint"));
+        ItemStack item = createItem(entry.icon(), Component.text(entry.name().resolve(locale)),
+                available ? NamedTextColor.AQUA : NamedTextColor.GRAY, lore);
+        if (count >= 0 && entry.stackAmount()) item.setAmount(NavigatorRegion.stackAmount(count, item.getMaxStackSize()));
+        return item;
     }
 
 }
