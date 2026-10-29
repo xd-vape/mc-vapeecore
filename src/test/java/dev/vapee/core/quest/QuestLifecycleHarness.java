@@ -72,7 +72,7 @@ public final class QuestLifecycleHarness {
                 "questModule", "dailyQuestModule",
                 "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "settingsModule", "activityModule",
-                "utilityModule", "seatModule", "worldDisplayModule", "blackjackModule",
+                "utilityModule", "seatModule", "worldDisplayModule",
                 "warpModule", "lobbyExperienceModule"
         );
         int previousPosition = -1;
@@ -81,8 +81,8 @@ public final class QuestLifecycleHarness {
             check(position > previousPosition, module + " has the required Phase-17A order position");
             previousPosition = position;
         }
-        check(count(coreSource, "moduleManager.register(") == 28,
-                "VapeeCore registers exactly twenty-eight modules");
+        check(count(coreSource, "moduleManager.register(") == 27,
+                "VapeeCore registers exactly twenty-seven modules");
         check(coreSource.indexOf("onlineRewardModule = new OnlineRewardModule")
                         < coreSource.indexOf("questModule = new QuestModule")
                         && coreSource.indexOf("questModule = new QuestModule")

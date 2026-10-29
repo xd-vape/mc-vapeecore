@@ -105,7 +105,6 @@ core:
   # Command Help
   help:
     ban.description: "Bans a known player temporarily or permanently."
-    blackjack.help.description: "Shows blackjack administration commands."
     build.description: "Toggles temporary lobby build mode."
     clan:
       help.description: "Shows clan and invitation commands."
@@ -313,6 +312,8 @@ warp:
   help:
     footer: "Use /warp info \\<id> to review a warp before changing it."
     section.create-edit: "Create & Edit"
+    section.information: "Information"
+    section.management: "Management"
     title: "Warp Administration"
     warp:
       hide.description: "Hides a destination from the navigator only."
@@ -902,260 +903,13 @@ quests:
 
 
 # ==================================================
-# ACTIVITIES AND BLACKJACK
+# ACTIVITIES
 # ==================================================
 
 activity:
 
   # General
   context: "<aqua><activity></aqua> <dark_gray>›</dark_gray> <body>"
-  blackjack: "Blackjack"
-
-blackjack:
-
-  # Actions
-  action:
-    deal: "Deal"
-    double: "Double"
-    hit: "Hit"
-    leave: "Leave Table"
-    stand: "Stand"
-
-  # Gameplay Hints
-  hint:
-    deal: "Start a new free-play round."
-    double: "Draw exactly one card, then stand."
-    hit: "Draw one card."
-    leave: "Leave blackjack and return your lobby items."
-    stand: "Keep your current hand."
-    use: "Right-click to use."
-
-  # Round Messages and States
-  round:
-    double-invalid: "<yellow>You can only double on your first two cards.</yellow>"
-    not-turn: "<yellow>It is not your turn.</yellow>"
-    start-failed: "<red>The blackjack round could not be started.</red>"
-    timeout: "<yellow>Your turn timed out. You automatically stood.</yellow>"
-    turn: "<aqua>It is your turn. You have 20 seconds.</aqua>"
-  state:
-    available: "Table available"
-    complete: "Round complete"
-    dealer: "Dealer is playing"
-    other-turn: "Another player's turn"
-    own-turn: "Your turn"
-    waiting: "Waiting for deal"
-  status:
-    players: "<count> player(s) seated"
-    title: "Blackjack Status"
-    value: "Hand value: <value>"
-  next:
-    dealer: "Stand at the dealer position facing the table, then use:"
-    display: "Set the table display surface with:"
-    interaction: "Set the legacy interaction block with:"
-    pos1: "Set the first area corner with:"
-    pos2: "Set the second area corner with:"
-    preview: "Preview the visual positions before enabling with:"
-    seat: "Configure at least one seat with:"
-
-  # Results
-  result:
-    BLACKJACK: "<gold>Blackjack!</gold>"
-    BUST: "<red>Bust.</red>"
-    LOSS: "<red>Dealer wins.</red>"
-    PUSH: "<yellow>Push.</yellow>"
-    WIN: "<green>You win.</green>"
-
-  # Joining a Table
-  join:
-    build: "<red>You cannot join blackjack while build mode is enabled.</red>"
-    current-unavailable: "<red>This blackjack table is currently unavailable.</red>"
-    failed: "<red>You could not be seated at this blackjack table.</red>"
-    full: "<red>This blackjack table is full.</red>"
-    other-activity: "<red>You are already participating in another activity.</red>"
-    other-table: "<red>You are already seated at another blackjack table.</red>"
-    running: "<red>This blackjack round is already in progress.</red>"
-    unavailable: "<red>This blackjack table is not available.</red>"
-
-  # Physical Table Setup
-  position:
-    DEALER: "dealer position"
-    POS1: "area pos1"
-    POS2: "area pos2"
-  setup:
-    activate-failed: "<red>The table runtime could not be activated. Check the server log.</red>"
-    already-disabled: "<yellow>That blackjack table is already disabled.</yellow>"
-    already-enabled: "<yellow>That blackjack table is already enabled.</yellow>"
-    busy: "<red>The table cannot be disabled while occupied or running a round.</red>"
-    denied: "<red>You do not have permission to configure blackjack tables.</red>"
-    disable-delete: "<red>Disable the table before deleting it.</red>"
-    disable-edit: "<red>Disable the table before editing it.</red>"
-    empty: "<yellow>No blackjack tables are configured.</yellow>"
-    id-invalid: "<red>Table IDs must match [a-z0-9_-]+.</red>"
-    interaction-used: "<red>That interaction block is already used by another table.</red>"
-    look-block: "<red>Look at a block within six blocks.</red>"
-    look-seat: "<red>Look at a supported seat block within six blocks.</red>"
-    look-table: "<red>Look at a table block within six blocks.</red>"
-    player-only: "<red>Only players can capture world positions.</red>"
-    save-failed: "<red>The blackjack table configuration could not be saved. Check the server log.</red>"
-    seat-block-invalid: "<red>Use a bottom stair or a single bottom/top slab. Top stairs and double slabs are unsupported.</red>"
-    seat-invalid: "<red>A configured seat block is no longer a supported stair or slab.</red>"
-    seat-number: "<red>Seat number must be between 1 and 5.</red>"
-    seat-unconfigured: "<red>That seat is not configured.</red>"
-    seat-used: "<red>One of those seat blocks is already used by another enabled table.</red>"
-    surface-updated: "Blackjack table surface updated."
-    world-missing: "<red>The table world is not loaded.</red>"
-  workflow:
-    build: "Build the physical table in the world."
-    create: "Create its disabled configuration draft:"
-    dealer: "Stand at the dealer position facing the table, then:"
-    enable: "Validate and enable the table:"
-    order: "Setup order:"
-    pos1: "Set the first gameplay-area corner:"
-    pos2: "Set the second gameplay-area corner:"
-    preview: "Check the visual calibration:"
-    progress: "Use <command> to check progress."
-    seat: "Look at every seat and repeat with its number:"
-    surface: "Look at the playing surface:"
-
-  # Preview
-  preview:
-    center: "CENTER"
-    dealer: "Dealer"
-    dealer-hand: "DEALER HAND"
-    markers: "Markers: "
-    missing-heading: "Missing components:"
-    missing-item: "- <component>: missing"
-    missing-seat: "Seat <seat>"
-    player-only: "<red>Only players can view a world preview.</red>"
-    seat: "SEAT <seat>"
-    shown: "Blackjack table preview shown for <seconds> seconds."
-    status: "STATUS"
-    surface: "Table Surface"
-    surface-missing: "Set the table surface before starting a preview."
-    world-missing: "The table surface world is not loaded."
-
-  # Table Administration
-  table:
-    created: "Blackjack table '<id>' created."
-    deleted: "Blackjack table '<id>' deleted."
-    disabled: "Blackjack table '<id>' disabled."
-    enabled: "Blackjack table '<id>' enabled."
-    exists: "Blackjack table '<id>' already exists."
-    interaction: "Blackjack table '<id>' interaction block updated."
-    missing: "Blackjack table '<id>' does not exist."
-    not-ready: "Table '<id>' is not ready."
-    position: "Blackjack table '<id>' <position> updated."
-    seat: "Blackjack table '<id>' seat <seat> block and sit position updated."
-    seat-removed: "Blackjack table '<id>' seat <seat> removed."
-  world:
-    dealer: "Dealer"
-    dealer-label: "Dealer • <value>"
-    outcome:
-      BLACKJACK: "BLACKJACK"
-      BUST: "BUST"
-      LOSS: "LOSS"
-      PUSH: "PUSH"
-      WIN: "WIN"
-    player-turn: "<player>'s turn"
-    player-turn-empty: "Player turn"
-  unknown-command: "Unknown subcommand '<command>'."
-
-  # Information
-  # Scalar keys and their dotted descendants are intentionally separate leaves.
-  info:
-    area: "Area: "
-    block: "Block: "
-    configured: "Configured"
-    dealer: "Dealer: "
-    enabled: "Enabled: "
-    heading: "Blackjack Table • "
-    interaction: "Interaction: "
-    join-mode: "Join Mode: "
-    join-mode.invalid: "Invalid mixed schema"
-    join-mode.legacy: "Legacy interaction"
-    join-mode.modern: "Modern seat click"
-    legacy-geometry: "Missing - using legacy geometry"
-    missing: "Missing"
-    next: "Next"
-    not-configured: "Not configured"
-    physical: "Physical Table Setup"
-    pos1: "Area Pos 1: "
-    pos2: "Area Pos 2: "
-    runtime: "Runtime: "
-    seats: "Seats: "
-    session: "Session: "
-    session-count: "<state> • <count> participant(s)"
-    session-state:
-      ACTIVE: "Active"
-      AVAILABLE: "Available"
-      CLOSED: "Closed"
-      RESETTING: "Resetting"
-      SETTLED: "Settled"
-    status: "Status"
-    surface: "Surface: "
-    table-count: "<count> table(s) configured."
-    table-surface: "Table Surface: "
-    tables: "Blackjack Tables"
-    world: "World: "
-
-  # Help
-  help:
-    blackjack:
-      setup.create.description: "Creates a disabled blackjack table draft."
-      setup.dealer.description: "Stand at the dealer position facing the table."
-      setup.delete.description: "Deletes a disabled table."
-      setup.description: "Shows physical table setup commands."
-      setup.disable.description: "Disables an unused table."
-      setup.display.description: "Sets the center and surface of the physical blackjack table."
-      setup.enable.description: "Validates and enables the table."
-      setup.info.description: "Shows configuration and runtime state."
-      setup.interaction.description: "Sets the block players right-click to join."
-      setup.list.description: "Lists all configured tables."
-      setup.list.description-alternate: "Lists configured tables."
-      setup.pos1.description: "Sets the first corner of the table area."
-      setup.pos2.description: "Sets the second corner of the table area."
-      setup.preview.description: "Temporarily shows the configured card and status positions."
-      setup.removeseat.description: "Removes a configured seat."
-      setup.seat.description: "Sets or updates a table seat."
-    footer: "Use /blackjack setup help for the complete setup workflow."
-    footer-setup: "Use /blackjack setup info \\<id> to check setup progress."
-    section:
-      create-configure: "Create & Configure"
-      information: "Information"
-      management: "Management"
-      table-setup: "Table Setup"
-    title: "Blackjack Administration"
-    title-setup: "Blackjack Setup"
-
-  # Validation
-  validation:
-    area-pos1: "Area Pos 1"
-    area-pos2: "Area Pos 2"
-    area-worlds: "Area corners use different worlds"
-    dealer: "Dealer position"
-    dealer-outside: "Dealer is outside the area"
-    dealer-world: "Dealer uses a different world"
-    display-outside: "Display anchor is outside the area"
-    display-world: "Display anchor uses a different world"
-    duplicate-block: "Duplicate seat block at seat <seat>"
-    duplicate-number: "Duplicate seat number <seat>"
-    heading: "Missing or invalid:"
-    interaction: "Interaction block"
-    interaction-outside: "Interaction is outside the area"
-    interaction-world: "Interaction uses a different world"
-    max-seats: "At most five seats are allowed"
-    mixed-seats: "Legacy and modern seats cannot be mixed"
-    seat: "At least one seat"
-    seat-block-outside: "Seat block <seat> is outside the area"
-    seat-block-world: "Seat block <seat> uses a different world"
-    seat-no-block: "Seat <seat> has no block"
-    seat-number: "Seat number <seat> is outside 1–5"
-    seat-outside: "Seat <seat> is outside the area"
-    seat-world: "Seat <seat> uses a different world"
-    then: "Then: "
-    too-many: "More than five seats configured"
-    unknown: "Unknown validation issue"
-
 
 # ==================================================
 # MODERATION

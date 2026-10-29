@@ -25,8 +25,8 @@ enum WarpSubcommand {
 
     enum Section {
         CREATE_EDIT("warp.help.section.create-edit"),
-        INFORMATION("blackjack.help.section.information"),
-        MANAGEMENT("blackjack.help.section.management");
+        INFORMATION("warp.help.section.information"),
+        MANAGEMENT("warp.help.section.management");
 
         final String titleKey;
 

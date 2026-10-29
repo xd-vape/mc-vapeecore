@@ -10,7 +10,7 @@ VapeeCore ist ein modular aufgebautes Minecraft-Plugin für Paper. Es verbindet 
 - **Moderation und Utility:** Mutes, Bans, Warnungen und Historie; berechtigungsgesteuerte Bewegungs-, Teleport- und Spielerwerkzeuge.
 - **Darstellung:** formatierbarer Chat, Sidebar und Tablist; Rankfarben aus LuckPerms und optionale Clan-Tags in Tablist/Nametags. Die Nametag-Farbe verwendet die 16 von Minecraft unterstützten Teamfarben.
 - **Rewards und Quests:** Gameplay-Reward-API, kumulative Playtime-Rewards, Quest-Fortschritt und konfigurierbare Daily-Auswahl. Daily Quests sind im Default deaktiviert und besitzen keinen vorinstallierten Quest-Katalog.
-- **Activities:** gemeinsame Session-/Teilnehmerverwaltung, physische Blackjack-Tische, Sitze und World Displays. Blackjack besitzt keine Coin-Einsätze.
+- **Activities:** gemeinsame Session-/Teilnehmerverwaltung, generische Sitze und World Displays. Blackjack ist seit Prototype Step 02 kein Core-Feature mehr.
 
 `/core help` zeigt die verfügbaren Befehle. Feature-Einstiege sind beispielsweise `/spawn`, `/settings`, `/friend`, `/clan`, `/profile`, `/quests`, `/msg`, `/rank` und `/ranks`. Vollständige Berechtigungen und öffentliche Command-Verträge stehen in [PERMISSIONS.md](docs/PERMISSIONS.md).
 
@@ -61,7 +61,7 @@ Bei Updates den vorhandenen `plugins/VapeeCore/`-Ordner behalten. Beim Startup e
 
 Nach normalen Änderungen liest **`/core reload`** die Operator-Configs und beide Sprachdateien über die in `VapeeCore` verdrahteten Teilnehmer in einer gemeinsamen Prepare-/Apply-Transaktion neu. Der Reload erstellt keine Migrationsbackups und schreibt keine Operator-Configs. Die heutige Daily-Auswahl bleibt im selben Cycle erhalten; neue Katalogeinträge werden beim nächsten Cycle ausgewählt. Für ausdrückliche Tests übernimmt `/core quest force [player]` die aktuelle Auswahl bis zur konfigurierten Anzahl, erhält Fortschritt weiterhin ausgewählter IDs und vergibt selbst keine Coins. Ausstehende Belohnungen blockieren Force; es verlangt `vapeecore.admin` und den bestehenden Online-Zielschutz.
 
-`warps.yml`, `blackjack.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind veränderliche **Persistence**, keine Operator-Config-Evolution. Sie besitzen ihre eigenen Datei-/Schema-Verträge. Verwende für Warps und Blackjack die Admin-Commands.
+`warps.yml`, `blackjack.yml`, `players/*.yml`, `friends.yml`, `clans.yml` und `moderation.yml` sind veränderliche **Persistence**, keine Operator-Config-Evolution. Sie besitzen ihre eigenen Datei-/Schema-Verträge. Für Warps bleiben die Admin-Commands verfügbar. Bestehende `blackjack.yml`-Dateien sind historische Betreiberdateien und werden vom Core weder gelesen noch verändert. Alte `blackjack:win`-Daily-Quests müssen bewusst deaktiviert oder ersetzt werden; ihr Producer ist entfernt. Siehe [Step-02-Bericht](reports/prototype/STEP_02_BLACKJACK_REMOVAL.md).
 
 ### Lobby-Items anpassen
 

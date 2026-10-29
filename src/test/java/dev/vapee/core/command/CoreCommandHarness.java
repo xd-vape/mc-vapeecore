@@ -95,7 +95,7 @@ public final class CoreCommandHarness {
         }
         run(command, console, "core", "Administration", "help");
         for (String syntax : List.of("/ping [player]", "/clear [player]", "/invsee <player>", "/enderchest [player]",
-                "/core reload", "/setspawn", "/warp help", "/blackjack help")) {
+                "/core reload", "/setspawn", "/warp help")) {
             check(console.text().contains(syntax), "admin overview contains " + syntax);
         }
         check(console.output.stream().allMatch(CoreCommandHarness::suggestionsOnly), "all help clicks only suggest commands");

@@ -25,7 +25,7 @@ Kataloge dürfen flache semantische Keys (`common.close`) oder gleichwertige ver
 
 ### Sprachkataloge gliedern und bestehende Dateien übernehmen
 
-Die gebündelten `lang/en.yml` und `lang/de.yml` haben dieselben Feature-Abschnitte und dieselbe Reihenfolge. Suche beispielsweise Friends → Requests and Notifications, Daily Quests → Reset Countdown oder Blackjack → Physical Table Setup. Große Bereiche sind in der IDE einklappbar. Unter einem Feature stehen höchstens drei Section-Ebenen; längere Namen bleiben teilweise gepunktet.
+Die gebündelten `lang/en.yml` und `lang/de.yml` haben dieselben Feature-Abschnitte und dieselbe Reihenfolge. Suche beispielsweise Friends → Requests and Notifications, Daily Quests → Reset Countdown oder Warps → Administration Feedback. Große Bereiche sind in der IDE einklappbar. Unter einem Feature stehen höchstens drei Section-Ebenen; längere Namen bleiben teilweise gepunktet.
 
 ```yaml
 daily-quests:
@@ -102,7 +102,7 @@ Ein neues Plugin-JAR und `/core reload` ersetzen keine vorhandenen Texte in `lob
 
 Header/Footer und Lore bleiben YAML-Listen; die Referenzen sind deren einzelne String-Einträge. Nach `/core reload` folgen diese Texte der aktuellen Minecraft-Clientsprache. Für eigene zweisprachige Header/Footer einen eigenen parameterlosen Key in beiden Sprachdateien anlegen und ausdrücklich referenzieren. Für eigene Lobby-Namen/Lore kann alternativ die oben gezeigte `en/de`-Map verwendet werden. Feste Strings werden absichtlich nicht anhand ihres Inhalts automatisch übersetzt.
 
-Alle normalen Menüs einschließlich Player Menu übersetzen Titel, Icons und Lore für ihren Besitzer. Sprachwechsel aktualisieren aktive Items; native Inventartitel werden beim nächsten Open neu erstellt. Eigene Sidebar/Tablist-Header/Footer sind persönlich. Native Nametag-/Tablist-Namen, Chat-Wrappers und global sichtbare Blackjack-/Preview-Anzeigen bleiben gemeinsame Texte; eigene Katalogtexte in den gemeinsamen Weltanzeigen sind Englisch. Servermarke, Clan-/Warp-Namen, LuckPerms-Prefix/Suffix und Benutzertexte bleiben unverändert. Frühzeitige Ban-Login-Ablehnung verwendet Englisch.
+Alle normalen Menüs einschließlich Player Menu übersetzen Titel, Icons und Lore für ihren Besitzer. Sprachwechsel aktualisieren aktive Items; native Inventartitel werden beim nächsten Open neu erstellt. Eigene Sidebar/Tablist-Header/Footer sind persönlich. Native Nametag-/Tablist-Namen, Chat-Wrappers und globale WorldDisplay-Texte bleiben gemeinsame Texte; eigene Katalogtexte in den gemeinsamen Weltanzeigen sind Englisch. Servermarke, Clan-/Warp-Namen, LuckPerms-Prefix/Suffix und Benutzertexte bleiben unverändert. Frühzeitige Ban-Login-Ablehnung verwendet Englisch.
 
 ---
 

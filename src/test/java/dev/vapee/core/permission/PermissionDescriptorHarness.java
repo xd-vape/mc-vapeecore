@@ -41,7 +41,6 @@ public final class PermissionDescriptorHarness {
             Map.entry("ignore", new Root("vapeecore.social.ignore", List.of(), "/ignore <player>")),
             Map.entry("unignore", new Root("vapeecore.social.ignore", List.of(), "/unignore <player|uuid>")),
             Map.entry("ignorelist", new Root("vapeecore.social.ignore", List.of(), "/ignorelist")),
-            Map.entry("blackjack", new Root("vapeecore.blackjack.admin", List.of(), "/blackjack help")),
             Map.entry("warp", new Root("vapeecore.warp.admin", List.of(), "/warp help")),
             Map.entry("build", new Root("vapeecore.utility.build", List.of(), "/build")),
             Map.entry("fly", new Root("vapeecore.utility.fly", List.of(), "/fly [player]")),
@@ -105,7 +104,6 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.message.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.settings.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.social.ignore", new Node(PermissionDefault.TRUE, Set.of())),
-            Map.entry("vapeecore.blackjack.admin", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.warp.admin", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.rank.view", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.ranks.view", new Node(PermissionDefault.TRUE, Set.of()))
@@ -117,7 +115,7 @@ public final class PermissionDescriptorHarness {
             if (stream == null) throw new AssertionError("missing descriptor");
             descriptor = new PluginDescriptionFile(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
-        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 37, "exact 37 command roots");
+        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 36, "exact 36 command roots");
         check(descriptor.getDepend().equals(List.of("LuckPerms")), "required LP dependency");
         Set<String> identifiers = new HashSet<>(ROOTS.keySet());
         for (var entry : ROOTS.entrySet()) {
@@ -133,7 +131,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 50, "all 50 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 49, "all 49 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");
@@ -155,7 +153,7 @@ public final class PermissionDescriptorHarness {
         check(invsee.contains("Reserved") || invsee.split("MODIFY_PERMISSION", -1).length == 2,
                 "invsee modify defined but not an execution capability");
         String core = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
-        check(core.split("moduleManager.register\\(", -1).length - 1 == 28, "28 modules including Localization");
+        check(core.split("moduleManager.register\\(", -1).length - 1 == 27, "27 modules including Localization");
         check(core.contains("List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,")
                 && core.contains("presentationModule, dailyQuestModule)"), "same seven reload participants");
         String utility = Files.readString(Path.of("src/main/java/dev/vapee/core/utility/UtilityModule.java"));

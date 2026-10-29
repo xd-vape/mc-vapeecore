@@ -61,7 +61,7 @@ Praktische Erweiterungs- und Prüfpfade: [PERSISTENCE_DEVELOPMENT.md](PERSISTENC
 | Freunde / Clans | `FriendService` / `ClanService`, eigene immutable veröffentlichte Snapshots | Feature-eigene Repositories und Dateien. Neue Beziehung wird erst nach erfolgreichem Save publiziert; keine Profilkopie als zweite Wahrheit |
 | Settings / Ignore | `PlayerSettingsService` / `SocialService` mutieren die Profilbereiche | Save über `PlayerService`, Rücknahme bei Fehler, danach schmale Change-/Relationship-Observer. Ignore-Snapshots sind abgeleitete Leseransichten |
 | Lobby | `LobbyService` für Spawn/Regeln; `LobbyPlayerStateService` für NORMAL/BUILD und Inventarbesitz | `LobbyConfig` speichert den Spawn geschützt. Hotbar-Präsentation kommt aus Live-`lobby.yml`; PDC-Identität und Verhalten aus `LobbyItemRegistry` |
-| Activities | `ActivityService` besitzt Sessions, Mitgliedschaft und Reservierungen; `BlackjackService` die Spielrunde | Session-/Runden-State ist Runtime. Persistente Tischdefinitionen gehören dem Blackjack-Feature, nicht einem GUI oder dem Profil |
+| Activities | `ActivityService` besitzt Sessions, Mitgliedschaft und Reservierungen | Runtime bleibt generisch; Core registriert kein Blackjack mehr. Seat und WorldDisplay bleiben unabhängige gemeinsame Services |
 | Betreiberkonfiguration | `ConfigService` bzw. Feature-Config und koordinierter `ReloadService` | Validierte Snapshots; kein Menü schreibt YAML. Startup-Evolution und Runtime-Reload sind getrennt |
 | Sonstiger Runtime-State | Das Feature, das ihn erzeugt: aktive GUI-Inventare, Page/UUID/ID-Mappings, Tasks, Nametag-Teams, Glide-Berechtigung/temporäre Elytra | Kein automatischer Persistenzanspruch. Besitzer muss Listener/Tasks/Views/temporäre Zustände beim Verlassen und Shutdown freigeben |
 
@@ -81,6 +81,8 @@ Es gibt keinen globalen Eventbus. Automatische GUI-Updates verwenden Ereignisse/
 `VapeeCore` erstellt die aktuelle Teilnehmerliste des `ReloadService` ausdrücklich. Alle Teilnehmer bereiten zuerst vor; Prepare darf den aktiven Zustand nicht verändern. Apply schaltet die vorbereiteten Snapshots nacheinander um. Bei einem Fehler werden der fehlgeschlagene Plan und vorher angewendete Pläne rückwärts zurückgenommen. Unvollständiger Rollback wird ausdrücklich gemeldet. Neue reloadbare Werte müssen dieses Verfahren verwenden; nicht jeder Modulzustand ist reloadbar.
 
 `ConfigEvolution` arbeitet ausschließlich beim Startup auf `MANAGED_CONFIGS`: exaktes Backup vor ergänzten Defaults, Erhalt von Betreiberwerten/unbekannten Keys, keine Downgrades zukünftiger Versionen. Sprachkataloge und persistente Feature-Dateien sind ausgeschlossen. `/core reload` migriert oder überschreibt keine Betreiberdateien.
+
+Blackjack wurde in Prototype Step 02 aus der Composition entfernt: 27 Module, unveränderte relative Reihenfolge und sieben Reload-Teilnehmer. Es besteht noch kein öffentliches Add-on-API. Historische Tischdateien und Quest-Daten bleiben erhalten; [Entfernung und spätere Migration](../reports/prototype/STEP_02_BLACKJACK_REMOVAL.md).
 
 ## Standardänderungen
 

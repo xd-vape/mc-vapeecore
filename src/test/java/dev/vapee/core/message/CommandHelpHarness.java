@@ -1,6 +1,5 @@
 package dev.vapee.core.message;
 
-import dev.vapee.core.activity.blackjack.command.BlackjackCommand;
 import dev.vapee.core.command.CoreCommand;
 import dev.vapee.core.command.help.CommandHelpEntry;
 import dev.vapee.core.command.help.CommandHelpPage;
@@ -16,9 +15,6 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.util.BoundingBox;
-import org.bukkit.util.VoxelShape;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -40,7 +36,7 @@ public final class CommandHelpHarness {
         testModelAndRenderer();
         testSafeDynamicTextAndPrefix();
         testCoreAndCoinsHelp();
-        testBlackjackAndWarpHelp();
+        testWarpHelp();
         testTabSuggestions();
         System.out.println("CommandHelpHarness passed " + checks + " checks.");
     }
@@ -156,7 +152,7 @@ public final class CommandHelpHarness {
                 "vapeecore.utility.teleport", "vapeecore.utility.teleport.here",
                 "vapeecore.utility.heal", "vapeecore.utility.feed", "vapeecore.utility.ping",
                 "vapeecore.utility.clear", "vapeecore.utility.invsee", "vapeecore.utility.enderchest",
-                "vapeecore.warp.admin", "vapeecore.blackjack.admin",
+                "vapeecore.warp.admin",
                 "vapeecore.rank.view", "vapeecore.ranks.view"
         ));
         new CommandHelpRenderer(admin.messageService()).send(admin.sender(), core);
@@ -164,7 +160,7 @@ public final class CommandHelpHarness {
         check(adminText.contains("/ping [player]") && adminText.contains("/clear [player]")
                         && adminText.contains("/invsee <player>") && adminText.contains("/enderchest [player]"),
                 "phase 23 overview contains the four remaining inventory and latency utilities");
-        check(adminText.contains("/core reload") && adminText.contains("/blackjack help")
+        check(adminText.contains("/core reload") && !adminText.contains("/blackjack help")
                         && adminText.contains("/gamemode <mode> [player]")
                         && adminText.contains("Alias: /gm") && adminText.contains("/tphere <player>"),
                 "core help shows all permitted administration and utility commands");
@@ -183,76 +179,7 @@ public final class CommandHelpHarness {
                 "coins help shows all mutations to an administrator");
     }
 
-    private static void testBlackjackAndWarpHelp() throws Exception {
-        CommandHelpPage main = page(BlackjackCommand.class, "MAIN_HELP_PAGE");
-        CommandHelpPage setup = page(BlackjackCommand.class, "SETUP_HELP_PAGE");
-        check(main.sections().size() == 1 && dev.vapee.core.i18n.I18nTestSupport.english(main.sections().get(0).title()).equals("Table Setup"),
-                "blackjack root help is structured");
-        String mainText = render(main);
-        check(!mainText.contains("create|delete|pos1"), "blackjack root has no pipe-chain usage");
-        check(setup.sections().stream().map(section -> dev.vapee.core.i18n.I18nTestSupport.english(section.title())).toList()
-                        .equals(List.of("Create & Configure", "Management", "Information")),
-                "blackjack setup sections have the required order");
-        check(setup.sections().stream().mapToInt(section -> section.entries().size()).sum() == 14,
-                "blackjack setup help contains all fourteen actions including preview");
-        check(render(setup).contains("/blackjack setup preview <id>")
-                        && render(setup).contains("physical blackjack table")
-                        && render(setup).contains("dealer position facing the table"),
-                "blackjack help explains dealer facing, physical table surface setup and preview");
-        check(invokeSuggestions(BlackjackCommand.class, "setupSuggestions", "pre")
-                        .equals(List.of("preview")),
-                "blackjack preview is offered by setup completion");
-        Component workflow = invokeComponent(
-                BlackjackCommand.class,
-                "createWorkflow",
-                new Class<?>[]{String.class},
-                "casino-1"
-        );
-        String workflowText = dev.vapee.core.i18n.I18nTestSupport.english(workflow);
-        check(workflowText.contains("Blackjack table 'casino-1' created.")
-                        && workflowText.contains("1. Build the physical table in the world.")
-                        && workflowText.contains("2. Create its disabled configuration draft:")
-                        && workflowText.contains("/blackjack setup create casino-1")
-                        && workflowText.contains("dealer position facing the table")
-                        && workflowText.contains("6. Look at the playing surface:")
-                        && workflowText.contains("/blackjack setup display casino-1")
-                        && workflowText.contains("7. Look at every seat")
-                        && workflowText.contains("/blackjack setup seat casino-1 <number>")
-                        && workflowText.contains("8. Check the visual calibration:")
-                        && workflowText.contains("/blackjack setup preview casino-1")
-                        && workflowText.contains("9. Validate and enable the table:")
-                        && !workflowText.contains("setup interaction casino-1"),
-                "blackjack create workflow shows a safe ordered setup path");
-        check(hasClickAction(workflow, ClickEvent.Action.SUGGEST_COMMAND)
-                        && !hasClickAction(workflow, ClickEvent.Action.RUN_COMMAND),
-                "blackjack create workflow is suggest-only");
-        String invalid = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
-                BlackjackCommand.class,
-                "invalidDefinitionMessage",
-                new Class<?>[]{String.class, List.class},
-                "casino-1",
-                List.of("missing dealer", "at least one seat is required")
-        ));
-        check(invalid.contains("Table 'casino-1' is not ready.")
-                        && invalid.contains("Dealer position")
-                        && invalid.contains("At least one seat")
-                        && invalid.contains("/blackjack setup info casino-1"),
-                "blackjack validation output explains missing setup and the next check");
-        String missingTable = dev.vapee.core.i18n.I18nTestSupport.english(invokeComponent(
-                BlackjackCommand.class,
-                "missingTableMessage",
-                new Class<?>[]{String.class},
-                "unknown-table"
-        ));
-        check(missingTable.equals("Blackjack table 'unknown-table' does not exist."),
-                "blackjack preview shares the controlled unknown-table response");
-        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0, 0, 1, 0.5, 1))) - 64.5D) < 0.0001D,
-                "blackjack display setup uses a bottom slab collision surface");
-        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 0.5, 0, 1, 1, 1))) - 65.0D) < 0.0001D,
-                "blackjack display setup uses a top slab collision surface");
-        check(Math.abs(invokeSurfaceY(block(64, new BoundingBox(0, 64, 0, 1, 65, 1))) - 65.0D) < 0.0001D,
-                "blackjack display setup accepts world-space collision bounds");
-
+    private static void testWarpHelp() throws Exception {
         CommandHelpPage warp = page(WarpCommand.class, "HELP_PAGE");
         check(warp.sections().stream().map(section -> dev.vapee.core.i18n.I18nTestSupport.english(section.title())).toList()
                         .equals(List.of("Create & Edit", "Information", "Management")),
@@ -323,19 +250,6 @@ public final class CommandHelpHarness {
                 "core reload is hidden without permission");
         check(invokeSuggestions(CoreCommand.class, "rootSuggestions", "r", true).equals(List.of("reload")),
                 "core reload is visible with permission");
-        check(invokeSuggestions(BlackjackCommand.class, "rootSuggestions", "s").equals(List.of("setup")),
-                "blackjack s completes to setup");
-        check(invokeSuggestions(BlackjackCommand.class, "setupSuggestions", "i")
-                        .equals(List.of("info", "interaction")),
-                "blackjack setup i completes info and interaction");
-        Method tableIdAction = BlackjackCommand.class.getDeclaredMethod("acceptsExistingTableId", String.class);
-        tableIdAction.setAccessible(true);
-        for (String action : List.of("unknown", "help", "create", "list", "<red>unknown</red>")) {
-            check(!(boolean) tableIdAction.invoke(null, action), "blackjack exposes no table IDs for " + action);
-        }
-        for (String action : List.of("INFO", "seat", "removeseat", "preview", "enable", "disable", "delete")) {
-            check((boolean) tableIdAction.invoke(null, action), "blackjack completes existing IDs for " + action);
-        }
         check(invokeSuggestions(WarpCommand.class, "rootSuggestions", "i").equals(List.of("icon", "info")),
                 "warp i completes icon and info");
         check(invokeSuggestions(CoinsCommand.class, "rootSuggestions", "a", true).equals(List.of("add")),
@@ -365,31 +279,6 @@ public final class CommandHelpHarness {
         Method method = owner.getDeclaredMethod(name, parameterTypes);
         method.setAccessible(true);
         return (Component) method.invoke(null, arguments);
-    }
-
-    private static double invokeSurfaceY(Block block) throws Exception {
-        Method method = BlackjackCommand.class.getDeclaredMethod("surfaceY", Block.class);
-        method.setAccessible(true);
-        return (double) method.invoke(null, block);
-    }
-
-    private static Block block(int y, BoundingBox collisionBox) {
-        VoxelShape shape = (VoxelShape) Proxy.newProxyInstance(
-                VoxelShape.class.getClassLoader(),
-                new Class<?>[]{VoxelShape.class},
-                (proxy, method, arguments) -> method.getName().equals("getBoundingBoxes")
-                        ? List.of(collisionBox) : defaultValue(method.getReturnType())
-        );
-        return (Block) Proxy.newProxyInstance(
-                Block.class.getClassLoader(),
-                new Class<?>[]{Block.class},
-                (proxy, method, arguments) -> switch (method.getName()) {
-                    case "getY" -> y;
-                    case "getCollisionShape" -> shape;
-                    case "getBoundingBox" -> new BoundingBox(0, y, 0, 1, y + 1, 1);
-                    default -> defaultValue(method.getReturnType());
-                }
-        );
     }
 
     @SuppressWarnings("unchecked")

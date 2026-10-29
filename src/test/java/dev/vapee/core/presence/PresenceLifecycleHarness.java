@@ -107,8 +107,8 @@ public final class PresenceLifecycleHarness {
                                 < core.indexOf("moduleManager.register(clanModule)"),
                 "module order is Friend then Presence then Clan");
         check(
-                core.split("moduleManager.register\\(", -1).length - 1 == 28,
-                "exactly twenty-eight modules register");
+                core.split("moduleManager.register\\(", -1).length - 1 == 27,
+                "exactly twenty-seven modules register");
         check(
                 core.contains("presentationModule, dailyQuestModule)")
                         && !core.contains("List.of(configService, presenceModule"),

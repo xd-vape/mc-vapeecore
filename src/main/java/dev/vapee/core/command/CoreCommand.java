@@ -130,9 +130,7 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/setspawn", tr("core.help.setspawn.description"),
                                     "vapeecore.lobby.setspawn"),
                             new CommandHelpEntry("/warp help", tr("core.help.warp.help.description"),
-                                    "vapeecore.warp.admin"),
-                            new CommandHelpEntry("/blackjack help", tr("core.help.blackjack.help.description"),
-                                    "vapeecore.blackjack.admin")
+                                    "vapeecore.warp.admin")
                     ))
             ),
             tr("core.help.footer")

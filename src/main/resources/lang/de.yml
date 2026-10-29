@@ -105,7 +105,6 @@ core:
   # Command Help
   help:
     ban.description: "Sperrt einen bekannten Spieler vorübergehend oder dauerhaft."
-    blackjack.help.description: "Zeigt Commands zur Blackjack-Verwaltung."
     build.description: "Schaltet den temporären Lobby-Baumodus um."
     clan:
       help.description: "Zeigt Clan- und Einladungs-Commands."
@@ -313,6 +312,8 @@ warp:
   help:
     footer: "Nutze /warp info \\<id>, um einen Warp vor einer Änderung zu prüfen."
     section.create-edit: "Erstellen und Bearbeiten"
+    section.information: "Informationen"
+    section.management: "Verwaltung"
     title: "Warp-Verwaltung"
     warp:
       hide.description: "Blendet ein Ziel ausschließlich im Navigator aus."
@@ -902,260 +903,13 @@ quests:
 
 
 # ==================================================
-# ACTIVITIES AND BLACKJACK
+# ACTIVITIES
 # ==================================================
 
 activity:
 
   # General
   context: "<aqua><activity></aqua> <dark_gray>›</dark_gray> <body>"
-  blackjack: "Blackjack"
-
-blackjack:
-
-  # Actions
-  action:
-    deal: "Austeilen"
-    double: "Verdoppeln"
-    hit: "Karte ziehen"
-    leave: "Tisch verlassen"
-    stand: "Halten"
-
-  # Gameplay Hints
-  hint:
-    deal: "Starte eine neue Runde ohne Einsatz."
-    double: "Ziehe genau eine Karte und halte anschließend."
-    hit: "Ziehe eine Karte."
-    leave: "Verlasse Blackjack und erhalte deine Lobby-Items zurück."
-    stand: "Behalte deine aktuelle Hand."
-    use: "Rechtsklick zum Verwenden."
-
-  # Round Messages and States
-  round:
-    double-invalid: "<yellow>Du kannst nur mit deinen ersten zwei Karten verdoppeln.</yellow>"
-    not-turn: "<yellow>Du bist nicht am Zug.</yellow>"
-    start-failed: "<red>Die Blackjack-Runde konnte nicht gestartet werden.</red>"
-    timeout: "<yellow>Deine Zugzeit ist abgelaufen. Du hast automatisch gehalten.</yellow>"
-    turn: "<aqua>Du bist am Zug. Du hast 20 Sekunden.</aqua>"
-  state:
-    available: "Tisch verfügbar"
-    complete: "Runde abgeschlossen"
-    dealer: "Der Geber spielt"
-    other-turn: "Ein anderer Spieler ist am Zug"
-    own-turn: "Du bist am Zug"
-    waiting: "Warten auf das Austeilen"
-  status:
-    players: "<count> Spieler am Tisch"
-    title: "Blackjack-Status"
-    value: "Handwert: <value>"
-  next:
-    dealer: "Stelle dich an die Geberposition und schaue zum Tisch, dann nutze:"
-    display: "Setze die Tisch-Anzeigefläche mit:"
-    interaction: "Setze den bisherigen Interaktionsblock mit:"
-    pos1: "Setze die erste Bereichsecke mit:"
-    pos2: "Setze die zweite Bereichsecke mit:"
-    preview: "Prüfe die sichtbaren Positionen vor der Aktivierung mit:"
-    seat: "Konfiguriere mindestens einen Sitzplatz mit:"
-
-  # Results
-  result:
-    BLACKJACK: "<gold>Blackjack!</gold>"
-    BUST: "<red>Überkauft.</red>"
-    LOSS: "<red>Der Geber gewinnt.</red>"
-    PUSH: "<yellow>Gleichstand.</yellow>"
-    WIN: "<green>Du gewinnst.</green>"
-
-  # Joining a Table
-  join:
-    build: "<red>Du kannst im Baumodus keinem Blackjack-Tisch beitreten.</red>"
-    current-unavailable: "<red>Dieser Blackjack-Tisch ist derzeit nicht verfügbar.</red>"
-    failed: "<red>Du konntest an diesem Blackjack-Tisch nicht Platz nehmen.</red>"
-    full: "<red>Dieser Blackjack-Tisch ist voll.</red>"
-    other-activity: "<red>Du nimmst bereits an einer anderen Aktivität teil.</red>"
-    other-table: "<red>Du sitzt bereits an einem anderen Blackjack-Tisch.</red>"
-    running: "<red>Diese Blackjack-Runde läuft bereits.</red>"
-    unavailable: "<red>Dieser Blackjack-Tisch ist nicht verfügbar.</red>"
-
-  # Physical Table Setup
-  position:
-    DEALER: "Geberposition"
-    POS1: "erste Bereichsecke"
-    POS2: "zweite Bereichsecke"
-  setup:
-    activate-failed: "<red>Der Tisch konnte nicht aktiviert werden. Sieh im Server-Log nach.</red>"
-    already-disabled: "<yellow>Dieser Blackjack-Tisch ist bereits deaktiviert.</yellow>"
-    already-enabled: "<yellow>Dieser Blackjack-Tisch ist bereits aktiviert.</yellow>"
-    busy: "<red>Der Tisch kann nicht deaktiviert werden, solange er besetzt ist oder eine Runde läuft.</red>"
-    denied: "<red>Du darfst Blackjack-Tische nicht konfigurieren.</red>"
-    disable-delete: "<red>Deaktiviere den Tisch, bevor du ihn löschst.</red>"
-    disable-edit: "<red>Deaktiviere den Tisch, bevor du ihn bearbeitest.</red>"
-    empty: "<yellow>Es sind keine Blackjack-Tische konfiguriert.</yellow>"
-    id-invalid: "<red>Tisch-IDs müssen dem Muster [a-z0-9_-]+ entsprechen.</red>"
-    interaction-used: "<red>Dieser Interaktionsblock wird bereits von einem anderen Tisch verwendet.</red>"
-    look-block: "<red>Schaue einen Block in höchstens sechs Blöcken Entfernung an.</red>"
-    look-seat: "<red>Schaue einen unterstützten Sitzblock in höchstens sechs Blöcken Entfernung an.</red>"
-    look-table: "<red>Schaue einen Tischblock in höchstens sechs Blöcken Entfernung an.</red>"
-    player-only: "<red>Nur Spieler können Weltpositionen erfassen.</red>"
-    save-failed: "<red>Die Blackjack-Tischkonfiguration konnte nicht gespeichert werden. Sieh im Server-Log nach.</red>"
-    seat-block-invalid: "<red>Nutze eine untere Treppe oder eine einzelne untere/obere Stufe. Obere Treppen und doppelte Stufen werden nicht unterstützt.</red>"
-    seat-invalid: "<red>Ein konfigurierter Sitzblock ist keine unterstützte Treppe oder Stufe mehr.</red>"
-    seat-number: "<red>Die Sitzplatznummer muss zwischen 1 und 5 liegen.</red>"
-    seat-unconfigured: "<red>Dieser Sitzplatz ist nicht konfiguriert.</red>"
-    seat-used: "<red>Einer dieser Sitzblöcke wird bereits von einem anderen aktivierten Tisch verwendet.</red>"
-    surface-updated: "Blackjack-Tischoberfläche aktualisiert."
-    world-missing: "<red>Die Tischwelt ist nicht geladen.</red>"
-  workflow:
-    build: "Baue den physischen Tisch in der Welt."
-    create: "Erstelle seinen deaktivierten Konfigurationsentwurf:"
-    dealer: "Stelle dich an die Geberposition und schaue zum Tisch, dann:"
-    enable: "Prüfe und aktiviere den Tisch:"
-    order: "Einrichtungsreihenfolge:"
-    pos1: "Setze die erste Ecke des Spielbereichs:"
-    pos2: "Setze die zweite Ecke des Spielbereichs:"
-    preview: "Prüfe die sichtbaren Positionen:"
-    progress: "Nutze <command>, um den Fortschritt zu prüfen."
-    seat: "Schaue jeden Sitzplatz an und wiederhole den Command mit seiner Nummer:"
-    surface: "Schaue die Spielfläche an:"
-
-  # Preview
-  preview:
-    center: "MITTE"
-    dealer: "Geber"
-    dealer-hand: "GEBERHAND"
-    markers: "Markierungen: "
-    missing-heading: "Fehlende Bestandteile:"
-    missing-item: "- <component>: fehlt"
-    missing-seat: "Sitz <seat>"
-    player-only: "<red>Nur Spieler können eine Welt-Vorschau ansehen.</red>"
-    seat: "SITZ <seat>"
-    shown: "Blackjack-Tischvorschau für <seconds> Sekunden angezeigt."
-    status: "STATUS"
-    surface: "Tischfläche"
-    surface-missing: "Setze die Tischoberfläche, bevor du eine Vorschau startest."
-    world-missing: "Die Welt der Tischoberfläche ist nicht geladen."
-
-  # Table Administration
-  table:
-    created: "Blackjack-Tisch '<id>' erstellt."
-    deleted: "Blackjack-Tisch '<id>' gelöscht."
-    disabled: "Blackjack-Tisch '<id>' deaktiviert."
-    enabled: "Blackjack-Tisch '<id>' aktiviert."
-    exists: "Blackjack-Tisch '<id>' existiert bereits."
-    interaction: "Interaktionsblock von Blackjack-Tisch '<id>' aktualisiert."
-    missing: "Blackjack-Tisch '<id>' existiert nicht."
-    not-ready: "Tisch '<id>' ist noch nicht bereit."
-    position: "<position> von Blackjack-Tisch '<id>' aktualisiert."
-    seat: "Block und Sitzposition von Sitzplatz <seat> an Blackjack-Tisch '<id>' aktualisiert."
-    seat-removed: "Sitzplatz <seat> von Blackjack-Tisch '<id>' entfernt."
-  world:
-    dealer: "Geber"
-    dealer-label: "Geber • <value>"
-    outcome:
-      BLACKJACK: "BLACKJACK"
-      BUST: "ÜBERKAUFT"
-      LOSS: "VERLOREN"
-      PUSH: "GLEICHSTAND"
-      WIN: "GEWONNEN"
-    player-turn: "<player> ist am Zug"
-    player-turn-empty: "Spieler am Zug"
-  unknown-command: "Unbekannter Unterbefehl '<command>'."
-
-  # Information
-  # Scalar keys and their dotted descendants are intentionally separate leaves.
-  info:
-    area: "Bereich: "
-    block: "Block: "
-    configured: "Konfiguriert"
-    dealer: "Geber: "
-    enabled: "Aktiviert: "
-    heading: "Blackjack-Tisch • "
-    interaction: "Interaktion: "
-    join-mode: "Beitrittsmodus: "
-    join-mode.invalid: "Ungültiges gemischtes Schema"
-    join-mode.legacy: "Bisheriger Interaktionsblock"
-    join-mode.modern: "Klick auf Sitzplatz"
-    legacy-geometry: "Fehlt – bisherige Geometrie wird verwendet"
-    missing: "Fehlt"
-    next: "Nächster Schritt"
-    not-configured: "Nicht konfiguriert"
-    physical: "Physische Tisch-Einrichtung"
-    pos1: "Erste Bereichsecke: "
-    pos2: "Zweite Bereichsecke: "
-    runtime: "Laufzeit: "
-    seats: "Sitzplätze: "
-    session: "Sitzung: "
-    session-count: "<state> • <count> Teilnehmer"
-    session-state:
-      ACTIVE: "Aktiv"
-      AVAILABLE: "Verfügbar"
-      CLOSED: "Geschlossen"
-      RESETTING: "Wird zurückgesetzt"
-      SETTLED: "Abgeschlossen"
-    status: "Status"
-    surface: "Oberfläche: "
-    table-count: "<count> Tische konfiguriert."
-    table-surface: "Tischoberfläche: "
-    tables: "Blackjack-Tische"
-    world: "Welt: "
-
-  # Help
-  help:
-    blackjack:
-      setup.create.description: "Erstellt einen deaktivierten Blackjack-Tischentwurf."
-      setup.dealer.description: "Stelle dich an die Position des Gebers und schaue zum Tisch."
-      setup.delete.description: "Löscht einen deaktivierten Tisch."
-      setup.description: "Zeigt Commands zur Einrichtung eines physischen Tisches."
-      setup.disable.description: "Deaktiviert einen unbenutzten Tisch."
-      setup.display.description: "Setzt den Mittelpunkt und die Oberfläche des physischen Blackjack-Tisches."
-      setup.enable.description: "Prüft und aktiviert den Tisch."
-      setup.info.description: "Zeigt Konfiguration und Laufzeitzustand."
-      setup.interaction.description: "Setzt den Block, den Spieler zum Beitreten rechts anklicken."
-      setup.list.description: "Listet alle konfigurierten Tische auf."
-      setup.list.description-alternate: "Listet konfigurierte Tische auf."
-      setup.pos1.description: "Setzt die erste Ecke des Tischbereichs."
-      setup.pos2.description: "Setzt die zweite Ecke des Tischbereichs."
-      setup.preview.description: "Zeigt vorübergehend die konfigurierten Karten- und Statuspositionen."
-      setup.removeseat.description: "Entfernt einen konfigurierten Sitzplatz."
-      setup.seat.description: "Setzt oder aktualisiert einen Sitzplatz am Tisch."
-    footer: "Nutze /blackjack setup help für den vollständigen Einrichtungsablauf."
-    footer-setup: "Nutze /blackjack setup info \\<id>, um den Einrichtungsfortschritt zu prüfen."
-    section:
-      create-configure: "Erstellen und Konfigurieren"
-      information: "Informationen"
-      management: "Verwaltung"
-      table-setup: "Tisch-Einrichtung"
-    title: "Blackjack-Verwaltung"
-    title-setup: "Blackjack-Einrichtung"
-
-  # Validation
-  validation:
-    area-pos1: "Erste Bereichsecke"
-    area-pos2: "Zweite Bereichsecke"
-    area-worlds: "Bereichsecken liegen in verschiedenen Welten"
-    dealer: "Geberposition"
-    dealer-outside: "Geber befindet sich außerhalb des Bereichs"
-    dealer-world: "Geber befindet sich in einer anderen Welt"
-    display-outside: "Anzeigeanker liegt außerhalb des Bereichs"
-    display-world: "Anzeigeanker liegt in einer anderen Welt"
-    duplicate-block: "Doppelter Sitzblock bei Sitz <seat>"
-    duplicate-number: "Doppelte Sitznummer <seat>"
-    heading: "Fehlt oder ist ungültig:"
-    interaction: "Interaktionsblock"
-    interaction-outside: "Interaktionsblock liegt außerhalb des Bereichs"
-    interaction-world: "Interaktionsblock liegt in einer anderen Welt"
-    max-seats: "Höchstens fünf Sitzplätze sind erlaubt"
-    mixed-seats: "Alte und moderne Sitzplätze können nicht kombiniert werden"
-    seat: "Mindestens ein Sitzplatz"
-    seat-block-outside: "Sitzblock <seat> liegt außerhalb des Bereichs"
-    seat-block-world: "Sitzblock <seat> liegt in einer anderen Welt"
-    seat-no-block: "Sitz <seat> hat keinen Block"
-    seat-number: "Sitznummer <seat> liegt außerhalb von 1–5"
-    seat-outside: "Sitz <seat> liegt außerhalb des Bereichs"
-    seat-world: "Sitz <seat> liegt in einer anderen Welt"
-    then: "Danach: "
-    too-many: "Mehr als fünf Sitzplätze konfiguriert"
-    unknown: "Unbekannter Prüfungsfehler"
-
 
 # ==================================================
 # MODERATION

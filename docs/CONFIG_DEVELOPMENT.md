@@ -13,10 +13,12 @@ Paths below are relative to `plugins/VapeeCore/` unless marked as bundled resour
 | `chat.yml`, `private-messages.yml` v1 | Bundled resources + feature fallbacks | Owning config plus service runtime state | `ConfigFiles.copyDefault`, parser, template preparation | Each owning module publishes config and prepared service state | Same startup allowlist | Operator | Evolution backup; no reload save |
 | `presentation.yml` v1 | Bundled resource + feature defaults | Config, renderer, service and owned update task | Copy missing resource, parse and prepare renderer | Module also reconciles task/UI effects | Same startup allowlist | Operator | Evolution backup; no reload save |
 | `daily-quests.yml` v1 | Bundled resource + DailyQuestConfig defaults | Typed state and quest definition registry | Copy missing resource, validate catalog | Module replaces state/registry and closes quest views | Same startup allowlist | Operator; assignments/progress are separate profile data | Evolution backup; no reload save |
-| Player/feature persistence: `players/*.yml`, friends, clans, warps, moderation, blackjack tables | Owning domain/repository | Feature services/repositories | Feature-specific readers and schemas | Not operator-config participants; use existing feature mutation/lifecycle paths | **Excluded** from ConfigEvolution | Owning service/repository | Feature-specific; do not assume all repositories use SafeFileWriter |
+| Player/feature persistence: `players/*.yml`, friends, clans, warps, moderation | Owning domain/repository | Feature services/repositories | Feature-specific readers and schemas | Not operator-config participants; use existing feature mutation/lifecycle paths | **Excluded** from ConfigEvolution | Owning service/repository | Feature-specific; do not assume all repositories use SafeFileWriter |
 | `lang/en.yml`, `lang/de.yml` | Bundled catalogs plus installed overrides | `LocalizationService` snapshots / LocalizationModule | Copy only missing catalog, read overrides | Separate second participant | **Excluded** from ConfigEvolution | Operator or explicit language-adoption script | Adoption workflow has its own exact-byte backup; ordinary reload does not write |
 
 The six-file allowlist is explicit in `ConfigEvolution.MANAGED_CONFIGS`: Core 1, Lobby 2, Chat 1, Private Messages 1, Presentation 1, Daily Quests 1. `ConfigResourceContractHarness` independently freezes these names/versions and verifies bundled resources, roots, duplicates and version agreement. No directory-wide YAML discovery is used.
+
+Historical `blackjack.yml` files remain excluded from evolution and reload. Core no longer owns a table loader, writer or bundled default; no operator file is deleted or migrated.
 
 ## Add a Core value
 
