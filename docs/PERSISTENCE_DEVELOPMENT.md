@@ -15,10 +15,12 @@ Player preferences are part of one `CorePlayer` aggregate. Start here when addin
 | Friendships and requests | `FriendService` | `FileFriendRepository` / `friends.yml` |
 | Clans and invitations | `ClanService` | `FileClanRepository` / `clans.yml` |
 | Moderation records | `ModerationService` | `FileModerationRepository` / `moderation.yml` |
-| Warps, lobby spawn, Blackjack table definitions | Their existing feature services/configuration | `WarpConfig`, `LobbyConfig`, `BlackjackTableConfig`; preserve their individual file contracts |
+| Warps, lobby spawn | Their existing feature services/configuration | `WarpConfig`, `LobbyConfig`; preserve their individual file contracts |
 | Operator configuration | `ConfigService` and feature configs | Startup `ConfigEvolution` allowlist and coordinated reload; separate from player schema evolution |
 
 Choose an independent feature repository when data has its own identity, aggregate and lifecycle, such as friendships between players. A new preference is not a reason to split player data into another file. Do not copy profiles or balances into another cache, introduce a second save loop or assume all repositories use `SafeFileWriter`.
+
+Prototype Step 02 removes the Blackjack producer and table writer, preserving existing operator `blackjack.yml`, historical quest assignments/progress and daily cycles. `blackjack:win` remains a valid generic definition key with no built-in producer. Operators must deliberately disable or replace such daily quests. Player schemas, Reward/Economy semantics and generic QuestProgressReporter are unchanged. [Schema/recovery inventory](../reports/prototype/STEP_02_BLACKJACK_REMOVAL.md).
 
 ## Player aggregate read and commit
 

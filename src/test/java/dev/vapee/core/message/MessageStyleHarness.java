@@ -38,10 +38,10 @@ public final class MessageStyleHarness {
                 check(hasColor(output.getLast(), "", MessageStyle.ERROR), "error remains visibly distinct");
                 messages.send(player, tr("common.unavailable").color(MessageStyle.WARNING));
                 check(hasColor(output.getLast(), "", MessageStyle.WARNING), "warning semantic color retained");
-                messages.send(player, MessageStyle.activity(tr("activity.blackjack"), tr("blackjack.result.WIN")));
-                check(plain(output.getLast()).startsWith("Blackjack › ") && !plain(output.getLast()).contains("VapeeCore"), "activity has useful context without default plugin prefix");
+                messages.send(player, MessageStyle.activity(Component.text("Practice"), Component.text("Won.")));
+                check(plain(output.getLast()).startsWith("Practice › ") && !plain(output.getLast()).contains("VapeeCore"), "activity has useful context without default plugin prefix");
                 String body = "literal <red>hello</red>";
-                messages.send(player, MessageStyle.activity(tr("activity.blackjack"), Component.text(body)));
+                messages.send(player, MessageStyle.activity(Component.text("Practice"), Component.text(body)));
                 check(plain(output.getLast()).endsWith(body), "context keeps dynamic activity body literal");
             }
             Files.writeString(f.directory.resolve("config.yml"), "messages:\n  prefix: '<gold>[Custom]</gold> '\n");

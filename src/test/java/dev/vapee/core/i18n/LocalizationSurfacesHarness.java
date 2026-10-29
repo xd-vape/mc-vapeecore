@@ -28,7 +28,7 @@ public final class LocalizationSurfacesHarness {
         var console = new Viewer(null, "Console", true);
         for (String key : List.of("core.development", "settings.denied", "friends.title", "clan.members-title",
                 "social.empty", "warp.empty", "spawn.saved", "utility.build.denied", "profile.title",
-                "daily-quests.command-player-only", "moderation.kick.screen", "blackjack.round.timeout")) {
+                "daily-quests.command-player-only", "moderation.kick.screen")) {
             Component template = Translations.tr(key);
             messages.send(german.audience, template); messages.send(english.audience, template); messages.send(console.audience, template);
             check(german.last().equals(PLAIN.serialize(localization.render(Locale.GERMANY, template))), "German surface " + key);

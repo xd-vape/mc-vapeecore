@@ -67,7 +67,7 @@ public final class CatalogOrganizationHarness {
         check(!en.isEmpty() && en.keySet().equals(de.keySet()), "complete current EN/DE key/placeholder parity");
         for (String key : List.of("daily-quests.reset-title", "daily-quests.reset-countdown", "daily-quests.reset-description"))
             check(en.containsKey(key) && de.containsKey(key), "previous phase reset key retained: " + key);
-        for (String key : List.of("blackjack.info.join-mode", "clan.owner", "clan.role", "common.player-only", "common.profile-unavailable"))
+        for (String key : List.of("clan.owner", "clan.role", "common.player-only", "common.profile-unavailable"))
             check(en.containsKey(key) && en.keySet().stream().anyMatch(other -> other.startsWith(key + ".")), "scalar and descendant remain separately addressable: " + key);
         var enLines = Files.readAllLines(resources.resolve("en.yml"));
         var deLines = Files.readAllLines(resources.resolve("de.yml"));

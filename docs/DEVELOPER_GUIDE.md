@@ -36,9 +36,9 @@ Lifecycle-Tests verwenden die echten Module mit kontrollierten Paper-/Service-Gr
 
 `LocalizationModule` startet zuerst und besitzt die beiden Kataloge gemeinsam. `TranslationCatalog` lädt UTF-8-YAML mit sicheren Konstruktoren, lehnt doppelte Keys/ungültige Werte ab und prüft Key-/Placeholder-Parität. Die gebündelten Kataloge sind vollständig; Live-Dateien dürfen partiell sein. Eine unbekannte Entwicklungs-ID erzeugt eine Diagnose und `[missing:key]`. `lang/` gehört nicht zur ConfigEvolution-Allowlist. Startup kopiert ausschließlich fehlende Dateien. Prepare publiziert nichts, Apply tauscht einen immutable Snapshot, Rollback stellt denselben vorherigen Snapshot wieder her. Apply/Rollback informieren die bestehenden aktiven View-Observer.
 
-Die beiden kanonischen Resources `lang/en.yml` und `lang/de.yml` sind identisch nach Features geordnet: Common, Core/Help/Administration, Lobby/Spawn, Player Menu, Navigator/Warps, Visibility/Visible Players, Settings, Profile, Ranks, Social, Friends, Clans, Private Messages, Economy/Rewards, Daily Quests, Activities/Blackjack, Moderation, Utility/Teleportation und Presentation. Kommentare markieren innerhalb großer Features etwa Actions, Requests, Rewards, Reset Countdown, Help und Errors. Die vorhandenen Namespaces bleiben getrennt, insbesondere `clan`/`clans` und `daily-quests`/`quests`.
+Die beiden kanonischen Resources `lang/en.yml` und `lang/de.yml` sind identisch nach Features geordnet: Common, Core/Help/Administration, Lobby/Spawn, Player Menu, Navigator/Warps, Visibility/Visible Players, Settings, Profile, Ranks, Social, Friends, Clans, Private Messages, Economy/Rewards, Daily Quests, Activities, Moderation, Utility/Teleportation und Presentation. Kommentare markieren innerhalb großer Features etwa Actions, Requests, Rewards, Reset Countdown, Help und Errors. Die vorhandenen Namespaces bleiben getrennt, insbesondere `clan`/`clans` und `daily-quests`/`quests`.
 
-Sections sind auf höchstens drei Ebenen vor einem String begrenzt. `daily-quests: {status: {completed: "Completed"}}` ergibt weiterhin `daily-quests.status.completed`; tiefere Pfade bleiben als gepunktete Blattnamen lesbar. Ein skalarer Key darf keine gleichnamige Section werden: `clan.owner` und `clan.owner.transferred` stehen unter `clan` als `owner` und `owner.transferred`. Dasselbe gilt für `clan.role`, `common.player-only`, `common.profile-unavailable` und `blackjack.info.join-mode`. Gemischte gepunktete/verschachtelte Darstellung ist unterstützt; zwei Darstellungen desselben Laufzeitkeys werden abgelehnt.
+Sections sind auf höchstens drei Ebenen vor einem String begrenzt. `daily-quests: {status: {completed: "Completed"}}` ergibt weiterhin `daily-quests.status.completed`; tiefere Pfade bleiben als gepunktete Blattnamen lesbar. Ein skalarer Key darf keine gleichnamige Section werden: `clan.owner` und `clan.owner.transferred` stehen unter `clan` als `owner` und `owner.transferred`. Dasselbe gilt für `clan.role`, `common.player-only`, `common.profile-unavailable`. Gemischte gepunktete/verschachtelte Darstellung ist unterstützt; zwei Darstellungen desselben Laufzeitkeys werden abgelehnt.
 
 Neue Texte gehören zum besitzenden Feature und an dieselbe Stelle in beiden Sprachen: bestehenden Key-Namespace beibehalten, EN und DE gemeinsam ergänzen, dynamische Placeholder identisch halten und vorhandene MiniMessage-Formatierung beachten. Niemals neue Keys am Dateiende sammeln. UTF-8, zwei Leerzeichen, keine Tabs, durchgehend doppelt zitierte Stringwerte; absichtliche Leerzeichen innerhalb der Anführungszeichen erhalten. Java-Referenzen über `Translations.tr(...)` ändern sich durch YAML-Gliederung nicht.
 
@@ -48,11 +48,11 @@ Neue eigene Texte erhalten einen semantischen Key in beiden Ressourcen. `Transla
 
 Alle normalen Menüs einschließlich Player Menu lösen Titel und `UiItemSpec`-Texte für ihren Besitzer auf. Ein Locale-Event rendert aktuelle Items im selben gebundenen Inventory; Owner/UUID/ID/Page/Actions bleiben stabil. Der explizite neue Event-Locale gilt nur während des synchronen Callbacks, weil Paper den Player-Getter eventuell erst danach aktualisiert. Titel werden beim nächsten Open neu erzeugt. Observer werden mit dem owning Menü/Modul abgemeldet. Es gibt keinen neuen Polling-Task.
 
-Friend-/Clan-/Presence-Nachrichten und Blackjack-Rundenhinweise werden erst pro Empfänger aufgelöst. Lokalisierte Lobby-Join-/Quit-Formate unterdrücken die einzelne globale Event-Nachricht und liefern pro Online-Empfänger sowie Englisch an die Console. Legacy-Strings bleiben auf dem bisherigen universellen Event-Pfad. PM-Wrappers werden unabhängig für Sender und Empfänger ausgewählt; der Body bleibt identisch. Quest-Completion/Retry-Feedback nutzt denselben MessageService, löst operator-authored Quest-Namen am Reporter-Anwendungsrand auf und ändert keine Progress-/Reward-Transaktion.
+Friend-/Clan-/Presence-Nachrichten werden erst pro Empfänger aufgelöst. Lokalisierte Lobby-Join-/Quit-Formate unterdrücken die einzelne globale Event-Nachricht und liefern pro Online-Empfänger sowie Englisch an die Console. Legacy-Strings bleiben auf dem bisherigen universellen Event-Pfad. PM-Wrappers werden unabhängig für Sender und Empfänger ausgewählt; der Body bleibt identisch. Quest-Completion/Retry-Feedback nutzt denselben MessageService, löst operator-authored Quest-Namen am Reporter-Anwendungsrand auf und ändert keine Progress-/Reward-Transaktion.
 
 Additive Config-Formate: `quests.*.name/description`, `items.*.name/lore` (einschließlich filtered), `messages.join/quit.format` und PM outgoing/incoming akzeptieren `en/de`-Maps mit erforderlichem `en`. Vorhandene Strings/Listen bleiben universal. Quest-Texte sind Plain Text; die anderen Templates MiniMessage. Der generische Lobby-Parser/Builder behält registrierte Java-IDs und PDC als Behavior-Authority. Kein übersetzter Anzeigename routet Klicks.
 
-Eigene Sidebar sowie persönliche Tablist-Header/Footer können `<i18n:presentation.sidebar.coins>` und andere explizite Katalogreferenzen enthalten; die neuen Default-Templates verwenden diese. Bestehende skalare/listenförmige Presentation-Templates werden nicht ersetzt. Native Nametags/subject-basierte Tablist-Namen und globale Blackjack-/Preview-TextDisplays besitzen einen gemeinsamen Textzustand und verwenden Englisch für eigene Katalogtexte. Der globale Chat bleibt eine universelle operator-authored Vorlage; Chat-Body und LuckPerms-Meta bleiben unverändert. Frühe Ban-Login-Ablehnung ist Englisch, da noch kein verlässlicher Client-Locale vorliegt; Online-Kick/Ban/Mute-Feedback verwendet den Ziel-Locale.
+Eigene Sidebar sowie persönliche Tablist-Header/Footer können `<i18n:presentation.sidebar.coins>` und andere explizite Katalogreferenzen enthalten; die neuen Default-Templates verwenden diese. Bestehende skalare/listenförmige Presentation-Templates werden nicht ersetzt. Native Nametags/subject-basierte Tablist-Namen besitzen einen gemeinsamen Textzustand und verwenden Englisch für eigene Katalogtexte. Der globale Chat bleibt eine universelle operator-authored Vorlage; Chat-Body und LuckPerms-Meta bleiben unverändert. Frühe Ban-Login-Ablehnung ist Englisch, da noch kein verlässlicher Client-Locale vorliegt; Online-Kick/Ban/Mute-Feedback verwendet den Ziel-Locale.
 
 Bei einer bestehenden Installation müssen alte feste Standardtexte ausdrücklich auf die Katalogreferenzen umgestellt werden; das Update des JARs allein aktiviert für diese Felder keine Übersetzung. Dies betrifft insbesondere Tablist-Header/Footer, Sidebar-Labels, Lobby-Namen/Lore einschließlich Friends und filtered Visibility sowie alte PM-/Reward-Wrapper. Die konkrete Feldzuordnung und das Vorgehen ohne Verlust eigener Einstellungen stehen in [FORMATTING.md – Bestehende Installation auf übersetzte Standardtexte umstellen](FORMATTING.md#bestehende-installation-auf-übersetzte-standardtexte-umstellen). Keinen Laufzeitvergleich mit englischen Anzeigenamen zum Übersetzen oder Routen einführen.
 
@@ -68,7 +68,7 @@ Rechtsklick mit dem Player-Menu-Item auf einen Online-Spieler in Lobby NORMAL f�
 
 Settings und Visibility zeigen auf ausdrücklichen Wunsch aus dem Client-Test wieder farbige Status-Glaspaneele neben den Feature-Items. `.setting(action, icon, status)` hält beide Positionen lokal im jeweiligen `DEFAULT_LAYOUT`; eine reine Icon-Komposition bleibt möglich. Beide Darstellungen aktualisieren sich nach erfolgreichem Save sofort. Bestehende Friend-/Clan-Ansichten behalten ihre fachlich notwendigen Tabs und kontextuellen Aktionen; Navigator bleibt ausschließlich für Ziele zuständig. DailyQuest behält seine adaptive 1–5-Anordnung. Keine Default-Füller, manuellen Refresh-Items oder 1/1-Navigationen.
 
-`messages.prefix` ist standardmäßig leer; ein ausdrücklich konfiguriertes Präfix wird weiter unverändert angewendet. `message/MessageStyle` ist die kleine Palette für neutrale Sätze, Aqua-Werte, grüne Zustände, gelbe Warnungen und rote Fehler. Friend-/Clan-/Utility-/Warp-/Coin-Erfolge verwenden einen neutralen Satz mit hervorgehobenen Werten. Die normale Delivery ergänzt eine neutrale Farbe nur, wenn noch keine vorhanden ist. Operator-Vorlagen und dynamische Components werden nicht umgefärbt oder erneut als MiniMessage interpretiert. Blackjack-Spielnachrichten verwenden den lokalisierten Kontext `Blackjack ›`; ADMIN-/Setup-Nachrichten bleiben technische Hinweise. Kataloge und sichere Platzhalter bleiben maßgeblich.
+`messages.prefix` ist standardmäßig leer; ein ausdrücklich konfiguriertes Präfix wird weiter unverändert angewendet. `message/MessageStyle` ist die kleine Palette für neutrale Sätze, Aqua-Werte, grüne Zustände, gelbe Warnungen und rote Fehler. Friend-/Clan-/Utility-/Warp-/Coin-Erfolge verwenden einen neutralen Satz mit hervorgehobenen Werten. Die normale Delivery ergänzt eine neutrale Farbe nur, wenn noch keine vorhanden ist. Operator-Vorlagen und dynamische Components werden nicht umgefärbt oder erneut als MiniMessage interpretiert. Kataloge und sichere Platzhalter bleiben maßgeblich.
 
 Command-Argumente erhalten ihre Farbe ausdrücklich vor dem Einsetzen in `tr(...)`: etwa `Component.text(name, MessageStyle.HIGHLIGHT)` beziehungsweise formatierte Beträge mit derselben Farbe. Die Farbe am Satz allein wird sonst auch von unformatierten Platzhaltern geerbt. `/coins add/remove/set` hebt deshalb Zielspieler, Betrag und neuen Kontostand hervor, ebenso die getrennte Zielspieler-Benachrichtigung und `/coins get`. Weitere dynamische Command-Werte wie Ping, Speed, Fly-/Gamemode-Zustand, Listenanzahl, Moderationsziel und -dauer sowie Warp-Reihenfolge verwenden denselben Akzent. Freie Nachrichtentexte/Moderationsgründe bleiben literal; explizite Rankfarben, Zustandsfarben und Operator-Templates behalten ihre eigene Bedeutung. Profilwerte verwenden nur einen Farb-Fallback, damit vorhandene Rankfarben erhalten bleiben. Farbregressionstests prüfen die effektiven Textfarben einschließlich Vererbung, nicht bloß die Farbe eines übergeordneten Components.
 
@@ -134,7 +134,7 @@ DailyQuest hat die folgende aktuelle, lokal editierbare Default-Anordnung in `Da
 
 Bei sieben Quests verwendet die zweite Seite die Zwei-Quest-Anordnung. Tests und Listener lesen die lokale Layout-API, keine zweite Slot-Tabelle. Andere Listenmenüs übernehmen diese Zentrierung nicht.
 
-Technische Sonderfälle: Invsee behält sein 54-Slot-Snapshot-Mapping für Storage/Rüstung/Offhand. Blackjack und Lobby-Items verwenden die echte Spieler-Hotbar; Blackjack platziert über lokale Konstanten und routet über PDC, Lobby-Presentation steht in der Live-`lobby.yml`. Die echte Enderchest bleibt nativ. UUID-Zuordnung, Active-/Owner-Binding, Permissions und Domain-Gates werden weiterhin nicht aus Material oder Lore abgeleitet.
+Technische Sonderfälle: Invsee behält sein 54-Slot-Snapshot-Mapping für Storage/Rüstung/Offhand. Lobby-Items verwenden die echte Spieler-Hotbar; ihre Präsentation steht in der Live-`lobby.yml`. Die echte Enderchest bleibt nativ. UUID-Zuordnung, Active-/Owner-Binding, Permissions und Domain-Gates werden weiterhin nicht aus Material oder Lore abgeleitet.
 
 Lobby-Items werden nach `/core reload` für geladene NORMAL-Spieler in der Lobby neu abgeglichen. BUILD-Spieler und Activity-Teilnehmer werden ausgelassen. `LobbyItemsConfig` validiert immutable Definitionen; `LobbyItemService` bleibt alleiniger Besitzer von PDC, Erzeugung und sicherer Displacement-Logik. Die Visibility-Darstellungen liegen unter `items.visibility` (ALL), `.filtered` (FILTERED) und `.variants.hidden` (HIDDEN). Ungültige Materialien/Slots warnen, doppelte aktive Slots erhalten einen freien Fallback. `head-owner` ist `none` oder `self` und wirkt nur mit `PLAYER_HEAD`.
 
@@ -228,19 +228,10 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Settings menu und Visibility UX | `SettingsMenu`, `dev.vapee.core.settings.visibility`, `SettingsCommand` |
 | Warps | `dev.vapee.core.lobby.warp` |
 | Warp persistence | Live: `plugins/VapeeCore/warps.yml`, Code: `WarpConfig` |
-| Blackjack rules | `dev.vapee.core.activity.blackjack` |
-| Physical Blackjack table setup | `dev.vapee.core.activity.blackjack.table` |
-| Blackjack setup command | `BlackjackCommand` |
-| Blackjack table persistence | Live: `plugins/VapeeCore/blackjack.yml`, Code: `BlackjackTableConfig` |
-| Blackjack hotbar items and slots | `BlackjackInventoryService` |
-| Blackjack seat/block interaction | `activity.blackjack.interaction.BlackjackTableListener` |
-| Blackjack world cards and labels | `BlackjackWorldViewService` |
-| Blackjack card positions and tuning | `BlackjackDisplayGeometry` |
 | Casual seating behavior | `dev.vapee.core.seat.SeatListener` |
 | Seat entity lifecycle | `dev.vapee.core.seat.SeatService` |
 | Stair/slab seat position | `dev.vapee.core.seat.SeatPositionResolver` |
 | Managed seat integration | `SeatService` und das konsumierende Feature |
-| Blackjack seat allocation | `dev.vapee.core.activity.blackjack.table.BlackjackSeatService` |
 | World text/item display lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayService` |
 | World display module lifecycle | `dev.vapee.core.worlddisplay.WorldDisplayModule` |
 | Coins | `dev.vapee.core.economy` |
@@ -302,7 +293,7 @@ Die Knoten-API der bereits durch Paper bereitgestellten SnakeYAML-Library erhäl
 | `private-messages.yml` | `PrivateMessageConfig` / `PrivateMessageModule` | Aktivierung und PM-Formate | Ja | Durch Reload | `src/main/resources/private-messages.yml` |
 | `presentation.yml` | `PresentationConfig` / `PresentationModule` | Sidebar, Tablist, Nametags, Updateintervall | Ja | Durch Reload | `src/main/resources/presentation.yml` |
 | `daily-quests.yml` | `DailyQuestConfig` / `DailyQuestModule` | Anzahl täglicher Quest-Zuweisungen, Reset, Zeitzone und Quest-Katalog | Ja | Durch Reload; Player-Rotation erst beim nächsten Sync | `src/main/resources/daily-quests.yml` |
-| `blackjack.yml` | `BlackjackTableConfig` / `BlackjackModule` | Physische Blackjack-Table-Drafts | Nein | Ja, atomar über `/blackjack setup …` | `src/main/resources/blackjack.yml` |
+| `blackjack.yml` (historisch) | Betreiber; kein Core-Runtime-Owner | Bestehende Tischdaten unverändert aufbewahren | Nein | Nein | Keine gebündelte Resource |
 | `warps.yml` | `WarpConfig` / `WarpModule` | Dynamische Warps | Nein | Ja, atomar über `/warp …` | `src/main/resources/warps.yml` |
 | `friends.yml` | `FriendModule` / `FileFriendRepository` | UUID-basierte Freundschaften und gerichtete Anfragen, `schema-version: 1` | Nein | Ja, atomar über `FriendService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
 | `clans.yml` | `ClanModule` / `FileClanRepository` | UUID-basierte Clans, Mitglieder und Einladungen, `schema-version: 1` | Nein | Ja, atomar über `ClanService` | Kein Resource-Default; bei fehlender Datei leer, beim ersten Save erzeugt |
@@ -341,11 +332,10 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 23. **Utility** – `/build`, grundlegende Player-Utilities und transienter Movement-Cleanup.
 24. **Seat** – generische CASUAL-/MANAGED-Sitze, Seat-Entities und Event-Cleanup.
 25. **WorldDisplay** – native keyed TextDisplay-/ItemDisplay-Lifecycles.
-26. **Blackjack** – physische Tische, Seat-Allocation, Activity-Hotbar und native Weltanzeigen.
-27. **Warp** – dynamische Warp-Persistence und Admin-Command.
-28. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen, Player Menu, Zielspieler-Auswahl und Navigator-UI.
+26. **Warp** – dynamische Warp-Persistence und Admin-Command.
+27. **LobbyExperience** – Visibility-Events und Hotbar-Anwendung, Item-Interaktionen, Player Menu, Zielspieler-Auswahl und Navigator-UI.
 
-Shutdown läuft exakt rückwärts: LobbyExperience → Warp → Blackjack → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Presence → Friend → Moderation → Identity → Economy → Social → Player → Rank → Permission → Localization. Presence meldet seinen Listener ab und leert seinen reinen Runtime-State, solange Friend, Social und Player noch verfügbar sind. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Moderation deaktiviert ausstehendes Chat-Feedback, deregistriert beide Listener und sieben Command-Hooks, leert die Projektion, gibt Runtime-Referenzen frei und schreibt nicht erneut. Rank besitzt keinen persistenten Player-State. Blackjack gibt seine MANAGED-Sitze frei, bevor Seat den globalen Rest bereinigt.
+Shutdown läuft exakt rückwärts: LobbyExperience → Warp → WorldDisplay → Seat → Utility → Activity → Settings → Presentation → PrivateMessage → Chat → Visibility → Lobby → DailyQuest → Quest → OnlineReward → Reward → Clan → Presence → Friend → Moderation → Identity → Economy → Social → Player → Rank → Permission → Localization. Presence meldet seinen Listener ab und leert seinen reinen Runtime-State, solange Friend, Social und Player noch verfügbar sind. Visibility gibt dabei seine VapeeCore-eigenen Hide-Zustände frei, solange Lobby, Friend, Social und Player noch verfügbar sind. DailyQuest stoppt zuerst seinen Sync-Task; Quest stoppt dann seinen Flush-Task und speichert dirty Quest-State einschließlich Cycle-ID, während Reward und Player noch verfügbar sind. OnlineReward stoppt danach seinen Processing-Task; Reward flusht anschließend dirty Coins und jeweils den gesamten aktuellen `CorePlayer`, solange Economy und Player noch verfügbar sind. Clan, Friend und Identity deregistrieren ihre Commands; Moderation deaktiviert ausstehendes Chat-Feedback, deregistriert beide Listener und sieben Command-Hooks, leert die Projektion, gibt Runtime-Referenzen frei und schreibt nicht erneut. Rank besitzt keinen persistenten Player-State.
 
 Die wichtigsten Dependency-Richtungen sind:
 
@@ -391,10 +381,6 @@ Utility
 Lobby + Activity
   ↑
 Seat
-
-Seat + Activity + WorldDisplay + Lobby + Quest
-  ↑
-Blackjack
 
 Lobby + Player + Settings + Warp + Visibility + Activity
   ↑
@@ -576,7 +562,7 @@ Save schreibt deterministische LinkedHashMaps in Snapshot-Reihenfolge in eine UT
 
 ### Phase 25A – Moderation Commands und Ban-Enforcement
 
-Phase 25A ergänzt ausschließlich `/warn <player|uuid> <reason...>`, `/ban <player|uuid> <duration|permanent> <reason...>`, `/unban <player|uuid> [reason...]`, `/kick <player|uuid> <reason...>` und `/history <player|uuid> [page]`. Owner bleibt ModerationModule; Aktueller Modulstand: 28 Module, sieben Reload-Teilnehmer. Kein neuer Root-Dispatcher, GUI, Config-Key, Schemafeld oder Bukkit-Banlist-Abgleich. Vollständige Verifikation: `reports/25a-moderation-tools/MODERATION_TOOLS.md`.
+Phase 25A ergänzt ausschließlich `/warn <player|uuid> <reason...>`, `/ban <player|uuid> <duration|permanent> <reason...>`, `/unban <player|uuid> [reason...]`, `/kick <player|uuid> <reason...>` und `/history <player|uuid> [page]`. Owner bleibt ModerationModule; Aktueller Modulstand: 27 Module, sieben Reload-Teilnehmer. Kein neuer Root-Dispatcher, GUI, Config-Key, Schemafeld oder Bukkit-Banlist-Abgleich. Vollständige Verifikation: `reports/25a-moderation-tools/MODERATION_TOOLS.md`.
 
 Alle fünf Commands prüfen ihre unabhängige `vapeecore.moderation.<command>`-Permission zusätzlich zu `plugin.yml`; Defaults sind `op`, ohne Aliases, Children oder Wildcard. `CoreCommand` zeigt die neue Moderation-Section permission-gefiltert. Player wird zu `ModerationActor.player(UUID)`, Console zu `ModerationActor.console()`; andere Sender werden nicht still als Console auditiert. Alle Targets gehen zuerst durch `PlayerIdentityService.resolve`: Known name/UUID, online und offline, eindeutiger vollständiger Name, kein Phantom-UUID-/OfflinePlayer-/Netzwerk-Lookup. Self-Warn/Ban/Unban/Kick ist gesperrt; Self-History mit Permission erlaubt.
 
@@ -618,7 +604,7 @@ Verifikation: Hierarchie-Matrix im bestehenden ModerationCommandHarness, fokussi
 
 PrivateMessageService erhält ein finales `Predicate<UUID>` (`projection::isMuted`). Alte öffentliche und lokale Testkonstruktoren delegieren auf `id -> false`. Send-Reihenfolge: enabled → sender loaded → sender muted → self → recipient online → recipient loaded/settings → Ignore → Render/Send → Conversation. Reply prüft enabled/loaded/mute vor Partner-Lookup und Cleanup. SENDER_MUTED rendert/sendet keine PM und verändert keine Konversation; `/msg`, `/reply` und Alias `/r` zeigen dieselbe kontrollierte Meldung. Empfangen bleibt für gemutete Spieler erlaubt, unter bestehenden Settings/Ignore-Gates. Config-Reload/Rollback ersetzt nur RuntimeState, niemals das Predicate; weiterhin sieben Reload-Teilnehmer.
 
-28 Module, 37 Root-Commands, sieben unabhängige op-Permissions. Partielle Enable-Fehler an allen sieben Command- und beiden Listener-Grenzen werden bereinigt; Getter bleiben unavailable und Retry funktioniert. Moderation ist kein Reload-Teilnehmer. Phase 25B ergänzte keine Rank-Hierarchie, Freeze-, Bypass- oder globale Command-Sperre, Schemaänderung oder neue Player-Persistence. Phase 26A ergänzt anschließend ausschließlich die Moderations-Target-Hierarchie; Utility/Economy-Hardening wurde anschließend in Phase 26B abgeschlossen. Historische Berichte COMMAND_AUDIT, MODERATION_FOUNDATION und MODERATION_TOOLS bleiben unverändert; aktuelle Formatierungs- und Sprachverträge stehen in FORMATTING.md. Bericht: `reports/25b-moderation-mutes/MODERATION_MUTES.md`.
+27 Module, 36 Root-Commands, sieben unabhängige op-Permissions. Partielle Enable-Fehler an allen sieben Command- und beiden Listener-Grenzen werden bereinigt; Getter bleiben unavailable und Retry funktioniert. Moderation ist kein Reload-Teilnehmer. Phase 25B ergänzte keine Rank-Hierarchie, Freeze-, Bypass- oder globale Command-Sperre, Schemaänderung oder neue Player-Persistence. Phase 26A ergänzt anschließend ausschließlich die Moderations-Target-Hierarchie; Utility/Economy-Hardening wurde anschließend in Phase 26B abgeschlossen. Historische Berichte COMMAND_AUDIT, MODERATION_FOUNDATION und MODERATION_TOOLS bleiben unverändert; aktuelle Formatierungs- und Sprachverträge stehen in FORMATTING.md. Bericht: `reports/25b-moderation-mutes/MODERATION_MUTES.md`.
 
 ## Friends Foundation und Integration (Phase 18A.1/18A.2)
 
@@ -672,7 +658,7 @@ Im Friends-Tab entfernt nur Shift + Rechtsklick; normale Klicks bleiben inert. E
 
 ## Economy Completion (Phase 22)
 
-`EconomyModule` bleibt Owner des EconomyService und der `/coins`-Command-Hooks. Es bezieht PlayerService aus PlayerModule und bleibt vor IdentityModule; keine Economy→Identity-/Presentation-Abhängigkeit, kein Scheduler oder ReloadParticipant. Aktuell sind es einschließlich Localization 28 Module und sieben Reload-Teilnehmer.
+`EconomyModule` bleibt Owner des EconomyService und der `/coins`-Command-Hooks. Es bezieht PlayerService aus PlayerModule und bleibt vor IdentityModule; keine Economy→Identity-/Presentation-Abhängigkeit, kein Scheduler oder ReloadParticipant. Aktuell sind es einschließlich Localization 27 Module und sieben Reload-Teilnehmer.
 
 `CoinWallet` hält eine nichtnegative ganze `long`-Balance, initial 0 Coins. `economy.coins` bleibt der unveränderte Player-YAML-Key; keine Migration, zusätzliche Economy-Datei, Cap oder Config. `getCoins/hasCoins` lesen nur geladene Player, `getKnownCoins` bevorzugt deren Runtime-Wallet und liest sonst bekannte gespeicherte Offline-Daten, ohne sie zu laden. Alle bestehenden APIs bleiben unverändert.
 
@@ -759,7 +745,7 @@ Quest-Mutationen sind Main-Thread-owned und sofort im CorePlayer sichtbar. Quest
 
 RewardService und QuestService speichern jeweils den gesamten aktuellen `CorePlayer`, niemals getrennte Balance- oder Quest-Snapshots. Ein Reward-Flush kann daher aktuellen Quest-State mitpersistieren und ein späterer Quest-Flush redundant sein, aber keiner kann einen alten Teilzustand zurückschreiben. Bei einem harten JVM-/OS-Abbruch können die letzten ungefähr fünf Sekunden Quest-Progress verloren gehen; Coins und Completion-State im selben noch nicht gespeicherten In-Memory-Profil teilen dieses Batching-Fenster. Normales Quit, Plugin-Disable und Server-Shutdown flushen kontrolliert.
 
-Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende Quest Foundation. Phase 29 ergänzt genau die Quellen playtime:minute und blackjack:win, /quests, GUI und Chat-Feedback. Andere valide Keys, etwa future:event, mine:block:any, activity:complete oder location:visit:mine, bleiben akzeptiert und ohne Producer inert. Es gibt keine festen Default-Quests oder manuelle Claims.
+Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende Quest Foundation. Phase 29 ergänzte /quests, GUI und Chat-Feedback. Aktiver Core-Producer ist playtime:minute; der frühere blackjack:win-Producer wurde in Prototype Step 02 entfernt. Andere valide Keys, etwa future:event, mine:block:any, activity:complete oder location:visit:mine, bleiben akzeptiert und ohne Producer inert. Es gibt keine festen Default-Quests oder manuelle Claims.
 
 ### Quest Completion (Phase 29)
 
@@ -767,7 +753,7 @@ Phase 17B lädt Definitionen und rotiert Daily-Assignments über die bestehende 
 
 `QuestPlaytimeProducer` hält UUID → letztes Statistic.PLAY_ONE_MINUTE-Tick-Sample nur im Speicher. Enable und MONITOR-Join seeden online/geladen vorgefundene Spieler. Eine erste spätere Probe ist ebenfalls nur Baseline. Fortschritt ist `currentTicks / 1200 - previousTicks / 1200`; mehrere Grenzen werden als ein positives Signal gemeldet. Negativwerte werden auf null geklemmt; ein kleinerer aktueller Wert rebased mit UUID-Warning ohne Fortschritt. Quit vergisst, Disable leert Samples. Kein zusätzlicher Task, Offline-Fortschritt, AFK-Filter oder persistierter Counter; OnlineRewardProgress, processed-playtime-ticks und OnlineReward-Schedule bleiben unabhängig. Daily enabled: false deaktiviert Assignment/UI, nicht die generische Quelle für bereits vorhandene Assignments.
 
-`BlackjackService` besitzt einen standardmäßig leeren `BiConsumer<UUID, BlackjackOutcome>`. Er setzt Outcome und SETTLED-State, meldet danach einmal je Player/Runde und führt Refresh und Reset weiter aus. BlackjackModule konsumiert den früher gestarteten QuestModule-Reporter: ausschließlich WIN und BLACKJACK melden blackjack:win mit Amount 1; PUSH, LOSS und BUST bleiben inert. Callback-Ausnahmen warnen mit UUID, Outcome und Cause; andere Player, Refresh und Reset laufen weiter. Shutdown setzt den Callback auf No-op zurück. Kein Blackjack-Coin-Grant, Quest-Import in der Blackjack-Domain oder umgekehrte Abhängigkeit.
+Der frühere Blackjack-Outcome-Producer ist seit Prototype Step 02 entfernt. Historisch meldeten WIN und BLACKJACK genau eine Einheit `blackjack:win`; solche Signale erzeugt der Core nicht mehr. Der generische Reporter, Quest-State und Reward-Pfad bleiben erhalten.
 
 `DailyQuestMenu` liest Größe, Controls und die adaptive Anordnung aus `DailyQuestMenu.DEFAULT_LAYOUT`. Die lokale `Layout`-API begrenzt Seiten auf fünf Quests und wählt die Slots nach der tatsächlichen sichtbaren Anzahl. Controls sind `Action.PREVIOUS`, `PAGE_INFO`, `CLOSE` und `NEXT`; Pagination erscheint nur bei mehreren Seiten, ein manueller Refresh ist nicht platziert. Der Holder speichert die tatsächlich gerenderte Slot→Quest-ID-Zuordnung und ausschließlich sichtbare Controls. Seiten werden geklemmt; Namen, Beschreibungen und long-Werte bleiben literal. ACTIVE zeigt In Progress, COMPLETED grün mit geliefertem Reward, REWARD_PENDING gelb mit automatischem Retry-Hinweis. Keine technischen IDs/Keys in Lore; Quest-Items sind lesend. Owner-UUID, Holder, exakt gebundene Inventory-Instanz, aktive Registrierung und aktuell geöffnetes Top müssen übereinstimmen. Jeder erkannte Klick und Drag wird zuerst gecancelt; nur LEFT/RIGHT auf Top-Controls handeln nach aktuellen Online-/Loaded-/Permission-Checks. Kein Lobby-, BUILD- oder Activity-Gate. Stale/forged Menüs bleiben inert; alter Close entfernt keine neue Seite. Quit vergisst; Disable schließt nur eigene aktuelle Views, isoliert Close-Fehler und leert alle Bindings.
 
@@ -779,7 +765,7 @@ Reload bleibt der siebte Teilnehmer: Prepare verändert nichts, Apply wechselt C
 
 DailyQuestModule hängt von JavaPlugin, PlayerModule, QuestModule und MessageService ab. Es besitzt daily-quests.yml, DailyQuestConfig, DailyQuestService, Join-Listener, /quests-Executor und TabCompleter, konkretes Menü mit separatem UI-Listener sowie genau einen 1200-Tick-Sync-Task. Kein Save-Task. Enable-Fehler räumen Task, beide Listener, Handler, Menü und Referenzen auf und stellen den vorigen Registry-Katalog wieder her. Disable stoppt den Task, schließt eigene Views, meldet beide Listener ab und entfernt beide Handler. Die Quest Foundation bleibt Owner von Registry, Progress, Completion, Reward-Retry und 100-Tick-Flush.
 
-Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Unterstützte Keys sind ausschließlich playtime:minute und blackjack:win; eine Parser-Allowlist gibt es nicht. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
+Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Der eingebaute Producer unterstützt playtime:minute; eine Parser-Allowlist gibt es nicht. blackjack:win bleibt als historischer Key gültig, erhält im Core aber keine Signale mehr. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
 
 ```yaml
 enabled: true
@@ -922,11 +908,11 @@ Navigation: Player Menu → Visibility → Manage Visible Players. Back aus der 
 
 Beim Disable schließt SettingsModule alle drei eigenen getrackten Menütypen vor Listener-/Command-Cleanup und nullt anschließend Runtime-Referenzen. Fremde aktuell geöffnete Inventare bleiben erhalten. Settings hat weiterhin keinen ReloadParticipant, Scheduler, neuen Config-Key, neue Permission oder neuen Command. Chat Range, Game Auto-Join und andere Settings ohne Backend werden nicht angezeigt.
 
-Phase 30C: Die sieben Menüs Friend, Clan, Settings, VisibilitySettings, VisiblePlayers, Navigator und DailyQuest teilen ausschließlich die kleinen Primitiven in `dev.vapee.core.ui`: `UiItemSpec` hält Material, Component-Name und defensiv kopierte Lore; `UiItems` erzeugt literal, nicht-kursive Texte und setzt nur Material/Name/Lore. Leere Component-Lorezeilen und die injizierbaren InventoryFactory-/ItemRenderer-Testseams bleiben erhalten. `Pagination.of` berechnet ohne Bukkit oder Domain-State leere, geklemmte und überlaufsichere Seitenbereiche für die fünf paginierten Menüs. Menüdefinitionen, Farben, Controls, Slot-Zielbindungen, Aktionen, Holder-/Owner-/Active-Prüfungen und die bestehenden Current-Top-Unterschiede bleiben featurelokal; `ui/MenuLayout` beschreibt optionale Komposition und validiert die gemeinsame Chest-Geometrie; es gibt kein GUI-Framework. Bulk-Cleanup isoliert RuntimeException je getracktem Owner, protokolliert Menü/UUID/Ursache und leert die Registry in `finally`; nur das exakt getrackte, aktuell offene Inventar wird geschlossen. Invsee-Snapshots, Lobby-PDC-Items, Blackjack-Hotbar und native Enderchest bleiben eigenständig. SEC-001 bleibt offen. Details und Verifikation: `reports/30c-gui-inventory-item-cleanup/GUI_INVENTORY_ITEM_CLEANUP.md`.
+Phase 30C: Die sieben Menüs Friend, Clan, Settings, VisibilitySettings, VisiblePlayers, Navigator und DailyQuest teilen ausschließlich die kleinen Primitiven in `dev.vapee.core.ui`: `UiItemSpec` hält Material, Component-Name und defensiv kopierte Lore; `UiItems` erzeugt literal, nicht-kursive Texte und setzt nur Material/Name/Lore. Leere Component-Lorezeilen und die injizierbaren InventoryFactory-/ItemRenderer-Testseams bleiben erhalten. `Pagination.of` berechnet ohne Bukkit oder Domain-State leere, geklemmte und überlaufsichere Seitenbereiche für die fünf paginierten Menüs. Menüdefinitionen, Farben, Controls, Slot-Zielbindungen, Aktionen, Holder-/Owner-/Active-Prüfungen und die bestehenden Current-Top-Unterschiede bleiben featurelokal; `ui/MenuLayout` beschreibt optionale Komposition und validiert die gemeinsame Chest-Geometrie; es gibt kein GUI-Framework. Bulk-Cleanup isoliert RuntimeException je getracktem Owner, protokolliert Menü/UUID/Ursache und leert die Registry in `finally`; nur das exakt getrackte, aktuell offene Inventar wird geschlossen. Invsee-Snapshots, Lobby-PDC-Items und native Enderchest bleiben eigenständig. SEC-001 bleibt offen. Details und Verifikation: `reports/30c-gui-inventory-item-cleanup/GUI_INVENTORY_ITEM_CLEANUP.md`.
 
 ## Lobby & Navigation Completion (Phase 28)
 
-`WarpModule` besitzt weiterhin `WarpConfig`, `WarpService` und den administrativen `/warp`-Root. `LobbyExperienceModule` besitzt Compass-Interaktion, `NavigatorMenu` und `NavigatorListener`. Es bezieht zusätzlich das bereits früher gestartete `ActivityModule` für die kleine konkrete `NavigatorAccessPolicy`; es gibt keine Reverse Dependency. Aktuell gibt es 28 Module, sieben Reload-Teilnehmer, 37 Root-Commands und 50 Permission-Nodes. Warp ist kein ReloadParticipant; Admin-Mutationen wirken sofort, `/core reload` lädt `warps.yml` nicht neu.
+`WarpModule` besitzt weiterhin `WarpConfig`, `WarpService` und den administrativen `/warp`-Root. `LobbyExperienceModule` besitzt Compass-Interaktion, `NavigatorMenu` und `NavigatorListener`. Es bezieht zusätzlich das bereits früher gestartete `ActivityModule` für die kleine konkrete `NavigatorAccessPolicy`; es gibt keine Reverse Dependency. Aktuell gibt es 27 Module, sieben Reload-Teilnehmer, 36 Root-Commands und 49 Permission-Nodes. Warp ist kein ReloadParticipant; Admin-Mutationen wirken sofort, `/core reload` lädt `warps.yml` nicht neu.
 
 `WarpPoint` enthält ID, literal Display Name, Item-Icon, `WarpPosition` und den immutable Record `WarpNavigation(visible, order)`. Der kompatible Vier-Argument-Konstruktor und neue `/warp set`-Ziele verwenden `visible=true`, `order=0`. Hidden bedeutet ausschließlich im Compass verborgen: Existenz, Admin-Verwaltung und generische `WarpService#teleport`-Semantik bleiben erhalten. Weder Lobby-Spawn noch bestimmte IDs sind reserviert oder automatisch erzeugt.
 
@@ -1044,11 +1030,11 @@ Deaktivierung wird immer zuerst erkannt und bleibt damit auch als sicherer Exit 
   → in der Lobby die drei Lobby-Items neu erzeugen
 ```
 
-`ActivityService.isParticipating` blockiert NORMAL → BUILD. In Gegenrichtung fragt Blackjack den vom `LobbyModule` gelieferten `LobbyPlayerStateService` ab und lehnt BUILD-Spieler vor Definition-, Sitz- oder Membership-Änderungen ab. Es gibt keine `UtilityModule → BlackjackModule`-Dependency und keine Lobby-Abhängigkeit im generischen Activity-Framework.
+`ActivityService.isParticipating` blockiert NORMAL → BUILD. Feature-spezifische Teilnahme- und Inventory-Regeln gehören zum jeweiligen Activity-Consumer. Im generischen Activity-Service entsteht keine Lobby-Abhängigkeit; einen eingebauten Blackjack-Consumer gibt es nicht mehr.
 
 Vor NORMAL → BUILD gibt `BuildCommand` eventuell durch `/fly` verwaltetes Flight an `UtilityService` zurück. Erst danach übernimmt `LobbyPlayerStateService` über `CREATIVE`; damit besitzen Utility und BUILD Flight nie gleichzeitig.
 
-Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby, `BUILD` ist das temporäre Creative-Inventory und aktive Blackjack-Teilnahme gehört `BlackjackInventoryService`. `relinquishNormalInventory` entfernt Lobby-Items und leert alle Inventory-Flächen vor der Übernahme. Reguläres Leave stellt NORMAL nur in der Lobby wieder her; Quit, World Change, Tod und Plugin-Shutdown bereinigen ohne Reapply.
+Inventory-Ownership darf nie gleichzeitig bei zwei Systemen liegen: `NORMAL` gehört der Lobby und `BUILD` ist das temporäre Creative-Inventory. Der gemeinsame Übergang `relinquishNormalInventory` entfernt Lobby-Items und leert alle Inventory-Flächen vor einer bewussten Übernahme. Reguläres Leave stellt NORMAL nur in der Lobby wieder her; Quit, World Change, Tod und Plugin-Shutdown bereinigen ohne Reapply. Die frühere Blackjack-Hotbar wurde entfernt.
 
 ## Community seating
 
@@ -1060,7 +1046,6 @@ Die generischen PDC-Keys sind `seat`, `seat_owner`, `seat_id` und `seat_type`. N
 
 Normales Shift-Dismount entfernt Assignment und Entity. Ein `MANAGED`-Callback wird einen Tick verzögert nur bei einem echten Player-Dismount ausgeführt und prüft vorher Plugin-, Online- und Relevanzzustand. Programmatic Release, Quit, World Change, Tod und der Abbau eines belegten Casual-Blocks bereinigen ohne freiwilligen Feature-Callback. `CASUAL` erzeugt keine Activity und keinen neuen LobbyPlayerMode und verändert weder Gamemode noch Inventory.
 
-`BlackjackSeatService` ist der fachliche Allocation-Adapter: moderne Sitzklicks reservieren exakt die angeklickte Nummer, Legacy-Interaktionen weiterhin die niedrigste freie Nummer. Table-/Seat-Mapping, `blackjack:<table-id>`-Owner und Reservation/Mount/Release delegieren an SeatService. `activity.blackjack.interaction.BlackjackTableListener` priorisiert Hotbar-Actions, dann moderne Sitzblöcke, dann Legacy-Interaktionsblöcke. Der transaktionale Ablauf Reservation → Activity-Join → Mount → Inventory-Übernahme besitzt vollständigen Rollback.
 
 ## Native world displays
 
@@ -1070,71 +1055,13 @@ Die PDC-Keys sind `world_display`, `world_display_owner`, `world_display_id` und
 
 WorldDisplay ist kein Admin-Hologramm-System. Ein externes Hologramm-Plugin darf parallel für frei konfigurierbare statische Hologramme verwendet werden, VapeeCore besitzt jedoch keine harte Dependency darauf.
 
-## Physical Blackjack Table
+## Blackjack außerhalb des Core (Prototype Step 02)
 
-Der eigentliche Blackjack-Tisch wird vom Map-Builder aus normalen Minecraft-Blöcken gebaut und bleibt vollständig Map-owned. VapeeCore kennt keine Blockliste des Tisches, speichert keine Schematic und führt weder automatische Reparatur noch Regeneration aus. Nur die konfigurierten Seat-Blöcke sind konkrete technische Sitzpunkte; die `ActivityArea` beschreibt den gesamten Gameplay-/Ownership-Bereich mit Tisch, Sitzen und Dealerbereich. Der Builder kann die Struktur jederzeit ändern, solange Area, Seat-Blöcke und Spielflächen-Anchor danach weiterhin stimmen oder neu gesetzt werden. Es gibt bewusst kein Furniture-Modul, keine ItemDisplay-Möbel, keine CustomModelData- und keine Resource-Pack-Abhängigkeit.
+Blackjack ist vollständig aus VapeeCore entfernt. Der Core liefert weder Spielcode noch `/blackjack`, Permission, Default-Tischdatei, Preview oder Spiel-Producer. ActivityModule bleibt mit generischen Typen, Venues, Sessions und Teilnehmern erhalten; SeatService und WorldDisplayService bleiben unabhängig nutzbar. Alle übrigen Module behalten ihre Reihenfolge, sieben Reload-Teilnehmer bleiben bestehen.
 
-Als unverbindliches Baubeispiel eignet sich ein sieben bis neun Blöcke breiter und vier bis fünf Blöcke tiefer Tisch: grüne Spielfläche, dunkler Rand, bis zu fünf Stairs oder einzelne Slabs als Sitze und der Dealer gegenüber der Spielerseite. Diese Maße sind nur eine Empfehlung; die visuelle Wahrheit ist der Table-Surface-Anchor, nicht eine fest codierte Tischform.
+Bestehende `plugins/VapeeCore/blackjack.yml`-Dateien und historische Player-/Quest-/Daily-Daten werden weder gelöscht noch migriert. `blackjack:win` bleibt syntaktisch gültig, hat aber keinen eingebauten Producer mehr. Betreiber müssen solche Daily-Quests vor regulärer Nutzung bewusst deaktivieren oder ersetzen. Es gibt keine automatische Kompensation, Konvertierung oder erneute Reward-Auszahlung.
 
-Der Abschnitt `tables.<id>.display` ist semantisch die Mitte der nutzbaren physischen Spielfläche: `x/z` sind ihr Center, `y` ist exakt ihre Oberfläche und `yaw` ihre Hauptausrichtung. `/blackjack setup display <id>` speichert Blockmittelpunkt, reale Collision-Shape-Oberkante und Player-Yaw. Aus dem Yaw leitet `BlackjackDisplayGeometry` normalisierte Forward-/Right-Vektoren für Playerkarten und Status ab. Playerkarten liegen zwischen Seat und Center, beziehen ihre Y-Höhe aber immer von `display.y + CARD_HOVER`; Ergebnisse liegen knapp hinter der jeweiligen Kartenfläche.
-
-Der Dealer besitzt davon unabhängig ein einzelnes aufrechtes Floating-Hand-`TextDisplay`. `/blackjack setup dealer <id>` wird ausgeführt, während der Admin an der Dealerposition steht und zum Tisch schaut. Die gespeicherte Dealer-Blickrichtung bestimmt den horizontalen Forward-Vektor; `dealerHandLocation` verschiebt das Display von der Dealerposition um `DEALER_HAND_FORWARD_OFFSET` nach vorne und `DEALER_HAND_VERTICAL_OFFSET` nach oben. Es besteht keine Abhängigkeit von Table-Surface-Y oder Tischform.
-
-Der vollständige Setup-Ablauf ist:
-
-1. Physischen Tisch in der Welt bauen.
-2. `/blackjack setup create <id>`
-3. `/blackjack setup pos1 <id>`
-4. `/blackjack setup pos2 <id>`
-5. An der Dealerposition stehen, zum Tisch schauen und `/blackjack setup dealer <id>` ausführen.
-6. Spielfläche ansehen und `/blackjack setup display <id>` ausführen.
-7. Jeden Sitz ansehen und `/blackjack setup seat <id> <number>` ausführen.
-8. Mit `/blackjack setup preview <id>` visuell kalibrieren.
-9. `/blackjack setup enable <id>`
-
-Die Preview benötigt keine ActivitySession und funktioniert bei disabled, enabled und teilweise konfigurierten Tabellen. Für zwölf Sekunden zeigt sie `CENTER`, optional `DEALER HAND`, `STATUS` und nur die vorhandenen `SEAT n`-Marker; fehlende Komponenten werden zusätzlich im Chat genannt. Der Dealer-Marker verwendet exakt dieselbe `dealerHandLocation` wie die Production-Anzeige. Ihr Owner `blackjack-preview:<adminUuid>:<tableId>` ist vom Produktions-Owner getrennt. Timeout, eine neue Preview desselben Admins, Player-Quit und Modul-Shutdown räumen sie auf, ohne Produktionsanzeigen zu berühren. Setup-Markierungen werden nie persistiert.
-
-### Blackjack world UX
-
-`BlackjackTableInteractionMode` trennt `MODERN_SEAT_CLICK` und `LEGACY_INTERACTION`. Ein moderner Seat speichert unter `seats.<n>.block` die konkrete Welt-/Blockposition und unter `seats.<n>.position` die aufgelöste Sitzposition samt Yaw/Pitch. `/blackjack setup seat <id> <1-5>` verlangt einen Zielblock in höchstens sechs Blöcken Entfernung und verwendet `SeatPositionResolver`; Bottom-Stairs sowie einzelne Bottom-/Top-Slabs sind erlaubt, Top-Stairs, Double-Slabs und andere Blöcke nicht. Die resolved Position darf über der Area-Grenzebene liegen, solange der konkrete Sitzblock die Area berührt. Vollständig alte, flache Seat-Positionen bleiben lesbar und benötigen `interaction`. Moderne Tische ignorieren einen eventuell noch vorhandenen alten Interaction-Key. Gemischte Schemas, doppelte Blöcke innerhalb einer Definition und Blockkonflikte zwischen aktivierten Tischen sind ungültig.
-
-`BlackjackDisplayAnchor` bleibt optional: Alte Dateien ohne den Abschnitt laden unverändert, `BlackjackTableService` protokolliert den Legacy-Fallback und `/blackjack setup info <id>` zeigt bei `Table Surface` den Hinweis `Missing - using legacy geometry`. Neue Tabellen sollten vor dem Enable immer den oben beschriebenen Preview-Schritt verwenden.
-
-`BlackjackTableService` hält getrennte O(1)-Indizes für Legacy-Interaktionen und moderne `BlackjackBlockPosition → BlackjackTableSeatReference`-Zuordnungen. Vor Runtime-Aktivierung wird ein moderner Block erneut durch `SeatPositionResolver` validiert. Enable erzeugt sofort die Idle-Anzeige; Disable, Rollback und Shutdown entfernen alle Anzeigen und Seat-Indizes.
-
-`BlackjackInventoryService` besitzt während der Teilnahme die Player-Hotbar. Die Action-PDC heißt `blackjack_action`; Status ist markiert, aber nicht ausführbar. Die zentrale Platzierung steht in `PRIMARY_SLOT` (Deal oder Hit), `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT` und `LEAVE_SLOT` derselben Klasse. Die Action wird über PDC erkannt und ist unabhängig von diesen Positionen. `AVAILABLE` zeigt Deal/Status/Leave. Nur der aktuelle Spielerzug zeigt Hit/Stand und – solange legal – Double. Fremder Zug, Dealer-Zug und Settlement zeigen ausschließlich Status/Leave. Beim Activity-Reset löscht `BlackjackSession.onReset()` ausschließlich Rundendaten. `ActivityService` wechselt danach auf `AVAILABLE` und ruft erst dann `onResetCompleted()` auf; Blackjack aktualisiert dort Hotbar und Weltansicht. Fehler im Post-Reset-Hook werden protokolliert und schließen die Session kontrolliert. Dadurch bleiben Participant, Sitz und Inventory-Ownership erhalten, während Deal sofort wieder am zentral definierten `PRIMARY_SLOT` erscheint. Drop, Inventory-Click inklusive Number-Key, Drag, Offhand-Swap und Pickup werden nur für aktuelle Blackjack-Owner blockiert. `PlayerDeathEvent` entfernt markierte Drops; der generische Activity-Listener verlässt mit `DEATH`.
-
-Double Down liegt in `BlackjackService.doubleDown`: Teilnahme, `ACTIVE`, `PLAYER_TURNS`, eigener Zug, unfertige Hand, genau zwei Karten und kein Natural sind zwingend. Der Timeout wird abgebrochen, genau eine Karte gezogen, `BlackjackPlayerRound.doubledDown` gesetzt, die Hand beendet und zum nächsten Spieler beziehungsweise Dealer weitergeschaltet. Es gibt weiterhin keine Wette und keine Economy-Auswirkung.
-
-`BlackjackWorldViewService` nutzt ausschließlich `WorldDisplayService`. Owner ist `blackjack:<tableId>`; Keys sind `status`, genau ein `dealer-hand`, `seat-<n>-label` und `seat-<n>-card-<i>`. Playerkarten bleiben einzelne horizontale Displays auf der Table Surface. Die Dealerhand ist dagegen ein vertikales Billboard an der Dealerposition: Während `PLAYER_TURNS` zeigt sie beispielsweise `K♦   ◆` und darunter `Dealer • 10`; in `DEALER_TURN` und `SETTLED` werden sämtliche Karten und der Gesamtwert im selben Display sichtbar. Dealer-Hits führen deshalb nur zu `updateText` und Teleport des bestehenden Keys, unabhängig von der Kartenanzahl. Ab der fünften Karte wird die Hand nach vier Karten umgebrochen. Beim Reset verschwindet `dealer-hand`, Disable und Shutdown bereinigen weiterhin den kompletten Owner.
-
-Ein Refresh aktualisiert bestehende TextDisplays, erzeugt fehlende und entfernt nur nicht mehr gewünschte Keys; nur ein tatsächlicher Stilwechsel ersetzt den betroffenen Display-Key. Er wird durch Join/Leave und Rundenzustandsänderungen ausgelöst, nicht durch einen Tick-Task. Idle zeigt ausschließlich `Blackjack` plus `n / capacity`. Aktive Spielerhände zeigen Karten, kleinen Zahlenwert und Zugstatus; Settlement ersetzt den Wert durch ein kleines farbiges Resultat nahe den Karten. `OPEN_CARD`, `DEALER_HAND`, `STATUS`, `RESULT` und `VALUE` besitzen getrennte Styles. Presentation-Fehler werden protokolliert und brechen das Gameplay nicht ab.
-
-`BlackjackService.requiresDealerPlay` überspringt die Dealer-Ausspielung, wenn ausschließlich Bust-Hände oder bereits sichere Naturals übrig sind; normale Live-Hände spielen den Dealer weiterhin bis mindestens 17 aus, inklusive Stand auf Soft 17. `BlackjackShoe` erzeugt sechs vollständige Decks (312 Karten), mischt per Fisher-Yates mit `nextInt(index + 1)` und verwendet keinen konstanten Seed oder dynamische Spielerbevorzugung. `BlackjackFairnessHarness` prüft mit festen Seeds Verteilung, Reproduzierbarkeit, unterschiedliche Reihenfolgen, Ziehen ohne Replacement sowie Dealer-/Outcome-Invarianten; er besitzt absichtlich keine zufällige Winrate-Grenze.
-
-Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Presentation liest auf dem Hauptthread ausschließlich immutable Snapshots über `BlackjackSession#getDealerHandView`, `getPlayerRoundView` und `getPlayerRoundViews`: `BlackjackHandView` kopiert die Kartenliste und speichert den zentral berechneten Wert sowie Natural-Status; `BlackjackPlayerRoundView` enthält diese Handansicht, Spieler-UUID, Finished-/Double-Flags und optionales Outcome. Bereits gelesene Views ändern sich durch spätere Engine-Mutationen oder Reset nicht. Mutable Session-/Round-Getter bleiben package-private; es gibt keinen öffentlichen Current-Shoe-Read. Details und Regression: [ARCHITECTURE_REFACTOR.md](../reports/30b-architecture-refactor/ARCHITECTURE_REFACTOR.md).
-
-### Blackjack tuning map
-
-| Frage | Stelle |
-|---|---|
-| Wo ändere ich den Table-/Card-Anchor? | `/blackjack setup display <id>` und `BlackjackDisplayGeometry` |
-| Wo ändere ich den Abstand zwischen Karten? | `BlackjackDisplayGeometry.CARD_SPACING` |
-| Wo ändere ich die Kartengröße? | `BlackjackDisplayGeometry.CARD_SCALE` |
-| Wo ändere ich die Kartenhöhe? | `BlackjackDisplayGeometry.CARD_HOVER` |
-| Wo ändere ich Handwert-Größe? | `BlackjackDisplayGeometry.HAND_VALUE_SCALE` |
-| Wo ändere ich Resultat-Größe/-Höhe? | `BlackjackDisplayGeometry.RESULT_SCALE` / `RESULT_HEIGHT` |
-| Wo ändere ich Status-Größe/-Position? | `BlackjackDisplayGeometry.STATUS_SCALE` / `STATUS_HEIGHT` |
-| Wo ändere ich den Abstand der Playerkarten? | `BlackjackDisplayGeometry.PLAYER_CARD_DISTANCE` |
-| Wo ändere ich den Dealer-Display-Abstand? | `BlackjackDisplayGeometry.DEALER_HAND_FORWARD_OFFSET` |
-| Wo ändere ich die Dealer-Display-Höhe? | `BlackjackDisplayGeometry.DEALER_HAND_VERTICAL_OFFSET` |
-| Wo ändere ich die Dealer-Display-Größe? | `BlackjackDisplayGeometry.DEALER_HAND_SCALE` |
-| Wo ändere ich die Hotbar Items? | Factory-Aufrufe in `BlackjackInventoryService.refreshPlayer` |
-| Wo ändere ich die Hotbar Slots? | `PRIMARY_SLOT`, `STAND_SLOT`, `DOUBLE_SLOT`, `STATUS_SLOT`, `LEAVE_SLOT` in `BlackjackInventoryService` |
-| Wo ändere ich die Seat-Setup-Regeln? | `BlackjackCommand.seat` und `SeatPositionResolver` |
-| Wo ändere ich Double? | `BlackjackService.doubleDown` und `BlackjackPlayerRound` |
-| Wo ändere ich die Reset-Presentation? | Activity-Reset-Lifecycle und `BlackjackSession.onResetCompleted` |
-| Wo ändere ich die Dealer-Play-Entscheidung? | `BlackjackService.requiresDealerPlay` |
+Historischer Code, Tischschema, PDC-Owner, Clean-Shutdown-/Crash-Grenzen und Test-Ledger stehen im [Step-02-Bericht](../reports/prototype/STEP_02_BLACKJACK_REMOVAL.md). Git-Commit `1a3dade15c7dfab69b0cf96ce74af6097c73145e` ist die maßgebliche Quelle. VapeeGames ist zukünftige separate Plugin-Arbeit und benötigt zuerst einen expliziten API-/Lifecycle-/Ownership-Vertrag; ein öffentliches Add-on-API wurde hier nicht implementiert.
 
 ## Should I change Java or configuration?
 
@@ -1148,31 +1075,20 @@ Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Prese
 | Normaler Lobby-Gamemode | Live-`lobby.yml`, Key `player.gamemode` |
 | BUILD-Regeln, Cleanup oder Inventory-Semantik | `LobbyPlayerStateService` |
 | Warp-Position | `/warp set …` beziehungsweise `warps.yml` |
-| Blackjack-Tischposition | `/blackjack setup …` beziehungsweise `blackjack.yml` |
-| Blackjack-Table-/Card-Anchor | `/blackjack setup display <id>` und `BlackjackDisplayGeometry` |
 | Casual-Sitzbedingungen und Cleanup-Events | `SeatListener` |
 | Seat-Reservation, Entity und PDC | `SeatService` |
 | Stair-/Slab-Geometrie | `SeatPositionResolver` |
-| Blackjack-Sitzverteilung | `BlackjackSeatService` |
-| Blackjack-Hotbar-Materialien und Slots | `BlackjackInventoryService` |
-| Blackjack-Kartenposition, Abstand und Höhe | `BlackjackDisplayGeometry` |
-| Floating Dealer Hand: Abstand, Höhe und Größe | `BlackjackDisplayGeometry.DEALER_HAND_FORWARD_OFFSET`, `DEALER_HAND_VERTICAL_OFFSET`, `DEALER_HAND_SCALE` |
-| Blackjack-Display-Texte und Ausrichtung | `BlackjackWorldViewService` |
-| Blackjack-Round-Reset-Presentation | `ActivityService.resetSessionInternal`, `ActivitySession.onResetCompleted`, `BlackjackSession` |
-| Blackjack-Dealer-Ausspielentscheidung | `BlackjackService.requiresDealerPlay` |
-| Double-Down-Regeln | `BlackjackService.doubleDown` |
 | Native Text-/ItemDisplays | `WorldDisplayService` |
 | Command-Help-Design und Rendering | `dev.vapee.core.command.help` |
 | Hauptübersicht und `/core help` | `CoreCommand` |
 | Coin-Command-UX | `CoinsCommand` |
-| Blackjack-Command-UX | `BlackjackCommand` |
 | Warp-Command-UX | `WarpCommand` |
 | Utility-Bukkit-Mutationen und Flight-/Speed-Cleanup | `UtilityService` |
 | Utility-Argumente, Rechte, Guards, Texte oder Completion | jeweilige Klasse unter `utility/command` |
 | Invsee-Snapshot, Read-only-Schutz und View-Lifecycle | `InvseeService` und `InvseeInventoryHolder` |
 | Quest Progress Engine | `QuestService` |
 | Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
-| Technische Quest Progress Keys | `QuestProgressKey`; playtime:minute im QuestPlaytimeProducer, blackjack:win im BlackjackModule |
+| Technische Quest Progress Keys | `QuestProgressKey`; playtime:minute im QuestPlaytimeProducer; blackjack:win nur noch historisch ohne Core-Producer |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
 | Daily-Quest-Anzahl, Reset, Zeitzone und Definitionen | `daily-quests.yml` |
 | Daily-Cycle-Berechnung | `DailyQuestCycleResolver` |
@@ -1181,7 +1097,7 @@ Die Blackjack-Engine besitzt den mutablen Runden-, Hand- und Shoe-Zustand. Prese
 
 ## Utility ownership und Lifecycle
 
-`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services sowie den Rank-eigenen StaffHierarchyService für den OnlineStaffTargetGuard, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; aktuell betragen Module Count und Reload Count einschließlich Localization insgesamt 28 beziehungsweise 7. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
+`UtilityModule` bleibt genau ein `CoreModule`. Beim Enable bezieht es Lobby- und Activity-Services sowie den Rank-eigenen StaffHierarchyService für den OnlineStaffTargetGuard, erstellt `UtilityService`, `UtilityListener` und den read-only `InvseeService`, registriert zwölf Commands und anschließend beide Listener. Die Startup-Zahl wird aus der tatsächlich registrierten Command-Liste abgeleitet. Utility ist kein `ReloadParticipant` und besitzt keine Configdatei; aktuell betragen Module Count und Reload Count einschließlich Localization insgesamt 27 beziehungsweise 7. Beim Disable werden offene Invsee-Snapshots geschlossen, deren UUID-Metadaten geleert, verwaltetes Flight und beide Speed-Kanäle online normalisiert, Listener abgemeldet und Executor sowie TabCompleter entfernt. Der Gamemode wird dabei bewusst nicht zurückgesetzt.
 
 `UtilityService` ist der einzige Owner der eigentlichen Bukkit-Mutationen für Flight, Speed, Gamemode, Utility-Teleports, Heal, Feed, sicheres Inventory-Clear und das Öffnen echter Enderchests. Alle Mutationen sind Main-Thread-only. Der Service hält niemals dauerhafte `Player`-Referenzen, sondern ausschließlich UUID-Mengen für command-managed Flight und Speed. Diese Daten werden weder in `CorePlayer` noch in `PlayerSettings` oder `players/<uuid>.yml` persistiert. Teleportziele und letzte Positionen werden ebenfalls nicht gespeichert; `/back` gehört nicht zu dieser Phase.
 
@@ -1237,7 +1153,6 @@ Alle Utility-Mutationen, die laufenden Gameplay-State stören würden, fragen di
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
 | `/ranks` | Öffentliche LuckPerms-Track-Reihenfolge anzeigen | `RanksCommand` | `vapeecore.ranks.view` (Default `true`) |
-| `/blackjack`, `/blackjack help`, `/blackjack setup …` | Strukturierte Hilfe und Verwaltung physischer Blackjack-Tische | `BlackjackCommand` | `vapeecore.blackjack.admin` |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 | `/mute <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline; Chat und ausgehende PM sperren | `MuteCommand`, `ModerationMuteProjection`, `ModerationMuteChatListener` | `vapeecore.moderation.mute` |
 | `/unmute <player\|uuid> [reason...]` | Aktiven Mute widerrufen | `UnmuteCommand` | `vapeecore.moderation.unmute` |
@@ -1331,7 +1246,7 @@ Der [Verify-Workflow](../scripts/verify.ps1) prüft Voraussetzungen, baut mit `c
 ./scripts/stop-dev-server.ps1
 ```
 
-Der separate Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x prüft Start aller 28 Module, sieben Reload-Teilnehmer, 37 Command-Roots und sauberen Shutdown in umgekehrter Reihenfolge. Aktuelle Descriptor-Verträge: 50 Permission-Nodes und 15 positive Child-Kanten. Live-YAMLs werden durch einen Build nicht mit Resource-Defaults überschrieben. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
+Der separate Paper-1.21.11-Smoke-Test mit Java 21 und LuckPerms 5.5.x prüft Start aller 27 Module, sieben Reload-Teilnehmer, 36 Command-Roots und sauberen Shutdown in umgekehrter Reihenfolge. Aktuelle Descriptor-Verträge: 49 Permission-Nodes und 15 positive Child-Kanten. Live-YAMLs werden durch einen Build nicht mit Resource-Defaults überschrieben. Ein „Live Client Test“ darf nur dokumentiert werden, wenn wirklich ein Minecraft-Client verbunden war und die Schritte ausgeführt wurden; Serverstart oder Harness allein zählen nicht als Live-Client-Test.
 
 ## Documentation maintenance rule
 
@@ -1339,7 +1254,7 @@ Diese Datei ist Teil der Codebase. `docs/` beschreibt den aktuellen, dauerhaft g
 
 ### Phase 26B – Administrative online targets / permissions
 
-VapeeCore injiziert RankModule ausdrücklich in UtilityModule und EconomyModule. Rank besitzt unverändert den einzigen StaffHierarchyService; es hängt nicht von Utility oder Economy ab. Beide Module erstellen einen kleinen Bukkit-Application-Guard `command.OnlineStaffTargetGuard`, ohne zweiten Hierarchie-Algorithmus, Group-/Level-Cache, Scheduler oder neuen ReloadParticipant. Enable-Reihenfolge, 28 Module und sieben Reload-Teilnehmer bleiben unverändert; Executor/Completer-Hooks werden wie bisher entfernt.
+VapeeCore injiziert RankModule ausdrücklich in UtilityModule und EconomyModule. Rank besitzt unverändert den einzigen StaffHierarchyService; es hängt nicht von Utility oder Economy ab. Beide Module erstellen einen kleinen Bukkit-Application-Guard `command.OnlineStaffTargetGuard`, ohne zweiten Hierarchie-Algorithmus, Group-/Level-Cache, Scheduler oder neuen ReloadParticipant. Enable-Reihenfolge, 27 Module und sieben Reload-Teilnehmer bleiben unverändert; Executor/Completer-Hooks werden wie bisher entfernt.
 
 Command-Capability und Syntax bleiben Pflicht. Nach bestehender exakter Online-Zielauflösung und UUID-Self-Klassifikation folgt die geladene Entscheidung vor Activity-/BUILD-Guards, Flight-Cleanup, Player-/Wallet-Mutation, Snapshot-Erstellung oder GUI-Open. `check` erhält StaffTargetDecision einschließlich UNAVAILABLE; `authorize` unterscheidet kontrolliertes Denial und unavailable Feedback. Fehlende geladene Gruppen oder unerwartete RuntimeException: fail closed, ein contextual WARNING mit Actor-UUID, Target-UUID und Action; gewöhnliche Hierarchie-Denials erzeugen keinen Logspam. Completion prüft dieselben loaded-only Regeln still und lädt keine LP-User.
 

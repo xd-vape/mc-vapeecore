@@ -20,12 +20,14 @@ Categories overlap; admin-only describes authority, not another parser abstracti
 |---|---|---|
 | Simple root | `lobby/command/SpawnCommand`, `quest/daily/command/DailyQuestCommand` | `/quests` requires a permitted player and no arguments; returns an empty completion list |
 | Root with subcommands | `lobby/warp/command/WarpCommand`; `friend/command/FriendCommand`; `clan/command/ClanCommand` | Warp is the bounded metadata pilot. Friends/clans have relationship/member-dependent choices and player-only flows; do not flatten these into Warp's model |
-| Admin-only | Warp; existing `blackjack/command/BlackjackCommand` | Warp has one permission for all actions and only `set` needs a player's location. Blackjack has table/setup-specific grammar; it was not migrated |
+| Admin-only | `lobby/warp/command/WarpCommand` | Warp has one permission for all actions and only `set` needs a player's location |
 | Delegated root action | `command/CoreCommand` -> `quest/daily/command/CoreQuestCommand` | `/core quest force` has explicit wiring in `VapeeCore#registerCommands`, argument slicing, its own authorization and target guard. Do not create a second root or change its semantics |
 | Known online/offline target | `identity/command/ProfileCommand`, `economy/command/CoinsCommand`, moderation commands | Profile reads known identities, including offline data. Coins GET can read known offline balances; mutations require online targets and the existing staff policy |
 | Online target / movement grammar | `utility/OnlinePlayerResolver`, `utility/command/TeleportCommand`, `command/OnlineStaffTargetGuard` | Exact online name resolution, source/destination distinction, Others capabilities, staff hierarchy and activity guards belong to the existing command/domain paths |
 
 Runtime permission checks remain necessary even when Bukkit's descriptor checks permissions. Help/completion hiding is not execution authorization. `/core` intentionally has public general actions and restricted admin actions, so a root permission is not mandatory for every category.
+
+Prototype Step 02 removes the `/blackjack` descriptor, executor, permission and help entries. Warp keeps its existing localized Information/Management titles under `warp.help.section.*`.
 
 ## Add a root only when justified
 

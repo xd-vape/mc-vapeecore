@@ -26,7 +26,7 @@ Spotless ist für mechanische Ausgabe maßgeblich, `.editorconfig` liefert passe
 | `src/test/java/dev/vapee/core/presence/PresenceLifecycleHarness.java` | In Phase 1 verhaltensbasiert verbesserter Lifecycle-Test |
 | `src/test/java/dev/vapee/core/settings/visibility/SettingsModuleLifecycleHarness.java` | Reale Registrierung, Teilfehler und Menü-Cleanup aus Phase 1 |
 
-Neue Dateien außerhalb dieser Liste werden nicht automatisch aufgenommen. Eine spätere Erweiterung benötigt bewusstes Review der Allowlist, Git-LF-Regeln und Source-Test-Auswirkungen. `VapeeCore`, `BlackjackCommand` und `FilePlayerRepository` gehören nicht zum Piloten.
+Neue Dateien außerhalb dieser Liste werden nicht automatisch aufgenommen. Eine spätere Erweiterung benötigt bewusstes Review der Allowlist, Git-LF-Regeln und Source-Test-Auswirkungen. `VapeeCore` und `FilePlayerRepository` gehören nicht zum Piloten.
 
 ## Bearbeiten → Formatieren → Prüfen → Verifizieren → Commit
 

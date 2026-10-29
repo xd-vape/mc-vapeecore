@@ -37,7 +37,7 @@ public final class SeatHarness {
         testCasualPolicy();
         testLifecycleCleanup();
         testCleanupFaults();
-        testBlackjackAdapterRetryIsolation();
+        testOwnerRetryIsolation();
         System.out.println("SeatHarness passed " + checks + " checks.");
     }
 
@@ -179,53 +179,31 @@ public final class SeatHarness {
         }
     }
 
-    private static void testBlackjackAdapterRetryIsolation() throws Exception {
+    private static void testOwnerRetryIsolation() {
         Fixture f = new Fixture();
-        var server = proxy(org.bukkit.Server.class, (method, args) -> switch (method.getName()) {
-            case "getWorld" -> f.world;
-            case "isPrimaryThread" -> true;
-            default -> defaultValue(method.getReturnType());
-        });
-        var unsafeField = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
-        unsafeField.setAccessible(true);
-        Object unsafe = unsafeField.get(null);
-        var plugin = (org.bukkit.plugin.java.JavaPlugin) unsafe.getClass().getMethod("allocateInstance", Class.class)
-                .invoke(unsafe, TestPlugin.class);
-        var serverField = org.bukkit.plugin.java.JavaPlugin.class.getDeclaredField("server");
-        serverField.setAccessible(true);
-        serverField.set(plugin, server);
-        var quest = new dev.vapee.core.quest.QuestCompletionFixture();
-        var activity = new dev.vapee.core.activity.ActivityService(server, quest.players, quest.logger);
-        var adapter = new dev.vapee.core.activity.blackjack.table.BlackjackSeatService(plugin, activity, f.service);
-        var position = new dev.vapee.core.activity.location.ActivityPosition("world", 5, 5, 5, 0, 0);
-        var definition = new dev.vapee.core.activity.blackjack.table.BlackjackTableDefinition("retry",
-                new dev.vapee.core.activity.location.ActivityArea("world", 0, 0, 0, 10, 10, 10), position,
-                new dev.vapee.core.activity.blackjack.table.BlackjackBlockPosition("world", 5, 5, 5),
-                List.of(new dev.vapee.core.activity.blackjack.table.BlackjackSeat(1, position)));
         UUID player = UUID.randomUUID();
-        adapter.reserveSeat(definition, 1, player).orElseThrow();
-        adapter.mountReservedPlayer(f.player(player, false, false, 0));
+        SeatKey original = new SeatKey("retry", "original");
+        f.service.reserve(original, SeatType.MANAGED, player, new Location(f.world, 5, 5, 5), null);
+        f.service.mountReserved(f.player(player, false, false, 0));
         f.gateway.failMask = 1;
-        check(capture(adapter::shutdown) != null, "real Blackjack/generic seat failure propagates after attempt");
-        check(adapter.getAssignment(player).isPresent() && f.service.isSeated(player),
-                "real failed release retains both adapter and generic ownership");
+        check(capture(() -> f.service.releaseOwner("retry")) != null,
+                "generic seat failure propagates after attempt");
+        check(f.service.getAssignment(original).isPresent() && f.service.isSeated(player),
+                "failed release retains original generic ownership");
         f.gateway.failMask = 0;
-        f.service.releasePlayer(player); // Existing generic reconciliation completed independently.
+        f.service.releasePlayer(player);
         SeatKey foreignKey = new SeatKey("foreign", "new-seat");
         f.service.reserve(foreignKey, SeatType.CASUAL, player, new Location(f.world, 1, 2, 3), null);
         f.service.mountReserved(f.player(player, false, false, 0));
         UUID foreignEntity = f.service.getAssignment(foreignKey).orElseThrow().seatEntity().orElseThrow();
-        adapter.shutdown();
-        check(adapter.getAssignment(player).isEmpty(), "adapter reconciles original already released assignment");
+        check(f.service.releaseOwner("retry") == 0, "old owner reconciles original already released assignment");
         check(f.service.getAssignment(player).orElseThrow().key().equals(foreignKey)
                         && f.gateway.seatEntities.containsKey(foreignEntity),
-                "adapter retry cannot remove later foreign seat of same player");
-        adapter.shutdown();
-        check(f.gateway.seatEntities.containsKey(foreignEntity), "repeated adapter shutdown preserves foreign seat");
+                "owner retry cannot remove later foreign seat of same player");
+        f.service.releaseOwner("retry");
+        check(f.gateway.seatEntities.containsKey(foreignEntity), "repeated owner cleanup preserves foreign seat");
         f.service.cleanup();
     }
-
-    private static final class TestPlugin extends org.bukkit.plugin.java.JavaPlugin { }
 
     private static void testCleanupFaults() {
         for (boolean all : new boolean[]{false, true}) {

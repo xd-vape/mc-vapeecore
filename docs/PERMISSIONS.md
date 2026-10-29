@@ -12,7 +12,6 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |
 | `vapeecore.economy.coins` | `true` | `/coins` | Eigene Coin-Balance anzeigen. |
 | `vapeecore.economy.admin` | `op` | `/coins get\|add\|remove\|set` | Liest bekannte Online-/Offline-Wallets; verändert nur geladene Online-Wallets. Child: `vapeecore.economy.coins`. |
-| `vapeecore.blackjack.admin` | `op` | `/blackjack …` | Verändert Blackjack-Tische und deren Konfiguration. |
 | `vapeecore.warp.admin` | `op` | `/warp …` | Verändert persistente Warp-Ziele. |
 
 ### Economy Commands (Phase 22)
@@ -216,7 +215,6 @@ Alles von Moderator, zusätzlich:
 - `vapeecore.economy.admin`
 - `vapeecore.lobby.setspawn`
 - `vapeecore.warp.admin`
-- `vapeecore.blackjack.admin`
 - `vapeecore.visibility.staff`
 
 `vapeecore.admin` bleibt optional, wenn `/core reload` Owner-only sein soll.
@@ -311,7 +309,6 @@ In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarke
 | /ignore | — | vapeecore.social.ignore | social.ignore | User/VIP | /ignore <player> | Nein |
 | /unignore | — | vapeecore.social.ignore | social.ignore | User/VIP | /unignore <player\|uuid> | Nein |
 | /ignorelist | — | vapeecore.social.ignore | social.ignore | User/VIP | /ignorelist | Nein |
-| /blackjack | — | vapeecore.blackjack.admin | blackjack.admin | Admin/Owner | /blackjack help | Nein |
 | /warp | — | vapeecore.warp.admin | warp.admin | Admin/Owner | /warp help | Nein |
 | /build | — | vapeecore.utility.build | utility.build | Builder; zusätzliche gezielte Staff-Rechte | /build | Nein |
 | /fly | — | vapeecore.utility.fly | utility.fly Self; utility.fly.others für fremde UUID | Builder; zusätzliche gezielte Staff-Rechte | /fly [player] | Nein |

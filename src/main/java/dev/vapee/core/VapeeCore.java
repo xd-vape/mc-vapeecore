@@ -1,7 +1,6 @@
 package dev.vapee.core;
 
 import dev.vapee.core.activity.ActivityModule;
-import dev.vapee.core.activity.blackjack.BlackjackModule;
 import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.clan.ClanModule;
 import dev.vapee.core.clan.Clan;
@@ -76,7 +75,6 @@ public final class VapeeCore extends JavaPlugin {
     private UtilityModule utilityModule;
     private SeatModule seatModule;
     private WorldDisplayModule worldDisplayModule;
-    private BlackjackModule blackjackModule;
     private WarpModule warpModule;
     private LobbyExperienceModule lobbyExperienceModule;
 
@@ -149,16 +147,6 @@ public final class VapeeCore extends JavaPlugin {
         );
         seatModule = new SeatModule(this, lobbyModule, activityModule);
         worldDisplayModule = new WorldDisplayModule(this);
-        blackjackModule = new BlackjackModule(
-                this,
-                activityModule,
-                seatModule,
-                worldDisplayModule,
-                lobbyModule,
-                messageService,
-                commandHelpRenderer,
-                questModule
-        );
         warpModule = new WarpModule(this, messageService, commandHelpRenderer);
         lobbyExperienceModule = new LobbyExperienceModule(
                 this,
@@ -197,7 +185,6 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(utilityModule);
         moduleManager.register(seatModule);
         moduleManager.register(worldDisplayModule);
-        moduleManager.register(blackjackModule);
         moduleManager.register(warpModule);
         moduleManager.register(lobbyExperienceModule);
         moduleManager.enableAll();
