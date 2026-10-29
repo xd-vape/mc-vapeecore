@@ -3,6 +3,13 @@ package dev.vapee.core.activity;
 import static dev.vapee.core.quest.QuestCompletionFixture.DEFAULT;
 import static dev.vapee.core.quest.QuestCompletionFixture.proxy;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewClassTree;
+import com.sun.source.util.JavacTask;
+import com.sun.source.util.TreeScanner;
 import dev.vapee.core.activity.location.ActivityArea;
 import dev.vapee.core.activity.location.ActivityPosition;
 import dev.vapee.core.activity.location.ActivityVenue;
@@ -43,6 +50,10 @@ import java.util.function.Predicate;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
+import javax.tools.Diagnostic;
+import javax.tools.DiagnosticCollector;
+import javax.tools.JavaFileObject;
+import javax.tools.ToolProvider;
 
 /** Artifact assertions and real shared domain behavior; full root lifecycle is also tested on Paper. */
 public final class BlackjackRemovalHarness {
@@ -65,14 +76,18 @@ public final class BlackjackRemovalHarness {
 
     private static void compositionAndArtifact() throws Exception {
         // Independent exact order oracle; runtime acceptance checks the actual enabled module objects.
-        String root = Files.readString(Path.of("src/main/java/dev/vapee/core/VapeeCore.java"));
+        Path rootSource = Path.of("src/main/java/dev/vapee/core/VapeeCore.java");
+        String root = Files.readString(rootSource);
         var matcher = Pattern.compile("moduleManager\\.register\\((\\w+)\\)").matcher(root);
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));
         check(actual.equals(MODULES) && actual.size() == 27, "exact remaining production registration order");
         check(!root.contains("BlackjackModule") && !root.contains("blackjackModule"), "no root Blackjack wiring");
-        check(root.contains("List.of(configService, localizationModule, lobbyModule, chatModule, privateMessageModule,\n"
-                + "                        presentationModule, dailyQuestModule)"), "seven reload participants and order preserved");
+        List<String> expectedReload = List.of("configService", "localizationModule", "lobbyModule", "chatModule",
+                "privateMessageModule", "presentationModule", "dailyQuestModule");
+        List<String> actualReload = reloadParticipants(rootSource);
+        check(actualReload.equals(expectedReload), "seven reload participants and order preserved: expected "
+                + expectedReload + "; actual " + actualReload);
         try (ZipFile jar = new ZipFile("target/vapeecore-1.0-SNAPSHOT.jar")) {
             check(jar.stream().noneMatch(entry -> entry.getName().toLowerCase(java.util.Locale.ROOT).contains("blackjack")),
                     "compiled Core JAR has no Blackjack classes, archive or resources");
@@ -95,6 +110,47 @@ public final class BlackjackRemovalHarness {
                     "obsolete translations absent: " + language);
             check(catalog.containsKey("activity.context") && catalog.containsKey("warp.help.section.information")
                     && catalog.containsKey("warp.help.section.management"), "shared vocabulary preserved: " + language);
+        }
+    }
+
+    private static List<String> reloadParticipants(Path source) throws java.io.IOException {
+        // Parse the actual onEnable construction: formatting and comments cannot supply a false match.
+        var diagnostics = new DiagnosticCollector<JavaFileObject>();
+        var compiler = java.util.Objects.requireNonNull(ToolProvider.getSystemJavaCompiler(), "JDK compiler required");
+        try (var files = compiler.getStandardFileManager(diagnostics, java.util.Locale.ROOT,
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            var task = (JavacTask) compiler.getTask(null, files, diagnostics, List.of("-proc:none"), null,
+                    files.getJavaFileObjects(source));
+            List<NewClassTree> constructors = new ArrayList<>();
+            var scanner = new TreeScanner<Void, Void>() {
+                @Override public Void visitClass(ClassTree tree, Void unused) {
+                    return tree.getSimpleName().contentEquals("VapeeCore") ? super.visitClass(tree, unused) : null;
+                }
+                @Override public Void visitMethod(MethodTree tree, Void unused) {
+                    return tree.getName().contentEquals("onEnable") && tree.getParameters().isEmpty()
+                            ? super.visitMethod(tree, unused) : null;
+                }
+                @Override public Void visitNewClass(NewClassTree tree, Void unused) {
+                    if (tree.getIdentifier().toString().equals("ReloadService")) constructors.add(tree);
+                    return super.visitNewClass(tree, unused);
+                }
+            };
+            for (var unit : task.parse()) scanner.scan(unit, null);
+            if (diagnostics.getDiagnostics().stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR)) {
+                throw new AssertionError("Invalid Java source " + source + ": " + diagnostics.getDiagnostics());
+            }
+            if (constructors.size() != 1) {
+                throw new AssertionError("Expected one ReloadService construction in VapeeCore.onEnable; actual "
+                        + constructors.size() + " in " + source);
+            }
+            var arguments = constructors.getFirst().getArguments();
+            if (arguments.size() != 2 || !(arguments.get(1) instanceof MethodInvocationTree list)
+                    || !list.getMethodSelect().toString().equals("List.of")
+                    || list.getArguments().stream().anyMatch(argument -> !(argument instanceof IdentifierTree))) {
+                throw new AssertionError("Expected ReloadService(logger, List.of(participants)); actual "
+                        + constructors.getFirst() + " in " + source);
+            }
+            return list.getArguments().stream().map(argument -> ((IdentifierTree) argument).getName().toString()).toList();
         }
     }
 
