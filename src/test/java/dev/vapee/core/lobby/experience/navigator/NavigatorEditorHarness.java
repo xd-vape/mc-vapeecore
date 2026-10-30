@@ -19,7 +19,7 @@ public final class NavigatorEditorHarness {
         workflow(); security(); conflictsAndDiscard();
         System.out.println("NavigatorEditorHarness passed " + checks + " checks.");
     }
-    private static final class Fixture implements AutoCloseable {
+    static final class Fixture implements AutoCloseable {
         final NavigatorFixture f = new NavigatorFixture();
         final Path dir = Files.createTempDirectory(Path.of("target/harness-temp"), "navigator-editor-");
         final Path file = dir.resolve("navigator.yml");

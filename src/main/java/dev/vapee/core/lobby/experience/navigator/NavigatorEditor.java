@@ -69,12 +69,24 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         int bank;
         int slot = -1;
         long revision;
-        Location first;
+        PendingRegion first;
+        boolean pendingNoticeShown;
         Session(UUID owner, NavigatorStore.Snapshot base) {
             this.owner = owner; this.base = base;
             draft = new NavigatorConfig.State(true, base.state().root(), base.state().menus()); menu = draft.root();
         }
     }
+    /** One unfinished selection, bound to the real menu/entry and a snapshot of the Bukkit world UUID. */
+    record PendingRegion(String menu, String entry, UUID worldId, String world, double x, double y, double z) {
+        boolean owns(Session s) { return menu.equals(s.menu) && entry.equals(s.selected); }
+        PendingRegion moved(String targetMenu) { return new PendingRegion(targetMenu, entry, worldId, world, x, y, z); }
+    }
+    private static final class EditorProblem extends IllegalArgumentException {
+        final String german;
+        EditorProblem(String english, String german) { super(english); this.german = german; }
+    }
+    private static final class MissingArgument extends IllegalArgumentException { }
+    private static EditorProblem problem(String english, String german) { return new EditorProblem(english, german); }
     static final class Holder implements InventoryHolder {
         final UUID owner;
         final Session session;
@@ -112,19 +124,35 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private Session session(Player player) {
         if (!authorized(player)) { release(player); throw new IllegalArgumentException("Permission required: " + PERMISSION); }
         var session = sessions.get(player.getUniqueId());
-        if (session == null) throw new IllegalArgumentException("/navigator edit");
+        if (session == null) throw problem("No editor session. Open /navigator edit.", "Keine Editor-Sitzung. Öffne /navigator edit.");
+        if (!session.owner.equals(player.getUniqueId())) throw problem("Invalid editor state. Discard and reopen /navigator edit.", "Ungültiger Editor-Zustand. Entwurf verwerfen und /navigator edit erneut öffnen.");
         return session;
     }
     @Override public boolean onCommand(CommandSender sender, Command ignored, String label, String[] args) {
         if (!(sender instanceof Player player)) { sender.sendMessage("This editor requires a player."); return true; }
         if (!authorized(player)) { release(player); say(player, "No Navigator editor permission.", "Keine Navigator-Editor-Berechtigung."); return true; }
         try {
-            if (args.length == 0 || args[0].equalsIgnoreCase("help")) { help(player); return true; }
+            if (args.length == 0) { say(player, "Use /navigator edit or /navigator help.", "Nutze /navigator edit oder /navigator help."); return true; }
+            if (args[0].equalsIgnoreCase("help")) { help(player); return true; }
             if (args[0].equalsIgnoreCase("edit")) {
                 if (!sessions.containsKey(player.getUniqueId())) sessions.put(player.getUniqueId(), new Session(player.getUniqueId(), store.begin()));
                 navigator.endPreview(player); showMenu(player, session(player)); return true;
             }
+            if (!List.of("save", "discard", "preview", "page", "select", "menu", "add", "entry", "region").contains(args[0].toLowerCase(Locale.ROOT))) {
+                syntax(player, args); return true;
+            }
             var session = session(player);
+            var before = session.draft;
+            if (args[0].equalsIgnoreCase("region")) {
+                String action = arg(args, 1);
+                boolean visible = active.get(player.getUniqueId()) == player.getOpenInventory().getTopInventory();
+                region(player, session, action);
+                if (!action.equals("info")) {
+                    changed(player, session);
+                    if (visible) showRegion(player, session);
+                }
+                return true;
+            }
             switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "save" -> { save(player, session); return true; }
                 case "discard" -> { release(player); say(player, "Draft discarded.", "Entwurf verworfen."); return true; }
@@ -138,14 +166,51 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 case "menu" -> menuCommand(player, session, args);
                 case "add" -> add(session, arg(args, 1), arg(args, 2), args.length > 3 ? integer(args[3]) : suggestedSlot(menu(session), session.page));
                 case "entry" -> entryCommand(session, args);
-                case "region" -> region(player, session, arg(args, 1));
-                default -> { help(player); return true; }
+                default -> { syntax(player, args); return true; }
             }
-            changed(player, session); showMenu(player, session);
+            changed(player, session); explainPendingSelection(player, session);
+            if (before != session.draft) say(player, "Draft updated.", "Entwurf aktualisiert.");
+            showMenu(player, session);
         } catch (IOException | IllegalArgumentException | IllegalStateException failure) {
-            say(player, "Editor: " + failure.getMessage(), "Editor: " + failure.getMessage());
+            if (failure instanceof MissingArgument || failure instanceof NumberFormatException) syntax(player, args);
+            else feedback(player, failure);
         }
         return true;
+    }
+    private void feedback(Player player, Exception failure) {
+        if (failure instanceof EditorProblem known) say(player, known.getMessage(), known.german);
+        else if (failure instanceof IOException) say(player, "Save/read failed: " + failure.getMessage(), "Speichern/Lesen fehlgeschlagen: " + failure.getMessage());
+        else say(player, "Editor: " + failure.getMessage(), "Editor: " + failure.getMessage());
+    }
+    private void syntax(Player player, String[] args) {
+        String family = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+        String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "";
+        String usage = switch (family) {
+            case "menu" -> switch (action) {
+                case "create" -> "/navigator menu create <id> <name...>";
+                case "select", "delete" -> "/navigator menu " + action + " <id>";
+                case "rename" -> "/navigator menu rename [en|de|all] <name...>";
+                case "icon" -> "/navigator menu icon <material>";
+                case "size" -> "/navigator menu size <27|36|45|54>";
+                case "back" -> "/navigator menu back <-1|slot>";
+                default -> "/navigator menu <create|select|rename|icon|size|back|delete>";
+            };
+            case "entry" -> switch (action) {
+                case "icon" -> "/navigator entry icon <material>";
+                case "name", "lore" -> "/navigator entry " + action + " [en|de|all] <text...>";
+                case "permission" -> "/navigator entry permission <node|none>";
+                case "move" -> "/navigator entry move <menu> <slot> [page]";
+                case "stack" -> "/navigator entry stack <true|false>";
+                case "remove" -> "/navigator entry remove";
+                default -> "/navigator entry <icon|name|lore|permission|move|remove|stack>";
+            };
+            case "region" -> "/navigator region <pos1|pos2|clear|info>";
+            case "add" -> "/navigator add <warp|menu|unavailable> <id> [slot]";
+            case "select" -> "/navigator select <entry-id>";
+            case "page" -> "/navigator page <0..999>";
+            default -> "/navigator edit — /navigator help";
+        };
+        say(player, "Usage: " + usage, "Syntax: " + usage);
     }
     private void help(Player player) {
         say(player, "/navigator edit | preview | save | discard", "/navigator edit | preview | save | discard");
@@ -173,8 +238,6 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                         Material.COMPASS, LocalizedText.literal(name), List.of(), id, "", null, false));
                 menus.put(current.id(), withEntries(current, entries));
                 accept(s, menus); select(s, entryId);
-                say(player, "Submenu created and placed. /navigator entry icon <material>; click its entry, then Edit submenu.",
-                        "Untermenü erstellt und platziert. /navigator entry icon <Material>; Eintrag anklicken und Untermenü bearbeiten wählen.");
             }
             case "select" -> {
                 if (!s.draft.menus().containsKey(arg(args, 2))) throw new IllegalArgumentException("Unknown menu");
@@ -190,6 +253,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             case "delete" -> {
                 String id = arg(args, 2);
                 if (id.equals(s.draft.root()) || !s.draft.menus().containsKey(id)) throw new IllegalArgumentException("Cannot delete root or unknown menu");
+                if (s.first != null && s.first.menu().equals(id)) throw unfinished(s);
                 var menus = new LinkedHashMap<>(s.draft.menus()); menus.remove(id);
                 // Deleting a menu explicitly removes all incoming links, never leaves dangling references.
                 menus.replaceAll((key, menu) -> {
@@ -199,13 +263,17 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 });
                 accept(s, menus); s.menu = s.draft.root(); s.page = 0; s.bank = 0; select(s, null);
             }
-            default -> throw new IllegalArgumentException("/navigator menu create|select|rename|icon|size|back|delete");
+            default -> throw new MissingArgument();
         }
     }
     private void entryCommand(Session s, String[] args) {
+        if (!List.of("remove", "icon", "name", "lore", "permission", "stack", "move").contains(arg(args, 1))) throw new MissingArgument();
         var e = selected(s);
         switch (arg(args, 1)) {
-            case "remove" -> { var entries = new LinkedHashMap<>(menu(s).entries()); entries.remove(e.id()); replaceMenu(s, withEntries(menu(s), entries)); select(s, null); }
+            case "remove" -> {
+                if (s.first != null && s.first.owns(s)) throw unfinished(s);
+                var entries = new LinkedHashMap<>(menu(s).entries()); entries.remove(e.id()); replaceMenu(s, withEntries(menu(s), entries)); select(s, null);
+            }
             case "icon" -> update(s, old -> copy(old, material(arg(args, 2)), old.name(), old.lore(), old.permission(), old.region(), old.stackAmount()));
             case "name" -> update(s, old -> copy(old, old.icon(), localized(old.name(), args, 2), old.lore(), old.permission(), old.region(), old.stackAmount()));
             case "lore" -> {
@@ -225,7 +293,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 update(s, old -> copy(old, old.icon(), old.name(), lore, old.permission(), old.region(), old.stackAmount()));
             }
             case "permission" -> {
-                if (args.length != 3) throw new IllegalArgumentException("Expected one permission node or none");
+                if (args.length != 3) throw new MissingArgument();
                 update(s, old -> copy(old, old.icon(), old.name(), old.lore(), arg(args, 2).equals("none") ? "" : args[2], old.region(), old.stackAmount()));
             }
             case "stack" -> {
@@ -243,35 +311,63 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 destination = menus.get(target); var entries = new LinkedHashMap<>(destination.entries());
                 entries.put(e.id(), new NavigatorConfig.Entry(e.id(), e.type(), page, slot, e.icon(), e.name(), e.lore(), e.target(), e.permission(), e.region(), e.stackAmount()));
                 menus.put(target, withEntries(destination, entries)); accept(s, menus);
+                if (s.first != null && s.first.owns(s)) s.first = s.first.moved(target);
                 s.menu = target; s.page = page; s.bank = slot / 45; select(s, e.id());
             }
-            default -> throw new IllegalArgumentException("/navigator entry icon|name|lore|permission|move|remove|stack");
+            default -> throw new MissingArgument();
         }
     }
     private void region(Player player, Session s, String action) {
-        var entry = selected(s);
-        if (entry.type() != NavigatorConfig.Type.WARP) throw new IllegalArgumentException("Select a Warp entry first");
+        if (!List.of("info", "clear", "pos1", "pos2").contains(action)) throw new MissingArgument();
+        selectedWarp(s);
         switch (action) {
-            case "info" -> say(player, regionInfo(s), regionInfo(s));
-            case "clear" -> { update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), null, false)); s.first = null; }
+            case "info" -> say(player, regionInfo(player, s), regionInfo(player, s));
+            case "clear" -> {
+                requirePendingTarget(s);
+                update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), null, false)); s.first = null; s.pendingNoticeShown = false;
+                say(player, "Region cleared in draft.", "Region im Entwurf entfernt.");
+            }
             case "pos1", "pos2" -> {
+                if (action.equals("pos2") && s.first == null)
+                    throw problem("Position 1 is missing. Use /navigator region pos1 first.", "Position 1 fehlt. Nutze zuerst /navigator region pos1.");
+                requirePendingTarget(s);
                 Location at = player.getLocation().clone();
                 if (at.getWorld() == null || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY()) || !Double.isFinite(at.getZ()))
-                    throw new IllegalArgumentException("Invalid location");
-                if (action.equals("pos1")) { s.first = at; say(player, "Position 1 selected; use pos2 in the same world. Save is blocked until complete or clear.", "Position 1 gesetzt; pos2 in derselben Welt setzen. Speichern erst nach pos2 oder clear."); }
+                    throw problem("Invalid coordinates or missing world. No position was changed.", "Ungültige Koordinaten oder fehlende Welt. Keine Position wurde geändert.");
+                if (action.equals("pos1")) {
+                    s.first = new PendingRegion(s.menu, s.selected, at.getWorld().getUID(), at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+                    s.pendingNoticeShown = false;
+                    say(player, "Position 1 saved. Move to the second corner and use /navigator region pos2.", "Position 1 gesetzt. Gehe zur zweiten Ecke und nutze /navigator region pos2.");
+                }
                 else {
-                    if (s.first == null || !s.first.getWorld().getUID().equals(at.getWorld().getUID())) throw new IllegalArgumentException("Select pos1 and pos2 in the same world");
-                    var bounds = new NavigatorRegion(at.getWorld().getName(), s.first.getX(), s.first.getY(), s.first.getZ(), at.getX(), at.getY(), at.getZ());
-                    update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.stackAmount())); s.first = null;
+                    if (!s.first.worldId().equals(at.getWorld().getUID()))
+                        throw problem("Both positions must be in the same world. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".",
+                                "Beide Positionen müssen in derselben Welt liegen. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".");
+                    var bounds = new NavigatorRegion(at.getWorld().getName(), s.first.x(), s.first.y(), s.first.z(), at.getX(), at.getY(), at.getZ());
+                    update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.stackAmount())); s.first = null; s.pendingNoticeShown = false;
+                    say(player, "Region selected. Save to apply.", "Region gewählt. Zum Übernehmen speichern.");
                 }
             }
-            default -> throw new IllegalArgumentException("/navigator region pos1|pos2|clear|info");
+            default -> throw new MissingArgument();
         }
     }
-    private String regionInfo(Session s) {
+    private static void requirePendingTarget(Session s) {
+        if (s.first != null && !s.first.owns(s)) throw problem("Position 1 belongs to " + s.first.menu() + "/" + s.first.entry() + ". Select that Warp entry again, then use pos2 or clear.",
+                "Position 1 gehört zu " + s.first.menu() + "/" + s.first.entry() + ". Wähle diesen Warp-Eintrag erneut und nutze pos2 oder clear.");
+    }
+    private void explainPendingSelection(Player player, Session s) {
+        if (s.first != null && !s.first.owns(s) && !s.pendingNoticeShown) {
+            s.pendingNoticeShown = true;
+            say(player, "Position 1 retained for " + s.first.menu() + "/" + s.first.entry() + ". Select it again to continue.",
+                    "Position 1 bleibt für " + s.first.menu() + "/" + s.first.entry() + " erhalten. Wähle den Eintrag zum Fortsetzen erneut.");
+        }
+    }
+    private String regionInfo(Player player, Session s) {
         var entry = selected(s); var r = entry.region();
-        if (s.first != null) return "Pending pos1: " + s.first.getWorld().getName() + " " + s.first.getX() + "," + s.first.getY() + "," + s.first.getZ();
-        return r == null ? "Optional count: OFF (no region)" : "Count: ON; " + r.world() + " [" + r.minX() + "," + r.minY() + "," + r.minZ() + "] - [" + r.maxX() + "," + r.maxY() + "," + r.maxZ() + "]; stack=" + entry.stackAmount();
+        String info = r == null ? text(player, "Optional count: OFF (no region)", "Optionaler Zähler: AUS (keine Region)")
+                : text(player, "Count: ON; ", "Zählung: AN; ") + r.world() + " [" + r.minX() + "," + r.minY() + "," + r.minZ() + "] - [" + r.maxX() + "," + r.maxY() + "," + r.maxZ() + "]; stack=" + entry.stackAmount();
+        if (s.first != null) info += text(player, "; pending Pos1: ", "; offene Pos1: ") + s.first.menu() + "/" + s.first.entry() + " @ " + s.first.world() + " [" + s.first.x() + "," + s.first.y() + "," + s.first.z() + "]";
+        return info;
     }
     private void add(Session s, String kind, String target, int slot) {
         var type = switch (kind) { case "warp" -> NavigatorConfig.Type.WARP; case "menu" -> NavigatorConfig.Type.MENU; case "unavailable" -> NavigatorConfig.Type.UNAVAILABLE; default -> throw new IllegalArgumentException("Expected warp, menu or unavailable"); };
@@ -296,12 +392,23 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         }
         throw new IllegalArgumentException("Page is full; choose another /navigator page");
     }
-    private static NavigatorConfig.Menu menu(Session s) { return s.draft.menus().get(s.menu); }
-    private static NavigatorConfig.Entry selected(Session s) {
-        var entry = menu(s).entries().get(s.selected);
-        if (entry == null) throw new IllegalArgumentException("Select an entry first"); return entry;
+    private static NavigatorConfig.Menu menu(Session s) {
+        var menu = s.draft == null ? null : s.draft.menus().get(s.menu);
+        if (menu == null) throw problem("Invalid editor state. Discard and reopen /navigator edit.", "Ungültiger Editor-Zustand. Entwurf verwerfen und /navigator edit erneut öffnen.");
+        return menu;
     }
-    private static void select(Session s, String id) { if (!java.util.Objects.equals(s.selected, id)) s.first = null; s.selected = id; s.slot = -1; }
+    private static NavigatorConfig.Entry selected(Session s) {
+        if (s.selected == null) throw problem("Select an entry first. Open /navigator edit and click the entry.", "Wähle zuerst einen Eintrag. Öffne /navigator edit und klicke ihn an.");
+        var entry = menu(s).entries().get(s.selected);
+        if (entry == null) throw problem("Selected entry is stale or missing. Reopen /navigator edit and select an existing entry.", "Der ausgewählte Eintrag ist veraltet oder fehlt. Öffne /navigator edit und wähle einen vorhandenen Eintrag."); return entry;
+    }
+    private static NavigatorConfig.Entry selectedWarp(Session s) {
+        if (s.selected == null) throw problem("Select a Warp entry first. Open /navigator edit and click the Warp.", "Wähle zuerst einen Warp-Eintrag. Öffne /navigator edit und klicke den Warp an.");
+        var entry = selected(s);
+        if (entry.type() != NavigatorConfig.Type.WARP) throw problem("Select a Warp entry first. Open /navigator edit and click the Warp.", "Wähle zuerst einen Warp-Eintrag. Öffne /navigator edit und klicke den Warp an.");
+        return entry;
+    }
+    private static void select(Session s, String id) { s.selected = id; s.slot = -1; }
     private static NavigatorConfig.Menu withEntries(NavigatorConfig.Menu m, Map<String, NavigatorConfig.Entry> entries) {
         return new NavigatorConfig.Menu(m.id(), m.title(), entries, m.size(), m.icon(), m.backSlot());
     }
@@ -330,16 +437,30 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private static Material material(String name) {
         var material = Material.matchMaterial(name); if (!WarpPoint.isDisplayableItem(material)) throw new IllegalArgumentException("Invalid item material"); return material;
     }
-    private static String arg(String[] args, int index) { if (index >= args.length) throw new IllegalArgumentException("Missing argument; /navigator help"); return args[index]; }
+    private static String arg(String[] args, int index) { if (index >= args.length) throw new MissingArgument(); return args[index]; }
     private static String joined(String[] args, int start) { arg(args, start); return String.join(" ", java.util.Arrays.copyOfRange(args, start, args.length)); }
     private static int integer(String value) { int n = Integer.parseInt(value); if (n < 0 || n > 999) throw new IllegalArgumentException("Expected 0..999"); return n; }
     private void changed(Player player, Session s) { s.revision++; navigator.endPreview(player); active.remove(player.getUniqueId()); }
-    private void save(Player player, Session s) throws IOException {
-        if (s.first != null) throw new IllegalArgumentException("Region selection incomplete; pos2 or clear first");
-        var backup = store.save(s.base, s.draft);
-        release(player); say(player, "Navigator saved and V2 activated. Backup: " + backup.getFileName(), "Navigator gespeichert und V2 aktiviert. Backup: " + backup.getFileName());
+    private static EditorProblem unfinished(Session s) {
+        return problem("Incomplete region for " + s.first.menu() + "/" + s.first.entry() + ". Select that entry, then pos2 or clear before saving/removing.",
+                "Unvollständige Region für " + s.first.menu() + "/" + s.first.entry() + ". Wähle den Eintrag und nutze pos2 oder clear vor dem Speichern/Entfernen.");
     }
-    private void preview(Player player, Session s) { active.remove(player.getUniqueId()); navigator.preview(player, s.draft); say(player, "Draft preview: Warp clicks do not teleport. /navigator edit returns; /navigator save commits.", "Entwurfsvorschau: Warp-Klicks teleportieren nicht. /navigator edit zurück; /navigator save übernimmt."); }
+    private static EditorProblem saveProblem(Session s) {
+        if (s.first != null) return unfinished(s);
+        try {
+            if (s.draft == null || !NavigatorConfig.parse(NavigatorDocument.write(s.draft)).enabled())
+                return problem("Invalid Navigator draft. Discard and reopen /navigator edit.", "Ungültiger Navigator-Entwurf. Verwerfen und /navigator edit erneut öffnen.");
+        } catch (IllegalArgumentException | IllegalStateException invalid) {
+            return problem("Cannot save: " + invalid.getMessage(), "Speichern gesperrt: " + invalid.getMessage());
+        }
+        return null;
+    }
+    private void save(Player player, Session s) throws IOException {
+        var blocked = saveProblem(s); if (blocked != null) throw blocked;
+        store.save(s.base, s.draft);
+        release(player); say(player, "Navigator saved.", "Navigator gespeichert.");
+    }
+    private void preview(Player player, Session s) { active.remove(player.getUniqueId()); navigator.preview(player, s.draft); say(player, "Preview without teleport. Return: /navigator edit.", "Vorschau ohne Teleport. Zurück: /navigator edit."); }
 
     private Holder view(Player player, Session s, String en, String de, int size) {
         var holder = new Holder(s); holder.inventory = inventories.create(holder, size, Component.text(text(player, en, de), NamedTextColor.DARK_GRAY)); return holder;
@@ -371,23 +492,70 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                     p -> { select(s, entry.id()); showEntry(p, s); });
         }
         button(h, 45, Material.BOOK, text(player, "Select menu", "Menü auswählen"), p -> showMenus(p, s, false, 0));
-        button(h, 46, menu.icon(), text(player, "Menu settings / Create submenu", "Menü bearbeiten / Untermenü erstellen"),
-                List.of("/navigator menu create <id> <name...>", "/navigator menu rename [en|de|all] <name...>", "/navigator menu size <27|36|45|54>", "/navigator menu icon <material>", "/navigator menu delete <id>"), p -> { help(p); showIcons(p, s, true); });
+        button(h, 46, menu.icon(), text(player, "Menu actions", "Menü-Aktionen"), p -> showMenuActions(p, s));
         button(h, 47, Material.PAPER, "Page " + s.page + " / slots " + (s.bank * 45) + ".." + Math.min(menu.inventorySize() - 1, s.bank * 45 + 44), List.of("/navigator page <0..999>"), null);
         button(h, 48, Material.ENDER_EYE, text(player, "Preview", "Vorschau"), p -> preview(p, s));
-        button(h, 49, Material.LIME_DYE, text(player, "Save and activate V2", "Speichern und V2 aktivieren"), p -> { try { save(p, s); } catch (IOException e) { throw new IllegalStateException(e.getMessage(), e); } });
+        var blocked = saveProblem(s);
+        String saveLabel = store.isActive() ? text(player, "Save Changes", "Änderungen speichern")
+                : text(player, "Save & Activate Navigator", "Speichern & Navigator aktivieren");
+        button(h, 49, blocked == null ? Material.LIME_DYE : Material.GRAY_DYE,
+                blocked == null ? saveLabel : text(player, "Cannot save", "Speichern gesperrt"),
+                blocked == null ? List.of() : List.of(text(player, blocked.getMessage(), blocked.german)),
+                p -> { try { save(p, s); } catch (IOException e) { feedback(p, e); } });
         button(h, 50, Material.GRAY_DYE, text(player, "Discard", "Verwerfen"), p -> release(p));
         if (s.page > 0) button(h, 51, Material.ARROW, text(player, "Previous page", "Vorherige Seite"), p -> { s.page--; select(s, null); changed(p, s); showMenu(p, s); });
         if (s.page < 999) button(h, 52, Material.ARROW, text(player, "Next page", "Nächste Seite"), p -> { s.page++; select(s, null); changed(p, s); showMenu(p, s); });
         if (menu.inventorySize() > 45) button(h, 53, Material.MAP, text(player, "Other slots", "Weitere Plätze"), p -> { s.bank = 1 - s.bank; showMenu(p, s); });
         open(player, h);
     }
+    private void prompt(Player player, Session s, String english, String german, String suggestion) {
+        var inventory = active.remove(player.getUniqueId());
+        if (inventory != null && player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();
+        player.sendMessage(Component.text(text(player, english, german), NamedTextColor.GRAY)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand(suggestion))
+                .hoverEvent(Component.text(text(player, "Click to prepare the command.", "Klicken, um den Befehl vorzubereiten."))));
+    }
+    private void menuAction(Player player, Session s, String action, String value) {
+        menuCommand(player, s, new String[]{"menu", action, value});
+        changed(player, s); explainPendingSelection(player, s);
+        say(player, "Draft updated.", "Entwurf aktualisiert."); showMenu(player, s);
+    }
+    private void showMenuActions(Player player, Session s) {
+        var h = view(player, s, "Menu actions", "Menü-Aktionen", 27);
+        button(h, 10, Material.WRITABLE_BOOK, text(player, "Create submenu", "Untermenü erstellen"),
+                p -> prompt(p, s, "/navigator menu create <id> <name...>", "/navigator menu create <id> <Name...>", "/navigator menu create "));
+        button(h, 11, Material.BOOK, text(player, "Select existing menu", "Vorhandenes Menü auswählen"), p -> showMenus(p, s, false, 0));
+        button(h, 12, Material.NAME_TAG, text(player, "Rename current menu", "Aktuelles Menü umbenennen"),
+                p -> prompt(p, s, "/navigator menu rename [en|de|all] <name...>", "/navigator menu rename [en|de|all] <Name...>", "/navigator menu rename all "));
+        button(h, 14, menu(s).icon(), text(player, "Change menu icon", "Menü-Icon ändern"), p -> showIcons(p, s, true));
+        button(h, 15, Material.CHEST, text(player, "Change menu size", "Menügröße ändern"), p -> showSizes(p, s));
+        button(h, 16, Material.ARROW, text(player, "Optional Back icon", "Optionales Zurück-Icon"), p -> showBackOptions(p, s));
+        button(h, 22, Material.ARROW, "↩", p -> showMenu(p, s)); open(player, h);
+    }
+    private void showSizes(Player player, Session s) {
+        var h = view(player, s, "Menu size", "Menügröße", 27);
+        int[] sizes = {27, 36, 45, 54};
+        for (int i = 0; i < sizes.length; i++) {
+            int size = sizes[i]; button(h, 10 + i * 2, Material.CHEST, String.valueOf(size), p -> menuAction(p, s, "size", String.valueOf(size)));
+        }
+        button(h, 22, Material.ARROW, "↩", p -> showMenuActions(p, s)); open(player, h);
+    }
+    private void showBackOptions(Player player, Session s) {
+        var h = view(player, s, "Optional Back icon", "Optionales Zurück-Icon", 27);
+        int slot = menu(s).backSlot();
+        button(h, 4, Material.PAPER, slot < 0 ? text(player, "Disabled", "Deaktiviert") : text(player, "Slot ", "Platz ") + slot, null);
+        button(h, 11, Material.GRAY_DYE, text(player, "Disable Back icon", "Zurück-Icon deaktivieren"), p -> menuAction(p, s, "back", "-1"));
+        button(h, 15, Material.ARROW, text(player, "Choose Back slot", "Zurück-Platz wählen"),
+                p -> prompt(p, s, "/navigator menu back <free-slot|-1> (optional)", "/navigator menu back <freier-Platz|-1> (optional)", "/navigator menu back "));
+        button(h, 22, Material.ARROW, "↩", p -> showMenuActions(p, s)); open(player, h);
+    }
     private void showAdd(Player player, Session s) {
         var h = view(player, s, "Add at slot " + s.slot, "Hinzufügen auf Platz " + s.slot, 27);
         button(h, 11, Material.COMPASS, text(player, "Add Warp", "Warp hinzufügen"), p -> showWarps(p, s, 0));
         button(h, 13, Material.BOOK, text(player, "Link existing submenu", "Vorhandenes Untermenü verknüpfen"), p -> showMenus(p, s, true, 0));
         button(h, 15, Material.GRAY_DYE, text(player, "Unavailable placeholder", "Nicht verfügbarer Platzhalter"), p -> { add(s, "unavailable", "unavailable", s.slot); changed(p, s); showEntry(p, s); });
-        button(h, 22, Material.WRITABLE_BOOK, text(player, "Create submenu", "Untermenü erstellen"), List.of("/navigator menu create <id> <name...>", text(player, "Uses this selected empty slot.", "Verwendet diesen ausgewählten leeren Platz.")), p -> say(p, "/navigator menu create <id> <name...>", "/navigator menu create <id> <Name...>"));
+        button(h, 22, Material.WRITABLE_BOOK, text(player, "Create submenu", "Untermenü erstellen"), List.of(text(player, "Uses this selected empty slot.", "Verwendet diesen ausgewählten leeren Platz.")),
+                p -> prompt(p, s, "/navigator menu create <id> <name...>", "/navigator menu create <id> <Name...>", "/navigator menu create "));
         button(h, 18, Material.ARROW, text(player, "Back", "Zurück"), p -> showMenu(p, s)); open(player, h);
     }
     private void showWarps(Player player, Session s, int page) {
@@ -430,20 +598,35 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private void showEntry(Player player, Session s) {
         var entry = selected(s); var h = view(player, s, "Entry: " + entry.id(), "Eintrag: " + entry.id(), 27);
         button(h, 4, entry.icon(), entry.name().resolve(messages.localization().locale(player)), List.of("Type: " + entry.type(), "Target: " + entry.target(), "Permission: " + entry.permission()), null);
-        button(h, 10, Material.NAME_TAG, text(player, "Name and lore", "Name und Beschreibung"), List.of("/navigator entry name [en|de|all] <text...>", "/navigator entry lore [en|de|all] <line | line...>", "/navigator entry lore none"), p -> help(p));
+        button(h, 10, Material.NAME_TAG, text(player, "Name and lore", "Name und Beschreibung"), p -> showTextActions(p, s));
         button(h, 11, entry.icon(), text(player, "Icon", "Icon"), p -> showIcons(p, s, false));
-        button(h, 12, Material.IRON_DOOR, text(player, "Permission", "Berechtigung"), List.of("/navigator entry permission <node|none>"), p -> help(p));
-        button(h, 13, Material.PISTON, text(player, "Move", "Verschieben"), List.of("/navigator entry move <menu-id> <slot> [page]"), p -> help(p));
+        button(h, 12, Material.IRON_DOOR, text(player, "Permission", "Berechtigung"),
+                p -> prompt(p, s, "/navigator entry permission <node|none>", "/navigator entry permission <Node|none>", "/navigator entry permission "));
+        button(h, 13, Material.PISTON, text(player, "Move", "Verschieben"),
+                p -> prompt(p, s, "/navigator entry move <menu-id> <slot> [page]", "/navigator entry move <Menü-ID> <Platz> [Seite]", "/navigator entry move "));
         button(h, 14, Material.RED_DYE, text(player, "Remove entry", "Eintrag entfernen"), p -> { entryCommand(s, new String[]{"entry", "remove"}); changed(p, s); showMenu(p, s); });
         if (entry.type() == NavigatorConfig.Type.MENU) button(h, 15, Material.BOOK, text(player, "Edit submenu", "Untermenü bearbeiten"), p -> { s.menu = entry.target(); s.page = 0; s.bank = 0; select(s, null); changed(p, s); showMenu(p, s); });
         if (entry.type() == NavigatorConfig.Type.WARP) {
-            button(h, 18, Material.MAP, text(player, "Optional player counter", "Optionaler Spielerzähler"), List.of(regionInfo(s), "/navigator region info"), p -> region(p, s, "info"));
-            button(h, 19, Material.WOODEN_AXE, "Position 1", p -> { region(p, s, "pos1"); changed(p, s); showEntry(p, s); });
-            button(h, 20, Material.STONE_AXE, "Position 2", p -> { region(p, s, "pos2"); changed(p, s); showEntry(p, s); });
-            button(h, 21, Material.SPONGE, text(player, "Clear region", "Region entfernen"), p -> { region(p, s, "clear"); changed(p, s); showEntry(p, s); });
-            button(h, 22, Material.SLIME_BALL, "Stack: " + entry.stackAmount(), p -> { entryCommand(s, new String[]{"entry", "stack", String.valueOf(!entry.stackAmount())}); changed(p, s); showEntry(p, s); });
+            button(h, 18, Material.MAP, text(player, "Player-count region", "Spielerzähler-Region"), List.of(regionInfo(player, s)), p -> showRegion(p, s));
         }
         button(h, 26, Material.ARROW, "↩", p -> showMenu(p, s)); open(player, h);
+    }
+    private void showTextActions(Player player, Session s) {
+        selected(s); var h = view(player, s, "Name and lore", "Name und Beschreibung", 27);
+        button(h, 11, Material.NAME_TAG, text(player, "Edit name", "Name ändern"),
+                p -> prompt(p, s, "/navigator entry name [en|de|all] <text...>", "/navigator entry name [en|de|all] <Text...>", "/navigator entry name all "));
+        button(h, 15, Material.WRITABLE_BOOK, text(player, "Edit lore", "Beschreibung ändern"),
+                p -> prompt(p, s, "/navigator entry lore [en|de|all] <line | line...> (none clears)", "/navigator entry lore [en|de|all] <Zeile | Zeile...> (none entfernt)", "/navigator entry lore all "));
+        button(h, 22, Material.ARROW, "↩", p -> showEntry(p, s)); open(player, h);
+    }
+    private void showRegion(Player player, Session s) {
+        var entry = selectedWarp(s); var h = view(player, s, "Player-count region", "Spielerzähler-Region", 27);
+        button(h, 4, Material.MAP, text(player, "Optional player counter", "Optionaler Spielerzähler"), List.of(regionInfo(player, s)), p -> region(p, s, "info"));
+        button(h, 10, Material.WOODEN_AXE, "Position 1", p -> { region(p, s, "pos1"); changed(p, s); showRegion(p, s); });
+        button(h, 12, Material.STONE_AXE, "Position 2", p -> { region(p, s, "pos2"); changed(p, s); showRegion(p, s); });
+        button(h, 14, Material.SPONGE, text(player, "Clear region", "Region entfernen"), p -> { region(p, s, "clear"); changed(p, s); showRegion(p, s); });
+        button(h, 16, Material.SLIME_BALL, "Stack: " + entry.stackAmount(), p -> { entryCommand(s, new String[]{"entry", "stack", String.valueOf(!entry.stackAmount())}); changed(p, s); showRegion(p, s); });
+        button(h, 22, Material.ARROW, "↩", p -> showEntry(p, s)); open(player, h);
     }
     private boolean valid(Player p, Inventory top, Holder holder) {
         return authorized(p) && holder.owner.equals(p.getUniqueId()) && sessions.get(p.getUniqueId()) == holder.session
@@ -455,12 +638,16 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player p)) return;
         if (!authorized(p)) { release(p); return; }
-        if (!valid(p, top, holder) || event.getClickedInventory() != top
-                || event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT) return;
+        if (!valid(p, top, holder)) {
+            if (holder.owner.equals(p.getUniqueId()) && holder.inventory == top && active.remove(p.getUniqueId(), top))
+                say(p, "This editor view expired. Reopen /navigator edit.", "Diese Editor-Ansicht ist veraltet. Öffne /navigator edit erneut.");
+            return;
+        }
+        if (event.getClickedInventory() != top || event.getClick() != ClickType.LEFT && event.getClick() != ClickType.RIGHT) return;
         var action = holder.actions.get(event.getRawSlot());
         try {
-            if (action != null) action.accept(p);
-        } catch (IllegalArgumentException | IllegalStateException failure) { say(p, "Editor: " + failure.getMessage(), "Editor: " + failure.getMessage()); }
+            if (action != null) { action.accept(p); if (sessions.get(p.getUniqueId()) == holder.session) explainPendingSelection(p, holder.session); }
+        } catch (IllegalArgumentException | IllegalStateException failure) { feedback(p, failure); }
     }
     @EventHandler public void drag(InventoryDragEvent event) {
         var top = event.getView().getTopInventory(); if (!(top.getHolder() instanceof Holder holder)) return;

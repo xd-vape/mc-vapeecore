@@ -24,6 +24,7 @@ final class NavigatorStore {
     private final Consumer<NavigatorConfig.State> apply;
     private long revision;
     private boolean recoveryRequired;
+    boolean isActive() { return config.getState().enabled(); }
 
     NavigatorStore(NavigatorConfig config, Logger logger, Consumer<NavigatorConfig.State> apply) {
         this(config, new SafeFileWriter(logger), apply);
