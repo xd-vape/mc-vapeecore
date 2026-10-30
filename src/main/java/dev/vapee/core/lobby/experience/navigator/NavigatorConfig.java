@@ -131,7 +131,7 @@ public final class NavigatorConfig {
                     region = new NavigatorRegion(string(count.get("world"), "count.world"),
                             coordinate(min, "x"), coordinate(min, "y"), coordinate(min, "z"),
                             coordinate(max, "x"), coordinate(max, "y"), coordinate(max, "z"));
-                    amount = bool(count.getOrDefault("stack-amount", false), "count.stack-amount");
+                    amount = bool(count.getOrDefault("stack-amount", true), "count.stack-amount");
                 }
                 entries.put(entryId, new Entry(entryId, type, page, slot, icon, label, lore, target, permission, region, amount));
             });

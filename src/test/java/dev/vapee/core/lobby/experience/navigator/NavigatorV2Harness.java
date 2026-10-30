@@ -123,15 +123,15 @@ public final class NavigatorV2Harness {
         var f=fixture();var p=f.player();
         String counted=NavigatorConfigHarness.CONFIG.replace("warp: custom_001", "warp: custom_001, count: {world: lobby-world, min: {x: 0, y: 60, z: 0}, max: {x: 10, y: 80, z: 10}, stack-amount: true}");
         f.configured.set(NavigatorConfig.parse(counted)); f.menu.startUpdates();f.menu.open(p.player);f.click(p,p.open,22,ClickType.LEFT);
-        check(lore(p,20).contains("0 players in this area.") && p.open.getItem(20).getAmount()==1,"zero lore with visible valid item");
+        check(lore(p,20).equals(List.of("0 players")) && p.open.getItem(20).getAmount()==1,"minimal zero fallback with visible valid item");
         var target=f.player();target.x=5;target.y=70;target.z=5;f.menu.refreshActive(p.id);
-        check(lore(p,20).contains("1 player in this area.") && p.open.getItem(20).getAmount()==1,"singular count from actual region");
+        check(lore(p,20).isEmpty() && p.open.getItem(20).getAmount()==1,"singular count uses stack without automatic lore");
         for(int i=0;i<70;i++){var peer=f.player();peer.x=5;peer.y=70;peer.z=5;}
         f.menu.refreshActive(p.id);check(lore(p,20).stream().anyMatch(line->line.contains("71 players")) && p.open.getItem(20).getAmount()==64,"large count accurate, stack safely capped");
         p.hidden.add(target.id);target.vanished=true;f.menu.refreshActive(p.id);
         check(lore(p,20).stream().anyMatch(line->line.contains("70 players")),"count respects visibility and vanish");
         p.locale=Locale.GERMANY;f.messages.localization().localeChanged(p.player,Locale.GERMANY);
-        check(lore(p,20).stream().anyMatch(line->line.contains("70 Spieler")) && lore(p,20).contains("Rechtsklick auf einen leeren Platz: zurück.") && p.open.getItem(0) == null,"German counts and non-spamming Back hint localize in place");
+        check(lore(p,20).equals(List.of("70 Spieler")) && p.actionBars.size()==1 && p.open.getItem(0) == null,"German overflow and one contextual ActionBar replace repeated item hints");
         f.menu.open(p.player);check(plain(f.title).equals("Navigator") && text(p.open,22).equals("Aktivitäten"),"configured German names");
         f.click(p,p.open,22,ClickType.LEFT);check(plain(f.title).equals("Aktivitäten"),"configured German child title");
         f.configured.set(NavigatorConfig.parse(counted.replace("stack-amount: true","stack-amount: false")));

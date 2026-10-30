@@ -142,6 +142,24 @@ final class NavigatorFixture {
         final UUID id = UUID.randomUUID();
         final Inventory bottom = inventory(null, 36);
         final List<Component> received = new ArrayList<>();
+        final List<Component> actionBars = new ArrayList<>();
+        final ItemStack[] contents = new ItemStack[41];
+        int held;
+        ItemStack cursor;
+        org.bukkit.GameMode gameMode = org.bukkit.GameMode.ADVENTURE;
+        final PlayerInventory inventory = proxy(PlayerInventory.class, (method, args) -> switch (method) {
+            case "getContents" -> contents.clone();
+            case "getStorageContents" -> java.util.Arrays.copyOf(contents,36);
+            case "getSize" -> 41;
+            case "getItem" -> contents[(int)args[0]];
+            case "setItem" -> { contents[(int)args[0]]=(ItemStack)args[1]; yield null; }
+            case "getHeldItemSlot" -> held;
+            case "setHeldItemSlot" -> { held=(int)args[0]; yield null; }
+            case "getItemInMainHand" -> contents[held];
+            case "getItemInOffHand" -> contents[40];
+            case "getType" -> InventoryType.PLAYER;
+            default -> DEFAULT;
+        });
         final Player player;
         Inventory open = bottom;
         World currentWorld = lobby;
@@ -173,6 +191,10 @@ final class NavigatorFixture {
                 case "locale" -> locale;
                 case "isOnline" -> online;
                 case "getWorld" -> currentWorld;
+                case "getInventory" -> inventory;
+                case "getItemOnCursor" -> cursor;
+                case "setItemOnCursor" -> { cursor=(ItemStack)args[0]; yield null; }
+                case "getGameMode" -> gameMode;
                 case "getLocation" -> new Location(currentWorld, x, y, z);
                 case "hasPermission" -> permissions.contains(args[0]);
                 case "canSee" -> !hidden.contains(((Player) args[0]).getUniqueId());
@@ -215,6 +237,7 @@ final class NavigatorFixture {
                     for (Object value : args) if (value instanceof Component component) received.add(component);
                     yield null;
                 }
+                case "sendActionBar" -> { for (Object value : args) if (value instanceof Component component) actionBars.add(component); yield null; }
                 default -> DEFAULT;
             });
         }

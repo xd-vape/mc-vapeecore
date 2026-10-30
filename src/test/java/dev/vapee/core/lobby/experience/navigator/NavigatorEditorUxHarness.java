@@ -21,7 +21,7 @@ public final class NavigatorEditorUxHarness {
         System.out.println("NavigatorEditorUxHarness passed "+checks+" checks.");
     }
     private static TestPlayer warp(Fixture t)throws Exception {
-        var p=t.admin();t.cmd(p,"edit");t.cmd(p,"add warp custom_000");return p;
+        var p=t.admin();t.cmd(p,"edit");t.cmd(p,"add warp custom_000");t.cmd(p,"edit");return p;
     }
     private static String last(TestPlayer p){return plain(p.received.getLast());}
     private static void close(Fixture t,TestPlayer p) {
@@ -126,7 +126,7 @@ public final class NavigatorEditorUxHarness {
             t.click(p,p.open,12,ClickType.LEFT);check(t.s(p).draft.menus().get("root").inventorySize()==36,"size selection updates current menu draft only");
             t.click(p,p.open,46,ClickType.LEFT);t.click(p,p.open,16,ClickType.LEFT);check(text(p.open,4).equals("Disabled")&&text(p.open,11).equals("Disable Back icon"),"optional Back action has explicit state and controls");
             t.click(p,p.open,15,ClickType.LEFT);check(p.received.getLast().clickEvent().value().equals("/navigator menu back ")&&p.open==p.bottom,"Back slot action offers contextual existing command");
-            t.cmd(p,"menu back 0");check(t.s(p).draft.menus().get("root").backSlot()==0,"existing Back command remains supported");
+            t.cmd(p,"menu back 0");check(t.s(p).draft.menus().get("root").backSlot()==0,"existing Back command remains supported");t.cmd(p,"edit");
             t.click(p,p.open,46,ClickType.LEFT);t.click(p,p.open,16,ClickType.LEFT);t.click(p,p.open,11,ClickType.LEFT);check(t.s(p).draft.menus().get("root").backSlot()==-1,"Back disable uses existing validation");
             t.click(p,p.open,46,ClickType.LEFT);t.click(p,p.open,10,ClickType.LEFT);check(p.received.getLast().clickEvent().value().equals("/navigator menu create ")&&p.open==p.bottom,"create submenu action prompts only its own syntax");
             t.cmd(p,"menu create worlds Worlds");check(t.s(p).draft.menus().containsKey("worlds")&&t.entry(p).type()==NavigatorConfig.Type.MENU,"suggested create workflow places real submenu");

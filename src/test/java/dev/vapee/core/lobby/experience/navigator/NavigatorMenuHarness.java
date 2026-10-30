@@ -42,7 +42,7 @@ public final class NavigatorMenuHarness {
         check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.contentSlot(0)).orElseThrow().equals("custom_002"), "hidden ID excluded and custom order delays custom_001");
         for (int slot : MenuTestLayouts.NAVIGATOR.contentSlots()) {
             check(first.getItem(slot) != null && holder.getWarpId(slot).isPresent(), "all explicit mapped content slots: " + slot);
-            check(spec(first, slot).lore().stream().map(NavigatorFixture::plain).toList().equals(List.of("Click to teleport.")),
+            check(spec(first, slot).lore().isEmpty(),
                     "destination lore contains no technical ID: " + slot);
         }
         check(holder.getWarpId(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)).isEmpty() && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.PREVIOUS)) == null && first.getItem(MenuTestLayouts.NAVIGATOR.slot(NavigatorMenu.Action.NEXT)) != null,

@@ -76,6 +76,7 @@ public final class NavigatorMenu {
     private final Function<UUID, Player> onlinePlayer;
     private final Logger logger;
     private final Map<UUID, Inventory> activeInventories = new HashMap<>();
+    private final java.util.Set<UUID> backHints = new java.util.HashSet<>();
 
     public NavigatorMenu(JavaPlugin plugin, WarpService warpService, NavigatorAccessPolicy accessPolicy) {
         this(plugin, warpService, accessPolicy, new dev.vapee.core.message.MessageService(() -> "",
@@ -234,7 +235,7 @@ public final class NavigatorMenu {
                 warp.icon(),
                 Component.text(warp.displayName()),
                 NamedTextColor.AQUA,
-                List.of(tr("navigator.teleport-hint"))
+                List.of()
         );
     }
 
@@ -254,6 +255,7 @@ public final class NavigatorMenu {
         } finally {
             activeInventories.clear();
             previews.clear();
+            backHints.clear();
         }
     }
 
@@ -280,6 +282,7 @@ public final class NavigatorMenu {
     void forget(UUID owner) {
         activeInventories.remove(owner);
         previews.remove(owner);
+        backHints.remove(owner);
     }
 
     void close(Player player) {
@@ -470,11 +473,9 @@ public final class NavigatorMenu {
                         Component.text(menu.title().resolve(messageService.localization().locale(player)), NamedTextColor.DARK_GRAY));
                 holder.bindInventory(inventory);
             }
-            renderingParents = !parents.isEmpty();
             for (var entry : visible) inventory.setItem(entry.slot(), createConfiguredItem(player, entry));
             if (visible.isEmpty()) placeDisplay(inventory, menu.inventorySize() / 2,
-                    createItem(Material.GRAY_DYE, tr("navigator.empty"), NamedTextColor.GRAY,
-                            parents.isEmpty() ? List.of() : List.of(tr("navigator.back-hint"))));
+                    createItem(Material.GRAY_DYE, tr("navigator.empty"), NamedTextColor.GRAY, List.of()));
             if (pagination.hasPrevious()) placeConfigured(inventory, Action.PREVIOUS,
                     createItem(Material.ARROW, tr("common.previous-page"), NamedTextColor.YELLOW, List.of()));
             if (!parents.isEmpty() && menu.backSlot() >= 0) inventory.setItem(menu.backSlot(),
@@ -489,8 +490,10 @@ public final class NavigatorMenu {
                 close(player); return false;
             }
             activeInventories.put(player.getUniqueId(), inventory);
+            if (!parents.isEmpty() && backHints.add(player.getUniqueId()))
+                player.sendActionBar(messageService.localize(player, tr("navigator.back-hint")).color(NamedTextColor.GRAY));
             return true;
-        } finally { renderingFor = previousViewer; renderingParents = false; }
+        } finally { renderingFor = previousViewer; }
     }
 
     private void placeConfigured(Inventory inventory, Action action, ItemStack item) {
@@ -509,19 +512,24 @@ public final class NavigatorMenu {
         long count = -1;
         if (available && entry.region() != null) {
             count = entry.region().count(player, onlinePlayers.get());
-            lore.add(tr(count == 1 ? "navigator.players.one" : "navigator.players.many",
+            if (!entry.stackAmount()) lore.add(tr(count == 1 ? "navigator.players.one" : "navigator.players.many",
                     Map.of("count", Component.text(count, NamedTextColor.GREEN))));
         }
-        lore.add(tr(!available ? "navigator.unavailable-hint" : entry.type() == NavigatorConfig.Type.MENU
-                ? "navigator.menu-hint" : "navigator.teleport-hint"));
-        if (renderingParents) lore.add(tr("navigator.back-hint"));
+        if (!available) lore.add(tr("navigator.unavailable-hint"));
+        else if (entry.type() == NavigatorConfig.Type.MENU) lore.add(tr("navigator.menu-hint"));
         ItemStack item = createItem(entry.icon(), Component.text(entry.name().resolve(locale)),
                 available ? NamedTextColor.AQUA : NamedTextColor.GRAY, lore);
-        if (count >= 0 && entry.stackAmount()) item.setAmount(NavigatorRegion.stackAmount(count, item.getMaxStackSize()));
+        if (count >= 0 && entry.stackAmount()) {
+            int amount = NavigatorRegion.stackAmount(count, item.getMaxStackSize());
+            if (count == 0 || count > amount) {
+                lore.add(tr(count == 0 ? "navigator.players.zero" : "navigator.players.overflow",
+                        count == 0 ? Map.of() : Map.of("count", Component.text(count, NamedTextColor.GREEN))));
+                item = createItem(entry.icon(), Component.text(entry.name().resolve(locale)), NamedTextColor.AQUA, lore);
+            }
+            item.setAmount(amount);
+        }
         return item;
     }
-
-    private boolean renderingParents;
     /** Navigator-only tooltip policy; item names/lore and other menus are untouched. */
     static ItemStack renderIcon(UiItemSpec spec) {
         ItemStack item = UiItems.render(spec);

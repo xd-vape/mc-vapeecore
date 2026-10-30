@@ -58,9 +58,11 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private PluginCommand command;
     private org.bukkit.command.CommandExecutor previousExecutor;
     private org.bukkit.command.TabCompleter previousCompleter;
+    private NavigatorRegionTool regionTool;
 
     static final class Session {
         final UUID owner;
+        final UUID token = UUID.randomUUID();
         final NavigatorStore.Snapshot base;
         NavigatorConfig.State draft;
         String menu;
@@ -100,10 +102,17 @@ public final class NavigatorEditor implements TabExecutor, Listener {
 
     public NavigatorEditor(JavaPlugin plugin, WarpService warps, NavigatorMenu navigator,
                            NavigatorConfig config, MessageService messages) {
+        this(plugin, warps, navigator, config, messages, java.util.Set::of);
+    }
+    public NavigatorEditor(JavaPlugin plugin, WarpService warps, NavigatorMenu navigator,
+                           NavigatorConfig config, MessageService messages, java.util.function.Supplier<java.util.Set<Integer>> reserved) {
         this(warps, navigator, new NavigatorStore(config, plugin.getLogger(), state -> navigator.closeOpenInventories()),
                 messages, (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
                 NavigatorMenu::renderIcon, plugin.getServer()::getPlayer);
+        regionTool = new NavigatorRegionTool(plugin, this, reserved);
     }
+    public NavigatorRegionTool regionTool() { return regionTool; }
+    void regionTool(NavigatorRegionTool tool) { regionTool = tool; }
     NavigatorEditor(WarpService warps, NavigatorMenu navigator, NavigatorStore store, MessageService messages,
                     InventoryFactory inventories, Function<dev.vapee.core.ui.UiItemSpec, org.bukkit.inventory.ItemStack> renderer,
                     Function<UUID, Player> online) {
@@ -135,6 +144,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             if (args.length == 0) { say(player, "Use /navigator edit or /navigator help.", "Nutze /navigator edit oder /navigator help."); return true; }
             if (args[0].equalsIgnoreCase("help")) { help(player); return true; }
             if (args[0].equalsIgnoreCase("edit")) {
+                cancelTool(player, false);
                 if (!sessions.containsKey(player.getUniqueId())) sessions.put(player.getUniqueId(), new Session(player.getUniqueId(), store.begin()));
                 navigator.endPreview(player); showMenu(player, session(player)); return true;
             }
@@ -145,12 +155,9 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             var before = session.draft;
             if (args[0].equalsIgnoreCase("region")) {
                 String action = arg(args, 1);
-                boolean visible = active.get(player.getUniqueId()) == player.getOpenInventory().getTopInventory();
+                if (!List.of("info", "mark", "cancel").contains(action)) cancelTool(player, false);
                 region(player, session, action);
-                if (!action.equals("info")) {
-                    changed(player, session);
-                    if (visible) showRegion(player, session);
-                }
+                if (!action.equals("info")) commandChanged(player, session);
                 return true;
             }
             switch (args[0].toLowerCase(Locale.ROOT)) {
@@ -168,9 +175,8 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 case "entry" -> entryCommand(session, args);
                 default -> { syntax(player, args); return true; }
             }
-            changed(player, session); explainPendingSelection(player, session);
+            commandChanged(player, session); explainPendingSelection(player, session);
             if (before != session.draft) say(player, "Draft updated.", "Entwurf aktualisiert.");
-            showMenu(player, session);
         } catch (IOException | IllegalArgumentException | IllegalStateException failure) {
             if (failure instanceof MissingArgument || failure instanceof NumberFormatException) syntax(player, args);
             else feedback(player, failure);
@@ -204,7 +210,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 case "remove" -> "/navigator entry remove";
                 default -> "/navigator entry <icon|name|lore|permission|move|remove|stack>";
             };
-            case "region" -> "/navigator region <pos1|pos2|clear|info>";
+            case "region" -> "/navigator region <mark|cancel|pos1|pos2|clear|info>";
             case "add" -> "/navigator add <warp|menu|unavailable> <id> [slot]";
             case "select" -> "/navigator select <entry-id>";
             case "page" -> "/navigator page <0..999>";
@@ -220,8 +226,8 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 "/navigator add <warp|menu|unavailable> <id> [Slot] | page <0..999> | select <Eintrags-ID>");
         say(player, "/navigator entry icon <material> | name [en|de|all] <text...> | lore [en|de|all] <line | line...> | permission <node|none> | move <menu> <slot> [page] | remove | stack <true|false>",
                 "/navigator entry icon <Material> | name [en|de|all] <Text...> | lore [en|de|all] <Zeile | Zeile...> | permission <Node|none> | move <Menü> <Slot> [Seite] | remove | stack <true|false>");
-        say(player, "/navigator region pos1 | pos2 | clear | info — selected Warp entry; optional counter, no teleport changes.",
-                "/navigator region pos1 | pos2 | clear | info — ausgewählter Warp-Eintrag; optionaler Zähler, kein Teleportziel.");
+        say(player, "/navigator region mark | cancel | pos1 | pos2 | clear | info — selected Warp entry; draft only.",
+                "/navigator region mark | cancel | pos1 | pos2 | clear | info — ausgewählter Warp-Eintrag; nur Entwurf.");
     }
     private void menuCommand(Player player, Session s, String[] args) {
         var current = menu(s);
@@ -318,39 +324,67 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         }
     }
     private void region(Player player, Session s, String action) {
-        if (!List.of("info", "clear", "pos1", "pos2").contains(action)) throw new MissingArgument();
+        if (!List.of("info", "clear", "pos1", "pos2", "mark", "cancel").contains(action)) throw new MissingArgument();
         selectedWarp(s);
         switch (action) {
+            case "mark" -> {
+                if (regionTool == null) throw problem("Region tool is unavailable.", "Das Regionswerkzeug ist nicht verfügbar.");
+                regionTool.start(player);
+            }
+            case "cancel" -> cancelTool(player, true);
             case "info" -> say(player, regionInfo(player, s), regionInfo(player, s));
             case "clear" -> {
                 requirePendingTarget(s);
                 update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), null, false)); s.first = null; s.pendingNoticeShown = false;
                 say(player, "Region cleared in draft.", "Region im Entwurf entfernt.");
             }
-            case "pos1", "pos2" -> {
-                if (action.equals("pos2") && s.first == null)
-                    throw problem("Position 1 is missing. Use /navigator region pos1 first.", "Position 1 fehlt. Nutze zuerst /navigator region pos1.");
-                requirePendingTarget(s);
-                Location at = player.getLocation().clone();
-                if (at.getWorld() == null || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY()) || !Double.isFinite(at.getZ()))
-                    throw problem("Invalid coordinates or missing world. No position was changed.", "Ungültige Koordinaten oder fehlende Welt. Keine Position wurde geändert.");
-                if (action.equals("pos1")) {
-                    s.first = new PendingRegion(s.menu, s.selected, at.getWorld().getUID(), at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
-                    s.pendingNoticeShown = false;
-                    say(player, "Position 1 saved. Move to the second corner and use /navigator region pos2.", "Position 1 gesetzt. Gehe zur zweiten Ecke und nutze /navigator region pos2.");
-                }
-                else {
-                    if (!s.first.worldId().equals(at.getWorld().getUID()))
-                        throw problem("Both positions must be in the same world. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".",
-                                "Beide Positionen müssen in derselben Welt liegen. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".");
-                    var bounds = new NavigatorRegion(at.getWorld().getName(), s.first.x(), s.first.y(), s.first.z(), at.getX(), at.getY(), at.getZ());
-                    update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.stackAmount())); s.first = null; s.pendingNoticeShown = false;
-                    say(player, "Region selected. Save to apply.", "Region gewählt. Zum Übernehmen speichern.");
-                }
-            }
+            case "pos1", "pos2" -> position(player, s, action, player.getLocation(), false);
             default -> throw new MissingArgument();
         }
     }
+    private void position(Player player, Session s, String action, Location at, boolean tool) {
+        if (action.equals("pos2") && s.first == null)
+            throw problem("Position 1 is missing. Use /navigator region pos1 first.", "Position 1 fehlt. Nutze zuerst /navigator region pos1.");
+        requirePendingTarget(s);
+        if (at == null || at.getWorld() == null || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY()) || !Double.isFinite(at.getZ()))
+            throw problem("Invalid coordinates or missing world. No position was changed.", "Ungültige Koordinaten oder fehlende Welt. Keine Position wurde geändert.");
+        if (action.equals("pos1")) {
+            s.first = new PendingRegion(s.menu, s.selected, at.getWorld().getUID(), at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+            s.pendingNoticeShown = false;
+            if (tool) toolFeedback(player, "Position 1 selected.", "Position 1 gewählt.");
+            else say(player, "Position 1 saved. Move to the second corner and use /navigator region pos2.", "Position 1 gesetzt. Gehe zur zweiten Ecke und nutze /navigator region pos2.");
+        } else {
+            if (!s.first.worldId().equals(at.getWorld().getUID()))
+                throw problem("Both positions must be in the same world. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".",
+                        "Beide Positionen müssen in derselben Welt liegen. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".");
+            var bounds = new NavigatorRegion(at.getWorld().getName(), s.first.x(), s.first.y(), s.first.z(), at.getX(), at.getY(), at.getZ());
+            update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.region() == null || old.stackAmount())); s.first = null; s.pendingNoticeShown = false;
+            if (tool) toolFeedback(player, "Position 2 selected. Region selected; Save to apply.", "Position 2 gewählt. Region gewählt; zum Übernehmen speichern.");
+            else say(player, "Region selected. Save to apply.", "Region gewählt. Zum Übernehmen speichern.");
+        }
+    }
+    NavigatorRegionTool.Target toolTarget(Player player) {
+        var s = session(player); selectedWarp(s); requirePendingTarget(s);
+        return new NavigatorRegionTool.Target(s.owner, s.token, s.menu, s.selected);
+    }
+    boolean toolValid(Player player, NavigatorRegionTool.Target target) {
+        var s = sessions.get(player.getUniqueId());
+        if (!authorized(player) || s == null || !target.owner().equals(player.getUniqueId()) || !target.session().equals(s.token)
+                || !target.menu().equals(s.menu) || !target.entry().equals(s.selected)) return false;
+        var menu = s.draft.menus().get(target.menu());
+        return menu != null && menu.entries().containsKey(target.entry()) && menu.entries().get(target.entry()).type() == NavigatorConfig.Type.WARP;
+    }
+    void toolPosition(Player player, NavigatorRegionTool.Target target, Location at, boolean first) {
+        if (!toolValid(player, target)) throw problem("This selection expired.", "Diese Auswahl ist abgelaufen.");
+        var s = session(player); position(player, s, first ? "pos1" : "pos2", at, true); changed(player, s);
+    }
+    void toolFeedback(Player player, String english, String german) { player.sendActionBar(Component.text(text(player, english, german), NamedTextColor.GRAY)); }
+    void toolFailure(Player player, RuntimeException failure) { toolFeedback(player, failure.getMessage(), failure instanceof EditorProblem known ? known.german : failure.getMessage()); }
+    boolean toolAuthorized(Player player) { return authorized(player); }
+    void toolPermissionLost(Player player) { release(player); }
+    Player toolPlayer(UUID owner) { return online.apply(owner); }
+    void closeForTool(Player player) { commandChanged(player, session(player)); }
+    private void cancelTool(Player player, boolean notify) { if (regionTool != null) regionTool.cancel(player, notify); }
     private static void requirePendingTarget(Session s) {
         if (s.first != null && !s.first.owns(s)) throw problem("Position 1 belongs to " + s.first.menu() + "/" + s.first.entry() + ". Select that Warp entry again, then use pos2 or clear.",
                 "Position 1 gehört zu " + s.first.menu() + "/" + s.first.entry() + ". Wähle diesen Warp-Eintrag erneut und nutze pos2 oder clear.");
@@ -441,6 +475,12 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private static String joined(String[] args, int start) { arg(args, start); return String.join(" ", java.util.Arrays.copyOfRange(args, start, args.length)); }
     private static int integer(String value) { int n = Integer.parseInt(value); if (n < 0 || n > 999) throw new IllegalArgumentException("Expected 0..999"); return n; }
     private void changed(Player player, Session s) { s.revision++; navigator.endPreview(player); active.remove(player.getUniqueId()); }
+    private void commandChanged(Player player, Session s) {
+        var previous = active.get(player.getUniqueId());
+        changed(player, s);
+        if (previous != null && player.getOpenInventory().getTopInventory() == previous) player.closeInventory();
+        if (regionTool != null) regionTool.reconcile(player);
+    }
     private static EditorProblem unfinished(Session s) {
         return problem("Incomplete region for " + s.first.menu() + "/" + s.first.entry() + ". Select that entry, then pos2 or clear before saving/removing.",
                 "Unvollständige Region für " + s.first.menu() + "/" + s.first.entry() + ". Wähle den Eintrag und nutze pos2 oder clear vor dem Speichern/Entfernen.");
@@ -456,11 +496,12 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         return null;
     }
     private void save(Player player, Session s) throws IOException {
+        cancelTool(player, false);
         var blocked = saveProblem(s); if (blocked != null) throw blocked;
         store.save(s.base, s.draft);
         release(player); say(player, "Navigator saved.", "Navigator gespeichert.");
     }
-    private void preview(Player player, Session s) { active.remove(player.getUniqueId()); navigator.preview(player, s.draft); say(player, "Preview without teleport. Return: /navigator edit.", "Vorschau ohne Teleport. Zurück: /navigator edit."); }
+    private void preview(Player player, Session s) { cancelTool(player, false); active.remove(player.getUniqueId()); navigator.preview(player, s.draft); say(player, "Preview without teleport. Return: /navigator edit.", "Vorschau ohne Teleport. Zurück: /navigator edit."); }
 
     private Holder view(Player player, Session s, String en, String de, int size) {
         var holder = new Holder(s); holder.inventory = inventories.create(holder, size, Component.text(text(player, en, de), NamedTextColor.DARK_GRAY)); return holder;
@@ -626,6 +667,8 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         button(h, 12, Material.STONE_AXE, "Position 2", p -> { region(p, s, "pos2"); changed(p, s); showRegion(p, s); });
         button(h, 14, Material.SPONGE, text(player, "Clear region", "Region entfernen"), p -> { region(p, s, "clear"); changed(p, s); showRegion(p, s); });
         button(h, 16, Material.SLIME_BALL, "Stack: " + entry.stackAmount(), p -> { entryCommand(s, new String[]{"entry", "stack", String.valueOf(!entry.stackAmount())}); changed(p, s); showRegion(p, s); });
+        button(h, 20, Material.BLAZE_ROD, text(player, "Mark Region", "Region markieren"), p -> region(p, s, "mark"));
+        button(h, 24, Material.GRAY_DYE, text(player, "Cancel marking", "Markierung abbrechen"), p -> region(p, s, "cancel"));
         button(h, 22, Material.ARROW, "↩", p -> showEntry(p, s)); open(player, h);
     }
     private boolean valid(Player p, Inventory top, Holder holder) {
@@ -660,12 +703,14 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     }
     @EventHandler public void quit(PlayerQuitEvent event) { release(event.getPlayer()); }
     private void release(Player player) {
+        cancelTool(player, false);
         sessions.remove(player.getUniqueId()); var inventory = active.remove(player.getUniqueId());
         try { navigator.endPreview(player); }
         finally { if (inventory != null && player.getOpenInventory().getTopInventory() == inventory) player.closeInventory(); }
     }
     public void shutdown() {
         running = false;
+        if (regionTool != null) regionTool.shutdown();
         try { for (UUID owner : List.copyOf(sessions.keySet())) { var player = online.apply(owner); if (player != null) { try { release(player); } catch (RuntimeException ignored) { /* authority is cleared below even if transport fails */ } } } }
         finally {
             sessions.clear(); active.clear(); navigator.previewAccess(player -> false);
@@ -684,7 +729,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         else if (args.length == 2) values = switch (args[0]) {
             case "menu" -> List.of("create", "select", "rename", "icon", "size", "back", "delete");
             case "entry" -> List.of("icon", "name", "lore", "permission", "move", "remove", "stack");
-            case "region" -> List.of("pos1", "pos2", "clear", "info");
+            case "region" -> List.of("mark", "cancel", "pos1", "pos2", "clear", "info");
             case "add" -> List.of("warp", "menu", "unavailable");
             case "select" -> s == null ? List.of() : List.copyOf(menu(s).entries().keySet());
             default -> List.of();

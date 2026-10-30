@@ -67,7 +67,7 @@ public final class NavigatorEditorHarness {
             check(t.entry(p).icon() == Material.GRASS_BLOCK && t.entry(p).name().english().equals("Welten") && t.entry(p).name().values().get("de").equals("Welten DE"), "entry icon and localized name preserve English");
             t.cmd(p,"menu select welten"); t.cmd(p,"menu rename de Spielwelten"); t.cmd(p,"menu icon FEATHER");
             check(t.s(p).draft.menus().get("welten").title().values().get("de").equals("Spielwelten") && t.s(p).draft.menus().get("welten").icon() == Material.FEATHER, "menu title and picker icon editable");
-            t.click(p,p.open,13,ClickType.LEFT); t.click(p,p.open,11,ClickType.LEFT);
+            t.cmd(p,"edit"); t.click(p,p.open,13,ClickType.LEFT); t.click(p,p.open,11,ClickType.LEFT);
             check(text(p.open,0).contains("custom_000"), "Warp picker uses existing WarpService destinations");
             t.click(p,p.open,1,ClickType.LEFT);
             check(t.entry(p).type() == NavigatorConfig.Type.WARP && t.entry(p).target().equals("custom_001") && t.entry(p).slot() == 13, "picker assigns actual selected Warp and slot");

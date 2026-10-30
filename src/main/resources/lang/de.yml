@@ -281,6 +281,8 @@ navigator:
   unavailable: "<gray>Dieses Ziel ist momentan nicht verfügbar.</gray>"
   destination-missing: "<gray>Dieses Ziel ist nicht mehr verfügbar.</gray>"
   players:
+    zero: "0 Spieler"
+    overflow: "<count> Spieler"
     one: "<count> Spieler in diesem Bereich."
     many: "<count> Spieler in diesem Bereich."
 

@@ -124,7 +124,10 @@ public final class LobbyExperienceModule implements CoreModule {
         NavigatorMenu newNavigatorMenu = new NavigatorMenu(plugin, newWarpService, newAccessPolicy,
                 messageService, navigatorConfig::getState);
         var newNavigatorEditor = new dev.vapee.core.lobby.experience.navigator.NavigatorEditor(plugin,
-                newWarpService, newNavigatorMenu, navigatorConfig, messageService);
+                newWarpService, newNavigatorMenu, navigatorConfig, messageService,
+                () -> lobbyModule.getLobbyConfig().getItems().values().stream()
+                        .filter(dev.vapee.core.lobby.item.LobbyItemDefinition::enabled)
+                        .map(dev.vapee.core.lobby.item.LobbyItemDefinition::slot).collect(java.util.stream.Collectors.toSet()));
         var newGlide = new LobbyGlideService(plugin, newAccessPolicy, utilityModule.getUtilityService());
         var newGlideListener = new LobbyGlideListener(newGlide);
         LobbyExperienceListener newExperienceListener = new LobbyExperienceListener(
@@ -170,6 +173,7 @@ public final class LobbyExperienceModule implements CoreModule {
         try {
             newNavigatorEditor.register(plugin.getCommand("navigator"));
             plugin.getServer().getPluginManager().registerEvents(newNavigatorEditor, plugin);
+            plugin.getServer().getPluginManager().registerEvents(newNavigatorEditor.regionTool(), plugin);
             utilityModule.getUtilityService().addFlightListener(newGlide);
             lobbyModule.getLobbyPlayerStateService().addStateListener(newGlide);
             activityModule.getActivityService().addMembershipListener(newGlide);
@@ -181,6 +185,7 @@ public final class LobbyExperienceModule implements CoreModule {
             plugin.getServer().getPluginManager().registerEvents(newSelectionListener, plugin);
 
             for (Player player : plugin.getServer().getOnlinePlayers()) {
+                newNavigatorEditor.regionTool().available(player);
                 if (!newLobbyService.isLobbyWorld(player.getWorld())) {
                     continue;
                 }
@@ -246,6 +251,7 @@ public final class LobbyExperienceModule implements CoreModule {
         if (navigatorEditor != null) {
             cleanupStep(failure, "navigator editor", navigatorEditor::shutdown);
             cleanupStep(failure, "navigator editor listener", () -> HandlerList.unregisterAll(navigatorEditor));
+            cleanupStep(failure, "navigator region tool listener", () -> HandlerList.unregisterAll(navigatorEditor.regionTool()));
         }
         if (glideService != null) {
             LobbyGlideService ownedGlide = glideService;
