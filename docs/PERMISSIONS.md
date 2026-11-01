@@ -7,6 +7,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | Permission | Default | Command/Funktion | Hinweis |
 |---|---:|---|---|
 | `vapeecore.admin` | `op` | `/core reload` und `/core quest force [player]` | Kritisches Owner-Recht; kein Wildcard-Parent für alle VapeeCore-Rechte. |
+| `vapeecore.staff.panel` | `false` | Privates `/staff`-Panel und eigener PUBLIC/HIDDEN-Status | Zusätzlich ist eine aktuelle primäre Gruppe aus `staff.hierarchy.protected-groups` erforderlich. Keine Moderationsrechte als Children. `/staff list` ist öffentlich und benötigt diesen Node nicht. |
 | `vapeecore.lobby.spawn` | `true` | `/spawn` | Teleport zum konfigurierten Lobby-Spawn. |
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |
@@ -255,11 +256,11 @@ Coins add/remove/set prüfen nach Known-Identity und echter Online-Präsenz die 
 
 Ping bleibt absichtlich ein nicht-sensitives, permission-geschütztes Latenz-Read. Build bleibt Self-only. Moderation einschließlich Schema, Mute-Projektion und Chat/PM-Enforcement ist unverändert. Historische Berichte und FORMATTING bleiben unverändert. plugin.yml, config.yml und StaffHierarchyService wurden nicht geändert.
 
-Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 37 Roots, 50 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige Verification/Datei-Inventare: `reports/26b-permission-hardening/PERMISSION_HARDENING.md`. Phase 27 Notifications & Presence bleibt außerhalb dieser Änderung: keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.
+Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 38 Roots, 52 Nodes, 15 Child-Kanten und konservative Parent-Empfehlung). Vollständige historische Verification/Datei-Inventare: `reports/26b-permission-hardening/PERMISSION_HARDENING.md`; Staff-Panel-Ergänzung: `reports/prototype/PHASE_05A_STAFF_PANEL_MVP.md`. Keine AFK-/Presence-/Friend-Alert-/Join-Quit-Neugestaltung.
 
 ## Permission-Children und Default-Audit (aktueller Phase-29-Vertrag)
 
-50 explizite Nodes: 11 Player-Basisrechte mit `default: true`, 39 mit `default: op`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin` und `vapeecore.visibility.staff` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
+52 explizite Nodes: 11 Player-Basisrechte mit `default: true`, 40 mit `default: op` und `vapeecore.staff.panel` mit `default: false`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass oder alleinige Staff-Identität. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin`, `vapeecore.visibility.staff` und `vapeecore.staff.panel` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
 
 | Parent (vapeecore.) | Child (vapeecore.) | Bedeutung |
 |---|---|---|
@@ -283,12 +284,13 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 37 Roots, 50 Nodes, 15 Child-K
 
 ## Vollständiger Command-/Descriptor-Audit (aktueller Phase-29-Vertrag)
 
-Alle 37 Root-Commands wurden gegen Registrierung, Executor-Gates und den eingefrorenen Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die bestehenden und erweiterten Command-Harnesses prüfen das Verhalten. Paper bestätigt die tatsächlich registrierten Roots. Phase 29 ergänzt ausschließlich quests, den Alias quest und quest.use; bestehende Defaults und Children bleiben unverändert.
+Alle 38 Root-Commands werden gegen Registrierung, Executor-Gates und den Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die Command-Harnesses prüfen das Verhalten. Phase 05A ergänzt `/staff [list]` und den unabhängigen, standardmäßig verweigerten Panel-Node; bestehende Defaults und Children bleiben unverändert.
 
 In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarkeit weggelassen. Die Empfehlung ist keine automatische Rangfreigabe. Gezielte Fähigkeiten und die unabhängige Target-Hierarchie gelten gleichzeitig.
 
 | Root | Aliases | Bukkit-Gate | Executor-Gate | Empfehlung | Usage | Descriptor-Defekt |
 |---|---|---|---|---|---|---|
+| /staff | — | — | Panel: staff.panel plus aktuelle primäre Staff-Gruppe; list: öffentlich | Explizit freigeschalteter Staff; Liste für alle | /staff [list] | Nein |
 | /mute | — | vapeecore.moderation.mute | moderation.mute | Moderator | /mute <player\|uuid> <duration\|permanent> <reason...> | Nein |
 | /unmute | — | vapeecore.moderation.unmute | moderation.unmute | Moderator | /unmute <player\|uuid> [reason...] | Nein |
 | /warn | — | vapeecore.moderation.warn | moderation.warn | Moderator | /warn <player\|uuid> <reason...> | Nein |

@@ -712,7 +712,7 @@ public final class ModerationCommandHarness {
     private static void descriptor() throws Exception {
         var yaml = (Map<?, ?>) new Yaml().load(Files.readString(Path.of("src/main/resources/plugin.yml")));
         var commands = (Map<?, ?>) yaml.get("commands"); var permissions = (Map<?, ?>) yaml.get("permissions");
-        check(commands.size() == 37, "37 plugin root commands including the Navigator editor");
+        check(commands.size() == 38 && commands.containsKey("staff"), "38 plugin root commands including Navigator and the staff panel/public roster");
         Map<String, String> syntax = Map.of("warn", "<player|uuid> <reason...>", "ban", "<player|uuid> <duration|permanent> <reason...>",
                 "unban", "<player|uuid> [reason...]", "kick", "<player|uuid> <reason...>", "history", "<player|uuid> [page]",
                 "mute", "<player|uuid> <duration|permanent> <reason...>", "unmute", "<player|uuid> [reason...]");

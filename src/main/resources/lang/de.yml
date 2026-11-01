@@ -925,6 +925,40 @@ activity:
 # MODERATION
 # ==================================================
 
+# Staff Panel and Public Roster
+staff:
+  title: "Staff-Panel"
+  target-title: "Staff-Aktionen"
+  usage: "Mit /staff öffnest du das Panel, mit /staff list die öffentliche Teamliste."
+  denied: "Das private Staff-Panel benötigt einen zulässigen primären Staff-Rang und die Panel-Berechtigung."
+  roster: "Team online: <players>"
+  roster-empty: "Momentan ist kein Teammitglied öffentlich gelistet."
+  show-players: "Verfügbare Spielerziele anzeigen"
+  show-staff: "Staff online anzeigen"
+  empty: "Keine sichtbaren Einträge"
+  rank: "Rang: <rank>"
+  rank-unavailable: "Nicht verfügbar"
+  member-public: "Öffentlich gelistetes Teammitglied"
+  member-hidden: "In der öffentlichen Teamliste verborgen"
+  select: "Klicken, um verfügbare Aktionen zu sehen."
+  no-actions: "Keine erlaubten Aktionen für diesen Spieler."
+  status-public: "<green>Dein Teamlisten-Status: PUBLIC"
+  status-hidden: "<yellow>Dein Teamlisten-Status: HIDDEN"
+  status-scope: "Nur Teamlisten-Sichtbarkeit; dies ist kein Vanish."
+  hide-hint: "Klicken, um dich bis zum Verlassen zu verbergen."
+  public-hint: "Klicken, um in der öffentlichen Teamliste zu erscheinen."
+  action-teleport: "Zum Spieler teleportieren"
+  action-history: "Moderationsverlauf ansehen"
+  action-warn: "Spieler verwarnen"
+  action-mute: "Spieler stummschalten"
+  action-kick: "Spieler kicken"
+  action-execute: "Klicken, um deine bestehende Berechtigung zu nutzen."
+  action-input: "Klicken, um die Aktion im Chat vorzubereiten."
+  prepare: "<aqua><action>: Hier klicken und die nötigen Angaben im Chat ergänzen."
+  action-unavailable: "Diese Staff-Aktion ist momentan nicht verfügbar."
+  target-unavailable: "Dieser Spieler ist kein verfügbares Ziel mehr."
+  action-denied: "Deine aktuelle Berechtigung oder Staff-Hierarchie erlaubt diese Aktion nicht."
+
 moderation:
 
   # Actions and Record Fields

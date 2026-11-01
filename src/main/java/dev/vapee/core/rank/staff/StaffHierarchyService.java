@@ -28,6 +28,12 @@ public final class StaffHierarchyService {
     }
 
     public Optional<String> getLoadedPrimaryGroup(UUID id) { return loadedGroups.apply(Objects.requireNonNull(id)); }
+
+    /** Staff roster eligibility uses the same configured protected primary groups as target protection. */
+    public boolean isStaff(UUID id) {
+        StaffHierarchyConfig snapshot = configuration.get();
+        return normalized(getLoadedPrimaryGroup(id)).filter(group -> snapshot.level(group) >= 0).isPresent();
+    }
     public CompletableFuture<Optional<String>> loadPrimaryGroup(UUID id) {
         return Objects.requireNonNull(loadGroups.apply(Objects.requireNonNull(id)), "primary group future");
     }

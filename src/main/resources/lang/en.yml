@@ -925,6 +925,40 @@ activity:
 # MODERATION
 # ==================================================
 
+# Staff Panel and Public Roster
+staff:
+  title: "Staff Panel"
+  target-title: "Staff Actions"
+  usage: "Use /staff to open the panel or /staff list for the public team list."
+  denied: "The private staff panel requires an eligible staff primary group and panel permission."
+  roster: "Online team: <players>"
+  roster-empty: "No staff are publicly listed right now."
+  show-players: "Show available player targets"
+  show-staff: "Show online staff"
+  empty: "No visible entries"
+  rank: "Rank: <rank>"
+  rank-unavailable: "Unavailable"
+  member-public: "Publicly listed staff"
+  member-hidden: "Hidden from the public team list"
+  select: "Click to view available actions."
+  no-actions: "No permitted actions for this player."
+  status-public: "<green>Your roster status: PUBLIC"
+  status-hidden: "<yellow>Your roster status: HIDDEN"
+  status-scope: "Team-list visibility only; this is not vanish."
+  hide-hint: "Click to hide until you disconnect."
+  public-hint: "Click to appear in the public team list."
+  action-teleport: "Teleport to player"
+  action-history: "View moderation history"
+  action-warn: "Warn player"
+  action-mute: "Mute player"
+  action-kick: "Kick player"
+  action-execute: "Click to use your existing permission."
+  action-input: "Click to prepare the action in chat."
+  prepare: "<aqua><action>: click here to enter the required details in chat."
+  action-unavailable: "This staff action is currently unavailable."
+  target-unavailable: "That player is no longer an available target."
+  action-denied: "Your current permission or staff hierarchy does not allow that action."
+
 moderation:
 
   # Actions and Record Fields

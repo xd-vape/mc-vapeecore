@@ -5,6 +5,7 @@ import dev.vapee.core.identity.IdentityModule;
 import dev.vapee.core.rank.RankModule;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.moderation.command.*;
+import dev.vapee.core.staff.StaffPanel;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.event.HandlerList;
@@ -21,7 +22,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Owns main-thread service, committed mute projection, seven commands and two listeners. No reload/poller. */
+/** Owns moderation commands/listeners and the focused staff-panel presentation. No reload/poller. */
 public final class ModerationModule implements CoreModule {
     private final Supplier<ModerationRepository> repositoryFactory;
     private final Clock clock;
@@ -29,11 +30,13 @@ public final class ModerationModule implements CoreModule {
     private final Function<ModerationService, ModerationCommandContext> contextFactory;
     private final Hooks hooks;
     private final Consumer<Runnable> feedbackScheduler;
+    private final Function<ModerationCommandContext, StaffPanel> panelFactory;
     private ModerationService service;
     private ModerationLoginListener listener;
     private ModerationMuteProjection projection;
     private ModerationMuteChatListener chatListener;
     private AtomicBoolean commandActive;
+    private StaffPanel staffPanel;
 
     public ModerationModule(JavaPlugin plugin, IdentityModule identityModule, RankModule rankModule, MessageService messages) {
         Objects.requireNonNull(plugin, "plugin");
@@ -50,6 +53,8 @@ public final class ModerationModule implements CoreModule {
                 () -> false);
         hooks = new BukkitHooks(plugin);
         feedbackScheduler = task -> plugin.getServer().getScheduler().runTask(plugin, task);
+        panelFactory = context -> new StaffPanel(plugin, rankModule.getRankService(),
+                rankModule.getStaffHierarchyService(), messages, context.active());
     }
 
     // Local lifecycle seam exercises this actual module without inventing a Bukkit server.
@@ -61,12 +66,20 @@ public final class ModerationModule implements CoreModule {
     ModerationModule(Supplier<ModerationRepository> repositoryFactory, Clock clock, Supplier<UUID> idSupplier,
                      Function<ModerationService, ModerationCommandContext> contextFactory, Hooks hooks,
                      Consumer<Runnable> feedbackScheduler) {
+        // Retain the existing moderation-only fixture boundary; panel acquisition has its own executable coverage.
+        this(repositoryFactory, clock, idSupplier, contextFactory, hooks, feedbackScheduler, context -> null);
+    }
+
+    ModerationModule(Supplier<ModerationRepository> repositoryFactory, Clock clock, Supplier<UUID> idSupplier,
+                     Function<ModerationService, ModerationCommandContext> contextFactory, Hooks hooks,
+                     Consumer<Runnable> feedbackScheduler, Function<ModerationCommandContext, StaffPanel> panelFactory) {
         this.repositoryFactory = Objects.requireNonNull(repositoryFactory, "repositoryFactory");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.idSupplier = Objects.requireNonNull(idSupplier, "idSupplier");
         this.contextFactory = Objects.requireNonNull(contextFactory, "contextFactory");
         this.hooks = Objects.requireNonNull(hooks, "hooks");
         this.feedbackScheduler = Objects.requireNonNull(feedbackScheduler, "feedbackScheduler");
+        this.panelFactory = Objects.requireNonNull(panelFactory, "panelFactory");
     }
 
     @Override public String getName() { return "Moderation"; }
@@ -77,6 +90,7 @@ public final class ModerationModule implements CoreModule {
         AtomicBoolean nextActive = new AtomicBoolean(false);
         ModerationLoginListener newListener = null;
         ModerationMuteChatListener newChatListener = null;
+        StaffPanel newPanel = null;
         ModerationService loaded;
         try {
             loaded = new ModerationService(repositoryFactory.get(), clock, idSupplier, nextProjection::publish);
@@ -84,6 +98,7 @@ public final class ModerationModule implements CoreModule {
             newListener = new ModerationLoginListener(loaded, context.logger(), context.messages().localization());
             newChatListener = new ModerationMuteChatListener(nextProjection, feedbackScheduler,
                     context.onlinePlayer(), context.messages(), context.logger());
+            newPanel = panelFactory.apply(context);
             hooks.install("warn", new WarnCommand(context));
             hooks.install("ban", new BanCommand(context));
             hooks.install("unban", new UnbanCommand(context));
@@ -93,8 +108,13 @@ public final class ModerationModule implements CoreModule {
             hooks.install("unmute", new UnmuteCommand(context));
             hooks.register(newListener);
             hooks.register(newChatListener);
+            if (newPanel != null) {
+                hooks.install("staff", newPanel);
+                hooks.register(newPanel);
+                newPanel.startUpdates();
+            }
         } catch (RuntimeException exception) {
-            try { cleanup(newListener, newChatListener); }
+            try { cleanup(newListener, newChatListener, newPanel); }
             catch (RuntimeException cleanupFailure) { exception.addSuppressed(cleanupFailure); }
             finally { nextProjection.clear(); }
             throw exception;
@@ -104,23 +124,29 @@ public final class ModerationModule implements CoreModule {
         projection = nextProjection;
         service = loaded; // Publish only once all hooks have been installed successfully.
         commandActive = nextActive;
+        staffPanel = newPanel;
         nextActive.set(true);
     }
 
     @Override public void disable() {
         if (commandActive != null) commandActive.set(false);
-        try { cleanup(listener, chatListener); }
+        try { cleanup(listener, chatListener, staffPanel); }
         finally {
             if (projection != null) projection.clear();
             listener = null; chatListener = null; projection = null; service = null;
             commandActive = null;
+            staffPanel = null;
         }
     }
 
-    private void cleanup(ModerationLoginListener login, ModerationMuteChatListener chat) {
+    private void cleanup(ModerationLoginListener login, ModerationMuteChatListener chat, StaffPanel panel) {
         if (chat != null) chat.deactivate();
         RuntimeException failure = null;
-        for (Listener owned : new Listener[]{chat, login}) {
+        if (panel != null) {
+            try { panel.disable(); }
+            catch (RuntimeException exception) { failure = exception; }
+        }
+        for (Listener owned : new Listener[]{panel, chat, login}) {
             if (owned == null) continue;
             try { hooks.unregister(owned); }
             catch (RuntimeException exception) {
