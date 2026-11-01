@@ -12,7 +12,7 @@ public final class NavigatorRegionHarness {
         check(count(region, f, viewer) == 1, "inclusive maximum boundary");
         for (int axis = 0; axis < 3; axis++) {
             target.x = 5; target.y = 70; target.z = 5;
-            if (axis == 0) target.x = -0.001; else if (axis == 1) target.y = 59.999; else target.z = 10.001;
+            if (axis == 0) target.x = -0.001; else if (axis == 1) target.y = 59.999; else target.z = 11;
             check(count(region, f, viewer) == 0, "outside axis excluded " + axis);
         }
         target.x = 5; target.y = 70; target.z = 5;

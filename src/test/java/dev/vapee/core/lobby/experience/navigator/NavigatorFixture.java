@@ -256,9 +256,14 @@ final class NavigatorFixture {
     }
 
     private static World world(String name) {
+        return world(name, -64, 320);
+    }
+    static World world(String name, int minHeight, int maxHeight) {
         return proxy(World.class, (method, args) -> switch (method) {
             case "getName" -> name;
             case "getUID" -> UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            case "getMinHeight" -> minHeight;
+            case "getMaxHeight" -> maxHeight;
             default -> DEFAULT;
         });
     }

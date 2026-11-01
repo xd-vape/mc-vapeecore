@@ -54,7 +54,27 @@ public final class NavigatorRegionToolHarness {
         @Override public boolean equals(Object o){return o instanceof TestItem other&&material==other.material&&amount==other.amount&&tags.equals(other.tags)&&flags.equals(other.flags)&&Objects.equals(name,other.name);}
         @Override public int hashCode(){return Objects.hash(material,amount,tags,flags,name);}
     }
-    public static void main(String[]args)throws Exception{selection();ownership();boundaries();lifecycle();System.out.println("NavigatorRegionToolHarness passed "+checks+" checks.");}
+    public static void main(String[]args)throws Exception{selection();heights();ownership();boundaries();lifecycle();System.out.println("NavigatorRegionToolHarness passed "+checks+" checks.");}
+    private static void heights()throws Exception {
+        for(int[] limits:List.of(new int[]{-64,320},new int[]{0,256},new int[]{-128,512},new int[]{64,192})) {
+            try(var f=new ToolFixture()) {
+                var world=world("height-"+limits[0],limits[0],limits[1]);f.t.f.worlds.put(world.getName(),world);f.p.currentWorld=world;
+                var before=Files.readAllBytes(f.t.file);f.start();
+                f.hit(true,world,-4,limits[0]+8,-9,EquipmentSlot.HAND,true);f.hit(false,world,2,limits[0]+12,-3,EquipmentSlot.HAND,true);
+                var full=f.t.entry(f.p).region();
+                check(full.minY()==limits[0]&&full.maxY()==limits[1]-1,"tool uses actual world bounds, not hardcoded Overworld values");
+                check(full.minX()==-4&&full.maxX()==2&&full.minZ()==-9&&full.maxZ()==-3,"full height leaves clicked XZ unchanged");
+                f.t.cmd(f.p,"edit");f.t.click(f.p,f.p.open,11,ClickType.LEFT);f.t.click(f.p,f.p.open,18,ClickType.LEFT);
+                f.t.click(f.p,f.p.open,6,ClickType.LEFT);
+                check(text(f.p.open,6).equals("Height: Manual height")&&f.t.entry(f.p).region().minY()==limits[0]+8&&f.t.entry(f.p).region().maxY()==limits[0]+12,"GUI manual toggle restores the original clicked heights");
+                f.t.click(f.p,f.p.open,20,ClickType.LEFT);
+                f.hit(true,world,2,limits[0]+30,-3,EquipmentSlot.HAND,true);f.hit(false,world,-4,limits[0]+20,-9,EquipmentSlot.HAND,true);
+                var manual=f.t.entry(f.p).region();
+                check(manual.minY()==limits[0]+20&&manual.maxY()==limits[0]+30&&manual.minX()==-4&&manual.maxZ()==-3,"manual mode uses normalized actual clicked blocks on reselection");
+                check(f.tools()==0&&f.writes==0&&Arrays.equals(before,Files.readAllBytes(f.t.file)),"both tool modes preserve cleanup, blocks and draft-only persistence");
+            }
+        }
+    }
     private static void selection()throws Exception {
         try(var f=new ToolFixture()) {
             var before=Files.readAllBytes(f.t.file);var compass=f.p.contents[0];var head=f.p.contents[1];f.start();var issued=f.held();int slot=f.p.held;
@@ -71,7 +91,7 @@ public final class NavigatorRegionToolHarness {
             f.hit(false,f.t.f.outside,0,60,0,EquipmentSlot.HAND,true);check(f.tools()==1&&f.t.s(f.p).first==first&&f.t.entry(f.p).region()==null,"cross-world Pos2 rejection retains correctable tool and bounds");
             f.p.currentWorld=f.t.f.lobby;f.hit(false,f.t.f.lobby,0,60,0,EquipmentSlot.OFF_HAND,true);check(f.t.s(f.p).first==first&&f.tools()==1,"offhand interaction cannot choose Pos2");
             f.hit(false,f.t.f.lobby,0,60,0,EquipmentSlot.HAND,true);
-            check(f.t.entry(f.p).region().minX()==0&&f.t.entry(f.p).region().maxY()==80&&f.t.entry(f.p).stackAmount(),"two block clicks update same unsaved draft with stack default");
+            check(f.t.entry(f.p).region().minX()==0&&f.t.entry(f.p).region().maxY()==f.t.f.lobby.getMaxHeight()-1&&f.t.entry(f.p).stackAmount(),"two block clicks update same unsaved draft with full-height and stack defaults");
             check(f.tools()==0&&f.p.held==0&&f.p.contents[slot]==null,"completion removes tool and restores still-owned held slot");
             check(Arrays.equals(before,Files.readAllBytes(f.t.file))&&!f.t.config.getState().enabled(),"tool completion is draft-only");
             var after=f.hit(false,f.t.f.lobby,0,60,0,EquipmentSlot.OFF_HAND,false);check(after.isCancelled(),"same-tick offhand follow-up cannot activate block after completion");f.runTicks();

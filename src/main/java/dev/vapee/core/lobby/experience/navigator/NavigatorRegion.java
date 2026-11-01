@@ -7,7 +7,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.UUID;
 
-/** An explicit inclusive cuboid, using the same world-name convention as local warps. */
+/** Inclusive block cuboid. Fractional endpoints identify their containing blocks; players use their feet block. */
 public record NavigatorRegion(String world, double minX, double minY, double minZ,
                               double maxX, double maxY, double maxZ) {
     public NavigatorRegion {
@@ -22,9 +22,10 @@ public record NavigatorRegion(String world, double minX, double minY, double min
 
     public boolean contains(Location location) {
         return location != null && location.getWorld() != null && world.equals(location.getWorld().getName())
-                && location.getX() >= minX && location.getX() <= maxX
-                && location.getY() >= minY && location.getY() <= maxY
-                && location.getZ() >= minZ && location.getZ() <= maxZ;
+                && Double.isFinite(location.getX()) && Double.isFinite(location.getY()) && Double.isFinite(location.getZ())
+                && location.getBlockX() >= Math.floor(minX) && location.getBlockX() <= Math.floor(maxX)
+                && location.getBlockY() >= Math.floor(minY) && location.getBlockY() <= Math.floor(maxY)
+                && location.getBlockZ() >= Math.floor(minZ) && location.getBlockZ() <= Math.floor(maxZ);
     }
 
     public long count(Player viewer, Collection<? extends Player> online) {

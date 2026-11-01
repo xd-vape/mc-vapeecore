@@ -29,7 +29,7 @@ public final class NavigatorEditorUxHarness {
     }
     private static List<String> lore(TestPlayer p,int slot){return spec(p.open,slot).lore().stream().map(NavigatorFixture::plain).toList();}
     private static World world(String name,UUID id) {
-        return proxy(World.class,(method,args)->switch(method){case "getName"->name;case "getUID"->id;default->null;});
+        return proxy(World.class,(method,args)->switch(method){case "getName"->name;case "getUID"->id;case "getMinHeight"->-64;case "getMaxHeight"->320;default->null;});
     }
     private static void movement()throws Exception {
         for(String variant:List.of("movement","reopen","reselect-same-menu","empty-slot-navigation")) {
@@ -46,7 +46,7 @@ public final class NavigatorEditorUxHarness {
                 }
                 check(t.s(p).first==first,variant+": Pos1 survives movement, reopen and normal selection/navigation");
                 close(t,p);p.x=0;p.y=60;p.z=0;t.cmd(p,"region pos2");
-                check(t.s(p).first==null&&t.entry(p).region().minX()==0&&t.entry(p).region().maxY()==80&&t.entry(p).region().world().equals("lobby-world"),variant+": exact same-world sequence completes normalized inclusive region");
+                check(t.s(p).first==null&&t.entry(p).region().minX()==0&&t.entry(p).region().maxY()==t.f.lobby.getMaxHeight()-1&&t.entry(p).region().world().equals("lobby-world"),variant+": exact same-world sequence completes inclusive region at default full world height");
                 check(last(p).equals("Region selected. Save to apply.")&&p.open==p.bottom,variant+": distinct successful Pos2 feedback without opening GUI");
                 int opens=p.opens;messages=p.received.size();t.cmd(p,"region info");
                 check(p.received.size()==messages+1&&last(p).contains("Count: ON")&&last(p).contains("lobby-world")&&p.opens==opens,variant+": info reports region without mutating/reopening view");

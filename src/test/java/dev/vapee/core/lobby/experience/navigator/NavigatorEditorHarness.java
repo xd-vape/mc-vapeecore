@@ -29,7 +29,7 @@ public final class NavigatorEditorHarness {
             config = new NavigatorConfig(file, f.logger); config.initialize(); f.configured.set(config.getState()); f.destinations(3);
             var store = new NavigatorStore(config, f.logger, state -> { f.configured.set(state); f.menu.closeOpenInventories(); });
             editor = new NavigatorEditor(f.warps, f.menu, store, f.messages, (holder,size,title) -> inventory(holder,size),
-                    SpecItem::new, id -> f.players.containsKey(id) ? f.players.get(id).player : null);
+                    SpecItem::new, id -> f.players.containsKey(id) ? f.players.get(id).player : null, f.worlds::get);
         }
         TestPlayer admin() { var p = f.player(); p.permissions.add(NavigatorEditor.PERMISSION); return p; }
         void cmd(TestPlayer p, String command) { editor.onCommand(p.player, null, "navigator", command.split(" ")); }
@@ -83,7 +83,7 @@ public final class NavigatorEditorHarness {
             p.currentWorld = t.f.outside; t.cmd(p,"region pos2");
             check(t.entry(p).region() == null && t.s(p).first != null, "cross-world pos2 rejected while pos1 retained");
             p.currentWorld = t.f.lobby; p.x = 0; p.y = 60; p.z = 0; t.cmd(p,"region pos2"); t.cmd(p,"entry stack true");
-            check(t.entry(p).region().minX() == 0 && t.entry(p).region().maxY() == 80 && t.entry(p).stackAmount(), "same-world region normalizes and enables safe stack counting");
+            check(t.entry(p).region().minX() == 0 && t.entry(p).region().maxY() == t.f.lobby.getMaxHeight() - 1 && t.entry(p).stackAmount(), "same-world region normalizes and defaults to full world height with safe stack counting");
             check(t.f.warps.getWarp("custom_001").orElseThrow().equals(warp), "region never modifies authoritative Warp position or metadata");
             t.cmd(p,"region info"); check(p.output().contains("lobby-world") && p.output().contains("Count: ON"), "region info displays world bounds enabled state");
             t.cmd(p,"region clear"); check(t.entry(p).region() == null && !t.entry(p).stackAmount(), "clear removes optional region and stack display");

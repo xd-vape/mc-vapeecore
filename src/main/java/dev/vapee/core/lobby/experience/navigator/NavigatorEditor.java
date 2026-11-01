@@ -9,6 +9,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -54,6 +55,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private final Map<UUID, Session> sessions = new HashMap<>();
     private final Map<UUID, Inventory> active = new HashMap<>();
     private final Function<UUID, Player> online;
+    private final Function<String, World> worlds;
     private boolean running = true;
     private PluginCommand command;
     private org.bukkit.command.CommandExecutor previousExecutor;
@@ -73,11 +75,15 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         long revision;
         PendingRegion first;
         boolean pendingNoticeShown;
+        final Map<RegionTarget, RegionHeight> heights = new HashMap<>();
         Session(UUID owner, NavigatorStore.Snapshot base) {
             this.owner = owner; this.base = base;
             draft = new NavigatorConfig.State(true, base.state().root(), base.state().menus()); menu = draft.root();
         }
     }
+    private record RegionTarget(String menu, String entry) { }
+    /** Draft-only editing choice; the existing document still stores only concrete cuboid coordinates. */
+    private record RegionHeight(boolean full, double manualMin, double manualMax) { }
     /** One unfinished selection, bound to the real menu/entry and a snapshot of the Bukkit world UUID. */
     record PendingRegion(String menu, String entry, UUID worldId, String world, double x, double y, double z) {
         boolean owns(Session s) { return menu.equals(s.menu) && entry.equals(s.selected); }
@@ -108,16 +114,16 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                            NavigatorConfig config, MessageService messages, java.util.function.Supplier<java.util.Set<Integer>> reserved) {
         this(warps, navigator, new NavigatorStore(config, plugin.getLogger(), state -> navigator.closeOpenInventories()),
                 messages, (holder, size, title) -> plugin.getServer().createInventory(holder, size, title),
-                NavigatorMenu::renderIcon, plugin.getServer()::getPlayer);
+                NavigatorMenu::renderIcon, plugin.getServer()::getPlayer, plugin.getServer()::getWorld);
         regionTool = new NavigatorRegionTool(plugin, this, reserved);
     }
     public NavigatorRegionTool regionTool() { return regionTool; }
     void regionTool(NavigatorRegionTool tool) { regionTool = tool; }
     NavigatorEditor(WarpService warps, NavigatorMenu navigator, NavigatorStore store, MessageService messages,
                     InventoryFactory inventories, Function<dev.vapee.core.ui.UiItemSpec, org.bukkit.inventory.ItemStack> renderer,
-                    Function<UUID, Player> online) {
+                    Function<UUID, Player> online, Function<String, World> worlds) {
         this.warps = warps; this.navigator = navigator; this.store = store; this.messages = messages;
-        this.inventories = inventories; this.renderer = renderer; this.online = online;
+        this.inventories = inventories; this.renderer = renderer; this.online = online; this.worlds = worlds;
         navigator.previewAccess(player -> authorized(player) && sessions.containsKey(player.getUniqueId()));
     }
     public void register(PluginCommand owned) {
@@ -268,6 +274,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                     return withEntries(menu, entries);
                 });
                 accept(s, menus); s.menu = s.draft.root(); s.page = 0; s.bank = 0; select(s, null);
+                s.heights.keySet().removeIf(target -> target.menu().equals(id));
             }
             default -> throw new MissingArgument();
         }
@@ -279,6 +286,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             case "remove" -> {
                 if (s.first != null && s.first.owns(s)) throw unfinished(s);
                 var entries = new LinkedHashMap<>(menu(s).entries()); entries.remove(e.id()); replaceMenu(s, withEntries(menu(s), entries)); select(s, null);
+                s.heights.remove(new RegionTarget(s.menu, e.id()));
             }
             case "icon" -> update(s, old -> copy(old, material(arg(args, 2)), old.name(), old.lore(), old.permission(), old.region(), old.stackAmount()));
             case "name" -> update(s, old -> copy(old, old.icon(), localized(old.name(), args, 2), old.lore(), old.permission(), old.region(), old.stackAmount()));
@@ -318,6 +326,8 @@ public final class NavigatorEditor implements TabExecutor, Listener {
                 entries.put(e.id(), new NavigatorConfig.Entry(e.id(), e.type(), page, slot, e.icon(), e.name(), e.lore(), e.target(), e.permission(), e.region(), e.stackAmount()));
                 menus.put(target, withEntries(destination, entries)); accept(s, menus);
                 if (s.first != null && s.first.owns(s)) s.first = s.first.moved(target);
+                var height = s.heights.remove(new RegionTarget(s.menu, e.id()));
+                if (height != null) s.heights.put(new RegionTarget(target, e.id()), height);
                 s.menu = target; s.page = page; s.bank = slot / 45; select(s, e.id());
             }
             default -> throw new MissingArgument();
@@ -336,6 +346,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             case "clear" -> {
                 requirePendingTarget(s);
                 update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), null, false)); s.first = null; s.pendingNoticeShown = false;
+                s.heights.remove(new RegionTarget(s.menu, s.selected));
                 say(player, "Region cleared in draft.", "Region im Entwurf entfernt.");
             }
             case "pos1", "pos2" -> position(player, s, action, player.getLocation(), false);
@@ -349,7 +360,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         if (at == null || at.getWorld() == null || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY()) || !Double.isFinite(at.getZ()))
             throw problem("Invalid coordinates or missing world. No position was changed.", "Ungültige Koordinaten oder fehlende Welt. Keine Position wurde geändert.");
         if (action.equals("pos1")) {
-            s.first = new PendingRegion(s.menu, s.selected, at.getWorld().getUID(), at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+            s.first = new PendingRegion(s.menu, s.selected, at.getWorld().getUID(), at.getWorld().getName(), at.getBlockX(), at.getBlockY(), at.getBlockZ());
             s.pendingNoticeShown = false;
             if (tool) toolFeedback(player, "Position 1 selected.", "Position 1 gewählt.");
             else say(player, "Position 1 saved. Move to the second corner and use /navigator region pos2.", "Position 1 gesetzt. Gehe zur zweiten Ecke und nutze /navigator region pos2.");
@@ -357,11 +368,47 @@ public final class NavigatorEditor implements TabExecutor, Listener {
             if (!s.first.worldId().equals(at.getWorld().getUID()))
                 throw problem("Both positions must be in the same world. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".",
                         "Beide Positionen müssen in derselben Welt liegen. Pos1: " + s.first.world() + "; Pos2: " + at.getWorld().getName() + ".");
-            var bounds = new NavigatorRegion(at.getWorld().getName(), s.first.x(), s.first.y(), s.first.z(), at.getX(), at.getY(), at.getZ());
+            var height = height(s);
+            double manualMin = Math.min(s.first.y(), at.getBlockY()), manualMax = Math.max(s.first.y(), at.getBlockY());
+            var manual = new NavigatorRegion(at.getWorld().getName(), s.first.x(), manualMin, s.first.z(), at.getBlockX(), manualMax, at.getBlockZ());
+            var bounds = height.full() ? fullHeight(manual, at.getWorld()) : manual;
             update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.region() == null || old.stackAmount())); s.first = null; s.pendingNoticeShown = false;
+            s.heights.put(new RegionTarget(s.menu, s.selected), new RegionHeight(height.full(), manualMin, manualMax));
             if (tool) toolFeedback(player, "Position 2 selected. Region selected; Save to apply.", "Position 2 gewählt. Region gewählt; zum Übernehmen speichern.");
             else say(player, "Region selected. Save to apply.", "Region gewählt. Zum Übernehmen speichern.");
         }
+    }
+    private RegionHeight height(Session s) {
+        var entry = selectedWarp(s);
+        return s.heights.computeIfAbsent(new RegionTarget(s.menu, s.selected), ignored -> {
+            var r = entry.region();
+            if (r == null) return new RegionHeight(true, 0, 0);
+            var world = worlds.apply(r.world());
+            // Infer a saved full-height region without rewriting it or adding a persistent mode flag.
+            boolean full = world != null && r.minY() == world.getMinHeight() && r.maxY() == world.getMaxHeight() - 1;
+            return new RegionHeight(full, r.minY(), r.maxY());
+        });
+    }
+    private static NavigatorRegion fullHeight(NavigatorRegion r, World world) {
+        if (world == null || !r.world().equals(world.getName()))
+            throw problem("Region world is not loaded. No height was changed.", "Die Regionswelt ist nicht geladen. Keine Höhe wurde geändert.");
+        if (world.getMinHeight() >= world.getMaxHeight())
+            throw problem("Invalid world height. No height was changed.", "Ungültige Welthöhe. Keine Höhe wurde geändert.");
+        return new NavigatorRegion(r.world(), r.minX(), world.getMinHeight(), r.minZ(), r.maxX(), world.getMaxHeight() - 1, r.maxZ());
+    }
+    private void toggleHeight(Session s) {
+        selectedWarp(s); requirePendingTarget(s);
+        var height = height(s); var r = selected(s).region();
+        if (r != null) {
+            var bounds = height.full()
+                    ? new NavigatorRegion(r.world(), r.minX(), height.manualMin(), r.minZ(), r.maxX(), height.manualMax(), r.maxZ())
+                    : fullHeight(r, worlds.apply(r.world()));
+            update(s, old -> copy(old, old.icon(), old.name(), old.lore(), old.permission(), bounds, old.stackAmount()));
+        }
+        s.heights.put(new RegionTarget(s.menu, s.selected), new RegionHeight(!height.full(), height.manualMin(), height.manualMax()));
+    }
+    private String heightName(Player player, Session s) {
+        return height(s).full() ? text(player, "Full world height", "Gesamte Welthöhe") : text(player, "Manual height", "Manuelle Höhe");
     }
     NavigatorRegionTool.Target toolTarget(Player player) {
         var s = session(player); selectedWarp(s); requirePendingTarget(s);
@@ -400,6 +447,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         var entry = selected(s); var r = entry.region();
         String info = r == null ? text(player, "Optional count: OFF (no region)", "Optionaler Zähler: AUS (keine Region)")
                 : text(player, "Count: ON; ", "Zählung: AN; ") + r.world() + " [" + r.minX() + "," + r.minY() + "," + r.minZ() + "] - [" + r.maxX() + "," + r.maxY() + "," + r.maxZ() + "]; stack=" + entry.stackAmount();
+        info += text(player, "; height: ", "; Höhe: ") + heightName(player, s);
         if (s.first != null) info += text(player, "; pending Pos1: ", "; offene Pos1: ") + s.first.menu() + "/" + s.first.entry() + " @ " + s.first.world() + " [" + s.first.x() + "," + s.first.y() + "," + s.first.z() + "]";
         return info;
     }
@@ -663,6 +711,14 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private void showRegion(Player player, Session s) {
         var entry = selectedWarp(s); var h = view(player, s, "Player-count region", "Spielerzähler-Region", 27);
         button(h, 4, Material.MAP, text(player, "Optional player counter", "Optionaler Spielerzähler"), List.of(regionInfo(player, s)), p -> region(p, s, "info"));
+        boolean full = height(s).full();
+        button(h, 6, Material.SCAFFOLDING, text(player, "Height: ", "Höhe: ") + heightName(player, s), List.of(
+                full ? text(player, "Y: world minimum to world maximum.", "Y: Weltminimum bis Weltmaximum.")
+                        : text(player, "Y: the two marked blocks (inclusive).", "Y: die zwei markierten Blöcke (inklusive)."),
+                full ? text(player, "Click: Manual height", "Klicken: Manuelle Höhe")
+                        : text(player, "Click: Full world height", "Klicken: Gesamte Welthöhe"),
+                text(player, "Draft only; Save to apply. Reselect to change manual Y.", "Nur Entwurf; mit Save übernehmen. Für neue manuelle Y-Werte erneut markieren.")),
+                p -> { toggleHeight(s); changed(p, s); showRegion(p, s); });
         button(h, 10, Material.WOODEN_AXE, "Position 1", p -> { region(p, s, "pos1"); changed(p, s); showRegion(p, s); });
         button(h, 12, Material.STONE_AXE, "Position 2", p -> { region(p, s, "pos2"); changed(p, s); showRegion(p, s); });
         button(h, 14, Material.SPONGE, text(player, "Clear region", "Region entfernen"), p -> { region(p, s, "clear"); changed(p, s); showRegion(p, s); });
