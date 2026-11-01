@@ -834,6 +834,7 @@ public final class UtilityCommandHarness {
         private final Inventory enderChest;
         private final PlayerInventory inventory;
         private Inventory openedInventory;
+        private org.bukkit.inventory.InventoryView openView;
 
         private MutablePlayer(String name, GameMode gameMode, Set<String> permissions) {
             this.name = name;
@@ -875,7 +876,19 @@ public final class UtilityCommandHarness {
                 case "getPing" -> ping;
                 case "getInventory" -> inventory;
                 case "getEnderChest" -> enderChest;
-                case "openInventory" -> set(() -> { writes++;  openedInventory = (Inventory) arguments[0]; });
+                case "openInventory" -> {
+                    writes++; openedInventory = (Inventory) arguments[0];
+                    Inventory top = openedInventory;
+                    openView = proxy(org.bukkit.inventory.InventoryView.class, (m, a) -> switch (m.getName()) {
+                        case "getTopInventory" -> top;
+                        case "getBottomInventory" -> inventory;
+                        case "getPlayer" -> currentPlayer();
+                        default -> defaultValue(m.getReturnType());
+                    });
+                    yield openView;
+                }
+                case "getOpenInventory" -> openView;
+                case "closeInventory" -> set(() -> { writes++; openedInventory = null; openView = null; });
                 case "getLocation" -> new Location(null, 1.0D, 2.0D, 3.0D);
                 case "teleport" -> {
                     writes++;
@@ -885,6 +898,8 @@ public final class UtilityCommandHarness {
                 default -> defaultValue(method.getReturnType());
             });
         }
+
+        private Player currentPlayer() { return player; }
     }
 
     private static Object set(Runnable action) {

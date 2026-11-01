@@ -179,6 +179,7 @@ public final class LobbyHarness {
         AtomicReference<GameMode> configuredMode = new AtomicReference<>(GameMode.ADVENTURE);
         PlayerProbe normal = new PlayerProbe("Normal");
         PlayerProbe builder = new PlayerProbe("Build");
+        builder.hasBuildPermission = true;
         ServiceFixture fixture = service(configuredMode, List.of(normal, builder));
 
         fixture.service.synchronize(normal.player);

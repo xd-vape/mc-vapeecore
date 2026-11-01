@@ -6,6 +6,15 @@ import dev.vapee.core.player.PlayerService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -19,10 +28,18 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 public final class LobbyListener implements Listener {
 
-    private final JavaPlugin plugin;
+    private final Consumer<Runnable> nextTick;
+    private final BooleanSupplier pluginEnabled;
+    private final Map<UUID, Player> pendingBuildCleanup = new HashMap<>();
+    private boolean active = true;
     private final LobbyConfig lobbyConfig;
     private final LobbyService lobbyService;
     private final PlayerService playerService;
@@ -35,7 +52,16 @@ public final class LobbyListener implements Listener {
             PlayerService playerService,
             LobbyPlayerStateService lobbyPlayerStateService
     ) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this(lobbyConfig, lobbyService, playerService, lobbyPlayerStateService,
+                task -> Objects.requireNonNull(plugin, "plugin").getServer().getScheduler().runTask(plugin, task),
+                plugin::isEnabled);
+    }
+
+    LobbyListener(LobbyConfig lobbyConfig, LobbyService lobbyService, PlayerService playerService,
+                  LobbyPlayerStateService lobbyPlayerStateService, Consumer<Runnable> nextTick,
+                  BooleanSupplier pluginEnabled) {
+        this.nextTick = Objects.requireNonNull(nextTick, "nextTick");
+        this.pluginEnabled = Objects.requireNonNull(pluginEnabled, "pluginEnabled");
         this.lobbyConfig = Objects.requireNonNull(lobbyConfig, "lobbyConfig");
         this.lobbyService = Objects.requireNonNull(lobbyService, "lobbyService");
         this.playerService = Objects.requireNonNull(playerService, "playerService");
@@ -49,8 +75,8 @@ public final class LobbyListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         lobbyPlayerStateService.handleQuit(player.getUniqueId());
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!plugin.isEnabled()
+        nextTick.accept(() -> {
+            if (!active || !pluginEnabled.getAsBoolean()
                     || !player.isOnline()
                     || !playerService.isLoaded(player.getUniqueId())) {
                 return;
@@ -89,6 +115,7 @@ public final class LobbyListener implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        pendingBuildCleanup.remove(event.getPlayer().getUniqueId());
         lobbyPlayerStateService.handleQuit(event.getPlayer().getUniqueId());
     }
 
@@ -123,50 +150,110 @@ public final class LobbyListener implements Listener {
         player.setFoodLevel(20);
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreak(BlockBreakEvent event) {
-        if (lobbyConfig.isBlockBreakProtectionEnabled()
+        if (denyRevokedBuild(event.getPlayer()) || (lobbyConfig.isBlockBreakProtectionEnabled()
                 && lobbyService.isLobbyWorld(event.getBlock().getWorld())
-                && !canBuild(event.getPlayer())) {
+                && !canBuild(event.getPlayer()))) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
-        if (lobbyConfig.isBlockPlaceProtectionEnabled()
+        if (denyRevokedBuild(event.getPlayer()) || (lobbyConfig.isBlockPlaceProtectionEnabled()
                 && lobbyService.isLobbyWorld(event.getBlock().getWorld())
-                && !canBuild(event.getPlayer())) {
+                && !canBuild(event.getPlayer()))) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onItemDrop(PlayerDropItemEvent event) {
-        if (lobbyConfig.isItemDropProtectionEnabled()
+        if (denyRevokedBuild(event.getPlayer()) || (lobbyConfig.isItemDropProtectionEnabled()
                 && lobbyService.isLobbyWorld(event.getPlayer().getWorld())
-                && !canBuild(event.getPlayer())) {
+                && !canBuild(event.getPlayer()))) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onItemPickup(EntityPickupItemEvent event) {
         if (event.getEntity() instanceof Player player
-                && lobbyConfig.isItemPickupProtectionEnabled()
+                && (denyRevokedBuild(player) || (lobbyConfig.isItemPickupProtectionEnabled()
                 && lobbyService.isLobbyWorld(player.getWorld())
-                && !canBuild(player)) {
+                && !canBuild(player)))) {
             event.setCancelled(true);
         }
     }
 
     private boolean canBuild(Player player) {
-        return lobbyPlayerStateService.isBuildMode(player.getUniqueId());
+        return lobbyPlayerStateService.hasBuildAuthority(player);
+    }
+
+    // Includes InventoryCreativeEvent; it shares InventoryClickEvent's handler list.
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player player && denyRevokedBuild(player)) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (event.getWhoClicked() instanceof Player player && denyRevokedBuild(player)) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteract(PlayerInteractEvent event) {
+        if (denyRevokedBuild(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractEntity(PlayerInteractEntityEvent event) {
+        if (denyRevokedBuild(event.getPlayer())) event.setCancelled(true);
+    }
+
+    // These subclasses have their own handler lists, unlike InventoryCreativeEvent.
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        if (denyRevokedBuild(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onArmorStandManipulate(PlayerArmorStandManipulateEvent event) {
+        if (denyRevokedBuild(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onSwapHands(PlayerSwapHandItemsEvent event) {
+        if (denyRevokedBuild(event.getPlayer())) event.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onMove(PlayerMoveEvent event) {
+        // Effective LP contexts may change within one world as well as between worlds.
+        denyRevokedBuild(event.getPlayer());
+    }
+
+    private boolean denyRevokedBuild(Player player) {
+        if (!active || !lobbyPlayerStateService.isBuildMode(player.getUniqueId()) || canBuild(player)) return false;
+        if (pendingBuildCleanup.putIfAbsent(player.getUniqueId(), player) == null) {
+            nextTick.accept(() -> {
+                if (!pendingBuildCleanup.remove(player.getUniqueId(), player) || !active
+                        || !pluginEnabled.getAsBoolean() || !player.isOnline()) return;
+                lobbyPlayerStateService.reconcileBuildAuthority(player);
+            });
+        }
+        return true;
+    }
+
+    public void disable() {
+        active = false;
+        pendingBuildCleanup.clear();
     }
 
     private void scheduleSynchronization(Player player) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!plugin.isEnabled()
+        nextTick.accept(() -> {
+            if (!active || !pluginEnabled.getAsBoolean()
                     || !player.isOnline()
                     || !playerService.isLoaded(player.getUniqueId())
                     || !lobbyService.isLobbyWorld(player.getWorld())) {

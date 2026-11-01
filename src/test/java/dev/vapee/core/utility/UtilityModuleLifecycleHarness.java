@@ -46,6 +46,7 @@ public final class UtilityModuleLifecycleHarness {
         combinedFailures();
         manager();
         wiring();
+        enderChestListenerLifecycle();
         System.out.println("UtilityModuleLifecycleHarness passed " + checks + " checks.");
     }
 
@@ -166,6 +167,24 @@ public final class UtilityModuleLifecycleHarness {
                 "production adapters delegate to real Paper setters and listeners");
     }
 
+    private static void enderChestListenerLifecycle() throws Exception {
+        for (String stage : List.of("", "register:enderchest", "executor:enderchest", "register:invsee", "log")) {
+            Fixture f = new Fixture(true); f.fail = stage;
+            if (stage.isEmpty()) {
+                f.module.enable();
+                check(f.listeners.size() == 3 && f.listeners.contains(f.enderChest), "foreign chest guard registered before publication");
+                f.module.disable();
+            } else check(failure(f.module::enable) == f.original, "Enderchest acquisition failure retains original " + stage);
+            empty(f);
+            var active = f.enderChest.getClass().getDeclaredField("active"); active.setAccessible(true);
+            check(!(boolean) active.get(f.enderChest) && f.events.contains("unregister:enderchest"),
+                    "owned foreign view guard disabled and unregistered after " + stage);
+            f.reset(); f.module.enable();
+            check((boolean) active.get(f.enderChest) && f.listeners.size() == 3, "re-enable owns a fresh active guard");
+            f.module.disable(); empty(f);
+        }
+    }
+
     private static void queueJoin(Fixture f) {
         Player player = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[]{Player.class},
                 (proxy, method, args) -> {
@@ -205,12 +224,17 @@ public final class UtilityModuleLifecycleHarness {
         UtilityService service;
         UtilityListener listener;
         InvseeService invsee;
+        dev.vapee.core.utility.command.EnderChestCommand enderChest;
         final UtilityModule module;
         String fail = "";
         boolean premature;
         int playerCalls;
 
         Fixture() {
+            this(false);
+        }
+
+        Fixture(boolean realEnderChest) {
             logger.setUseParentHandlers(false);
             logger.addHandler(new Handler() {
                 public void publish(LogRecord record) { if (fail.equals("log")) throw original; }
@@ -233,7 +257,21 @@ public final class UtilityModuleLifecycleHarness {
             }, (utility, views, register) -> {
                 for (String name : NAMES) {
                     fault("constructor:" + name);
-                    register.accept(name, EXECUTOR);
+                    if (realEnderChest && name.equals("enderchest")) {
+                        try {
+                            var ctor = dev.vapee.core.utility.command.EnderChestCommand.class.getDeclaredConstructor(
+                                    UtilityService.class, java.util.function.Function.class, java.util.function.Supplier.class,
+                                    java.util.function.BiConsumer.class, dev.vapee.core.command.OnlineStaffTargetGuard.class,
+                                    java.util.function.Consumer.class);
+                            ctor.setAccessible(true);
+                            enderChest = ctor.newInstance(utility, (java.util.function.Function<String, Player>) n -> null,
+                                    (java.util.function.Supplier<java.util.Collection<Player>>) List::of,
+                                    (java.util.function.BiConsumer<org.bukkit.command.CommandSender, Component>) (s, c) -> { },
+                                    new dev.vapee.core.command.StaffTargetTestFixture().guard,
+                                    (java.util.function.Consumer<Runnable>) queued::add);
+                        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+                        register.accept(name, enderChest);
+                    } else register.accept(name, EXECUTOR);
                 }
             }, this, logger);
         }
@@ -253,10 +291,14 @@ public final class UtilityModuleLifecycleHarness {
         }
         public void register(Listener value) {
             unpublished(); listeners.add(value);
-            fault("register:" + (value instanceof InvseeService ? "invsee" : "utility"));
+            fault("register:" + listenerName(value));
         }
         public void unregister(Listener value) {
-            listeners.remove(value); cleanup("unregister:" + (value instanceof InvseeService ? "invsee" : "utility"));
+            listeners.remove(value); cleanup("unregister:" + listenerName(value));
+        }
+        String listenerName(Listener value) {
+            return value instanceof dev.vapee.core.utility.command.EnderChestCommand ? "enderchest"
+                    : value instanceof InvseeService ? "invsee" : "utility";
         }
         void unpublished() {
             try { module.getUtilityService(); premature = true; } catch (IllegalStateException expected) { }

@@ -144,7 +144,7 @@ public final class UtilityModule implements CoreModule {
             cleanup(newUtilityService, newUtilityListener, newInvseeService, exception);
             throw exception;
         }
-        // Publish only when all command pairs and both listeners have been installed.
+        // Publish only when all command pairs and owned listeners have been installed.
         utilityService = newUtilityService;
         utilityListener = newUtilityListener;
         invseeService = newInvseeService;
@@ -165,6 +165,12 @@ public final class UtilityModule implements CoreModule {
 
     private RuntimeException cleanup(UtilityService service, UtilityListener listener,
                                      InvseeService invsee, RuntimeException failure) {
+        for (Listener owned : List.copyOf(registeredListeners)) {
+            if (owned instanceof EnderChestCommand enderChest) {
+                failure = attempt(failure, enderChest::disable);
+                failure = attempt(failure, () -> hooks.unregister(enderChest));
+            }
+        }
         if (invsee != null) failure = attempt(failure, invsee::disable);
         if (invsee != null && registeredListeners.contains(invsee)) {
             failure = attempt(failure, () -> hooks.unregister(invsee));
@@ -204,6 +210,7 @@ public final class UtilityModule implements CoreModule {
                 "Command '" + name + "' is missing from plugin.yml");
         // Own the pair before either setter, including a half-installed command.
         registeredCommands.add(command);
+        if (executor instanceof EnderChestCommand enderChest) registerListener(enderChest);
         command.executor().accept(executor);
         command.completer().accept(executor);
     }

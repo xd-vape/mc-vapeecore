@@ -38,9 +38,7 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.metadata.MetadataValue;
 
 /**
- * Audit characterizations, not a declaration that the observed gaps are desired behavior.
- * These assertions deliberately prove the pre-remediation behavior for PHASE_04_SECURITY_AUDIT.
- * When remediation is approved, replace them with deny/release expectations and negative controls.
+ * AUDIT-01/02 remediation regressions; AUDIT-03 remains an unchanged disclosure characterization.
  * Only existing process-local fixtures and disposable files are used; no server is contacted.
  */
 public final class Phase04SecurityAuditHarness {
@@ -71,8 +69,12 @@ public final class Phase04SecurityAuditHarness {
             var config = new LobbyConfig(file, LOG); config.initialize();
             // Unused plugin/player-service constructor dependencies are inert, as in existing event fixtures.
             var lobby = shell(LobbyService.class); set(lobby, "spawn", config.getSpawn().orElseThrow());
-            var listener = shell(LobbyListener.class);
-            set(listener, "lobbyConfig", config); set(listener, "lobbyService", lobby); set(listener, "lobbyPlayerStateService", state);
+            List<Runnable> queued = new ArrayList<>();
+            var listenerCtor = LobbyListener.class.getDeclaredConstructor(LobbyConfig.class, LobbyService.class,
+                    PlayerService.class, LobbyPlayerStateService.class, Consumer.class, BooleanSupplier.class);
+            listenerCtor.setAccessible(true);
+            var listener = listenerCtor.newInstance(config, lobby, shell(PlayerService.class), state,
+                    (Consumer<Runnable>) queued::add, (BooleanSupplier) () -> true);
             Block block = proxy(Block.class, (method, values) -> {
                 if (method.getName().startsWith("set")) throw new AssertionError("Diagnostic attempted a world write");
                 return method.getName().equals("getWorld") ? player.getWorld() : null;
@@ -86,14 +88,15 @@ public final class Phase04SecurityAuditHarness {
             set(probe, "hasBuildPermission", false);
             check(!player.hasPermission(BuildCommand.PERMISSION) && !player.isOp(), "effective permission and OP are false after revocation");
             var retained = new BlockBreakEvent(block, player); listener.onBlockBreak(retained);
-            check(!retained.isCancelled(), "AUDIT-01: real protection handler still permits stale BUILD actor after revocation");
+            check(retained.isCancelled(), "AUDIT-01 fixed: real protection handler denies stale BUILD actor immediately");
             System.out.println("AUDIT-01 actual: permission=" + player.hasPermission(BuildCommand.PERMISSION)
                     + ", BUILD=" + state.isBuildMode(player.getUniqueId()) + ", mode=" + player.getGameMode()
                     + ", blockBreakCancelled=" + retained.isCancelled());
             command.onCommand(player, null, "build", new String[0]);
-            check(state.isBuildMode(player.getUniqueId()), "denied /build does not revoke existing BUILD state");
+            check(queued.size() == 1 && retained.isCancelled(), "denied /build cannot regain authority while owned cleanup is pending");
             state.synchronize(player);
-            check(state.isBuildMode(player.getUniqueId()) && player.getGameMode() == GameMode.CREATIVE, "normal synchronization also retains revoked BUILD state");
+            queued.forEach(Runnable::run);
+            check(!state.isBuildMode(player.getUniqueId()) && player.getGameMode() == GameMode.ADVENTURE, "synchronization releases revoked BUILD state through normal lifecycle");
             state.handleQuit(player.getUniqueId());
             var afterQuit = new BlockBreakEvent(block, player); listener.onBlockBreak(afterQuit);
             check(afterQuit.isCancelled(), "quit cleanup removes the retained protection bypass");
@@ -107,9 +110,10 @@ public final class Phase04SecurityAuditHarness {
         Object ownerProbe = create.invoke(fixture, "AuditOwner", GameMode.SURVIVAL, new String[0]);
         Player viewer = (Player) field(viewerProbe, "player"), owner = (Player) field(ownerProbe, "player");
         var permissions = (Set<String>) field(viewerProbe, "permissions");
+        List<Runnable> queued = new ArrayList<>();
         var command = new EnderChestCommand((UtilityService) field(fixture, "service"),
                 name -> name.equalsIgnoreCase(owner.getName()) ? owner : viewer,
-                () -> List.of(viewer, owner), (sender, message) -> { }, new StaffTargetTestFixture(LOG).guard);
+                () -> List.of(viewer, owner), (sender, message) -> { }, new StaffTargetTestFixture(LOG).guard, queued::add);
         command.onCommand(viewer, null, "enderchest", new String[]{owner.getName()});
         check(field(viewerProbe, "openedInventory") == null, "base permission cannot open another player's chest");
         permissions.add(EnderChestCommand.OTHERS_PERMISSION);
@@ -120,10 +124,8 @@ public final class Phase04SecurityAuditHarness {
         command.onCommand(viewer, null, "enderchest", new String[]{owner.getName()});
         check((int) field(viewerProbe, "writes") == writes, "revoked actor cannot reopen through command boundary");
         check(!viewer.hasPermission(EnderChestCommand.OTHERS_PERMISSION) && !viewer.isOp() && field(viewerProbe, "openedInventory") == chest,
-                "AUDIT-02: fresh denial leaves earlier target chest reference open");
-        InventoryView view = proxy(InventoryView.class, (method, values) -> switch (method.getName()) {
-            case "getTopInventory" -> chest; case "getPlayer" -> viewer; default -> null;
-        });
+                "revoked non-OP actor still has a tracked view requiring interaction-time enforcement");
+        InventoryView view = viewer.getOpenInventory();
         Constructor<?> ctor = Arrays.stream(InvseeService.class.getDeclaredConstructors()).filter(c -> c.getParameterCount() == 3).findFirst().orElseThrow();
         ctor.setAccessible(true);
         Object factory = Proxy.newProxyInstance(ctor.getParameterTypes()[2].getClassLoader(), new Class<?>[]{ctor.getParameterTypes()[2]},
@@ -131,10 +133,13 @@ public final class Phase04SecurityAuditHarness {
         var invsee = (InvseeService) ctor.newInstance((BooleanSupplier) () -> true, (Function<UUID, Player>) id -> viewer, factory);
         var click = new InventoryClickEvent(view, InventoryType.SlotType.CONTAINER, 0, ClickType.LEFT, InventoryAction.PICKUP_ALL);
         invsee.onInventoryClick(click);
-        check(!click.isCancelled(), "AUDIT-02: Utility's read-only inventory listener does not guard live Enderchest clicks");
+        command.onInventoryClick(click);
+        queued.forEach(Runnable::run);
+        check(click.isCancelled() && field(viewerProbe, "openedInventory") == null,
+                "AUDIT-02 fixed: foreign view interaction is denied and released next tick");
         System.out.println("AUDIT-02 actual: othersPermission=" + viewer.hasPermission(EnderChestCommand.OTHERS_PERMISSION)
                 + ", retainedTargetInventory=" + (field(viewerProbe, "openedInventory") == owner.getEnderChest())
-                + ", invseeListenerCancelled=" + click.isCancelled());
+                + ", foreignViewCancelled=" + click.isCancelled());
         check(chest.getHolder() == null, "live fixture chest is not a plugin capability holder");
         // No inventory contents are changed: actual client transfer remains a disposable native acceptance scenario.
     }

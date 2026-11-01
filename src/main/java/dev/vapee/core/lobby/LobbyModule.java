@@ -97,6 +97,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
                 }
             }
         } catch (RuntimeException exception) {
+            newLobbyListener.disable();
             HandlerList.unregisterAll(newLobbyListener);
             newSpawnCommand.setExecutor(null);
             newSpawnCommand.setTabCompleter(null);
@@ -124,6 +125,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
     @Override
     public void disable() {
         if (lobbyListener != null) {
+            lobbyListener.disable();
             HandlerList.unregisterAll(lobbyListener);
         }
         if (spawnCommand != null) {

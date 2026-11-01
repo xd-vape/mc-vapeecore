@@ -143,11 +143,11 @@ public final class UtilityService {
         validatedPlayer.getInventory().setItemInOffHand(null);
     }
 
-    public void openEnderChest(Player viewer, Player owner) {
+    public org.bukkit.inventory.InventoryView openEnderChest(Player viewer, Player owner) {
         requirePrimaryThread();
         Player validatedViewer = Objects.requireNonNull(viewer, "viewer");
         Player validatedOwner = Objects.requireNonNull(owner, "owner");
-        validatedViewer.openInventory(validatedOwner.getEnderChest());
+        return validatedViewer.openInventory(validatedOwner.getEnderChest());
     }
 
     public void clearManagedFlight(Player player) {

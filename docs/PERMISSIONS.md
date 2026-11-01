@@ -6,7 +6,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 
 | Permission | Default | Command/Funktion | Hinweis |
 |---|---:|---|---|
-| `vapeecore.admin` | `op` | `/core reload` (technische Administration) | Kritisches Owner-Recht; kein Wildcard-Parent für alle VapeeCore-Rechte. |
+| `vapeecore.admin` | `op` | `/core reload` und `/core quest force [player]` | Kritisches Owner-Recht; kein Wildcard-Parent für alle VapeeCore-Rechte. |
 | `vapeecore.lobby.spawn` | `true` | `/spawn` | Teleport zum konfigurierten Lobby-Spawn. |
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |
@@ -218,7 +218,7 @@ Alles von Moderator, zusätzlich:
 - `vapeecore.warp.admin`
 - `vapeecore.visibility.staff`
 
-`vapeecore.admin` bleibt optional, wenn `/core reload` Owner-only sein soll.
+`vapeecore.admin` bleibt optional, wenn `/core reload` und `/core quest force [player]` Owner-only sein sollen.
 
 ### Owner
 
@@ -279,7 +279,7 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 37 Roots, 50 Nodes, 15 Child-K
 | utility.enderchest.others | utility.enderchest | Stärkerer Zugang gewährt Basis; kein Target-Schutz-Bypass |
 | economy.admin | economy.coins | Admin gewährt Basis, niemals umgekehrt |
 
-`default: true` bleibt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, quest.use, social.ignore, rank.view und ranks.view. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` wird nur für die technische Core-Reload-Fähigkeit verwendet, nicht als Staff-Bundle.
+`default: true` bleibt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, quest.use, social.ignore, rank.view und ranks.view. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` erlaubt Core-Reload und `/core quest force [player]`, nicht pauschal weitere Staff-Fähigkeiten.
 
 ## Vollständiger Command-/Descriptor-Audit (aktueller Phase-29-Vertrag)
 
@@ -296,7 +296,7 @@ In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarke
 | /unban | — | vapeecore.moderation.unban | moderation.unban | Admin/Owner | /unban <player\|uuid> [reason...] | Nein |
 | /kick | — | vapeecore.moderation.kick | moderation.kick | Moderator | /kick <player\|uuid> <reason...> | Nein |
 | /history | — | vapeecore.moderation.history | moderation.history | Moderator | /history <player\|uuid> [page] | Nein |
-| /vapeecore | core | — | Root ohne Gate; reload: vapeecore.admin | User; Reload Owner | /core help | Nein |
+| /vapeecore | core | — | Root ohne Gate; reload und quest force [player]: vapeecore.admin | User; Reload/Quest-Force Owner | /core help | Nein |
 | /spawn | — | vapeecore.lobby.spawn | lobby.spawn | User/VIP | /spawn | Nein |
 | /setspawn | — | vapeecore.lobby.setspawn | lobby.setspawn | Admin/Owner | /setspawn | Nein |
 | /coins | — | vapeecore.economy.coins | economy.coins; get/add/remove/set zusätzlich economy.admin | User/VIP | /coins help | Nein |

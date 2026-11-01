@@ -75,6 +75,17 @@ public final class LobbyPlayerStateService {
         return getMode(playerId) == LobbyPlayerMode.BUILD;
     }
 
+    /** BUILD membership is owned state, never a cached permission grant. */
+    public boolean hasBuildAuthority(Player player) {
+        return isBuildMode(player.getUniqueId()) && player.hasPermission("vapeecore.utility.build");
+    }
+
+    /** Called outside inventory transactions, through the existing state-change lifecycle. */
+    public void reconcileBuildAuthority(Player player) {
+        requirePrimaryThread();
+        if (isBuildMode(player.getUniqueId()) && !hasBuildAuthority(player)) exitBuildMode(player);
+    }
+
     public void synchronizeJoin(Player player) {
         requirePrimaryThread();
         Objects.requireNonNull(player, "player");
@@ -96,6 +107,10 @@ public final class LobbyPlayerStateService {
     public void synchronize(Player player) {
         requirePrimaryThread();
         Objects.requireNonNull(player, "player");
+        if (isBuildMode(player.getUniqueId()) && !hasBuildAuthority(player)) {
+            reconcileBuildAuthority(player);
+            return;
+        }
         for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
         try {
             Player validatedPlayer = player;
@@ -185,9 +200,12 @@ public final class LobbyPlayerStateService {
         for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
         try {
             Player validatedPlayer = player;
-            clearInventory(validatedPlayer);
-            buildPlayers.remove(validatedPlayer.getUniqueId());
-            applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer));
+            if (isBuildMode(validatedPlayer.getUniqueId())) {
+                // A different mode was assigned externally; release our inventory without undoing it.
+                applyNormalMode(validatedPlayer, lobbyPlayerCheck.test(validatedPlayer),
+                        validatedPlayer.getGameMode() == GameMode.CREATIVE);
+                buildPlayers.remove(validatedPlayer.getUniqueId());
+            }
         } finally {
             for (var listener : java.util.List.copyOf(stateListeners)) listener.afterStateChange(player.getUniqueId());
         }
@@ -202,7 +220,7 @@ public final class LobbyPlayerStateService {
             boolean wasBuilding = buildPlayers.remove(validatedPlayer.getUniqueId());
             if (wasBuilding) {
                 clearInventory(validatedPlayer);
-                validatedPlayer.setGameMode(normalGameMode());
+                if (validatedPlayer.getGameMode() == GameMode.CREATIVE) validatedPlayer.setGameMode(normalGameMode());
             }
             lobbyItemRemover.accept(validatedPlayer);
         } finally {
@@ -219,6 +237,10 @@ public final class LobbyPlayerStateService {
         requirePrimaryThread();
         for (Player player : onlinePlayersSupplier.get()) {
             if (player == null || !player.isOnline()) continue;
+            if (isBuildMode(player.getUniqueId()) && !hasBuildAuthority(player)) {
+                reconcileBuildAuthority(player);
+                continue;
+            }
             for (var listener : java.util.List.copyOf(stateListeners)) listener.beforeStateChange(player);
             try {
                 if (lobbyPlayerCheck.test(player) && !isBuildMode(player.getUniqueId())) player.setGameMode(normalGameMode());
@@ -236,7 +258,7 @@ public final class LobbyPlayerStateService {
             }
             if (isBuildMode(player.getUniqueId())) {
                 clearInventory(player);
-                player.setGameMode(normalGameMode());
+                if (player.getGameMode() == GameMode.CREATIVE) player.setGameMode(normalGameMode());
             }
             lobbyItemRemover.accept(player);
         }
@@ -263,8 +285,12 @@ public final class LobbyPlayerStateService {
     }
 
     private void applyNormalMode(Player player, boolean applyLobbyItems) {
+        applyNormalMode(player, applyLobbyItems, true);
+    }
+
+    private void applyNormalMode(Player player, boolean applyLobbyItems, boolean restoreGameMode) {
         clearInventory(player);
-        player.setGameMode(normalGameMode());
+        if (restoreGameMode) player.setGameMode(normalGameMode());
         if (applyLobbyItems) {
             lobbyItemApplier.accept(player);
         } else {
