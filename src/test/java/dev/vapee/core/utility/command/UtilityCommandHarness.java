@@ -692,7 +692,8 @@ public final class UtilityCommandHarness {
             String[] extra = java.util.Arrays.copyOf(staffArguments(i, "Beta"), staffArguments(i, "Beta").length + 1);
             extra[extra.length - 1] = "extra";
             command.onCommand(self.player, null, root, extra);
-            check(f.last().equals("Invalid usage.\nUse: " + usages.get(i)), root + " exact arity/usage preserved");
+            check(f.last().equals((root.equals("ping") ? "Invalid usage. Use: " : "Invalid usage.\nUse: ") + usages.get(i)),
+                    root + " exact arity/syntax preserved, ping uses compact feedback");
             check(command.onTabComplete(self.player, null, root, extra).isEmpty(), root + " extra completion arity");
             check(command.onTabComplete(self.player, null, root, new String[0]).isEmpty(), root + " zero completion arity");
             Fixture empty = new Fixture();

@@ -3,6 +3,7 @@ package dev.vapee.core.staff;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.SocialChannel;
 import dev.vapee.core.moderation.command.HistoryCommand;
 import dev.vapee.core.rank.RankInfo;
 import dev.vapee.core.rank.RankService;
@@ -71,7 +72,7 @@ public final class StaffPanel implements TabExecutor, Listener {
                     // Use the owning plugin's actual executor, never an alias, console sender or replacement executor.
                     if (command == null || !(request.action() == Action.TELEPORT
                             ? command.getExecutor() instanceof TeleportCommand : command.getExecutor() instanceof HistoryCommand)) {
-                        messages.send(viewer, tr("staff.action-unavailable")); return;
+                        SocialChannel.STAFF.send(messages, viewer, tr("staff.action-unavailable")); return;
                     }
                     command.execute(viewer, command.getName(), new String[]{request.action() == Action.TELEPORT
                             ? request.target().getName() : request.target().getUniqueId().toString()});
@@ -112,8 +113,8 @@ public final class StaffPanel implements TabExecutor, Listener {
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!active || !runtime.getAsBoolean()) return true;
         if (args.length == 1 && args[0].equalsIgnoreCase("list")) { publicRoster(sender); return true; }
-        if (args.length != 0) { messages.send(sender, tr("staff.usage")); return true; }
-        if (!(sender instanceof Player player)) { messages.send(sender, tr("common.inventory-player-only")); return true; }
+        if (args.length != 0) { SocialChannel.STAFF.send(messages, sender, tr("staff.usage")); return true; }
+        if (!(sender instanceof Player player)) { SocialChannel.STAFF.send(messages, sender, tr("common.inventory-player-only")); return true; }
         open(player, StaffPanelHolder.View.STAFF, 0, null);
         return true;
     }
@@ -131,17 +132,17 @@ public final class StaffPanel implements TabExecutor, Listener {
                         .append(playerName(p))).toList();
         Component list = names.isEmpty() ? tr("staff.roster-empty")
                 : Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.text(", ", NamedTextColor.GRAY)), names);
-        messages.send(viewer, tr("staff.roster", Map.of("players", list)));
+        SocialChannel.STAFF.send(messages, viewer, tr("staff.roster", Map.of("players", list)));
     }
 
     private boolean open(Player viewer, StaffPanelHolder.View view, int page, Player selected) {
         if (!canOpen(viewer)) {
-            messages.send(viewer, tr("staff.denied"));
+            SocialChannel.STAFF.send(messages, viewer, tr("staff.denied"));
             Binding existing = views.get(viewer.getUniqueId());
             if (existing != null && existing.viewer == viewer) closeOwned(viewer.getUniqueId());
             return false;
         }
-        if (selected != null && !visible(viewer, selected)) { messages.send(viewer, tr("staff.target-unavailable")); return false; }
+        if (selected != null && !visible(viewer, selected)) { SocialChannel.STAFF.send(messages, viewer, tr("staff.target-unavailable")); return false; }
         StaffPanelHolder holder = new StaffPanelHolder(viewer.getUniqueId());
         Inventory inventory = inventories.create(holder, 27, messages.localize(viewer, tr(selected == null ? "staff.title" : "staff.target-title")));
         holder.bind(inventory);
@@ -286,7 +287,7 @@ public final class StaffPanel implements TabExecutor, Listener {
         if (target != null) defer(binding, () -> {
             if (!visible(viewer, target) || (content.view() == StaffPanelHolder.View.STAFF ? !staff(target)
                     : CAPABILITIES.stream().noneMatch(a -> allowed(viewer, target, a)))) {
-                messages.send(viewer, tr("staff.target-unavailable")); refresh(viewer.getUniqueId()); return;
+                SocialChannel.STAFF.send(messages, viewer, tr("staff.target-unavailable")); refresh(viewer.getUniqueId()); return;
             }
             open(viewer, content.view(), content.page(), target);
         });
@@ -309,13 +310,13 @@ public final class StaffPanel implements TabExecutor, Listener {
             case TELEPORT, HISTORY, WARN, MUTE, KICK -> {
                 Player target = content.selected();
                 if (target == null || !allowed(viewer, target, action)) {
-                    messages.send(viewer, tr("staff.action-denied")); refresh(viewer.getUniqueId()); return;
+                    SocialChannel.STAFF.send(messages, viewer, tr("staff.action-denied")); refresh(viewer.getUniqueId()); return;
                 }
                 closeOwned(viewer.getUniqueId());
                 // A close hook may itself change authority or replace the player session.
                 if (!allowed(viewer, target, action)) return;
                 if (action == Action.TELEPORT || action == Action.HISTORY) commands.accept(viewer, new CommandRequest(action, target));
-                else messages.send(viewer, tr("staff.prepare", Map.of("action", actionName(action)))
+                else SocialChannel.STAFF.send(messages, viewer, tr("staff.prepare", Map.of("action", actionName(action).color(dev.vapee.core.message.MessageStyle.HIGHLIGHT)))
                         .clickEvent(ClickEvent.suggestCommand("/" + action.name().toLowerCase(Locale.ROOT) + " " + target.getUniqueId() + " ")));
             }
             default -> { }

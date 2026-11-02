@@ -6,10 +6,11 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-/** One localized channel heading per notification; MessageService still owns the global prefix. */
+/** Existing social wrappers keep operator prefix behavior; Staff owns its single raw heading. */
 public enum SocialChannel {
     FRIENDS("friends.prefix", NamedTextColor.GOLD),
-    CLAN("clan.prefix", NamedTextColor.DARK_PURPLE);
+    CLAN("clan.prefix", NamedTextColor.DARK_PURPLE),
+    STAFF("staff.prefix", NamedTextColor.DARK_GRAY);
 
     private final String prefixKey;
     private final NamedTextColor color;
@@ -26,7 +27,8 @@ public enum SocialChannel {
     }
 
     public void send(MessageService messages, Audience recipient, Component body) {
-        messages.send(recipient, message(body));
+        if (this == STAFF) messages.sendRaw(recipient, message(body));
+        else messages.send(recipient, message(body));
     }
 
     public void error(MessageService messages, Audience recipient, Component body) {

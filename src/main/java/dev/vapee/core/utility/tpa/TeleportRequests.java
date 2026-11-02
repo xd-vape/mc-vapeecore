@@ -318,7 +318,7 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
     }
 
     private void tell(Player player, Component text) {
-        if (current(player)) messages.sendRaw(player, tr("tpa.prefix").append(text).colorIfAbsent(NamedTextColor.GRAY));
+        if (current(player)) messages.sendRaw(player, text.colorIfAbsent(NamedTextColor.GRAY));
     }
 
     private void notifyBoth(Request request, Component text) { tell(request.sender, text); tell(request.recipient, text); }

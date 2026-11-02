@@ -40,17 +40,17 @@ public final class HistoryCommand extends AbstractModerationCommand {
         if (history.isEmpty()) { context.send(sender, tr("moderation.history.empty", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT)))); return; }
         int pages = (history.size() - 1) / PAGE_SIZE + 1;
         int page = page(args);
-        if (page > pages) { context.send(sender, tr("moderation.history.page-missing", java.util.Map.of("pages", Component.text(pages, MessageStyle.HIGHLIGHT)))); return; }
+        if (page > pages) { context.error(sender, tr("moderation.history.page-missing", java.util.Map.of("pages", Component.text(pages, MessageStyle.HIGHLIGHT)))); return; }
         context.send(sender, tr("moderation.history.heading", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "page", Component.text(page, MessageStyle.HIGHLIGHT), "pages", Component.text(pages, MessageStyle.HIGHLIGHT))));
         int offset = (page - 1) * PAGE_SIZE;
         Instant now = context.clock().instant();
         for (ModerationRecord record : history.subList(offset, offset + Math.min(history.size() - offset, PAGE_SIZE))) {
-            context.messages().send(sender, ModerationComponents.historyEntry(record, now, context::actorName));
+            context.messages().sendRaw(sender, ModerationComponents.historyEntry(record, now, context::actorName));
         }
         Component navigation = Component.empty();
         if (page > 1) navigation = navigation.append(navigation(tr("moderation.history.previous"), target, page - 1));
         if (page < pages) navigation = navigation.append(Component.space()).append(navigation(tr("moderation.history.next"), target, page + 1));
-        if (pages > 1) context.messages().send(sender, navigation);
+        if (pages > 1) context.messages().sendRaw(sender, navigation);
     }
 
     private Component navigation(Component text, PlayerIdentity target, int page) {

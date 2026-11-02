@@ -3,11 +3,11 @@ package dev.vapee.core.command.help;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.MessageStyle;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
 
 import java.util.ArrayList;
@@ -17,10 +17,6 @@ import java.util.Objects;
 public final class CommandHelpRenderer {
 
     private static final Component NEWLINE = Component.newline();
-    private static final Component SEPARATOR = Component.text(
-            "──────────────────────────",
-            NamedTextColor.DARK_GRAY
-    );
 
     private final MessageService messageService;
 
@@ -40,45 +36,40 @@ public final class CommandHelpRenderer {
         CommandHelpPage validatedPage = Objects.requireNonNull(page, "page");
         List<VisibleSection> visibleSections = visibleSections(validatedSender, validatedPage);
 
-        Component result = Component.empty()
-                .append(Component.text("VapeeCore", NamedTextColor.GOLD, TextDecoration.BOLD))
-                .append(Component.text(" • ", NamedTextColor.DARK_GRAY))
-                .append(validatedPage.title().color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
-                .append(NEWLINE)
-                .append(SEPARATOR);
+        Component result = Component.empty().color(MessageStyle.BODY)
+                .append(validatedPage.title().color(NamedTextColor.WHITE));
 
         if (validatedPage.description() != null) {
-            result = result.append(NEWLINE)
+            result = result.append(Component.text(" — ", NamedTextColor.DARK_GRAY))
                     .append(validatedPage.description().color(NamedTextColor.GRAY));
         }
 
         for (VisibleSection section : visibleSections) {
             result = result.append(NEWLINE)
-                    .append(NEWLINE)
-                    .append(section.title().color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
+                    .append(section.title().color(NamedTextColor.WHITE));
             for (CommandHelpEntry entry : section.entries()) {
                 result = result.append(NEWLINE)
                         .append(syntax(entry.syntax(), sender))
-                        .append(NEWLINE)
-                        .append(Component.text("  ").append(entry.description().color(NamedTextColor.GRAY)));
+                        .append(Component.text(" — ", NamedTextColor.DARK_GRAY))
+                        .append(entry.description().color(NamedTextColor.GRAY));
                 if (entry.hint() != null) {
-                    result = result.append(NEWLINE)
-                            .append(Component.text("  ").append(entry.hint().color(NamedTextColor.YELLOW)));
+                    result = result.append(Component.text(" (", NamedTextColor.DARK_GRAY))
+                            .append(entry.hint().color(NamedTextColor.GRAY))
+                            .append(Component.text(")", NamedTextColor.DARK_GRAY));
                 }
             }
         }
 
         if (validatedPage.footer() != null) {
             result = result.append(NEWLINE)
-                    .append(NEWLINE)
-                    .append(tr("common.help-tip").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD))
+                    .append(tr("common.help-tip").color(NamedTextColor.GRAY))
                     .append(validatedPage.footer().color(NamedTextColor.GRAY));
         }
         return messageService.localize(sender, result);
     }
 
     private Component syntax(String syntax, CommandSender sender) {
-        return Component.text(syntax, NamedTextColor.AQUA)
+        return MessageStyle.syntax(syntax)
                 .clickEvent(ClickEvent.suggestCommand(syntax))
                 .hoverEvent(HoverEvent.showText(tr("common.command-insert").color(NamedTextColor.GRAY)));
     }

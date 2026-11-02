@@ -927,6 +927,7 @@ activity:
 
 # Staff Panel and Public Roster
 staff:
+  prefix: "[Staff]"
   title: "Staff Panel"
   target-title: "Staff Actions"
   usage: "Use /staff to open the panel or /staff list for the public team list."
@@ -954,7 +955,7 @@ staff:
   action-kick: "Kick player"
   action-execute: "Click to use your existing permission."
   action-input: "Click to prepare the action in chat."
-  prepare: "<aqua><action>: click here to enter the required details in chat."
+  prepare: "<action>: click here to enter the required details in chat."
   action-unavailable: "This staff action is currently unavailable."
   target-unavailable: "That player is no longer an available target."
   action-denied: "Your current permission or staff hierarchy does not allow that action."
@@ -985,32 +986,32 @@ moderation:
 
   # Warnings
   warn:
-    received: "You received a warning.\nReason: <reason>"
-    saved: "Warned <player>.\nReason: <reason>"
+    received: "<yellow>You received a warning.</yellow>\n<gray>Reason: <white><reason></white></gray>"
+    saved: "<green>Warned</green> <player>.\n<gray>Reason: <white><reason></white></gray>"
   warn-notify-failed: "Warning was saved, but the online player could not be notified."
 
   # Bans and Kicks
   ban:
     disconnect-failed: "Ban was saved, but the online player could not be disconnected."
-    saved-duration: "Banned <player> for <duration>.\nReason: <reason>"
-    saved-permanent: "Banned <player> permanently.\nReason: <reason>"
+    saved-duration: "<green>Banned</green> <player> for <duration>.\n<gray>Reason: <white><reason></white></gray>"
+    saved-permanent: "<green>Banned</green> <player> permanently.\n<gray>Reason: <white><reason></white></gray>"
     screen: "You are banned from this server."
-  unban.saved: "Unbanned <player>."
+  unban.saved: "<green>Unbanned</green> <player>."
   kick:
     disconnect-failed: "Kick record was saved, but the online player could not be disconnected."
-    saved: "Kicked <player>.\nReason: <reason>"
+    saved: "<green>Kicked</green> <player>.\n<gray>Reason: <white><reason></white></gray>"
     screen: "You were kicked from the server."
 
   # Mutes
   mute:
     notify-failed: "Mute was saved, but the online player could not be notified."
-    saved-duration: "Muted <player> for <duration>.\nReason: <reason>"
-    saved-permanent: "Muted <player> permanently.\nReason: <reason>"
+    saved-duration: "<green>Muted</green> <player> for <duration>.\n<gray>Reason: <white><reason></white></gray>"
+    saved-permanent: "<green>Muted</green> <player> permanently.\n<gray>Reason: <white><reason></white></gray>"
     screen: "You are muted."
   unmute:
     notify-failed: "Unmute was saved, but the online player could not be notified."
-    saved: "Unmuted <player>."
-    screen: "Your mute has been removed."
+    saved: "<green>Unmuted</green> <player>."
+    screen: "Your <green>mute</green> has been removed."
 
   # History
   history:
@@ -1047,7 +1048,6 @@ moderation:
 # ==================================================
 
 tpa:
-  prefix: "<dark_gray>[<aqua>TPA</aqua>]</dark_gray> "
   permission: "<red>You cannot use teleport requests.</red>"
   usage-send: "Use /tpa \\<player> to go to them, or /tpahere \\<player> to invite them here."
   usage-answer: "Use /tpaccept [player] or /tpdeny [player]."
@@ -1066,8 +1066,8 @@ tpa:
   cancelled: "Teleport request cancelled."
   denied: "Teleport request denied."
   expired: "Teleport request expired."
-  failed: "<red>Teleport unavailable, cancelled or failed. Send a new request to try again.</red>"
-  success: "<green>Teleport completed.</green>"
+  failed: "<red>Teleport</red> unavailable, cancelled or failed. Send a new request to try again."
+  success: "<green>Teleport</green> completed."
 
 utility:
 
@@ -1079,7 +1079,7 @@ utility:
     enabled: "<green>Build mode enabled.</green>"
     failed: "<red>Build mode could not be changed. Check the server log.</red>"
     player-only: "<red>This command can only be used by a player.</red>"
-    usage: "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <aqua>/build</aqua>"
+    usage: "<red>Invalid usage.</red> <gray>Use:</gray> <aqua>/build</aqua>"
     world: "<red>Build mode can only be enabled in the lobby world.</red>"
 
   # Movement and Flight

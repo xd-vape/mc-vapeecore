@@ -74,6 +74,16 @@ Command-Argumente erhalten ihre Farbe ausdrücklich vor dem Einsetzen in `tr(...
 
 Bestehende unterstützte Live-Konfigurationen werden nicht durch eine neue Default-Komposition überschrieben. Für die bewusste Übernahme zuerst exakt sichern, anschließend nur `items` und den gewünschten Prefix anpassen; eigene Spawn-/Protection-/Rang-/Clan-Werte behalten. Vorhandene Sprach-Overrides bleiben ebenfalls maßgeblich. Die Umstellung alter Literaltexte beschreibt [FORMATTING.md](FORMATTING.md#bestehende-installation-auf-übersetzte-standardtexte-umstellen).
 
+### Chat presentation polish
+
+Kerntexte bleiben grau; nur Werte und Command-Roots erhalten Aqua, Erfolg ein kleines grünes Signal und Fehler einen roten Akzent. `MessageStyle.syntax` behandelt Syntax vollständig literal und färbt Argumente neutral. `CommandHelpRenderer` behält bestehende Kategorien, Permission-Filter und SUGGEST_COMMAND, zeigt aber jede Beschreibung samt optionalem Hinweis auf derselben Zeile wie den Befehl. Keine dekorativen Trennlinien oder pauschal fetten Titel. Relevante Syntaxfehler bei Moderation, `/ping`, `/tp`, BUILD und Settings zeigen kompakte Syntax, ohne den Command-Parser zu verändern.
+
+TPA verwendet ausschließlich den bestehenden Raw-Pfad ohne `[TPA]`, Staff- oder globalen Präfix. `SocialChannel.STAFF` ergänzt einmalig `[Staff]` (EN) beziehungsweise `[Team]` (DE), ebenfalls über Raw-Delivery: Panel-Feedback, öffentliche Teamliste und Moderationsantworten an den Actor. Historien erhalten nur am Seitenkopf einen Präfix; Einträge und Navigation bleiben raw. Opfernachrichten sowie Kick-/Ban-Screens erhalten keinen Staff-Präfix. Friends/Clan, Join-Summary, PM, Chat und operatorseitig konfigurierte unabhängige Channels behalten ihre bisherigen Regeln. Rankfarben und sämtliche ClickEvents bleiben erhalten.
+
+`ModerationMuteChatListener` blockiert weiterhin jeden aktiven Mute vor dem normalen Chat-Renderer. Nur die kompakte Blockier-Erinnerung wird zehn Sekunden je exakter Player-Session und immutable Mute-Record gedrosselt; die direkten Staff-Sanktionshinweise behalten vollständigen Grund und Ablauf/Dauerhaftigkeit und umgehen diese Drossel. Ein atomarer ConcurrentMap-Claim verhindert parallele Mehrfachaufgaben. Chat-Threads lesen nur die vorhandene immutable Projektion und eine monotone Uhr. Lookup, Session-/Record-Revalidierung und Versand passieren im vorhandenen einmaligen Main-Thread-Callback. Committed-Publikationen räumen widerrufene/ersetzte Records auf; Ablauf wird lazy geprüft, Quit und Shutdown räumen Sitzungszustand auf. Keine persistente Drossel, kein neuer wiederkehrender Scheduler und keine Änderungen an Moderationsspeicherung oder Permissions.
+
+Nachweise, genaue Präfixregeln und verbleibende echte Client-Prüfungen: `reports/prototype/CHAT_PRESENTATION_POLISH.md`.
+
 ## Common Changes / Where do I change this?
 
 | Häufige Änderung | Konkreter Einstieg |

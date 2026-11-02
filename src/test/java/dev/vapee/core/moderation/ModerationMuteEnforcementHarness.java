@@ -18,13 +18,14 @@ public final class ModerationMuteEnforcementHarness {
     public static void main(String[] args) throws Exception {
         Fixture f = new Fixture();
         var tasks = new ArrayList<Runnable>();
+        long[] feedbackTime = {0};
         Thread mainThread = Thread.currentThread();
         var listener = new ModerationMuteChatListener(f.projection, task -> {
             check(Thread.currentThread() != mainThread, "schedule from real chat thread"); tasks.add(task);
         }, id -> {
             check(Thread.currentThread() == mainThread, "lookup on main thread");
             return f.online.containsKey(id) ? (Player) f.online.get(id).sender : null;
-        }, f.messages, f.logger);
+        }, f.messages, f.logger, () -> feedbackTime[0]);
         var handler = ModerationMuteChatListener.class.getMethod("onAsyncChat", AsyncChatEvent.class).getAnnotation(EventHandler.class);
         check(handler.priority() == EventPriority.LOWEST && handler.ignoreCancelled(), "LOWEST ignoreCancelled");
         var chatHandler = dev.vapee.core.chat.ChatListener.class.getMethod("onAsyncChat", AsyncChatEvent.class).getAnnotation(EventHandler.class);
@@ -51,8 +52,9 @@ public final class ModerationMuteEnforcementHarness {
         check(formatterCalls == 0, "cancelled event cannot enter normal formatter");
         check(blocked.renderer() == originalRenderer, "mute cancellation never replaces renderer");
         tasks.removeFirst().run();
-        check(f.target.text().contains(ATTACK) && f.target.text().contains("UTC")
-                && f.target.output.stream().allMatch(ModerationTestSupport::noEvents), "literal timed feedback");
+        check(!f.target.text().contains(ATTACK) && f.target.text().contains("UTC")
+                && !plain(f.target.output.getLast()).contains("\n") && f.target.output.stream().allMatch(ModerationTestSupport::noEvents),
+                "compact timed reminder; initial sanction reason is covered by real command notification tests");
         f.repository.fail = true;
         try { f.service.revokeMute(TARGET, ModerationActor.console(), Optional.empty()); throw new AssertionError("failed revoke accepted"); }
         catch (ModerationRepositoryException expected) { checks++; }
@@ -68,6 +70,7 @@ public final class ModerationMuteEnforcementHarness {
         f.service.issueMute(TARGET, ModerationActor.console(), ATTACK, Optional.empty());
         check(async(listener, f).isCancelled(), "permanent blocks");
         tasks.removeFirst().run(); check(f.target.text().contains("Permanent"), "permanent feedback");
+        feedbackTime[0] += ModerationMuteChatListener.FEEDBACK_INTERVAL_NANOS;
         async(listener, f); f.online.remove(TARGET); int outputs = f.target.output.size(); tasks.removeFirst().run();
         check(f.target.output.size() == outputs, "offline before task no queued notification"); f.online.put(TARGET, f.target);
         var failedScheduler = new ModerationMuteChatListener(f.projection, task -> { throw new IllegalStateException("scheduler closed"); },

@@ -927,6 +927,7 @@ activity:
 
 # Staff Panel and Public Roster
 staff:
+  prefix: "[Team]"
   title: "Staff-Panel"
   target-title: "Staff-Aktionen"
   usage: "Mit /staff öffnest du das Panel, mit /staff list die öffentliche Teamliste."
@@ -954,7 +955,7 @@ staff:
   action-kick: "Spieler kicken"
   action-execute: "Klicken, um deine bestehende Berechtigung zu nutzen."
   action-input: "Klicken, um die Aktion im Chat vorzubereiten."
-  prepare: "<aqua><action>: Hier klicken und die nötigen Angaben im Chat ergänzen."
+  prepare: "<action>: Hier klicken und die nötigen Angaben im Chat ergänzen."
   action-unavailable: "Diese Staff-Aktion ist momentan nicht verfügbar."
   target-unavailable: "Dieser Spieler ist kein verfügbares Ziel mehr."
   action-denied: "Deine aktuelle Berechtigung oder Staff-Hierarchie erlaubt diese Aktion nicht."
@@ -985,32 +986,32 @@ moderation:
 
   # Warnings
   warn:
-    received: "Du wurdest verwarnt.\nGrund: <reason>"
-    saved: "<player> verwarnt.\nGrund: <reason>"
+    received: "<yellow>Du wurdest verwarnt.</yellow>\n<gray>Grund: <white><reason></white></gray>"
+    saved: "<player> <green>verwarnt</green>.\n<gray>Grund: <white><reason></white></gray>"
   warn-notify-failed: "Die Verwarnung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."
 
   # Bans and Kicks
   ban:
     disconnect-failed: "Die Sperre wurde gespeichert, aber der Online-Spieler konnte nicht vom Server getrennt werden."
-    saved-duration: "<player> für <duration> gesperrt.\nGrund: <reason>"
-    saved-permanent: "<player> dauerhaft gesperrt.\nGrund: <reason>"
+    saved-duration: "<player> für <duration> <green>gesperrt</green>.\n<gray>Grund: <white><reason></white></gray>"
+    saved-permanent: "<player> dauerhaft <green>gesperrt</green>.\n<gray>Grund: <white><reason></white></gray>"
     screen: "Du bist auf diesem Server gesperrt."
-  unban.saved: "Sperre von <player> aufgehoben."
+  unban.saved: "Sperre von <player> <green>aufgehoben</green>."
   kick:
     disconnect-failed: "Der Kick wurde gespeichert, aber der Online-Spieler konnte nicht vom Server getrennt werden."
-    saved: "<player> vom Server getrennt.\nGrund: <reason>"
+    saved: "<player> vom Server <green>getrennt</green>.\n<gray>Grund: <white><reason></white></gray>"
     screen: "Du wurdest vom Server getrennt."
 
   # Mutes
   mute:
     notify-failed: "Die Stummschaltung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."
-    saved-duration: "<player> für <duration> stummgeschaltet.\nGrund: <reason>"
-    saved-permanent: "<player> dauerhaft stummgeschaltet.\nGrund: <reason>"
+    saved-duration: "<player> für <duration> <green>stummgeschaltet</green>.\n<gray>Grund: <white><reason></white></gray>"
+    saved-permanent: "<player> dauerhaft <green>stummgeschaltet</green>.\n<gray>Grund: <white><reason></white></gray>"
     screen: "Du bist stummgeschaltet."
   unmute:
     notify-failed: "Die Aufhebung der Stummschaltung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."
-    saved: "Stummschaltung von <player> aufgehoben."
-    screen: "Deine Stummschaltung wurde aufgehoben."
+    saved: "Stummschaltung von <player> <green>aufgehoben</green>."
+    screen: "Deine <green>Stummschaltung</green> wurde aufgehoben."
 
   # History
   history:
@@ -1047,7 +1048,6 @@ moderation:
 # ==================================================
 
 tpa:
-  prefix: "<dark_gray>[<aqua>TPA</aqua>]</dark_gray> "
   permission: "<red>Du darfst Teleport-Anfragen nicht verwenden.</red>"
   usage-send: "Mit /tpa \\<Spieler> reist du zu ihm; mit /tpahere \\<Spieler> lädst du ihn zu dir ein."
   usage-answer: "Verwende /tpaccept [Spieler] oder /tpdeny [Spieler]."
@@ -1066,8 +1066,8 @@ tpa:
   cancelled: "Teleport-Anfrage abgebrochen."
   denied: "Teleport-Anfrage abgelehnt."
   expired: "Teleport-Anfrage abgelaufen."
-  failed: "<red>Teleport nicht verfügbar, abgebrochen oder fehlgeschlagen. Sende zum Wiederholen eine neue Anfrage.</red>"
-  success: "<green>Teleport abgeschlossen.</green>"
+  failed: "<red>Teleport</red> nicht verfügbar, abgebrochen oder fehlgeschlagen. Sende zum Wiederholen eine neue Anfrage."
+  success: "<green>Teleport</green> abgeschlossen."
 
 utility:
 
@@ -1079,7 +1079,7 @@ utility:
     enabled: "<green>Baumodus aktiviert.</green>"
     failed: "<red>Der Baumodus konnte nicht geändert werden. Sieh im Server-Log nach.</red>"
     player-only: "<red>Dieser Command kann nur von einem Spieler verwendet werden.</red>"
-    usage: "<red>Ungültige Verwendung.</red>\n<yellow>Verwendung:</yellow> <aqua>/build</aqua>"
+    usage: "<red>Ungültige Verwendung.</red> <gray>Verwendung:</gray> <aqua>/build</aqua>"
     world: "<red>Der Baumodus kann nur in der Lobby-Welt aktiviert werden.</red>"
 
   # Movement and Flight

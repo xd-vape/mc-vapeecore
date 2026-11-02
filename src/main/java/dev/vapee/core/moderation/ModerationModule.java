@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Owns moderation commands/listeners and the focused staff-panel presentation. No reload/poller. */
 public final class ModerationModule implements CoreModule {
@@ -88,16 +89,22 @@ public final class ModerationModule implements CoreModule {
         if (service != null) throw new IllegalStateException("ModerationModule already enabled");
         ModerationMuteProjection nextProjection = new ModerationMuteProjection(clock);
         AtomicBoolean nextActive = new AtomicBoolean(false);
+        AtomicReference<ModerationMuteChatListener> feedbackTarget = new AtomicReference<>();
         ModerationLoginListener newListener = null;
         ModerationMuteChatListener newChatListener = null;
         StaffPanel newPanel = null;
         ModerationService loaded;
         try {
-            loaded = new ModerationService(repositoryFactory.get(), clock, idSupplier, nextProjection::publish);
+            loaded = new ModerationService(repositoryFactory.get(), clock, idSupplier, snapshot -> {
+                nextProjection.publish(snapshot);
+                ModerationMuteChatListener current = feedbackTarget.get();
+                if (current != null) current.reconcileFeedback();
+            });
             ModerationCommandContext context = contextFactory.apply(loaded).withRuntime(feedbackScheduler, nextActive::get);
             newListener = new ModerationLoginListener(loaded, context.logger(), context.messages().localization());
             newChatListener = new ModerationMuteChatListener(nextProjection, feedbackScheduler,
                     context.onlinePlayer(), context.messages(), context.logger());
+            feedbackTarget.set(newChatListener);
             newPanel = panelFactory.apply(context);
             hooks.install("warn", new WarnCommand(context));
             hooks.install("ban", new BanCommand(context));

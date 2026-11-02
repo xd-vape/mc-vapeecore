@@ -33,7 +33,7 @@ public final class MuteCommand extends AbstractModerationCommand {
             duration = ModerationDurationParser.parse(args[1]);
             expiry = duration.expiresAt(context.clock().instant());
         } catch (IllegalArgumentException exception) {
-            context.send(sender, tr("moderation.duration-invalid"));
+            context.error(sender, tr("moderation.duration-invalid"));
             return;
         }
         ModerationRecord record = mutate(sender, actor, target,

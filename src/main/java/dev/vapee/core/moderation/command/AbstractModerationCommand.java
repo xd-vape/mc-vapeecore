@@ -3,6 +3,7 @@ package dev.vapee.core.moderation.command;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.identity.PlayerIdentity;
+import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.identity.PlayerLookupStatus;
 import dev.vapee.core.moderation.*;
 import dev.vapee.core.rank.staff.StaffTargetDecision;
@@ -32,12 +33,12 @@ abstract class AbstractModerationCommand implements TabExecutor {
     @Override public final boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!context.active().getAsBoolean()) return true;
         if (!sender.hasPermission("vapeecore.moderation." + name)) {
-            context.send(sender, tr("common.command-denied"));
+            context.error(sender, tr("common.command-denied"));
             return true;
         }
         ModerationActor actor = actor(sender);
         if (actor == null) {
-            context.send(sender, tr("moderation.actor-only"));
+            context.error(sender, tr("moderation.actor-only"));
             return true;
         }
         if (!validArguments(sender, args)) return true;
@@ -45,20 +46,20 @@ abstract class AbstractModerationCommand implements TabExecutor {
         try {
             var lookup = context.identities().resolve(args[0]);
             if (lookup.status() != PlayerLookupStatus.FOUND) {
-                context.send(sender, lookup.status() == PlayerLookupStatus.AMBIGUOUS
+                context.error(sender, lookup.status() == PlayerLookupStatus.AMBIGUOUS
                         ? tr("moderation.ambiguous") : tr("common.player-unknown"));
                 return true;
             }
             target = lookup.identity().orElseThrow();
             if (!name.equals("history") && actor.playerId().filter(target.uniqueId()::equals).isPresent()) {
-                context.send(sender, tr("moderation.self"));
+                context.error(sender, tr("moderation.self"));
                 return true;
             }
             authorize(sender, actor, target, args.clone());
         } catch (RuntimeException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT), actor,
                     target == null ? args[0] : target.uniqueId().toString(), exception);
-            context.send(sender, tr("moderation.failed"));
+            context.error(sender, tr("moderation.failed"));
         }
         return true;
     }
@@ -95,7 +96,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
             // Require the original live session, not merely a reconnect with the same UUID.
             if (!player.isOnline() || context.online(actor.playerId().orElseThrow()) != player) return;
             if (!sender.hasPermission("vapeecore.moderation." + name)) {
-                context.send(sender, tr("common.command-denied"));
+                context.error(sender, tr("common.command-denied"));
                 return;
             }
             if (failure != null) throw new IllegalStateException("LuckPerms primary group load failed", failure);
@@ -104,7 +105,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
         } catch (RuntimeException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT) + "_HIERARCHY",
                     actor, target.uniqueId().toString(), exception);
-            context.send(sender, tr("moderation.failed"));
+            context.error(sender, tr("moderation.failed"));
         }
     }
 
@@ -112,8 +113,8 @@ abstract class AbstractModerationCommand implements TabExecutor {
                                    String[] args, StaffTargetDecision decision) {
         switch (decision) {
             case ALLOW -> execute(sender, actor, target, args);
-            case DENY_SAME_OR_HIGHER -> context.send(sender, tr("common.staff-target-denied"));
-            case DENY_ACTOR_NOT_PROTECTED -> context.send(sender, tr("moderation.staff-protected"));
+            case DENY_SAME_OR_HIGHER -> context.error(sender, tr("common.staff-target-denied"));
+            case DENY_ACTOR_NOT_PROTECTED -> context.error(sender, tr("moderation.staff-protected"));
             case UNAVAILABLE -> throw new IllegalStateException("Staff hierarchy primary group unavailable");
         }
     }
@@ -122,8 +123,8 @@ abstract class AbstractModerationCommand implements TabExecutor {
     protected abstract void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args);
 
     protected final void usage(CommandSender sender, Component error) {
-        context.messages().send(sender, error.color(NamedTextColor.RED).append(Component.newline())
-                .append(tr("common.usage").append(Component.text(syntax)).color(NamedTextColor.AQUA)));
+        context.error(sender, error.append(Component.space())
+                .append(tr("common.usage")).append(MessageStyle.syntax(syntax)));
     }
 
     protected final String reason(String[] args, int start) {
@@ -136,14 +137,14 @@ abstract class AbstractModerationCommand implements TabExecutor {
         try { result = operation.get(); }
         catch (ModerationRepositoryException exception) {
             context.failure(name.toUpperCase(java.util.Locale.ROOT), actor, target.uniqueId().toString(), exception);
-            context.send(sender, tr("moderation.save-failed"));
+            context.error(sender, tr("moderation.save-failed"));
             return null;
         } catch (IllegalArgumentException exception) {
-            context.send(sender, tr("moderation.reason-invalid"));
+            context.error(sender, tr("moderation.reason-invalid"));
             return null;
         }
         if (result.status() != ModerationStatus.SUCCESS) {
-            context.send(sender, switch (result.status()) {
+            context.error(sender, switch (result.status()) {
                 case ALREADY_BANNED -> tr("moderation.already-banned");
                 case NOT_BANNED -> tr("moderation.not-banned");
                 case ALREADY_MUTED -> tr("moderation.already-muted");

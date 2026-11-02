@@ -119,9 +119,8 @@ public final class PingCommand implements TabExecutor {
 
     private void invalidUsage(CommandSender sender) {
         messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
-                .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/ping [player]", NamedTextColor.AQUA)));
+                .append(Component.space()).append(tr("common.use").color(MessageStyle.BODY))
+                .append(MessageStyle.syntax("/ping [player]")));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

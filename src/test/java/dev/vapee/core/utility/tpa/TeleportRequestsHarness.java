@@ -161,7 +161,7 @@ public final class TeleportRequestsHarness {
     }
     private static void presentation() {
         Fixture f=new Fixture(); var a=f.user("Alpha"); var b=f.user("Beta");b.locale=Locale.GERMANY;
-        f.command(a,"tpa","Beta"); check(b.last().startsWith("[TPA]") && b.last().contains("möchte sich zu dir") && !b.last().contains("OPERATOR"),"compact localized dedicated prefix");
+        f.command(a,"tpa","Beta"); check(!b.last().contains("[TPA]") && b.last().contains("möchte sich zu dir") && !b.last().contains("OPERATOR"),"compact localized prefix-free raw TPA delivery");
         check(b.clicks().size()==2 && b.clicks().stream().allMatch(c->c.action()==ClickEvent.Action.RUN_COMMAND),"only two ordinary player RUN_COMMAND actions");
         check(b.clicks().stream().allMatch(c->c.value().contains(a.id+":")),"clicks select UUID plus one-time request id");
         check(containsColor(b.received.getLast(),"Alpha",NamedTextColor.GOLD),"current RankService color on literal name");

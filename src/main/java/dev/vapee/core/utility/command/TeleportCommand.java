@@ -109,7 +109,7 @@ public final class TeleportCommand implements TabExecutor {
         try {
             request = TeleportParser.parse(args);
         } catch (IllegalArgumentException exception) {
-            invalidUsage(sender);
+            invalidUsage(sender, args);
             return true;
         }
         if (!request.other() && !(sender instanceof Player)) {
@@ -282,14 +282,20 @@ public final class TeleportCommand implements TabExecutor {
                 .thenComparing(Comparator.naturalOrder())).toList();
     }
 
-    private void invalidUsage(CommandSender sender) {
+    private void invalidUsage(CommandSender sender, String[] args) {
+        String syntax;
+        if (args.length > 0 && args[0].equalsIgnoreCase("world"))
+            syntax = "/tp world <world> <x> <y> <z> [yaw pitch]";
+        else if (args.length > 1 && args[1].equalsIgnoreCase("world"))
+            syntax = "/tp <source> world <world> <x> <y> <z> [yaw pitch]";
+        else if (args.length > 0 && coordinateStart(args[0]))
+            syntax = "/tp <x> <y> <z> [yaw pitch]";
+        else if (args.length > 1 && coordinateStart(args[1]))
+            syntax = "/tp <source> <x> <y> <z> [yaw pitch]";
+        else syntax = args.length > 1 || !(sender instanceof Player) ? "/tp <source> <target>" : "/tp <player>";
         messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
-                .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/tp <player> | /tp <x> <y> <z> [yaw pitch] | "
-                        + "/tp <source> <target> | /tp <source> <x> <y> <z> [yaw pitch] | "
-                        + "/tp world <world> <x> <y> <z> [yaw pitch] | "
-                        + "/tp <source> world <world> <x> <y> <z> [yaw pitch]", NamedTextColor.AQUA)));
+                .append(Component.space()).append(tr("common.use").color(MessageStyle.BODY))
+                .append(MessageStyle.syntax(syntax)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

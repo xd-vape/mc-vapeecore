@@ -33,16 +33,18 @@ public final class ModerationComponents {
         return tr("moderation.kick.screen").color(NamedTextColor.RED).append(Component.newline()).append(reason(record.reason()));
     }
     public static Component muteNotice(ModerationRecord record) {
-        return tr("moderation.mute.screen").color(NamedTextColor.RED).append(Component.newline())
-                .append(reason(record.reason())).append(Component.newline()).append(expiry(record));
+        return muteReminder(record).append(Component.newline()).append(reason(record.reason()));
+    }
+    public static Component muteReminder(ModerationRecord record) {
+        return tr("moderation.mute.screen").color(MessageStyle.ERROR).append(Component.space()).append(expiry(record));
     }
     public static Component unmuteNotice(ModerationRecord record) {
-        Component result = tr("moderation.unmute.screen").color(NamedTextColor.GREEN);
+        Component result = tr("moderation.unmute.screen").color(MessageStyle.BODY);
         var reason = record.revocation().flatMap(ModerationRevocation::reason);
         return reason.isEmpty() ? result : result.append(Component.newline()).append(reason(reason.get()));
     }
     private static Component reason(String reason) {
-        return tr("moderation.reason", java.util.Map.of("reason", Component.text(reason))).color(NamedTextColor.WHITE);
+        return tr("moderation.reason", java.util.Map.of("reason", Component.text(reason, NamedTextColor.WHITE))).color(MessageStyle.BODY);
     }
     private static Component expiry(ModerationRecord record) {
         Component expiry = record.expiresAt().map(value -> (Component) Component.text(time(value), MessageStyle.HIGHLIGHT)).orElseGet(() -> tr("moderation.permanent"));
@@ -59,18 +61,20 @@ public final class ModerationComponents {
 
     public static Component historyEntry(ModerationRecord record, Instant now, Function<ModerationActor, String> actorName) {
         Component status = tr("moderation.status." + status(record, now).toLowerCase(Locale.ROOT));
-        Component result = tr("moderation.action." + record.action().name()).append(Component.text(" • " + time(record.createdAt()) + " • "))
-                .append(status).color(NamedTextColor.YELLOW)
+        Component result = Component.empty().color(MessageStyle.BODY)
+                .append(tr("moderation.action." + record.action().name()).color(NamedTextColor.WHITE))
+                .append(Component.text(" • ")).append(Component.text(time(record.createdAt()), MessageStyle.HIGHLIGHT))
+                .append(Component.text(" • ")).append(status)
                 .hoverEvent(HoverEvent.showText(tr("moderation.record-id", java.util.Map.of("id", Component.text(record.id().toString())))))
-                .append(Component.newline()).append(tr("moderation.actor", java.util.Map.of("actor", actor(record.actor(), actorName))).color(NamedTextColor.GRAY))
-                .append(Component.newline()).append(reason(record.reason()));
-        if (record.action().supportsActiveState()) result = result.append(Component.newline()).append(expiry(record));
+                .append(Component.text(" • ")).append(tr("moderation.actor", java.util.Map.of("actor", actor(record.actor(), actorName))));
+        if (record.action().supportsActiveState()) result = result.append(Component.text(" • ")).append(expiry(record));
+        result = result.append(Component.newline()).append(reason(record.reason()));
         if (record.revocation().isPresent()) {
             ModerationRevocation revoke = record.revocation().get();
-            result = result.append(Component.newline()).append(tr("moderation.revoked", java.util.Map.of("actor", actor(revoke.actor(), actorName),
+            result = result.append(Component.text(" • ")).append(tr("moderation.revoked", java.util.Map.of("actor", actor(revoke.actor(), actorName),
                     "time", Component.text(time(revoke.revokedAt()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
-            if (revoke.reason().isPresent()) result = result.append(Component.newline()).append(tr("moderation.revocation-reason",
-                    java.util.Map.of("reason", Component.text(revoke.reason().get()))).color(NamedTextColor.WHITE));
+            if (revoke.reason().isPresent()) result = result.append(Component.text(" • ")).append(tr("moderation.revocation-reason",
+                    java.util.Map.of("reason", Component.text(revoke.reason().get(), NamedTextColor.WHITE))).color(MessageStyle.BODY));
         }
         return result;
     }

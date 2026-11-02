@@ -264,8 +264,8 @@ public final class SettingsCommand implements TabExecutor {
     }
 
     private void sendUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, tr("common.usage").color(NamedTextColor.YELLOW)
-                .append(Component.text(syntax, NamedTextColor.AQUA)));
+        messageService.send(sender, tr("common.usage").color(MessageStyle.BODY)
+                .append(MessageStyle.syntax(syntax)));
     }
 
     private static List<String> matching(List<String> values, String prefix) {

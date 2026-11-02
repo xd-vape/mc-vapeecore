@@ -6,6 +6,7 @@ import dev.vapee.core.identity.PlayerIdentity;
 import dev.vapee.core.identity.PlayerIdentityService;
 import dev.vapee.core.identity.IdentityCommandArgument;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.SocialChannel;
 import dev.vapee.core.moderation.*;
 import dev.vapee.core.rank.staff.StaffHierarchyService;
 import dev.vapee.core.rank.staff.StaffTargetDecision;
@@ -47,7 +48,11 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
     }
 
     public void send(CommandSender sender, Component text) {
-        messages.send(sender, text.color(NamedTextColor.YELLOW));
+        SocialChannel.STAFF.send(messages, sender, text);
+    }
+
+    public void error(CommandSender sender, Component text) {
+        SocialChannel.STAFF.error(messages, sender, text);
     }
 
     Player online(UUID id) {
@@ -110,7 +115,7 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
             if (player != null) player.kick(messages.localize(player, ban ? ModerationComponents.banScreen(record) : ModerationComponents.kickScreen(record)));
         } catch (RuntimeException exception) {
             failure(ban ? "BAN_DISCONNECT" : "KICK_DISCONNECT", actor, target.uniqueId().toString(), exception);
-            send(sender, tr(ban ? "moderation.ban.disconnect-failed" : "moderation.kick.disconnect-failed"));
+            error(sender, tr(ban ? "moderation.ban.disconnect-failed" : "moderation.kick.disconnect-failed"));
         }
     }
 
@@ -118,11 +123,11 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                     ModerationRecord record, boolean removed) {
         try {
             Player player = online(target.uniqueId());
-            if (player != null) messages.send(player, removed ? ModerationComponents.unmuteNotice(record)
+            if (player != null) messages.sendRaw(player, removed ? ModerationComponents.unmuteNotice(record)
                     : ModerationComponents.muteNotice(record));
         } catch (RuntimeException exception) {
             failure(removed ? "UNMUTE_NOTIFY" : "MUTE_NOTIFY", actor, target.uniqueId().toString(), exception);
-            send(sender, tr(removed ? "moderation.unmute.notify-failed" : "moderation.mute.notify-failed"));
+            error(sender, tr(removed ? "moderation.unmute.notify-failed" : "moderation.mute.notify-failed"));
         }
     }
 }

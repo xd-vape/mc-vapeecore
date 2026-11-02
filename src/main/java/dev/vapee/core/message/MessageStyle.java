@@ -15,6 +15,12 @@ public final class MessageStyle {
     private MessageStyle() { }
 
     public static Component value(String literal) { return Component.text(literal, HIGHLIGHT); }
+    /** Literal command syntax: only the command root is accented, arguments stay neutral. */
+    public static Component syntax(String syntax) {
+        int split = syntax.indexOf(' ');
+        return split < 0 ? value(syntax) : value(syntax.substring(0, split))
+                .append(Component.text(syntax.substring(split), BODY));
+    }
     public static Component activity(Component label, Component body) {
         return Translations.tr("activity.context", Map.of("activity", label, "body", body.colorIfAbsent(BODY)));
     }

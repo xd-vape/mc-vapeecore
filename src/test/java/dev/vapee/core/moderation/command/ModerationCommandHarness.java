@@ -567,7 +567,7 @@ public final class ModerationCommandHarness {
                             : scenario.equals("revoked") ? "You do not have permission to use this command."
                             : "You cannot target a staff member at your level or above.";
                     boolean silent = List.of("logout", "reconnect", "disabled").contains(scenario);
-                    check(silent ? f.staff.output.isEmpty() : f.staff.output.size() == 1 && f.staff.text().trim().equals(expected),
+                    check(silent ? f.staff.output.isEmpty() : f.staff.output.size() == 1 && f.staff.text().trim().equals("[Staff] Error: " + expected),
                             "fresh hierarchy denies without success/history feedback " + label + "; received " + f.staff.text());
                     check(f.repository.saves == before && f.repository.saved == snapshot && f.service.getAllRecords().equals(records)
                             && f.service.getHistory(OFFLINE).equals(history), "denied save/snapshot/history unchanged " + label);

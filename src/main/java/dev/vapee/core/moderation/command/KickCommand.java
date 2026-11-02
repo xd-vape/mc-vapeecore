@@ -18,7 +18,7 @@ public final class KickCommand extends AbstractModerationCommand {
 
     @Override protected void execute(CommandSender sender, ModerationActor actor, PlayerIdentity target, String[] args) {
         if (context.online(target.uniqueId()) == null) {
-            context.send(sender, tr("moderation.target-offline")); return;
+            context.error(sender, tr("moderation.target-offline")); return;
         }
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().recordKick(target.uniqueId(), actor, reason(args, 1)));
