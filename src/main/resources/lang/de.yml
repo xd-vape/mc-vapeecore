@@ -1046,6 +1046,29 @@ moderation:
 # UTILITY AND TELEPORTATION
 # ==================================================
 
+tpa:
+  prefix: "<dark_gray>[<aqua>TPA</aqua>]</dark_gray> "
+  permission: "<red>Du darfst Teleport-Anfragen nicht verwenden.</red>"
+  usage-send: "Mit /tpa \\<Spieler> reist du zu ihm; mit /tpahere \\<Spieler> lädst du ihn zu dir ein."
+  usage-answer: "Verwende /tpaccept [Spieler] oder /tpdeny [Spieler]."
+  usage-cancel: "Verwende /tpcancel."
+  unavailable: "<red>Diese Teleport-Anfrage ist momentan nicht verfügbar.</red>"
+  pending: "Du hast bereits eine ausgehende Anfrage. Nutze zuerst /tpcancel."
+  cooldown: "Warte zwischen Teleport-Anfragen bitte 15 Sekunden."
+  sent: "Anfrage an <player> gesendet. Sie läuft nach 60 Sekunden ab."
+  request-to: "<player> möchte sich zu dir teleportieren (60 Sekunden)."
+  request-here: "<player> möchte, dass du dich zu ihm teleportierst (60 Sekunden)."
+  accept: "<green>[Annehmen]</green>"
+  deny: "<red>[Ablehnen]</red>"
+  multiple: "Du hast mehrere Anfragen. Wähle mit /tpaccept \\<Spieler> oder /tpdeny \\<Spieler>."
+  none-incoming: "Diese eingehende Anfrage ist nicht mehr vorhanden."
+  none-outgoing: "Du hast keine ausgehende Teleport-Anfrage."
+  cancelled: "Teleport-Anfrage abgebrochen."
+  denied: "Teleport-Anfrage abgelehnt."
+  expired: "Teleport-Anfrage abgelaufen."
+  failed: "<red>Teleport nicht verfügbar, abgebrochen oder fehlgeschlagen. Sende zum Wiederholen eine neue Anfrage.</red>"
+  success: "<green>Teleport abgeschlossen.</green>"
+
 utility:
 
   # Build Mode

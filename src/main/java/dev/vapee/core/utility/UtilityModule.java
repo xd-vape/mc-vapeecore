@@ -9,6 +9,11 @@ import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.rank.RankModule;
+import dev.vapee.core.player.PlayerModule;
+import dev.vapee.core.social.SocialModule;
+import dev.vapee.core.message.PlayerNameFormatter;
+import dev.vapee.core.utility.tpa.TeleportRequests;
+import dev.vapee.core.utility.tpa.TeleportRequestRegistration;
 import dev.vapee.core.utility.command.BuildCommand;
 import dev.vapee.core.utility.command.ClearCommand;
 import dev.vapee.core.utility.command.EnderChestCommand;
@@ -45,23 +50,37 @@ public final class UtilityModule implements CoreModule {
     private final CommandRegistration commandRegistration;
     private final Hooks hooks;
     private final Logger logger;
+    private final Function<UtilityService, TeleportRequestRegistration> requestsFactory;
     private final List<CommandHook> registeredCommands = new ArrayList<>();
     private final List<Listener> registeredListeners = new ArrayList<>();
     private UtilityService utilityService;
     private UtilityListener utilityListener;
     private InvseeService invseeService;
+    private TeleportRequestRegistration teleportRequests;
 
     public UtilityModule(JavaPlugin plugin, LobbyModule lobbyModule, ActivityModule activityModule,
-                         RankModule rankModule, MessageService messageService) {
+                         RankModule rankModule, MessageService messageService,
+                         SocialModule socialModule, PlayerModule playerModule) {
         Objects.requireNonNull(plugin, "plugin");
         Objects.requireNonNull(lobbyModule, "lobbyModule");
         Objects.requireNonNull(activityModule, "activityModule");
         Objects.requireNonNull(rankModule, "rankModule");
         Objects.requireNonNull(messageService, "messageService");
+        Objects.requireNonNull(socialModule, "socialModule");
+        Objects.requireNonNull(playerModule, "playerModule");
         logger = plugin.getLogger();
         serviceFactory = () -> new UtilityService(plugin);
         listenerFactory = service -> new UtilityListener(plugin, service);
         invseeFactory = () -> new InvseeService(plugin, messageService);
+        requestsFactory = service -> {
+            var activity = activityModule.getActivityService();
+            var states = lobbyModule.getLobbyPlayerStateService();
+            var social = socialModule.getSocialService();
+            var requests = new TeleportRequests(plugin.getServer(), service, activity, states, social,
+                    playerModule.getPlayerSettingsService(), messageService,
+                    new PlayerNameFormatter(rankModule::getRankService), plugin.getLogger());
+            return new TeleportRequestRegistration(plugin, requests, activity, states, social);
+        };
         commandRegistration = (newUtilityService, newInvseeService, register) -> {
             LobbyService lobbyService = lobbyModule.getLobbyService();
             LobbyPlayerStateService lobbyPlayerStateService = lobbyModule.getLobbyPlayerStateService();
@@ -115,12 +134,20 @@ public final class UtilityModule implements CoreModule {
                   Function<UtilityService, UtilityListener> listenerFactory,
                   Supplier<InvseeService> invseeFactory, CommandRegistration commandRegistration,
                   Hooks hooks, Logger logger) {
+        this(serviceFactory, listenerFactory, invseeFactory, commandRegistration, hooks, logger, service -> null);
+    }
+
+    UtilityModule(Supplier<UtilityService> serviceFactory,
+                  Function<UtilityService, UtilityListener> listenerFactory,
+                  Supplier<InvseeService> invseeFactory, CommandRegistration commandRegistration,
+                  Hooks hooks, Logger logger, Function<UtilityService, TeleportRequestRegistration> requestsFactory) {
         this.serviceFactory = Objects.requireNonNull(serviceFactory, "serviceFactory");
         this.listenerFactory = Objects.requireNonNull(listenerFactory, "listenerFactory");
         this.invseeFactory = Objects.requireNonNull(invseeFactory, "invseeFactory");
         this.commandRegistration = Objects.requireNonNull(commandRegistration, "commandRegistration");
         this.hooks = Objects.requireNonNull(hooks, "hooks");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.requestsFactory = Objects.requireNonNull(requestsFactory, "requestsFactory");
     }
 
     @Override
@@ -132,6 +159,7 @@ public final class UtilityModule implements CoreModule {
         UtilityService newUtilityService = null;
         UtilityListener newUtilityListener = null;
         InvseeService newInvseeService = null;
+        TeleportRequestRegistration newRequests = null;
         try {
             newUtilityService = Objects.requireNonNull(serviceFactory.get(), "utilityService");
             newUtilityListener = Objects.requireNonNull(listenerFactory.apply(newUtilityService), "utilityListener");
@@ -139,32 +167,37 @@ public final class UtilityModule implements CoreModule {
             commandRegistration.register(newUtilityService, newInvseeService, this::registerCommand);
             registerListener(newUtilityListener);
             registerListener(newInvseeService);
+            newRequests = requestsFactory.apply(newUtilityService);
+            if (newRequests != null) newRequests.enable();
             logger.info("Utility module enabled with " + registeredCommands.size() + " command(s).");
         } catch (RuntimeException exception) {
-            cleanup(newUtilityService, newUtilityListener, newInvseeService, exception);
+            cleanup(newUtilityService, newUtilityListener, newInvseeService, newRequests, exception);
             throw exception;
         }
         // Publish only when all command pairs and owned listeners have been installed.
         utilityService = newUtilityService;
         utilityListener = newUtilityListener;
         invseeService = newInvseeService;
+        teleportRequests = newRequests;
     }
 
     @Override
     public void disable() {
         RuntimeException failure;
         try {
-            failure = cleanup(utilityService, utilityListener, invseeService, null);
+            failure = cleanup(utilityService, utilityListener, invseeService, teleportRequests, null);
         } finally {
             utilityService = null;
             utilityListener = null;
             invseeService = null;
+            teleportRequests = null;
         }
         if (failure != null) throw failure;
     }
 
     private RuntimeException cleanup(UtilityService service, UtilityListener listener,
-                                     InvseeService invsee, RuntimeException failure) {
+                                     InvseeService invsee, TeleportRequestRegistration requests, RuntimeException failure) {
+        if (requests != null) failure = attempt(failure, requests::disable);
         for (Listener owned : List.copyOf(registeredListeners)) {
             if (owned instanceof EnderChestCommand enderChest) {
                 failure = attempt(failure, enderChest::disable);

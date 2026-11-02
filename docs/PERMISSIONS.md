@@ -260,7 +260,7 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 38 Roots, 52 Nodes, 15 Child-K
 
 ## Permission-Children und Default-Audit (aktueller Phase-29-Vertrag)
 
-52 explizite Nodes: 11 Player-Basisrechte mit `default: true`, 40 mit `default: op` und `vapeecore.staff.panel` mit `default: false`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass oder alleinige Staff-Identität. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin`, `vapeecore.visibility.staff` und `vapeecore.staff.panel` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
+53 explizite Nodes: 12 Player-Basisrechte mit `default: true`, 40 mit `default: op` und `vapeecore.staff.panel` mit `default: false`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass oder alleinige Staff-Identität. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin`, `vapeecore.visibility.staff`, `vapeecore.staff.panel` und `vapeecore.tpa.use` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
 
 | Parent (vapeecore.) | Child (vapeecore.) | Bedeutung |
 |---|---|---|
@@ -280,16 +280,21 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 38 Roots, 52 Nodes, 15 Child-K
 | utility.enderchest.others | utility.enderchest | Stärkerer Zugang gewährt Basis; kein Target-Schutz-Bypass |
 | economy.admin | economy.coins | Admin gewährt Basis, niemals umgekehrt |
 
-`default: true` bleibt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, quest.use, social.ignore, rank.view und ranks.view. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` erlaubt Core-Reload und `/core quest force [player]`, nicht pauschal weitere Staff-Fähigkeiten.
+`default: true` gilt ausschließlich bei lobby.spawn, economy.coins, profile.view, friend.use, clan.use, message.use, settings.use, quest.use, social.ignore, rank.view, ranks.view und tpa.use. `invsee.modify` bleibt ein reservierter Node, weder aktiver Executor-Gate noch Mutation. `vapeecore.admin` erlaubt Core-Reload und `/core quest force [player]`, nicht pauschal weitere Staff-Fähigkeiten.
 
 ## Vollständiger Command-/Descriptor-Audit (aktueller Phase-29-Vertrag)
 
-Alle 38 Root-Commands werden gegen Registrierung, Executor-Gates und den Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die Command-Harnesses prüfen das Verhalten. Phase 05A ergänzt `/staff [list]` und den unabhängigen, standardmäßig verweigerten Panel-Node; bestehende Defaults und Children bleiben unverändert.
+Alle 43 Root-Commands werden gegen Registrierung, Executor-Gates und den Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die Command-Harnesses prüfen das Verhalten. Phase 06A ergänzt fünf öffentliche TPA-Commands mit einem unabhängigen Default-true-Node; administrative Teleport-Rechte und Children bleiben unverändert. Beide Spieler brauchen `vapeecore.tpa.use`; es gibt keinen OP-/Staff-Bypass für Consent, Ignore, Sichtbarkeit, BUILD oder Activities.
 
 In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarkeit weggelassen. Die Empfehlung ist keine automatische Rangfreigabe. Gezielte Fähigkeiten und die unabhängige Target-Hierarchie gelten gleichzeitig.
 
 | Root | Aliases | Bukkit-Gate | Executor-Gate | Empfehlung | Usage | Descriptor-Defekt |
 |---|---|---|---|---|---|---|
+| /tpa | — | vapeecore.tpa.use | tpa.use für beide aktuellen Spieler; Einwilligung erforderlich | Community-Spieler | /tpa <player> | Nein |
+| /tpahere | — | vapeecore.tpa.use | tpa.use für beide aktuellen Spieler; Einwilligung erforderlich | Community-Spieler | /tpahere <player> | Nein |
+| /tpaccept | — | vapeecore.tpa.use | tpa.use; nur aktueller Anfrageempfänger | Community-Spieler | /tpaccept [player] | Nein |
+| /tpdeny | — | vapeecore.tpa.use | tpa.use; nur aktueller Anfrageempfänger | Community-Spieler | /tpdeny [player] | Nein |
+| /tpcancel | — | vapeecore.tpa.use | tpa.use; nur eigene ausgehende Anfrage | Community-Spieler | /tpcancel | Nein |
 | /staff | — | — | Panel: staff.panel plus aktuelle primäre Staff-Gruppe; list: öffentlich | Explizit freigeschalteter Staff; Liste für alle | /staff [list] | Nein |
 | /mute | — | vapeecore.moderation.mute | moderation.mute | Moderator | /mute <player\|uuid> <duration\|permanent> <reason...> | Nein |
 | /unmute | — | vapeecore.moderation.unmute | moderation.unmute | Moderator | /unmute <player\|uuid> [reason...] | Nein |

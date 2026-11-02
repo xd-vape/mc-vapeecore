@@ -8,6 +8,26 @@ depend:
   - LuckPerms
 
 commands:
+  tpa:
+    description: Request to teleport yourself to another player
+    usage: /tpa <player>
+    permission: vapeecore.tpa.use
+  tpahere:
+    description: Ask another player to teleport to you
+    usage: /tpahere <player>
+    permission: vapeecore.tpa.use
+  tpaccept:
+    description: Accept an incoming teleport request
+    usage: /tpaccept [player]
+    permission: vapeecore.tpa.use
+  tpdeny:
+    description: Deny an incoming teleport request
+    usage: /tpdeny [player]
+    permission: vapeecore.tpa.use
+  tpcancel:
+    description: Cancel your outgoing teleport request
+    usage: /tpcancel
+    permission: vapeecore.tpa.use
   staff:
     description: Open the staff panel or view the public staff roster
     usage: /staff [list]
@@ -172,6 +192,9 @@ commands:
     permission: vapeecore.ranks.view
 
 permissions:
+  vapeecore.tpa.use:
+    description: Send and answer consensual player teleport requests
+    default: true
   vapeecore.staff.panel:
     description: Allows eligible staff to open the private panel and change their session roster visibility; grants no moderation actions
     default: false

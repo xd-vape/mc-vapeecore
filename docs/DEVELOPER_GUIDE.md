@@ -1175,6 +1175,16 @@ Die Liste wird bei Open, Refresh, Join/Quit und Statuswechsel aktuell berechnet.
 
 Enable besitzt Command, Listener und Locale-Observer vor Veröffentlichung; ein Teilstartfehler gibt sie wieder frei. Disable deaktiviert zuerst die Runtime, schließt nur noch eigene aktuelle Views, verwirft Sitzungsstatus und entfernt den eigenen Observer. `StaffPanelHarness` und `StaffPanelLifecycleHarness` prüfen echte Feature-/Modulpfade einschließlich vorhandener Moderations-Executor; der Phasenbericht dokumentiert native Abnahme und verbleibende Client-Checks.
 
+## Player teleport requests (Phase 06A)
+
+`utility/tpa/TeleportRequests` gehört zum bestehenden UtilityModule. `/tpa <player>` bewegt nach Zustimmung den Sender zum Empfänger; `/tpahere <player>` bewegt nach Zustimmung den Empfänger zum Sender. `/tpaccept [player]`, `/tpdeny [player]` und `/tpcancel` benötigen ausschließlich `vapeecore.tpa.use` (default true). Ohne Auswahl wird nur genau eine eingehende Anfrage beantwortet. Es gibt keinen Staff-/OP-/Teleport-Bypass.
+
+Anfragen und Cooldowns leben nur in der Sitzung: eine ausgehende Anfrage, maximal fünf eingehende, 60 Sekunden Gültigkeit und 15 Sekunden Sendepause ab erfolgreichem Versand. Lazy-Pruning verwendet eine monotone Uhr; kein neuer Scheduler oder Reload-Teilnehmer. Chat-RUN_COMMANDs verwenden namespaced Befehle mit Sender-UUID und zufälliger Anfrage-ID. Manuelle Auswahl erlaubt exakten aktuellen Namen/UUID; alte Buttons dürfen spätere Anfragen desselben Senders weder annehmen noch ablehnen.
+
+Beide exakten Player-Sessions, effektive Permissions, geladene Settings, Activity, BUILD, Sichtbarkeit und beidseitiges Ignore werden beim Versand und erneut vor dem Teleport geprüft. Vorhandene PM-/Freundeinstellungen bleiben ihren jeweiligen Funktionen zugeordnet; es gibt keine neue persistente TPA-Einstellung. Activity-Eintritt, BUILD, Ignore, Weltwechsel, Tod, Disconnect und Shutdown invalidieren Consent. Ein Teleport verbraucht die Anfrage vor UtilityService/Event-Callbacks, auch bei Abbruch/Fehler.
+
+Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/Chunks, endliche Koordinaten innerhalb der Weltgrenzen, freie 0,6 × 1,8 Körperfläche und fester ungefährlicher Untergrund. Keine Welterzeugung, Chunk-Ladung, Bodensuche oder fremde Teleport-Policy. Ungewöhnliche Positionen wie Flug, Wasser oder nicht unterstützte Teilblöcke können konservativ abgelehnt werden. Fremde Plugins behalten ihre PlayerTeleportEvent-Kontrolle. `TeleportRequestRegistration` prüft alle Root-/Namespaced-Commands vor Installation und stellt vorherige Executor-/Completer-Werte ausschließlich bei fortbestehendem Besitz wieder her. Tests: `TeleportRequestsHarness`, `UtilityTpaLifecycleHarness`; Abnahme und offene Client-Prüfungen: `reports/prototype/PHASE_06A_TPA_MVP.md`.
+
 ## Commands und permissions
 
 | Command | Zweck | Zuständige Klasse | Permission |
