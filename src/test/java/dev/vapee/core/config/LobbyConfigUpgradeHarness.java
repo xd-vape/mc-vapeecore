@@ -14,7 +14,9 @@ public final class LobbyConfigUpgradeHarness {
             Logger logger=Logger.getAnonymousLogger();logger.setUseParentHandlers(false);
             var evolution=new ConfigEvolution(root,logger,name -> LobbyConfigUpgradeHarness.class.getResourceAsStream("/"+name));
             check(ConfigEvolution.MANAGED_CONFIGS.get("lobby.yml")==2,"explicit lobby schema version raised to 2");
-            check(ConfigEvolution.MANAGED_CONFIGS.entrySet().stream().filter(e -> !e.getKey().equals("lobby.yml")).allMatch(e -> e.getValue()==1),"other five schemas remain 1");
+            check(ConfigEvolution.MANAGED_CONFIGS.get("config.yml")==2
+                    && ConfigEvolution.MANAGED_CONFIGS.entrySet().stream().filter(e -> !List.of("lobby.yml","config.yml").contains(e.getKey())).allMatch(e -> e.getValue()==1),
+                    "core accent schema is 2; the other four schemas remain 1");
             var file=root.resolve("lobby.yml");
             String original="""
                     # Custom phase36 lobby

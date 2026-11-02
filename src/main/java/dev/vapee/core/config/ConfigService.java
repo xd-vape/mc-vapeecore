@@ -6,6 +6,9 @@ import dev.vapee.core.rank.staff.StaffHierarchyConfig;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import dev.vapee.core.onlinereward.OnlineRewardConfig;
+import dev.vapee.core.message.MessageStyle;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -49,7 +52,7 @@ public final class ConfigService implements ReloadParticipant {
 
     public void load() {
         defaultConfigSaver.run();
-        state = readState();
+        applyState(readState());
     }
 
     @Override
@@ -62,8 +65,8 @@ public final class ConfigService implements ReloadParticipant {
         CoreConfigState previousState = state;
         CoreConfigState preparedState = readState();
         return ReloadPlan.of(
-                () -> state = preparedState,
-                () -> state = previousState
+                () -> applyState(preparedState),
+                () -> applyState(previousState)
         );
     }
 
@@ -73,6 +76,13 @@ public final class ConfigService implements ReloadParticipant {
 
     public String getMessagePrefix() {
         return state.messagePrefix();
+    }
+
+    public TextColor getMessageAccentColor() { return state.messageAccentColor(); }
+
+    private void applyState(CoreConfigState candidate) {
+        state = candidate;
+        MessageStyle.applyAccentColor(candidate.messageAccentColor());
     }
 
     public boolean isDebugEnabled() {
@@ -102,6 +112,7 @@ public final class ConfigService implements ReloadParticipant {
         return new CoreConfigState(
                 readString(configuration, "server.name", DEFAULT_SERVER_NAME),
                 readString(configuration, "messages.prefix", DEFAULT_MESSAGE_PREFIX),
+                readAccentColor(configuration),
                 readBoolean(configuration, "settings.debug", false),
                 readNonBlankString(configuration, "ranks.track", DEFAULT_RANK_TRACK),
                 readOnlineRewardConfig(configuration),
@@ -119,6 +130,20 @@ public final class ConfigService implements ReloadParticipant {
                 readPositiveInt(configuration, "friends.limits.max-outgoing-requests",
                         FriendLimits.DEFAULT_MAX_OUTGOING_REQUESTS)
         );
+    }
+
+    private TextColor readAccentColor(YamlConfiguration configuration) {
+        String path = "messages.accent-color";
+        Object value = configuration.get(path);
+        if (value == null && !configuration.contains(path)) return MessageStyle.DEFAULT_HIGHLIGHT;
+        if (value instanceof String text) {
+            String candidate = text.trim().toLowerCase(java.util.Locale.ROOT);
+            TextColor color = candidate.matches("#[0-9a-f]{6}") ? TextColor.fromHexString(candidate)
+                    : NamedTextColor.NAMES.value(candidate);
+            if (color != null) return color;
+        }
+        warnInvalidValue(path, "a Minecraft color name or #RRGGBB", MessageStyle.DEFAULT_HIGHLIGHT.asHexString());
+        return MessageStyle.DEFAULT_HIGHLIGHT;
     }
 
     private StaffHierarchyConfig readStaffHierarchy(YamlConfiguration configuration) {
@@ -335,6 +360,7 @@ public final class ConfigService implements ReloadParticipant {
     private record CoreConfigState(
             String serverName,
             String messagePrefix,
+            TextColor messageAccentColor,
             boolean debugEnabled,
             String rankTrack,
             OnlineRewardConfig onlineRewardConfig,
@@ -346,6 +372,7 @@ public final class ConfigService implements ReloadParticipant {
         private CoreConfigState {
             Objects.requireNonNull(serverName, "serverName");
             Objects.requireNonNull(messagePrefix, "messagePrefix");
+            Objects.requireNonNull(messageAccentColor, "messageAccentColor");
             Objects.requireNonNull(rankTrack, "rankTrack");
             Objects.requireNonNull(onlineRewardConfig, "onlineRewardConfig");
             Objects.requireNonNull(friendLimits, "friendLimits");
@@ -357,6 +384,7 @@ public final class ConfigService implements ReloadParticipant {
             return new CoreConfigState(
                     DEFAULT_SERVER_NAME,
                     DEFAULT_MESSAGE_PREFIX,
+                    MessageStyle.DEFAULT_HIGHLIGHT,
                     false,
                     DEFAULT_RANK_TRACK,
                     OnlineRewardConfig.defaults(),

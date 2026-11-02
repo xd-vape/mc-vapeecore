@@ -204,7 +204,7 @@ public final class ClanCommandHarness {
         check(all(actor).contains("Unknown clan command: <red>unknown</red>")
                         && all(actor).contains("Use /clan help to view all clan commands."),
                 "unknown command is identified and points to optional help");
-        check(hasLiteral(actor.received, "<red>unknown</red>", NamedTextColor.AQUA),
+        check(hasLiteral(actor.received, "<red>unknown</red>", dev.vapee.core.message.MessageStyle.HIGHLIGHT),
                 "unknown user input remains literal component text");
 
         ClanMenuFixture choices = new ClanMenuFixture();
@@ -533,10 +533,10 @@ public final class ClanCommandHarness {
         if (component.clickEvent() != null) result.add(component.clickEvent());
         for (Component child : component.children()) collectClicks(child, result);
     }
-    private static boolean hasLiteral(List<Component> messages, String text, NamedTextColor color) {
+    private static boolean hasLiteral(List<Component> messages, String text, net.kyori.adventure.text.format.TextColor color) {
         return messages.stream().anyMatch(message -> hasLiteral(message, text, color));
     }
-    private static boolean hasLiteral(Component component, String text, NamedTextColor color) {
+    private static boolean hasLiteral(Component component, String text, net.kyori.adventure.text.format.TextColor color) {
         if (component instanceof TextComponent literal
                 && literal.content().equals(text) && color.equals(component.color())) return true;
         return component.children().stream().anyMatch(child -> hasLiteral(child, text, color));

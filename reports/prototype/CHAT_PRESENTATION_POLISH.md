@@ -155,3 +155,79 @@ Principal receipts: `baseline-results.json`, `verification-final-results.json`, 
 28. `src/test/java/dev/vapee/core/utility/tpa/TeleportRequestsHarness.java`
 
 Exactly one additional local feature commit: `Polish chat messages and moderation feedback`. No earlier commit is amended; no push, merge or operator deployment is performed.
+
+## Follow-up: Accept-only TPA actions and configurable system accent
+
+Completed 2026-11-02 on the same local worktree branch, after the original polish had already been committed as `fd6760b2cc0d74c64a2bbf6a12d43c8badba128b`. The sections above record that completed phase. This bounded follow-up supersedes their Aqua default and incoming TPA Accept/Deny presentation. It adds exactly one local follow-up commit, without amending that parent, pushing, merging or deploying.
+
+### Behavior and compatibility
+
+Incoming TPA and TPAHere messages now contain exactly one clickable **Accept / Annehmen** action. Its namespaced `/vapeecore:tpaccept <sender-UUID>:<request-UUID>` command is unchanged. Only the Deny component was removed: `/tpdeny` remains registered and executable, requests still expire after 60 seconds, and recipient ownership, request nonce, cooldown, eligibility, cancellation and consent checks are unchanged. Friends/Clan action buttons retain their existing behavior.
+
+The existing core config now includes:
+
+```yaml
+messages:
+  accent-color: "#E5BF75"
+```
+
+All sixteen Minecraft color names are accepted case-insensitively with surrounding whitespace, as are six-digit `#RRGGBB` values. Missing/null values use restrained gold. Invalid names, malformed hex, formatting names such as `bold`/`reset`, and non-string values warn with the config path and safely fall back to gold; loading/reloading does not rewrite invalid input. Three-digit hex is intentionally unsupported. Hex values must be quoted in YAML.
+
+ConfigService stores the color in its existing immutable snapshot and publishes the server-wide MessageStyle palette only on load/apply. Preparing a reload has no visible side effects; rollback restores the previous snapshot and palette, including a failure in a later actual ReloadService participant. The seven-participant transaction and module composition are unchanged. Newly constructed values and help command roots read the applied color. Already sent/built immutable Components retain their original color. No new module, scheduler, persistent cache or theme framework is introduced.
+
+Existing MessageStyle consumers, the polished shared help/syntax, core overview values and history navigation follow the palette. Selected bundled EN/DE system-message Aqua spans explicitly become `<accent>...</accent>` (quest administration/usage, reward values, activity context and BUILD usage). LocalizationService and explicit MessageService templates resolve this tag; TranslationCatalog recognizes it as styling rather than a missing parameter. No RGB search-and-replace is performed. Unrelated GUI colors and other explicit color choices are retained.
+
+LuckPerms rank colors, including an explicitly Aqua rank, remain independent. Friends GOLD, Clan DARK_PURPLE, Clan name GOLD/tag AQUA, action GREEN/RED and success/error colors remain intact. Literal operator `<aqua>` templates remain Aqua; operators can explicitly opt a span into `<accent>`. Names, reasons and arguments remain literal Components. No operator chat, PM or lobby template is overwritten.
+
+The config resource and existing ConfigEvolution registry advance `config.yml` from schema 1 to 2 so existing installations receive the new key through the standard startup-only additive evolution, with the exact original backup. Existing values/unknown keys, custom prefixes and a pre-existing custom accent are preserved. Other managed schemas are unchanged. Only disposable fixtures exercised this upgrade; no real operator config was migrated.
+
+### Executable verification
+
+Baseline before this follow-up: **225/225 harnesses / 33,292 checks**, Failed=0, Missing/Invalid=0; Maven clean package and Spotless PASS.
+
+Final `pwsh -File .\scripts\verify.ps1`: **226/226 harnesses / 33,371 checks**, Failed=0, Missing/Invalid=0; Maven clean package and Spotless PASS. Every baseline harness identity is retained. The new compiled `MessageAccentHarness` contributes **79 checks** covering all named colors, valid/invalid hex/types, immutable output, preparation/application/transactional rollback, EN/DE rendering, explicit operator color independence, social/rank colors, both Accept-only request directions, manual denial and additive migration/backups/custom-value preservation.
+
+Existing expectations were updated where their contract intentionally changed: one incoming TPA action, variable TextColor instead of NamedTextColor, system-value accent instead of fixed Aqua, and core schema 2 instead of 1. Synthetic v1 ConfigEvolution fixtures explicitly keep their v1 registry; real v2 evolution is exercised separately. Intermediate full runs exposed old Profile/Clan highlight and schema assumptions. The Clan investigation also caught an overbroad test expectation: clan names/tags still use GOLD/AQUA, so those two original checks are retained. No production clan recoloring was introduced, and no harness/assertion was removed or bypassed.
+
+### Isolated native Paper acceptance
+
+Both fresh disposable instances used Paper **1.21.11 build 132-c5eb079**, Java **21.0.12.1** and LuckPerms **5.5.84**, loopback port 25639 and two real non-OP protocol sessions. Runtime binaries came from an already stopped disposable fixture, not the operator server. Each generated its own world, player files, config and LuckPerms database. Both processes stopped cleanly with exit code 0; no ERROR/SEVERE log entries were found.
+
+- Full follow-up run: **70 server assertions / 31 protocol-client assertions / 43 fixture acknowledgements**, zero failures. It includes actual `/core reload` for hex, named and invalid accent values; default schema upgrade; captured packet colors; literal operator Aqua versus explicit accent; independently Aqua LP names and green action; single UUID/nonce Accept for both request types; manual `/tpdeny`; accepted TPAHere direction/consent; and the prior Staff/mute/chat/lifecycle regression acceptance.
+- Independent focused rerun after rebuilding: **28 server assertions / 13 protocol-client assertions / 13 fixture acknowledgements**, zero failures, covering the accent and TPA follow-up again.
+- Native archives and final canonical JAR each contain the same **570 byte-identical file entries**. Their whole-JAR SHA-256 values differ due to rebuild ZIP metadata, not production code/resources. `artifact-comparison.json` records every entry comparison and confirms the fixture is absent from the production artifact. Final canonical JAR SHA-256: `45556050A7CFB97F75A07BAFC77294A5FAB9AFBB403CF329C687A0AD551FFDEF`.
+
+These are native server/API and captured protocol-component assertions, **not rendered Minecraft-client visual confirmation**. Real-client review remains open for Gold/custom-color legibility, EN/DE help wrapping, hover/click presentation and the single Accept button; the earlier moderation/layout visual checks also remain open.
+
+Evidence is outside Git under `chat-accent-followup-20261102` beside the worktree. Principal receipts: `baseline-results.json`, `verification-final-results.json`, `harness-ledger.json`, `artifact-comparison.json`, both native `native-chat-results.json`, `protocol-client-results.json`, `process-exit.json`, transcripts, fixture source and archived tested JARs. Intermediate verification logs are retained for diagnosis.
+
+### Preserved local state and exact follow-up paths
+
+The original checkout remains on master at `e518c338404e1531a1004f78a3f8bd0ce23644b4`, with an empty index. All **67 captured pre-existing modified/untracked local paths** retain their SHA-256 content. The approved Run modification retains its exact Git diff and SHA-256 `EEDE5A220EEC6A8D154D82F2BD1BF29CFEB59215D6B546D83CDB38A73EAF596F`; neither checkout's Run file was edited or staged. Operator-owned server data was not opened/hashed/changed/stopped, so no byte-identity claim is made for live operator files.
+
+An unrelated untracked `reports/CHAT_PRESENTATION_POLISH.md` appeared in the feature worktree during this follow-up. It is preserved unchanged and excluded from the commit: SHA-256 `D6F3FC5F3CF4DE79896268EBA3DCB14537B78DD0B26893F6880068A668E89A6D`. It is distinct from this intended report at `reports/prototype/CHAT_PRESENTATION_POLISH.md`. The remaining untracked copy is expected local state, not a clean-tree claim.
+
+Only these **22 intended paths** are explicitly staged for the follow-up commit:
+
+1. `docs/DEVELOPER_GUIDE.md`
+2. `reports/prototype/CHAT_PRESENTATION_POLISH.md`
+3. `src/main/java/dev/vapee/core/command/CoreCommand.java`
+4. `src/main/java/dev/vapee/core/config/ConfigEvolution.java`
+5. `src/main/java/dev/vapee/core/config/ConfigService.java`
+6. `src/main/java/dev/vapee/core/i18n/LocalizationService.java`
+7. `src/main/java/dev/vapee/core/i18n/TranslationCatalog.java`
+8. `src/main/java/dev/vapee/core/i18n/Translations.java`
+9. `src/main/java/dev/vapee/core/message/MessageStyle.java`
+10. `src/main/java/dev/vapee/core/moderation/command/HistoryCommand.java`
+11. `src/main/java/dev/vapee/core/utility/tpa/TeleportRequests.java`
+12. `src/main/resources/config.yml`
+13. `src/main/resources/lang/de.yml`
+14. `src/main/resources/lang/en.yml`
+15. `src/test/java/dev/vapee/core/clan/gui/ClanCommandHarness.java`
+16. `src/test/java/dev/vapee/core/config/ConfigEvolutionHarness.java`
+17. `src/test/java/dev/vapee/core/config/ConfigResourceContractHarness.java`
+18. `src/test/java/dev/vapee/core/config/LobbyConfigUpgradeHarness.java`
+19. `src/test/java/dev/vapee/core/config/MessageAccentHarness.java`
+20. `src/test/java/dev/vapee/core/identity/ProfileHarness.java`
+21. `src/test/java/dev/vapee/core/message/ChatPresentationHarness.java`
+22. `src/test/java/dev/vapee/core/utility/tpa/TeleportRequestsHarness.java`

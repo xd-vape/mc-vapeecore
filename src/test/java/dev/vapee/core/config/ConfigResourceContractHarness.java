@@ -14,7 +14,7 @@ public final class ConfigResourceContractHarness {
     private static final Map<String, Integer> EXPECTED =
             Map.of(
                     "config.yml",
-                    1,
+                    2,
                     "lobby.yml",
                     2,
                     "chat.yml",

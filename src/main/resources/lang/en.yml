@@ -185,18 +185,18 @@ core:
 
   # Daily Quest Administration
   quest:
-    usage: "<yellow>Use:</yellow> <aqua>/core quest force [player]</aqua>"
+    usage: "<yellow>Use:</yellow> <accent>/core quest force [player]</accent>"
     denied: "<red>You do not have permission to manage daily quests.</red>"
     player-required: "<red>Console must specify an online player.</red>"
-    player-not-found: "<red>Online player <aqua><player></aqua> not found.</red>"
+    player-not-found: "<red>Online player <accent><player></accent> not found.</red>"
     profile-unavailable: "<red>The player profile is unavailable.</red>"
-    success: "<gray>Daily quests for <aqua><player></aqua> updated: <aqua><count></aqua>. Retained quests keep their progress.</gray>"
+    success: "<gray>Daily quests for <accent><player></accent> updated: <accent><count></accent>. Retained quests keep their progress.</gray>"
     pending: "<red>Pending quest rewards must be resolved before forcing a selection.</red>"
     failed: "<red>The quest selection could not be saved. The previous state was retained. Check the server log.</red>"
 
   # Errors
   player-data-failed: "<red>Your player data could not be loaded. Please contact a server administrator.</red>"
-  unknown-command: "<red>Unknown subcommand '<white><value></white>'.</red>\n<yellow>Use:</yellow> <aqua>/core help</aqua>"
+  unknown-command: "<red>Unknown subcommand '<white><value></white>'.</red>\n<yellow>Use:</yellow> <accent>/core help</accent>"
 
 
 # ==================================================
@@ -860,7 +860,7 @@ economy:
 rewards:
 
   # General
-  online.granted: "<gray>Received <aqua><coins> Coins</aqua> for <aqua><minutes> minutes</aqua> of playtime.</gray>"
+  online.granted: "<gray>Received <accent><coins> Coins</accent> for <accent><minutes> minutes</accent> of playtime.</gray>"
 
 
 # ==================================================
@@ -873,7 +873,7 @@ daily-quests:
   title: "Daily Quests"
   empty: "No daily quests"
   command-player-only: "<red>Only players can use this command.</red>"
-  command-usage: "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <aqua>/quests</aqua>"
+  command-usage: "<red>Invalid usage.</red>\n<yellow>Use:</yellow> <accent>/quests</accent>"
   refresh-hint: "Show your current daily quests."
 
   # Progress
@@ -919,7 +919,7 @@ quests:
 activity:
 
   # General
-  context: "<aqua><activity></aqua> <dark_gray>›</dark_gray> <body>"
+  context: "<accent><activity></accent> <dark_gray>›</dark_gray> <body>"
 
 # ==================================================
 # MODERATION
@@ -1079,7 +1079,7 @@ utility:
     enabled: "<green>Build mode enabled.</green>"
     failed: "<red>Build mode could not be changed. Check the server log.</red>"
     player-only: "<red>This command can only be used by a player.</red>"
-    usage: "<red>Invalid usage.</red> <gray>Use:</gray> <aqua>/build</aqua>"
+    usage: "<red>Invalid usage.</red> <gray>Use:</gray> <accent>/build</accent>"
     world: "<red>Build mode can only be enabled in the lobby world.</red>"
 
   # Movement and Flight

@@ -61,7 +61,7 @@ public final class ChatPresentationHarness {
     private static void tpa(Locale locale){
         var f=new TpaTestSupport.Fixture();var a=f.user("Alpha");var b=f.user("Beta");a.locale=locale;b.locale=locale;
         f.command(a,"tpa","Beta");Component incoming=b.received.getLast();List<ClickEvent> actions=events(incoming);
-        check(actions.size()==2&&actions.stream().allMatch(event->event.action()==ClickEvent.Action.RUN_COMMAND&&event.value().contains(a.id+":")),"TPA retains exact UUID/request UUID RUN_COMMAND selectors");
+        check(actions.size()==1&&actions.stream().allMatch(event->event.action()==ClickEvent.Action.RUN_COMMAND&&event.value().contains(a.id+":")),"TPA retains exact UUID/request UUID RUN_COMMAND selectors");
         check(color(incoming,"Alpha",NamedTextColor.GOLD),"TPA keeps existing primary rank name color");
         f.command(b,"tpdeny",b.accept());f.command(a,"tpa","Beta");f.seconds(15);f.command(a,"tpahere","Beta");f.command(a,"tpcancel");
         check(java.util.stream.Stream.concat(a.received.stream(),b.received.stream()).allMatch(component->!plain(component).contains("[TPA]")&&!plain(component).contains("OPERATOR")&&!plain(component).contains("[Staff]")),"all observed TPA paths use prefix-free raw delivery");
@@ -87,7 +87,7 @@ public final class ChatPresentationHarness {
     private static MessageService messages(ModerationTestSupport.Fixture f){return new MessageService(()->"<gold>[Operator]</gold> ",LocalizationService.bundled(f.logger));}
     private static ModerationCommandContext context(ModerationTestSupport.Fixture f,MessageService messages){var old=f.context;return new ModerationCommandContext(old.service(),old.identities(),messages,old.onlinePlayer(),old.onlinePlayers(),old.clock(),old.logger(),old.hierarchy(),old.mainThread(),old.active());}
     private static String prefix(Locale locale){return locale.equals(Locale.US)?"[Staff]":"[Team]";}
-    private static boolean color(Component component,String text,NamedTextColor color){return MessageColorAssertions.hasTextColor(component,text,color);}
+    private static boolean color(Component component,String text,net.kyori.adventure.text.format.TextColor color){return MessageColorAssertions.hasTextColor(component,text,color);}
     private static String plain(Component component){return ModerationTestSupport.plain(component);}
     private static List<ClickEvent> events(Component component){List<ClickEvent> result=new ArrayList<>();if(component.clickEvent()!=null)result.add(component.clickEvent());component.children().forEach(child->result.addAll(events(child)));return result;}
     private static boolean bold(Component component){return component.decoration(TextDecoration.BOLD)==TextDecoration.State.TRUE||component.children().stream().anyMatch(ChatPresentationHarness::bold);}

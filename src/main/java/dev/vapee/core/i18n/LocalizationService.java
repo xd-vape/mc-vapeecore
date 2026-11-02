@@ -70,7 +70,8 @@ public final class LocalizationService {
     public Component component(Locale locale, String key, TagResolver... placeholders) {
         String value = lookup(LanguageResolver.resolve(locale), key);
         if (value == null) { logger.severe("Missing translation key: " + key); return Component.text("[missing:" + key + "]"); }
-        try { return miniMessage.deserialize(value, TagResolver.resolver(placeholders)); }
+        try { return miniMessage.deserialize(value, TagResolver.resolver(
+                TagResolver.resolver(placeholders), dev.vapee.core.message.MessageStyle.accentTag())); }
         catch (RuntimeException exception) {
             logger.log(Level.WARNING, "Could not render translation: " + key, exception);
             return Component.text("[missing:" + key + "]");

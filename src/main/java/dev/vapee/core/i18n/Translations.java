@@ -16,8 +16,10 @@ public final class Translations {
     }
     /** Explicit catalog reference for operator MiniMessage templates; never a command/action router. */
     public static net.kyori.adventure.text.minimessage.tag.resolver.TagResolver tagResolver() {
-        return net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("i18n", (arguments, context) ->
-                net.kyori.adventure.text.minimessage.tag.Tag.inserting(tr(arguments.popOr("Translation key is required").value())));
+        return net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver(
+                dev.vapee.core.message.MessageStyle.accentTag(),
+                net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("i18n", (arguments, context) ->
+                        net.kyori.adventure.text.minimessage.tag.Tag.inserting(tr(arguments.popOr("Translation key is required").value()))));
     }
     private static final class Canonical {
         private static final Map<String, String> ENGLISH = LocalizationService.bundledSnapshot().bundled().get(Language.ENGLISH);

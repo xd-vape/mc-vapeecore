@@ -185,18 +185,18 @@ core:
 
   # Daily Quest Administration
   quest:
-    usage: "<yellow>Verwendung:</yellow> <aqua>/core quest force [Spieler]</aqua>"
+    usage: "<yellow>Verwendung:</yellow> <accent>/core quest force [Spieler]</accent>"
     denied: "<red>Du darfst Tagesquests nicht verwalten.</red>"
     player-required: "<red>Die Konsole muss einen Online-Spieler angeben.</red>"
-    player-not-found: "<red>Online-Spieler <aqua><player></aqua> wurde nicht gefunden.</red>"
+    player-not-found: "<red>Online-Spieler <accent><player></accent> wurde nicht gefunden.</red>"
     profile-unavailable: "<red>Das Spielerprofil ist nicht verfügbar.</red>"
-    success: "<gray>Tagesquests von <aqua><player></aqua> aktualisiert: <aqua><count></aqua>. Fortschritt enthaltener Quests bleibt erhalten.</gray>"
+    success: "<gray>Tagesquests von <accent><player></accent> aktualisiert: <accent><count></accent>. Fortschritt enthaltener Quests bleibt erhalten.</gray>"
     pending: "<red>Ausstehende Quest-Belohnungen müssen vor einer erzwungenen Auswahl ausgezahlt werden.</red>"
     failed: "<red>Die Quest-Auswahl konnte nicht gespeichert werden. Der bisherige Stand bleibt erhalten. Prüfe das Serverlog.</red>"
 
   # Errors
   player-data-failed: "<red>Deine Spielerdaten konnten nicht geladen werden. Wende dich an einen Serveradministrator.</red>"
-  unknown-command: "<red>Unbekannter Unterbefehl '<white><value></white>'.</red>\n<yellow>Verwendung:</yellow> <aqua>/core help</aqua>"
+  unknown-command: "<red>Unbekannter Unterbefehl '<white><value></white>'.</red>\n<yellow>Verwendung:</yellow> <accent>/core help</accent>"
 
 
 # ==================================================
@@ -860,7 +860,7 @@ economy:
 rewards:
 
   # General
-  online.granted: "<gray><aqua><coins> Coins</aqua> für <aqua><minutes> Minuten</aqua> Spielzeit erhalten.</gray>"
+  online.granted: "<gray><accent><coins> Coins</accent> für <accent><minutes> Minuten</accent> Spielzeit erhalten.</gray>"
 
 
 # ==================================================
@@ -873,7 +873,7 @@ daily-quests:
   title: "Tägliche Quests"
   empty: "Keine täglichen Quests"
   command-player-only: "<red>Nur Spieler können diesen Command verwenden.</red>"
-  command-usage: "<red>Ungültige Verwendung.</red>\n<yellow>Verwendung:</yellow> <aqua>/quests</aqua>"
+  command-usage: "<red>Ungültige Verwendung.</red>\n<yellow>Verwendung:</yellow> <accent>/quests</accent>"
   refresh-hint: "Zeige deine aktuellen täglichen Quests."
 
   # Progress
@@ -919,7 +919,7 @@ quests:
 activity:
 
   # General
-  context: "<aqua><activity></aqua> <dark_gray>›</dark_gray> <body>"
+  context: "<accent><activity></accent> <dark_gray>›</dark_gray> <body>"
 
 # ==================================================
 # MODERATION
@@ -1079,7 +1079,7 @@ utility:
     enabled: "<green>Baumodus aktiviert.</green>"
     failed: "<red>Der Baumodus konnte nicht geändert werden. Sieh im Server-Log nach.</red>"
     player-only: "<red>Dieser Command kann nur von einem Spieler verwendet werden.</red>"
-    usage: "<red>Ungültige Verwendung.</red> <gray>Verwendung:</gray> <aqua>/build</aqua>"
+    usage: "<red>Ungültige Verwendung.</red> <gray>Verwendung:</gray> <accent>/build</accent>"
     world: "<red>Der Baumodus kann nur in der Lobby-Welt aktiviert werden.</red>"
 
   # Movement and Flight

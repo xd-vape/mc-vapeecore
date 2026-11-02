@@ -270,7 +270,7 @@ public final class CoreCommand implements TabExecutor {
 
     private void sendOverview(CommandSender sender) {
         RuntimeInfo info = runtimeInfo.get();
-        messageService.send(sender, labeledValue("core.plugin", info.pluginName(), NamedTextColor.AQUA));
+        messageService.send(sender, labeledValue("core.plugin", info.pluginName(), MessageStyle.HIGHLIGHT));
         messageService.send(sender, labeledValue("core.version", info.pluginVersion(), MessageStyle.HIGHLIGHT));
         messageService.send(sender, labeledValue("core.server", info.serverVersion(), MessageStyle.HIGHLIGHT));
         messageService.send(sender, tr("core.status"));
@@ -343,7 +343,7 @@ public final class CoreCommand implements TabExecutor {
                 .append(Component.text(syntax, NamedTextColor.AQUA)));
     }
 
-    private Component labeledValue(String label, String value, NamedTextColor valueColor) {
+    private Component labeledValue(String label, String value, net.kyori.adventure.text.format.TextColor valueColor) {
         return tr(label, java.util.Map.of("value", Component.text(value, valueColor))).color(NamedTextColor.GRAY);
     }
 

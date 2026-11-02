@@ -199,7 +199,10 @@ public final class ConfigEvolutionHarness {
     }
 
     private static ConfigEvolution evolution(Path root, String defaults, ConfigEvolution.FileAccess files) {
-        return new ConfigEvolution(root, logger(), name -> new ByteArrayInputStream(defaults.getBytes(StandardCharsets.UTF_8)), files);
+        // These synthetic v1 resources exercise the v1 merge/fault contract; real resource revisions are tested separately.
+        var versions = new java.util.HashMap<>(ConfigEvolution.MANAGED_CONFIGS);
+        versions.put("config.yml", 1);
+        return new ConfigEvolution(root, logger(), name -> new ByteArrayInputStream(defaults.getBytes(StandardCharsets.UTF_8)), files, versions);
     }
     private static Logger logger() {
         Logger logger = Logger.getAnonymousLogger(); logger.setUseParentHandlers(false);

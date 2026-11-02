@@ -148,9 +148,7 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
         // A nonce prevents an old chat button accepting a later request from this same sender.
         String selector = sender.getUniqueId() + ":" + request.id;
         tell(target, direction.append(Component.space())
-                .append(tr("tpa.accept").clickEvent(ClickEvent.runCommand("/vapeecore:tpaccept " + selector)))
-                .append(Component.space())
-                .append(tr("tpa.deny").clickEvent(ClickEvent.runCommand("/vapeecore:tpdeny " + selector))));
+                .append(tr("tpa.accept").clickEvent(ClickEvent.runCommand("/vapeecore:tpaccept " + selector))));
     }
 
     private void answer(Player recipient, String selector, boolean accept) {

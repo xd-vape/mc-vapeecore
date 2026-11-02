@@ -54,7 +54,7 @@ public final class HistoryCommand extends AbstractModerationCommand {
     }
 
     private Component navigation(Component text, PlayerIdentity target, int page) {
-        return text.color(NamedTextColor.AQUA)
+        return text.color(MessageStyle.HIGHLIGHT)
                 .clickEvent(ClickEvent.suggestCommand("/history " + target.uniqueId() + " " + page));
     }
 }
