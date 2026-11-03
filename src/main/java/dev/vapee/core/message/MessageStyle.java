@@ -2,6 +2,7 @@ package dev.vapee.core.message;
 
 import dev.vapee.core.i18n.Translations;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.TextReplacementConfig;
@@ -9,10 +10,18 @@ import net.kyori.adventure.text.minimessage.tag.Tag;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /** Small semantic palette for core chat feedback; it never changes operator templates or user text. */
 public final class MessageStyle {
-    public static final NamedTextColor PREFIX = NamedTextColor.DARK_GRAY;
+    public static final NamedTextColor BRACKET = NamedTextColor.DARK_GRAY;
+    /** Compatibility name; this role now applies to prefix brackets, not feature labels. */
+    public static final NamedTextColor PREFIX = BRACKET;
+    public static final NamedTextColor DEFAULT_LABEL = NamedTextColor.GRAY;
+    public static final NamedTextColor FRIENDS_LABEL = NamedTextColor.GOLD;
+    public static final NamedTextColor CLAN_LABEL = NamedTextColor.DARK_PURPLE;
+    public static final NamedTextColor STAFF_LABEL = NamedTextColor.DARK_GRAY;
+    private static final String FORMATTED_PREFIX = "vapeecore.format.prefix";
     public static final NamedTextColor TEXT = NamedTextColor.GRAY;
     public static final NamedTextColor MUTED = NamedTextColor.DARK_GRAY;
     /** Compatibility name for the existing neutral body palette. */
@@ -50,14 +59,53 @@ public final class MessageStyle {
 
     /** A new feature supplies a bare localized label; actions are separate Components. */
     public static Component prefix(Component label) {
-        return Component.text("[", PREFIX).append(Objects.requireNonNull(label).color(PREFIX))
-                .append(Component.text("]", PREFIX));
+        return prefix(label, DEFAULT_LABEL);
     }
-    public static Component feature(Component label, Component body) { return message(prefix(label), body); }
+    public static Component prefix(Component label, TextColor labelColor) {
+        return Component.empty().append(Component.text("[", BRACKET))
+                .append(Objects.requireNonNull(label).color(Objects.requireNonNull(labelColor)))
+                .append(Component.text("]", BRACKET));
+    }
+    public static Component feature(Component label, Component body) { return feature(label, DEFAULT_LABEL, body); }
+    public static Component feature(Component label, TextColor labelColor, Component body) {
+        return compose(prefix(label, labelColor), body);
+    }
     /** Existing localized channel labels already include their brackets. */
     public static Component message(Component formattedPrefix, Component body) {
-        return Component.empty().color(TEXT).append(Objects.requireNonNull(formattedPrefix).color(PREFIX))
-                .append(Component.space()).append(text(body));
+        return message(formattedPrefix, DEFAULT_LABEL, body);
+    }
+    public static Component message(Component formattedPrefix, TextColor labelColor, Component body) {
+        Objects.requireNonNull(formattedPrefix);
+        Objects.requireNonNull(labelColor);
+        Component styled = containsTranslation(formattedPrefix)
+                ? Component.translatable(FORMATTED_PREFIX, formattedPrefix).color(labelColor)
+                : formatExistingPrefix(formattedPrefix, labelColor);
+        return compose(styled, body);
+    }
+    private static Component compose(Component prefix, Component body) {
+        return Component.empty().color(TEXT).append(prefix).append(Component.space()).append(text(body));
+    }
+    private static boolean containsTranslation(Component component) {
+        return component instanceof TranslatableComponent || component.children().stream().anyMatch(MessageStyle::containsTranslation);
+    }
+    /** Internal localized-prefix adapter; feature identity/color is supplied before translation. */
+    public static boolean isFormattedPrefix(Component component) {
+        return component instanceof TranslatableComponent translated && translated.key().equals(FORMATTED_PREFIX);
+    }
+    public static Component renderFormattedPrefix(TranslatableComponent template, UnaryOperator<Component> localize) {
+        if (!isFormattedPrefix(template) || template.arguments().size() != 1
+                || !(template.arguments().getFirst().value() instanceof Component value))
+            throw new IllegalArgumentException("Invalid formatted prefix template");
+        Component result = formatExistingPrefix(localize.apply(value), template.color() == null ? DEFAULT_LABEL : template.color())
+                .applyFallbackStyle(template.style().color(null));
+        for (Component child : template.children()) result = result.append(localize.apply(child));
+        return result;
+    }
+    private static Component formatExistingPrefix(Component prefix, TextColor labelColor) {
+        // Preserve complete operator wording, whitespace, styles and events; never parse it again.
+        return prefix.colorIfAbsent(labelColor).replaceText(TextReplacementConfig.builder()
+                .match("\\[|\\]").replaceInsideHoverEvents(false)
+                .replacement((match, builder) -> builder.color(BRACKET).build()).build());
     }
     /** Input must be localized first. No serialization or MiniMessage parsing of dynamic content. */
     public static Component block(Component... lines) {

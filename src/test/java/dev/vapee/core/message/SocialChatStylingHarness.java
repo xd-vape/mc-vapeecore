@@ -72,7 +72,7 @@ public final class SocialChatStylingHarness {
             check(hasTextColor(sent, "Twin", RGB), "sent feedback uses target UUID");
             check(hasTextColor(received, "Twin", NamedTextColor.GOLD), "received request uses actor UUID");
             check(hasTextColor(received, " sent you a friend request. ", NamedTextColor.GRAY), "rank color confined to name");
-            check(hasTextColor(received, "[Friends]", MessageStyle.PREFIX), "shared dark-gray Friends prefix");
+            check(MessageColorAssertions.hasSplitPrefix(received, "Friends", MessageStyle.BRACKET, MessageStyle.FRIENDS_LABEL), "dark-gray brackets and gold Friends label");
             check(hasTextColor(received, "[Accept]", NamedTextColor.GREEN) && hasTextColor(received, "[Deny]", NamedTextColor.RED), "action colors preserved");
             check(clicks(received).equals(List.of(ClickEvent.runCommand("/friend accept " + a.id), ClickEvent.runCommand("/friend deny " + a.id))), "only intended direct UUID buttons clickable");
             once(received, "[Friends]");
@@ -130,7 +130,7 @@ public final class SocialChatStylingHarness {
             f.clan.onCommand(a.player, null, "clan", new String[]{"invite", b.id.toString()});
             Component invitation = b.last();
             once(invitation, "[Clan]");
-            check(hasTextColor(invitation, "[Clan]", MessageStyle.PREFIX), "shared dark-gray Clan prefix");
+            check(MessageColorAssertions.hasSplitPrefix(invitation, "Clan", MessageStyle.BRACKET, MessageStyle.CLAN_LABEL), "dark-gray brackets and purple Clan label");
             check(hasTextColor(invitation, "Twin", RGB) && hasTextColor(invitation, "Style Clan", NamedTextColor.GOLD), "clan invitation owner UUID and literal gold clan name");
             check(hasTextColor(a.last(), "Twin", RGB), "clan invite sent uses target UUID");
             check(clicks(invitation).equals(List.of(ClickEvent.runCommand("/clan accept " + clanId), ClickEvent.runCommand("/clan deny " + clanId))), "clan UUID RUN_COMMAND and action-only events preserved");

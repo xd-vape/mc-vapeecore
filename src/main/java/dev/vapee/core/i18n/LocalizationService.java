@@ -90,7 +90,10 @@ public final class LocalizationService {
     public Component render(Audience audience, Component template) { return render(locale(audience), template); }
     public Component render(Locale locale, Component template) {
         Component result;
-        if (template instanceof TranslatableComponent translated && translated.key().startsWith(Translations.PREFIX)) {
+        if (dev.vapee.core.message.MessageStyle.isFormattedPrefix(template)) {
+            result = dev.vapee.core.message.MessageStyle.renderFormattedPrefix((TranslatableComponent) template,
+                    value -> render(locale, value));
+        } else if (template instanceof TranslatableComponent translated && translated.key().startsWith(Translations.PREFIX)) {
             var resolvers = new ArrayList<TagResolver>();
             for (var argument : translated.arguments()) {
                 if (!(argument.value() instanceof TranslatableComponent named) || !named.key().startsWith(Translations.ARGUMENT)

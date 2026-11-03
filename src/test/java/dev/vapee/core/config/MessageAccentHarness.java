@@ -51,7 +51,8 @@ public final class MessageAccentHarness {
             Component usage=messages.localization().component(locale,"utility.build.usage");check(has(usage,"/build",TextColor.color(0x123456)),"localized syntax uses configured accent "+locale);
             Component friends=messages.localization().render(locale,SocialChannel.FRIENDS.message(Component.text("body")));
             Component clan=messages.localization().render(locale,SocialChannel.CLAN.message(Component.text("body")));
-            check(has(friends,locale.equals(Locale.US)?"[Friends]":"[Freunde]",MessageStyle.PREFIX)&&has(clan,"[Clan]",MessageStyle.PREFIX),"social prefixes share the palette independently of accent "+locale);
+            check(MessageColorAssertions.hasSplitPrefix(friends,locale.equals(Locale.US)?"Friends":"Freunde",MessageStyle.BRACKET,MessageStyle.FRIENDS_LABEL)
+                    &&MessageColorAssertions.hasSplitPrefix(clan,"Clan",MessageStyle.BRACKET,MessageStyle.CLAN_LABEL),"brackets and feature labels stay independent of accent "+locale);
         }
         check(has(MessageStyle.syntax("/ping [player]"),"/ping",TextColor.color(0x123456))&&has(MessageStyle.syntax("/ping [player]"),"[player]",MessageStyle.BODY),"help/syntax root follows palette; arguments remain neutral");
         var fixture=new TpaTestSupport.Fixture();var a=fixture.user("Alpha");var b=fixture.user("Beta");fixture.command(a,"tpa","Beta");

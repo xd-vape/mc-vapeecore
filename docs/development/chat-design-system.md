@@ -6,7 +6,11 @@ VapeeCore verwendet die bestehende Adventure-/MiniMessage-Architektur. `MessageS
 
 | Rolle | API | Standard | Verwendung |
 |---|---|---|---|
-| PREFIX | `MessageStyle.PREFIX` | Dark Gray `#555555` | `[Feature]` |
+| BRACKET | `MessageStyle.BRACKET` / kompatibles `PREFIX` | Dark Gray `#555555` | nur `[` und `]` |
+| FRIENDS_LABEL | `MessageStyle.FRIENDS_LABEL` | Gold `#FFAA00` | Friends / Freunde |
+| CLAN_LABEL | `MessageStyle.CLAN_LABEL` | Dark Purple `#AA00AA` | Clan |
+| STAFF_LABEL | `MessageStyle.STAFF_LABEL` | Dark Gray `#555555` | Staff / Team; unabhängig von BRACKET |
+| DEFAULT_LABEL | `MessageStyle.DEFAULT_LABEL` | Gray `#AAAAAA` | neutrale Rückfallfarbe alter API-Overloads |
 | TEXT | `MessageStyle.TEXT` / bestehender Alias `BODY` | Gray `#AAAAAA` | neutrale Erklärungen |
 | MUTED | `MessageStyle.MUTED` | Dark Gray `#555555` | nachrangige Hinweise |
 | ACCENT | `MessageStyle.accent()` / bestehendes `HIGHLIGHT` | `#E5BF75` | Werte, Gründe, Command-Roots |
@@ -20,9 +24,11 @@ VapeeCore verwendet die bestehende Adventure-/MiniMessage-Architektur. `MessageS
 
 ## Prefix und Delivery
 
-Neue Features verwenden `MessageStyle.feature(bareLocalizedLabel, body)`. `prefix(label)` baut die Klammern zentral; `message(formattedPrefix, body)` ist der Adapter für bestehende bereits eingeklammerte Übersetzungen. Keine manuellen `[Feature]`-Strings oder eigene Prefixfarben im Feature implementieren.
+Neue Features verwenden `MessageStyle.feature(bareLocalizedLabel, labelColor, body)` beziehungsweise `prefix(label, labelColor)`. Die zentrale Komposition erzeugt drei getrennte Components: öffnende Klammer, Label und schließende Klammer. Beide Klammern sind explizit BRACKET; das Label erhält die unabhängig übergebene zentrale Feature-Farbe. Der Nachrichteninhalt wird separat neutral formatiert. Die bisherigen Overloads ohne Farbangabe bleiben erhalten und verwenden DEFAULT_LABEL. Keine manuellen `[Feature]`-Strings in Feature-Klassen zusammensetzen. Neue Feature-Farben werden erst mit dem tatsächlichen Feature als Konstante in MessageStyle ergänzt, nicht vorsorglich registriert.
 
-`SocialChannel.FRIENDS`, `CLAN` und `STAFF` delegieren an diese Komposition. Ihre bestehenden EN-/DE-Bezeichnungen bleiben `[Friends]`/`[Freunde]`, `[Clan]`, `[Staff]`/`[Team]`; alle gebündelten Prefixe sind dunkelgrau. Die Operator-Wrapper-Regel bleibt erhalten: Friends/Clan verwenden normale Delivery, Staff besitzt seinen vollständigen Wrapper und verwendet Raw-Delivery. Bereits existierende explizite Operator-Templates und Sprach-Overrides werden nicht überschrieben.
+`message(formattedPrefix, labelColor, body)` ist der kompatible Adapter für vollständige bereits eingeklammerte Prefixe. Übersetzbare Prefixe werden durch den vorhandenen LocalizationService aufgelöst, bevor nur ihre Klammerzeichen auf Component-Ebene formatiert werden. Der interne Format-Component ist kein neuer Übersetzungsschlüssel und wird nicht an den Client durchgereicht. Die Sprachkataloge und ihre bestehenden Platzhalter werden nicht geändert. Vollständige Operator-Overrides werden nicht nochmals eingeklammert; Wortlaut, Abstände, Dekorationen und Click-/HoverEvents bleiben erhalten. Explizite Operator-Label-Farben behalten ihren Vorrang, die Klammern erhalten die zentrale Farbe. Hover-Inhalte und Aktionen im Body werden nicht durch die Prefix-Formatierung bearbeitet.
+
+`SocialChannel.FRIENDS`, `CLAN` und `STAFF` delegieren an diese Komposition. Ihre bestehenden EN-/DE-Bezeichnungen bleiben `[Friends]`/`[Freunde]`, `[Clan]`, `[Staff]`/`[Team]`; nur ihre Klammern sind dunkelgrau. Friends/Freunde verwendet GOLD, Clan DARK_PURPLE und Staff/Team weiterhin DARK_GRAY. SocialChannel wählt die Label-Farbe über seine stabile Enum-Identität und die MessageStyle-Konstanten, niemals anhand eines übersetzten Namens. Eine spätere andere STAFF_LABEL-Farbe ändert BRACKET nicht. Die Operator-Wrapper-Regel bleibt erhalten: Friends/Clan verwenden normale Delivery, Staff besitzt seinen vollständigen Wrapper und verwendet Raw-Delivery. Bereits existierende explizite Operator-Templates und Sprach-Overrides werden nicht überschrieben.
 
 TPA/TPAHere bleiben ohne Feature-/Operator-Präfix und zeigen weiterhin nur die Accept-Aktion. `/tpdeny` bleibt manuell verfügbar. Die eigene Friends-Join-Zusammenfassung bleibt eine einzelne präfixfreie Zeile. Ban-/Kick-Screens und Hinweise an betroffene Spieler erhalten keinen Staff-Präfix.
 
@@ -35,7 +41,7 @@ messages:
 
 Die 16 Minecraft-Farbnamen und sechsstellige Hex-Werte werden weiterhin durch ConfigService validiert. Fehlende Werte verwenden den Standard; ungültige Werte warnen und verwenden den sicheren Fallback. `prepareReload` veröffentlicht nichts, Apply aktiviert die Farbe und Rollback stellt sie wieder her. Keine neue Config-Struktur, kein zweiter Farbzustand und keine Änderung des siebenstufigen Reload-Vertrags.
 
-Gebündelte Sprachtexte können `<accent>` sowie `<vc_prefix>`, `<vc_text>`, `<vc_muted>`, `<vc_success>`, `<vc_error>`, `<vc_warning>`, `<vc_online>` und `<vc_offline>` verwenden. Diese Tags beziehen ihre Farben aus MessageStyle. Die `vc_`-Namen vermeiden eine Kollision mit bestehenden dynamischen Platzhaltern wie `<prefix>`. Normales `<aqua>` bleibt Aqua, einschließlich Operator-Templates und Rangdaten. Die Tag-Resolver lesen den Akzent beim Rendern; bereits gesendete immutable Components werden nicht rückwirkend verändert.
+Gebündelte Sprachtexte können `<accent>` sowie `<vc_prefix>` (Klammerfarbe), `<vc_text>`, `<vc_muted>`, `<vc_success>`, `<vc_error>`, `<vc_warning>`, `<vc_online>` und `<vc_offline>` verwenden. Diese Tags beziehen ihre Farben aus MessageStyle. Die `vc_`-Namen vermeiden eine Kollision mit bestehenden dynamischen Platzhaltern wie `<prefix>`. Normales `<aqua>` bleibt Aqua, einschließlich Operator-Templates und Rangdaten. Die Tag-Resolver lesen den Akzent beim Rendern; bereits gesendete immutable Components werden nicht rückwirkend verändert.
 
 EN/DE behalten dieselbe Struktur und dieselben fachlichen Platzhalter. Werte als `Component.text` beziehungsweise `MessageStyle.value`, Namen über den bestehenden Rank-Formatter übergeben. Niemals Spielernamen, Gründe oder Texte aus Commands in MiniMessage-Strings konkatenieren.
 
@@ -66,11 +72,11 @@ party:
 
 ```java
 Component body = tr("party.created", Map.of("player", names.format(targetId, targetName)));
-messages.sendRaw(viewer, MessageStyle.feature(tr("party.label"), body));
+messages.sendRaw(viewer, MessageStyle.feature(tr("party.label"), MessageStyle.DEFAULT_LABEL, body));
 
 // Ein umfangreicherer Hinweis mit optionaler existierender Aktion:
 messages.sendRawBlock(viewer,
-        MessageStyle.feature(tr("party.label"), body),
+        MessageStyle.feature(tr("party.label"), MessageStyle.DEFAULT_LABEL, body),
         MessageStyle.text(actionComponent));
 ```
 
@@ -82,7 +88,7 @@ PUBLIC erlaubt die Aufnahme in die öffentliche Staff-Liste, vorbehaltlich aktue
 
 ## Regression und Architekturregel
 
-`ChatDesignSystemHarness` prüft tatsächliche Prefix-/Farbspannen, ein neues Feature ohne Enum-Erweiterung, semantische Tags, Akzent-Reload/Rollback, EN/DE, Blockstruktur und interaktive Events. Bestehende Social-, Presence-, Staff-, TPA-, Moderations- und Config-Harnesses sichern die fachlichen Grenzen ab. Der Staff-Fixture erfasst zusätzlich Appearance-Schreibzugriffe.
+`PrefixStylingHarness` prüft getrennte Klammer-/Label-Components, beide Sprachen, identischen Override-Text mit unterschiedlichen Feature-Identitäten und Click-/Hover-Erhalt. `ChatDesignSystemHarness` prüft tatsächliche Prefix-/Farbspannen, ein neues Feature ohne Enum-Erweiterung, semantische Tags, Akzent-Reload/Rollback, EN/DE, Blockstruktur und interaktive Events. Bestehende Social-, Presence-, Staff-, TPA-, Moderations- und Config-Harnesses sichern die fachlichen Grenzen ab. Der Staff-Fixture erfasst zusätzlich Appearance-Schreibzugriffe.
 
 Ein pauschaler repositoryweiter Regex-Verbotscheck für NamedTextColor ist ungeeignet: GUI-Items, Rangfarben und fachliche Farben bleiben legitim. Die schlanke Regel besteht deshalb aus den verbindlichen AGENTS-Anweisungen, dieser API und ausführbaren Verhaltenstests für alle vorhandenen SocialChannels. Neue Features müssen dieselben Tests um ihre beobachtbare Ausgabe erweitern. Es gibt keine Behauptung, dass ein Java-Typsystem beliebige zukünftige Direktformatierung automatisch verhindern könnte.
 

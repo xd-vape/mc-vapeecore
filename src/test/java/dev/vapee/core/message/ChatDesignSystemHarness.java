@@ -49,19 +49,21 @@ public final class ChatDesignSystemHarness {
                 ? new String[]{"[Friends]", "[Clan]", "[Staff]"}
                 : new String[]{"[Freunde]", "[Clan]", "[Team]"};
         int i = 0;
+        var labelColors = List.of(MessageStyle.FRIENDS_LABEL, MessageStyle.CLAN_LABEL, MessageStyle.STAFF_LABEL);
         for (SocialChannel channel : SocialChannel.values()) {
             Component body = Component.text("Body ").append(Component.text("RankName", NamedTextColor.AQUA))
                     .append(Component.space()).append(action());
             Component actual = localization.render(locale, channel.message(body));
             check(plain(actual).equals(labels[i] + " Body RankName Accept"), "localized prefix and exact one-line body");
-            check(hasTextColor(actual, labels[i++], MessageStyle.PREFIX), "every current channel uses shared prefix color");
+            String label = labels[i].substring(1, labels[i].length() - 1);
+            check(MessageColorAssertions.hasSplitPrefix(actual, label, MessageStyle.BRACKET, labelColors.get(i++)), "every channel separates bracket and stable feature color");
             check(hasTextColor(actual, "Body ", MessageStyle.TEXT), "body is neutral");
             check(hasTextColor(actual, "RankName", NamedTextColor.AQUA), "rank color remains explicit");
             check(clicks(actual).equals(List.of(ClickEvent.runCommand("/example accept"))), "action is retained separately from prefix");
         }
         Component future = MessageStyle.feature(Component.text("Party"), Component.text("Created ")
                 .append(MessageStyle.success(Component.text("OK"))));
-        check(plain(future).equals("[Party] Created OK") && hasTextColor(future, "[Party]", MessageStyle.PREFIX),
+        check(plain(future).equals("[Party] Created OK") && MessageColorAssertions.hasSplitPrefix(future,"Party",MessageStyle.BRACKET,MessageStyle.DEFAULT_LABEL),
                 "a future feature needs no own prefix colors or enum case");
         check(hasTextColor(future, "Created ", MessageStyle.TEXT) && hasTextColor(future, "OK", MessageStyle.SUCCESS),
                 "success label does not recolor surrounding explanation");

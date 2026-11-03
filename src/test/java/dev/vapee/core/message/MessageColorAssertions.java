@@ -21,6 +21,15 @@ public final class MessageColorAssertions {
         }
         return true;
     }
+    /** Checks this prefix only; similarly bracketed action buttons elsewhere may have other colors. */
+    public static boolean hasSplitPrefix(Component message, String label, TextColor bracket, TextColor labelColor) {
+        var text = new StringBuilder(); var colors = new ArrayList<TextColor>();
+        collect(message, null, text, colors);
+        int start = text.indexOf("[" + label + "]");
+        if (start < 0 || !bracket.equals(colors.get(start)) || !bracket.equals(colors.get(start + label.length() + 1))) return false;
+        for (int i = start + 1; i <= start + label.length(); i++) if (!labelColor.equals(colors.get(i))) return false;
+        return true;
+    }
     private static void collect(Component component, TextColor inherited, StringBuilder text, List<TextColor> colors) {
         TextColor current = component.color() == null ? inherited : component.color();
         if (component instanceof TextComponent literal) {
