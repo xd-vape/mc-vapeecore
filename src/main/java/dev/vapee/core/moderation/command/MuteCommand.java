@@ -39,7 +39,7 @@ public final class MuteCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().issueMute(target.uniqueId(), actor, reason(args, 2), expiry));
         if (record == null) return;
-        context.send(sender, tr(expiry.isEmpty() ? "moderation.mute.saved-permanent" : "moderation.mute.saved-duration", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "duration", Component.text(duration.display(), MessageStyle.HIGHLIGHT), "reason", Component.text(record.reason()))));
+        context.sendBlock(sender, tr(expiry.isEmpty() ? "moderation.mute.saved-permanent" : "moderation.mute.saved-duration", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "duration", Component.text(duration.display(), MessageStyle.HIGHLIGHT), "reason", MessageStyle.value(record.reason()))));
         context.notifyMute(sender, actor, target, record, false);
     }
 

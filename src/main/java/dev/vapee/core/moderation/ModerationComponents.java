@@ -33,7 +33,8 @@ public final class ModerationComponents {
         return tr("moderation.kick.screen").color(NamedTextColor.RED).append(Component.newline()).append(reason(record.reason()));
     }
     public static Component muteNotice(ModerationRecord record) {
-        return muteReminder(record).append(Component.newline()).append(reason(record.reason()));
+        return MessageStyle.warning(tr("moderation.mute.screen")).append(Component.space()).append(expiry(record))
+                .append(Component.newline()).append(reason(record.reason()));
     }
     public static Component muteReminder(ModerationRecord record) {
         return tr("moderation.mute.screen").color(MessageStyle.ERROR).append(Component.space()).append(expiry(record));
@@ -44,7 +45,7 @@ public final class ModerationComponents {
         return reason.isEmpty() ? result : result.append(Component.newline()).append(reason(reason.get()));
     }
     private static Component reason(String reason) {
-        return tr("moderation.reason", java.util.Map.of("reason", Component.text(reason, NamedTextColor.WHITE))).color(MessageStyle.BODY);
+        return tr("moderation.reason", java.util.Map.of("reason", MessageStyle.value(reason))).color(MessageStyle.BODY);
     }
     private static Component expiry(ModerationRecord record) {
         Component expiry = record.expiresAt().map(value -> (Component) Component.text(time(value), MessageStyle.HIGHLIGHT)).orElseGet(() -> tr("moderation.permanent"));

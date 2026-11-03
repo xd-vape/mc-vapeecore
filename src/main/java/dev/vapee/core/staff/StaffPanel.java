@@ -108,6 +108,7 @@ public final class StaffPanel implements TabExecutor, Listener {
         return player != null && player.isOnline() && onlinePlayer.apply(player.getUniqueId()) == player;
     }
 
+    /** Public roster eligibility only; never an appearance, rank, nametag or tablist disguise. */
     public boolean isPublic(UUID id) { return !hidden.containsKey(id) || hidden.get(id) != onlinePlayer.apply(id); }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {

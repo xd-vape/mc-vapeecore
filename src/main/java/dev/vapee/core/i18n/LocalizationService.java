@@ -71,7 +71,7 @@ public final class LocalizationService {
         String value = lookup(LanguageResolver.resolve(locale), key);
         if (value == null) { logger.severe("Missing translation key: " + key); return Component.text("[missing:" + key + "]"); }
         try { return miniMessage.deserialize(value, TagResolver.resolver(
-                TagResolver.resolver(placeholders), dev.vapee.core.message.MessageStyle.accentTag())); }
+                TagResolver.resolver(placeholders), dev.vapee.core.message.MessageStyle.semanticTags())); }
         catch (RuntimeException exception) {
             logger.log(Level.WARNING, "Could not render translation: " + key, exception);
             return Component.text("[missing:" + key + "]");

@@ -6,10 +6,10 @@ import dev.vapee.core.friend.FriendService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.message.PlayerNameFormatter;
 import dev.vapee.core.message.SocialChannel;
+import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.social.SocialService;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -126,9 +126,11 @@ public final class FriendPresenceNotifier {
     }
 
     private Component createMessage(UUID subject, String subjectName, PresenceStatus status) {
+        boolean online = status == PresenceStatus.ONLINE;
         return SocialChannel.FRIENDS.message(tr(status == PresenceStatus.ONLINE ? "friends.presence.online" : "friends.presence.offline",
-                java.util.Map.of("player", names.format(subject, subjectName)))
-                .color(NamedTextColor.GRAY));
+                java.util.Map.of("player", names.format(subject, subjectName), "status",
+                        MessageStyle.status(tr(online ? "friends.presence.status-online" : "friends.presence.status-offline"), online)))
+                .color(MessageStyle.TEXT));
     }
 
     @FunctionalInterface

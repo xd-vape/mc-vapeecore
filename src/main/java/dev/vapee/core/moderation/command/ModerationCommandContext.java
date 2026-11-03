@@ -51,6 +51,10 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
         SocialChannel.STAFF.send(messages, sender, text);
     }
 
+    public void sendBlock(CommandSender sender, Component text) {
+        messages.sendRawBlock(sender, SocialChannel.STAFF.message(text));
+    }
+
     public void error(CommandSender sender, Component text) {
         SocialChannel.STAFF.error(messages, sender, text);
     }
@@ -123,8 +127,10 @@ public record ModerationCommandContext(ModerationService service, PlayerIdentity
                     ModerationRecord record, boolean removed) {
         try {
             Player player = online(target.uniqueId());
-            if (player != null) messages.sendRaw(player, removed ? ModerationComponents.unmuteNotice(record)
-                    : ModerationComponents.muteNotice(record));
+            if (player != null) {
+                if (removed) messages.sendRaw(player, ModerationComponents.unmuteNotice(record));
+                else messages.sendRawBlock(player, ModerationComponents.muteNotice(record));
+            }
         } catch (RuntimeException exception) {
             failure(removed ? "UNMUTE_NOTIFY" : "MUTE_NOTIFY", actor, target.uniqueId().toString(), exception);
             error(sender, tr(removed ? "moderation.unmute.notify-failed" : "moderation.mute.notify-failed"));

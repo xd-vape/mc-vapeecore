@@ -46,8 +46,17 @@ When implementing a new feature with chat messages or prefixes,
 automatically apply these rules without requiring an explicit
 styling request.
 
-Use docs/development/chat-design-system.md as the detailed
-reference once it exists.
+Use docs/development/chat-design-system.md as the detailed reference.
+
+- Extend MessageStyle / MessageService / SocialChannel; do not add a second palette.
+- New features use MessageStyle.feature with a bare localized feature label.
+- Use MessageService.sendRawBlock for localized, padded message blocks; supply
+  the feature heading explicitly and keep repeated status feedback compact.
+- Bundled MiniMessage system styling uses <accent> and the vc_* semantic tags.
+  Pass names/reasons as literal Components, never as MiniMessage source.
+- Keep the prefix-free TPA and friend Join Summary delivery contracts.
+- Staff HIDDEN affects the public staff roster only; it is not a disguise and
+  must not change chat ranks, names, nametags, scoreboards or tablist appearance.
 
 If the central message API is missing, extend existing
 infrastructure conservatively rather than duplicating styling.

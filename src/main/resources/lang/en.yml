@@ -562,8 +562,10 @@ friends:
 
   # Friendship and Presence
   presence:
-    offline: "<gray>Friend </gray><player><gray> went offline.</gray>"
-    online: "<gray>Friend </gray><player><green> is now online.</green>"
+    offline: "<vc_text>Friend </vc_text><player><vc_text> went <status>.</vc_text>"
+    online: "<vc_text>Friend </vc_text><player><vc_text> is now <status>.</vc_text>"
+    status-online: "online"
+    status-offline: "offline"
   remove-hint: "Shift + Right Click to remove"
   removed: "Removed friend <player>"
 
@@ -986,8 +988,8 @@ moderation:
 
   # Warnings
   warn:
-    received: "<yellow>You received a warning.</yellow>\n<gray>Reason: <white><reason></white></gray>"
-    saved: "<green>Warned</green> <player>.\n<gray>Reason: <white><reason></white></gray>"
+    received: "<vc_warning>You received a warning.</vc_warning>\n<vc_text>Reason: <accent><reason></accent></vc_text>"
+    saved: "<vc_success>Warned</vc_success> <player>.\n<vc_text>Reason: <accent><reason></accent></vc_text>"
   warn-notify-failed: "Warning was saved, but the online player could not be notified."
 
   # Bans and Kicks
@@ -1005,8 +1007,8 @@ moderation:
   # Mutes
   mute:
     notify-failed: "Mute was saved, but the online player could not be notified."
-    saved-duration: "<green>Muted</green> <player> for <duration>.\n<gray>Reason: <white><reason></white></gray>"
-    saved-permanent: "<green>Muted</green> <player> permanently.\n<gray>Reason: <white><reason></white></gray>"
+    saved-duration: "<vc_success>Muted</vc_success> <player> for <duration>.\n<vc_text>Reason: <accent><reason></accent></vc_text>"
+    saved-permanent: "<vc_success>Muted</vc_success> <player> permanently.\n<vc_text>Reason: <accent><reason></accent></vc_text>"
     screen: "You are muted."
   unmute:
     notify-failed: "Unmute was saved, but the online player could not be notified."

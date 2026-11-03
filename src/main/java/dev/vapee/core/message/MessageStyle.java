@@ -4,20 +4,75 @@ import dev.vapee.core.i18n.Translations;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.TextReplacementConfig;
+import net.kyori.adventure.text.minimessage.tag.Tag;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import java.util.Map;
+import java.util.Objects;
 
 /** Small semantic palette for core chat feedback; it never changes operator templates or user text. */
 public final class MessageStyle {
-    public static final NamedTextColor BODY = NamedTextColor.GRAY;
+    public static final NamedTextColor PREFIX = NamedTextColor.DARK_GRAY;
+    public static final NamedTextColor TEXT = NamedTextColor.GRAY;
+    public static final NamedTextColor MUTED = NamedTextColor.DARK_GRAY;
+    /** Compatibility name for the existing neutral body palette. */
+    public static final NamedTextColor BODY = TEXT;
     public static final TextColor DEFAULT_HIGHLIGHT = TextColor.color(0xE5BF75);
     /** Server-wide palette owned by ConfigService's applied snapshot; read when constructing new output. */
     public static volatile TextColor HIGHLIGHT = DEFAULT_HIGHLIGHT;
     public static final NamedTextColor SUCCESS = NamedTextColor.GREEN;
     public static final NamedTextColor WARNING = NamedTextColor.YELLOW;
     public static final NamedTextColor ERROR = NamedTextColor.RED;
+    public static final NamedTextColor ONLINE = NamedTextColor.GREEN;
+    public static final NamedTextColor OFFLINE = NamedTextColor.GRAY;
+    private static final TagResolver SEMANTIC_TAGS = TagResolver.resolver(
+            accentTag(),
+            TagResolver.resolver("vc_prefix", Tag.styling(PREFIX)),
+            TagResolver.resolver("vc_text", Tag.styling(TEXT)),
+            TagResolver.resolver("vc_muted", Tag.styling(MUTED)),
+            TagResolver.resolver("vc_success", Tag.styling(SUCCESS)),
+            TagResolver.resolver("vc_error", Tag.styling(ERROR)),
+            TagResolver.resolver("vc_warning", Tag.styling(WARNING)),
+            TagResolver.resolver("vc_online", Tag.styling(ONLINE)),
+            TagResolver.resolver("vc_offline", Tag.styling(OFFLINE)));
     private MessageStyle() { }
 
     public static void applyAccentColor(TextColor color) { HIGHLIGHT = java.util.Objects.requireNonNull(color); }
+
+    public static TextColor accent() { return HIGHLIGHT; }
+    public static TagResolver semanticTags() { return SEMANTIC_TAGS; }
+    public static Component text(Component body) { return Objects.requireNonNull(body).colorIfAbsent(TEXT); }
+    /** These helpers color status labels, not whole explanations or rank-colored player names. */
+    public static Component success(Component label) { return label.color(SUCCESS); }
+    public static Component error(Component label) { return label.color(ERROR); }
+    public static Component warning(Component label) { return label.color(WARNING); }
+    public static Component status(Component label, boolean online) { return label.color(online ? ONLINE : OFFLINE); }
+
+    /** A new feature supplies a bare localized label; actions are separate Components. */
+    public static Component prefix(Component label) {
+        return Component.text("[", PREFIX).append(Objects.requireNonNull(label).color(PREFIX))
+                .append(Component.text("]", PREFIX));
+    }
+    public static Component feature(Component label, Component body) { return message(prefix(label), body); }
+    /** Existing localized channel labels already include their brackets. */
+    public static Component message(Component formattedPrefix, Component body) {
+        return Component.empty().color(TEXT).append(Objects.requireNonNull(formattedPrefix).color(PREFIX))
+                .append(Component.space()).append(text(body));
+    }
+    /** Input must be localized first. No serialization or MiniMessage parsing of dynamic content. */
+    public static Component block(Component... lines) {
+        Objects.requireNonNull(lines);
+        if (lines.length == 0) throw new IllegalArgumentException("A message block needs content");
+        Component result = Component.newline().color(TEXT);
+        var indent = TextReplacementConfig.builder().matchLiteral("\n")
+                .replaceInsideHoverEvents(false)
+                .replacement(Component.newline().append(Component.text("  "))).build();
+        for (Component line : lines) {
+            result = result.append(Component.text("  "))
+                    .append(text(Objects.requireNonNull(line)).replaceText(indent)).append(Component.newline());
+        }
+        return result;
+    }
 
     /** Only explicit accent tags use the palette; ordinary colors and rank metadata are never recolored. */
     public static net.kyori.adventure.text.minimessage.tag.resolver.TagResolver accentTag() {

@@ -562,8 +562,10 @@ friends:
 
   # Friendship and Presence
   presence:
-    offline: "<gray>Dein Freund </gray><player><gray> ist offline gegangen.</gray>"
-    online: "<gray>Dein Freund </gray><player><green> ist jetzt online.</green>"
+    offline: "<vc_text>Dein Freund </vc_text><player><vc_text> ist <status> gegangen.</vc_text>"
+    online: "<vc_text>Dein Freund </vc_text><player><vc_text> ist jetzt <status>.</vc_text>"
+    status-online: "online"
+    status-offline: "offline"
   remove-hint: "Umschalt + Rechtsklick zum Entfernen"
   removed: "<player> aus deiner Freundesliste entfernt"
 
@@ -986,8 +988,8 @@ moderation:
 
   # Warnings
   warn:
-    received: "<yellow>Du wurdest verwarnt.</yellow>\n<gray>Grund: <white><reason></white></gray>"
-    saved: "<player> <green>verwarnt</green>.\n<gray>Grund: <white><reason></white></gray>"
+    received: "<vc_warning>Du wurdest verwarnt.</vc_warning>\n<vc_text>Grund: <accent><reason></accent></vc_text>"
+    saved: "<player> <vc_success>verwarnt</vc_success>.\n<vc_text>Grund: <accent><reason></accent></vc_text>"
   warn-notify-failed: "Die Verwarnung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."
 
   # Bans and Kicks
@@ -1005,8 +1007,8 @@ moderation:
   # Mutes
   mute:
     notify-failed: "Die Stummschaltung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."
-    saved-duration: "<player> für <duration> <green>stummgeschaltet</green>.\n<gray>Grund: <white><reason></white></gray>"
-    saved-permanent: "<player> dauerhaft <green>stummgeschaltet</green>.\n<gray>Grund: <white><reason></white></gray>"
+    saved-duration: "<player> für <duration> <vc_success>stummgeschaltet</vc_success>.\n<vc_text>Grund: <accent><reason></accent></vc_text>"
+    saved-permanent: "<player> dauerhaft <vc_success>stummgeschaltet</vc_success>.\n<vc_text>Grund: <accent><reason></accent></vc_text>"
     screen: "Du bist stummgeschaltet."
   unmute:
     notify-failed: "Die Aufhebung der Stummschaltung wurde gespeichert, aber der Online-Spieler konnte nicht benachrichtigt werden."

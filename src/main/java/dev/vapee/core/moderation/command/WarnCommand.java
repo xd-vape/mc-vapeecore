@@ -22,11 +22,11 @@ public final class WarnCommand extends AbstractModerationCommand {
         ModerationRecord record = mutate(sender, actor, target,
                 () -> context.service().issueWarning(target.uniqueId(), actor, reason(args, 1)));
         if (record == null) return;
-        context.send(sender, tr("moderation.warn.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "reason", Component.text(record.reason()))));
+        context.sendBlock(sender, tr("moderation.warn.saved", java.util.Map.of("player", Component.text(target.name(), MessageStyle.HIGHLIGHT), "reason", MessageStyle.value(record.reason()))));
         try {
             Player online = context.online(target.uniqueId());
-            if (online != null) context.messages().sendRaw(online, tr("moderation.warn.received",
-                    java.util.Map.of("reason", Component.text(record.reason()))));
+            if (online != null) context.messages().sendRawBlock(online, tr("moderation.warn.received",
+                    java.util.Map.of("reason", MessageStyle.value(record.reason()))));
         } catch (RuntimeException exception) {
             context.failure("WARNING_NOTIFICATION", actor, target.uniqueId().toString(), exception);
             context.error(sender, tr("moderation.warn-notify-failed"));

@@ -64,7 +64,8 @@ public final class FriendPresenceNotifierHarness {
                 "online message is exact literal Adventure text");
         check(hasColoredText(messages.getFirst(), null, "Friend ", net.kyori.adventure.text.format.NamedTextColor.GRAY)
                         && hasColoredText(messages.getFirst(), null, "Alice", net.kyori.adventure.text.format.NamedTextColor.WHITE)
-                        && hasColoredText(messages.getFirst(), null, " is now online.", net.kyori.adventure.text.format.NamedTextColor.GREEN),
+                        && dev.vapee.core.message.MessageColorAssertions.hasTextColor(messages.getFirst(), " is now ", dev.vapee.core.message.MessageStyle.TEXT)
+                        && dev.vapee.core.message.MessageColorAssertions.hasTextColor(messages.getFirst(), "online", dev.vapee.core.message.MessageStyle.ONLINE),
                 "online component uses gray body, neutral name fallback and limited green status");
         recipients.clear();
         messages.clear();

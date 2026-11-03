@@ -17,7 +17,7 @@ public final class Translations {
     /** Explicit catalog reference for operator MiniMessage templates; never a command/action router. */
     public static net.kyori.adventure.text.minimessage.tag.resolver.TagResolver tagResolver() {
         return net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver(
-                dev.vapee.core.message.MessageStyle.accentTag(),
+                dev.vapee.core.message.MessageStyle.semanticTags(),
                 net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.resolver("i18n", (arguments, context) ->
                         net.kyori.adventure.text.minimessage.tag.Tag.inserting(tr(arguments.popOr("Translation key is required").value()))));
     }

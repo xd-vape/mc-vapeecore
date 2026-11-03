@@ -35,11 +35,11 @@ public final class ChatPresentationHarness {
         var f=new ModerationTestSupport.Fixture();f.staff.locale=locale;f.target.locale=locale;var c=context(f,messages(f));String prefix=prefix(locale);
         new MuteCommand(c).onCommand(f.staff.sender,null,"mute",new String[]{"Alex","1m",ModerationTestSupport.ATTACK});
         Component result=f.staff.output.getLast(),notice=f.target.output.getLast();
-        check(plain(result).startsWith(prefix+" ")&&count(plain(result),prefix)==1&&!plain(result).contains("Operator"),"staff-issued mute result has exactly one Staff heading");
+        check(plain(result).stripLeading().startsWith(prefix+" ")&&count(plain(result),prefix)==1&&!plain(result).contains("Operator"),"staff-issued mute result has exactly one Staff heading");
         check(color(result,"Alex",MessageStyle.HIGHLIGHT)&&color(result,"1m",MessageStyle.HIGHLIGHT),"target and duration values retain selective accent");
-        check(plain(result).contains(ModerationTestSupport.ATTACK)&&plain(result).lines().count()==2&&events(result).isEmpty(),"staff result preserves literal reason in two useful lines");
+        check(plain(result).contains(ModerationTestSupport.ATTACK)&&framed(result)&&events(result).isEmpty(),"staff result preserves literal reason in two padded indented lines");
         check(!plain(notice).contains(prefix)&&!plain(notice).contains("Operator")&&plain(notice).contains(ModerationTestSupport.ATTACK)
-                &&plain(notice).contains("UTC")&&plain(notice).lines().count()==2,"initial victim notice remains complete, raw, two lines");
+                &&plain(notice).contains("UTC")&&framed(notice),"initial victim notice remains complete, raw, with padded indented lines");
         new UnmuteCommand(c).onCommand(f.staff.sender,null,"unmute",new String[]{"Alex","release <red>literal"});
         check(plain(f.target.output.getLast()).contains("release <red>literal")&&events(f.target.output.getLast()).isEmpty(),"unmute reason literal and victim-facing without Staff prefix");
         new WarnCommand(c).onCommand(f.staff.sender,null,"warn",new String[]{"Alex",ModerationTestSupport.ATTACK});
@@ -89,6 +89,7 @@ public final class ChatPresentationHarness {
     private static String prefix(Locale locale){return locale.equals(Locale.US)?"[Staff]":"[Team]";}
     private static boolean color(Component component,String text,net.kyori.adventure.text.format.TextColor color){return MessageColorAssertions.hasTextColor(component,text,color);}
     private static String plain(Component component){return ModerationTestSupport.plain(component);}
+    private static boolean framed(Component component){String[] lines=plain(component).split("\n",-1);return lines.length==4&&lines[0].isEmpty()&&lines[3].isEmpty()&&lines[1].startsWith("  ")&&lines[2].startsWith("  ");}
     private static List<ClickEvent> events(Component component){List<ClickEvent> result=new ArrayList<>();if(component.clickEvent()!=null)result.add(component.clickEvent());component.children().forEach(child->result.addAll(events(child)));return result;}
     private static boolean bold(Component component){return component.decoration(TextDecoration.BOLD)==TextDecoration.State.TRUE||component.children().stream().anyMatch(ChatPresentationHarness::bold);}
     private static int count(String text,String value){return (text.length()-text.replace(value,"").length())/value.length();}

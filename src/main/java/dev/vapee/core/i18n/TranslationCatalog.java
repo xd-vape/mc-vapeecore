@@ -38,7 +38,8 @@ public final class TranslationCatalog {
         var names = new TreeSet<String>(); var matcher = TAG.matcher(value);
         while (matcher.find()) {
             String name = matcher.group(1).toLowerCase(java.util.Locale.ROOT);
-            if (!TagResolver.standard().has(name) && !name.equals("accent")) names.add(name);
+            if (!TagResolver.standard().has(name)
+                    && !dev.vapee.core.message.MessageStyle.semanticTags().has(name)) names.add(name);
         }
         return Set.copyOf(names);
     }

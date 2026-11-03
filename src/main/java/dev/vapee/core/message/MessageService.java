@@ -46,6 +46,15 @@ public final class MessageService {
         Objects.requireNonNull(audience).sendMessage(localize(audience, Objects.requireNonNull(component)));
     }
 
+    /** One raw packet with surrounding empty lines and uniform indentation, after localization. */
+    public void sendRawBlock(Audience audience, Component... lines) {
+        Objects.requireNonNull(audience);
+        Objects.requireNonNull(lines);
+        Component[] localized = java.util.Arrays.stream(lines)
+                .map(line -> localize(audience, Objects.requireNonNull(line))).toArray(Component[]::new);
+        audience.sendMessage(MessageStyle.block(localized));
+    }
+
     public Component deserialize(String message) {
         return miniMessage.deserialize(Objects.requireNonNull(message, "message"), dev.vapee.core.i18n.Translations.tagResolver());
     }

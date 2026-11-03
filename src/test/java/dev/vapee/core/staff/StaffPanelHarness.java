@@ -34,9 +34,12 @@ public final class StaffPanelHarness {
         f.config.set(StaffHierarchyConfig.defaults()); f.groups.put(user.id, "default");
         f.list(user); check(user.text().contains("Admin") && user.text().contains("Builder") && !user.text().contains("Owner User"), "public list requires no private permission and only eligible staff");
         f.open(admin); var beforeGroups = new HashMap<>(f.groups); var beforePermissions = Set.copyOf(admin.permissions);
+        var beforeRanks = new HashMap<>(f.ranks);
         f.click(admin, StaffPanel.ROSTER_LAYOUT.slot(StaffPanel.Action.STATUS));
         check(f.panel.isPublic(admin.id), "visibility does not mutate inside click handler"); f.drain();
         check(!f.panel.isPublic(admin.id) && f.groups.equals(beforeGroups) && admin.permissions.equals(beforePermissions), "HIDDEN changes presentation only");
+        check(f.ranks.equals(beforeRanks) && f.players.values().stream().allMatch(p -> p.appearanceWrites == 0),
+                "HIDDEN changes neither rank metadata nor chat/display/tablist/scoreboard appearance");
         f.list(user); check(!user.text().contains("Admin") && user.text().contains("Builder"), "HIDDEN omitted from public roster without leaking hidden counts");
         builder.permissions.add(StaffPanel.PERMISSION); f.open(builder);
         check(builder.holder().content().targets().containsValue(admin.player), "private authorized roster still includes hidden staff");
@@ -45,6 +48,8 @@ public final class StaffPanelHarness {
         user.invisible.add(builder.id); f.list(user); check(!user.text().contains("Builder"), "public roster respects existing visibility boundary");
         f.click(admin, StaffPanel.ROSTER_LAYOUT.slot(StaffPanel.Action.STATUS)); f.drain();
         check(f.panel.isPublic(admin.id) && admin.opReads == 0 && user.opReads == 0, "PUBLIC restores roster without consulting OP status");
+        check(f.ranks.equals(beforeRanks) && f.players.values().stream().allMatch(p -> p.appearanceWrites == 0),
+                "PUBLIC restoration does not rewrite staff appearance");
         check(f.panel.onTabComplete(user.player, null, "staff", new String[]{""}).equals(List.of("list")), "public completion exposes no staff names or actions");
         f.panel.disable();
     }

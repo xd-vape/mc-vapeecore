@@ -92,7 +92,7 @@ public final class StaffPanelTestSupport {
         public final List<Component> messages = new ArrayList<>();
         public Locale locale = Locale.US;
         public boolean online = true, permissionContext = true, op, cancelOpen;
-        public int opens, closes, opReads;
+        public int opens, closes, opReads, appearanceWrites;
         public InventoryView view;
         public Runnable afterOpen = () -> { }, afterClose = () -> { };
         final PlayerInventory bottom = proxy(PlayerInventory.class, (m, a) -> m.equals("getSize") ? 36 : null);
@@ -115,6 +115,13 @@ public final class StaffPanelTestSupport {
                     view = view(new Stock(null, 9, Component.empty()).inventory); afterClose.run(); yield null;
                 }
                 case "sendMessage" -> { for (Object v : a) if (v instanceof Component c) messages.add(c); yield null; }
+                case "displayName", "playerListName", "playerListHeader", "playerListFooter" -> {
+                    if (a.length != 0) appearanceWrites++;
+                    yield Component.text(name);
+                }
+                case "setDisplayName", "setPlayerListName", "setPlayerListOrder", "setPlayerListHeaderFooter", "setScoreboard" -> {
+                    appearanceWrites++; yield null;
+                }
                 case "setGameMode", "setAllowFlight", "hidePlayer", "showPlayer", "setOp" -> throw new AssertionError("Roster presentation changed player authority/presence");
                 default -> null;
             });
