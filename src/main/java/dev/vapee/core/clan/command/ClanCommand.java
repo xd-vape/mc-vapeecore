@@ -106,7 +106,7 @@ public final class ClanCommand implements TabExecutor {
             return true;
         }
         if (!player.hasPermission(PERMISSION)) {
-            send(player, tr("clan.command.denied"), NamedTextColor.RED);
+            dev.vapee.core.message.SocialChannel.CLAN.send(messages, player, messages.commandDenied(player, "clan.command.denied"));
             return true;
         }
         try {

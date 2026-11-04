@@ -36,6 +36,7 @@ public final class BuildCommand implements TabExecutor {
     private final Consumer<Player> managedFlightCleanup;
     private final BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender;
     private final Consumer<Player> usageSender;
+    private final Consumer<Player> denialSender;
 
     public BuildCommand(
             JavaPlugin plugin,
@@ -53,7 +54,8 @@ public final class BuildCommand implements TabExecutor {
                 Objects.requireNonNull(utilityService, "utilityService")::clearManagedFlight,
                 Objects.requireNonNull(messageService, "messageService")::send,
                 player -> messageService.send(player,
-                        messageService.usage(player, "utility.build.usage", "/build", ""))
+                        messageService.usage(player, "utility.build.usage", "/build", "")),
+                player -> messageService.send(player, messageService.commandDenied(player, "utility.build.denied"))
         );
     }
 
@@ -66,14 +68,15 @@ public final class BuildCommand implements TabExecutor {
             BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender
     ) {
         this(logger, lobbyWorldCheck, buildStateAccess, activityCheck, managedFlightCleanup,
-                messageSender, player -> messageSender.accept(player, MessageStyle.usage("/build", "")));
+                messageSender, player -> messageSender.accept(player, MessageStyle.usage("/build", "")),
+                player -> messageSender.accept(player, MessageStyle.commandDenied()));
     }
 
     private BuildCommand(Logger logger, Predicate<Player> lobbyWorldCheck,
                          BuildStateAccess buildStateAccess, Predicate<UUID> activityCheck,
                          Consumer<Player> managedFlightCleanup,
                          BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender,
-                         Consumer<Player> usageSender) {
+                         Consumer<Player> usageSender, Consumer<Player> denialSender) {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.lobbyWorldCheck = Objects.requireNonNull(lobbyWorldCheck, "lobbyWorldCheck");
         this.buildStateAccess = Objects.requireNonNull(buildStateAccess, "buildStateAccess");
@@ -81,6 +84,7 @@ public final class BuildCommand implements TabExecutor {
         this.managedFlightCleanup = Objects.requireNonNull(managedFlightCleanup, "managedFlightCleanup");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
         this.usageSender = Objects.requireNonNull(usageSender, "usageSender");
+        this.denialSender = Objects.requireNonNull(denialSender, "denialSender");
     }
 
     @Override
@@ -95,7 +99,7 @@ public final class BuildCommand implements TabExecutor {
             return true;
         }
         if (!player.hasPermission(PERMISSION)) {
-            send(player, tr("utility.build.denied"));
+            denialSender.accept(player);
             return true;
         }
         if (args.length != 0) {

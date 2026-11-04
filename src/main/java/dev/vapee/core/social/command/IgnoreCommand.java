@@ -57,7 +57,7 @@ public final class IgnoreCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("social.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "social.denied"));
             return true;
         }
         if (args.length != 1) {

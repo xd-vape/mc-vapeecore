@@ -33,7 +33,7 @@ public final class DailyQuestCommand implements CommandExecutor, TabCompleter {
                                        @NotNull String label, @NotNull String[] args) {
         if (!authorized.getAsBoolean()) return true;
         if (!sender.hasPermission(DailyQuestMenu.PERMISSION)) {
-            messages.send(sender, tr("daily-quests.denied").color(net.kyori.adventure.text.format.NamedTextColor.RED));
+            messages.send(sender, messages.commandDenied(sender, "daily-quests.denied"));
         } else if (!(sender instanceof Player player)) {
             messages.send(sender, tr("daily-quests.command-player-only"));
         } else if (args.length != 0) {

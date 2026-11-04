@@ -44,7 +44,7 @@ public final class SetSpawnCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("spawn.set-denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "spawn.set-denied"));
             return true;
         }
         if (args.length != 0) {

@@ -79,7 +79,13 @@ public final class TeleportRequestsHarness {
     private static void policies() {
         for(String boundary:List.of("permission-sender","permission-recipient","ignore-sender","ignore-recipient","hidden-target","hidden-sender","build-sender","build-recipient","activity-sender","activity-recipient","unloaded-sender","unloaded-recipient","dead-sender","dead-recipient","vehicle","passengers")) {
             Fixture f=new Fixture(); var a=f.user("Alpha"); var b=f.user("Beta"); block(f,a,b,boundary);
-            f.command(a,"tpa","Beta"); check(a.last().contains("unavailable") || a.last().contains("cannot use"),"send denied at actual boundary "+boundary);
+            f.command(a,"tpa","Beta"); check(boundary.equals("permission-sender")
+                    ? a.last().equals("You do not have permission to use this command.") : a.last().contains("unavailable"),
+                    "send denied at actual boundary "+boundary);
+            if (boundary.equals("permission-sender")) check(a.received.size() == 1
+                    && dev.vapee.core.message.MessageColorAssertions.hasTextColor(a.received.getFirst(),
+                    "You do not have permission to use this command.", dev.vapee.core.message.MessageStyle.ERROR),
+                    "ordinary TPA permission denial is one raw semantic error line");
             check(b.clicks().isEmpty() && a.teleports+b.teleports==0,"no private detail or actionable invitation "+boundary);
             check(f.tab(a,"tpa","").isEmpty(),"completion respects policy "+boundary);
         }

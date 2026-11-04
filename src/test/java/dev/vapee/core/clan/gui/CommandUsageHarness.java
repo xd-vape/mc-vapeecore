@@ -165,7 +165,9 @@ public final class CommandUsageHarness {
                 actor.received.size() == 1
                         && hasTextColor(
                                 actor.received.getFirst(),
-                                locale.equals(Locale.GERMANY) ? "Fehler:" : "Error:",
+                                locale.equals(Locale.GERMANY)
+                                        ? "Du hast keine Berechtigung, diesen Befehl zu verwenden."
+                                        : "You do not have permission to use this command.",
                                 MessageStyle.ERROR),
                 "real permission error remains red");
         check(

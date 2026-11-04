@@ -48,7 +48,7 @@ public final class ReplyCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(MessageCommand.PERMISSION)) {
-            messageService.send(sender, tr("private-messages.error.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "private-messages.error.denied"));
             return true;
         }
         if (args.length == 0) {

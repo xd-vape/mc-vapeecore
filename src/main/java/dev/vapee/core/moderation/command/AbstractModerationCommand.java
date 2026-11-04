@@ -33,7 +33,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
     @Override public final boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!context.active().getAsBoolean()) return true;
         if (!sender.hasPermission("vapeecore.moderation." + name)) {
-            context.error(sender, tr("common.command-denied"));
+            context.send(sender, context.messages().commandDenied(sender));
             return true;
         }
         ModerationActor actor = actor(sender);
@@ -96,7 +96,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
             // Require the original live session, not merely a reconnect with the same UUID.
             if (!player.isOnline() || context.online(actor.playerId().orElseThrow()) != player) return;
             if (!sender.hasPermission("vapeecore.moderation." + name)) {
-                context.error(sender, tr("common.command-denied"));
+                context.send(sender, context.messages().commandDenied(sender));
                 return;
             }
             if (failure != null) throw new IllegalStateException("LuckPerms primary group load failed", failure);

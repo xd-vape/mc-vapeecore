@@ -21,7 +21,7 @@ public final class StaffPanelHarness {
     }
     private static void accessAndRoster() {
         Fixture f = new Fixture(); Probe admin = f.admin(), user = f.player("User", "default"), builder = f.player("Builder", "builder");
-        f.open(user); check(user.opens == 0 && user.text().contains("private staff panel"), "ordinary player denied at executor boundary");
+        f.open(user); check(user.opens == 0 && user.text().contains("You do not have permission to use this command."), "ordinary player denied at executor boundary");
         user.permissions.add(StaffPanel.PERMISSION); user.op = true;
         f.open(user); check(user.opens == 0, "panel node and OP do not turn a nonstaff primary group into staff");
         f.ranks.put(user.id, new RankInfo("owner", "Owner", Optional.empty(), Optional.of(NamedTextColor.RED), OptionalInt.of(Integer.MAX_VALUE)));

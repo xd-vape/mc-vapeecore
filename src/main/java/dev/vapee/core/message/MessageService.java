@@ -39,6 +39,27 @@ public final class MessageService {
     }
     public Component localize(Audience audience, Component component) { return localization.render(audience, component); }
 
+    public Component commandDenied(Audience audience) {
+        return commandDenied(audience, "common.command-denied");
+    }
+
+    /** Ordinary command denial, retaining an explicitly customized former feature message. */
+    public Component commandDenied(Audience audience, String legacyKey) {
+        var language = dev.vapee.core.i18n.LanguageResolver.resolve(localization.locale(audience));
+        var snapshot = localization.snapshot();
+        String live = snapshot.live().getOrDefault(language, java.util.Map.of()).get(legacyKey);
+        String bundled = snapshot.bundled().getOrDefault(language, java.util.Map.of()).get(legacyKey);
+        // Exact, bounded compatibility for the sole changed canonical default, not a text heuristic.
+        boolean copiedGermanDefault = language == dev.vapee.core.i18n.Language.GERMAN
+                && legacyKey.equals("common.command-denied")
+                && "Du darfst diesen Command nicht verwenden.".equals(live);
+        if (live != null && !live.equals(bundled) && !copiedGermanDefault)
+            return component(audience, legacyKey).colorIfAbsent(MessageStyle.ERROR);
+        if (!legacyKey.equals("common.command-denied")) return commandDenied(audience);
+        if (copiedGermanDefault) return deserialize(bundled).colorIfAbsent(MessageStyle.ERROR);
+        return localize(audience, MessageStyle.commandDenied());
+    }
+
     /** Keep complete operator-owned legacy usage texts; bundled defaults use the shared composition. */
     public Component usage(Audience audience, String legacyKey, String command, String arguments) {
         var language = dev.vapee.core.i18n.LanguageResolver.resolve(localization.locale(audience));

@@ -56,7 +56,7 @@ public final class MessageCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("private-messages.error.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "private-messages.error.denied"));
             return true;
         }
         if (args.length < 2) {

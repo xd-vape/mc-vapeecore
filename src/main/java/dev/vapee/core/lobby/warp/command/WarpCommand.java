@@ -72,7 +72,7 @@ public final class WarpCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("warp.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "warp.denied"));
             return true;
         }
         if (args.length == 0) {

@@ -86,7 +86,7 @@ public final class SettingsCommand implements TabExecutor {
             return true;
         }
         if (!player.hasPermission(PERMISSION)) {
-            messageService.send(player, tr("common.command-denied").color(net.kyori.adventure.text.format.NamedTextColor.RED));
+            messageService.send(player, messageService.commandDenied(player));
             return true;
         }
         if (args.length == 0) {

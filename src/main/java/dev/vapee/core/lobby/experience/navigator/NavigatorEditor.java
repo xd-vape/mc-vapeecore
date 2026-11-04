@@ -146,7 +146,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     }
     @Override public boolean onCommand(CommandSender sender, Command ignored, String label, String[] args) {
         if (!(sender instanceof Player player)) { sender.sendMessage("This editor requires a player."); return true; }
-        if (!authorized(player)) { release(player); say(player, "No Navigator editor permission.", "Keine Navigator-Editor-Berechtigung."); return true; }
+        if (!authorized(player)) { release(player); messages.sendRaw(player, messages.commandDenied(player)); return true; }
         try {
             if (args.length == 0) { say(player, "Use /navigator edit or /navigator help.", "Nutze /navigator edit oder /navigator help."); return true; }
             if (args[0].equalsIgnoreCase("help")) { help(player); return true; }

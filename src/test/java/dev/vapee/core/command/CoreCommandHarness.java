@@ -56,7 +56,10 @@ public final class CoreCommandHarness {
         check(reloads[0] == 0, "bad reload arity never reaches coordinator");
         run(command, player, "core", attack, attack);
         check(player.output.stream().noneMatch(CoreCommandHarness::hasClick), "unknown subcommand remains literal");
-        run(command, player, "core", "permission to reload", "reload");
+        run(command, player, "core", "You do not have permission to use this command.", "reload");
+        check(player.output.size() == 1 && dev.vapee.core.message.MessageColorAssertions.hasTextColor(
+                player.output.getFirst(), "You do not have permission to use this command.",
+                dev.vapee.core.message.MessageStyle.ERROR), "ordinary core denial is one semantic error message");
         check(reloads[0] == 0, "direct executor enforces admin permission");
         check(command.onTabComplete(player.sender, null, "core", new String[]{""}).equals(List.of("help", "version")),
                 "non-admin root completion excludes reload");

@@ -34,6 +34,7 @@ public final class InvseeCommand implements TabExecutor {
     private final Function<String, Player> playerLookup;
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final BiConsumer<CommandSender, Component> messageSender;
+    private final Function<CommandSender, Component> denialMessage;
 
     public InvseeCommand(
             JavaPlugin plugin,
@@ -48,7 +49,8 @@ public final class InvseeCommand implements TabExecutor {
                 )::resolveExact,
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(messageService, "messageService")::send,
-                staffTargetGuard
+                staffTargetGuard,
+                sender -> messageService.commandDenied(sender, "utility.invsee.denied")
         );
     }
 
@@ -59,11 +61,23 @@ public final class InvseeCommand implements TabExecutor {
             BiConsumer<CommandSender, Component> messageSender,
             OnlineStaffTargetGuard staffTargetGuard
     ) {
+        this(invseeService, playerLookup, onlinePlayersSupplier, messageSender, staffTargetGuard, sender -> MessageStyle.commandDenied());
+    }
+
+    private InvseeCommand(
+            InvseeService invseeService,
+            Function<String, Player> playerLookup,
+            Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard,
+            Function<CommandSender, Component> denialMessage
+    ) {
         this.invseeService = Objects.requireNonNull(invseeService, "invseeService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
         this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
+        this.denialMessage = Objects.requireNonNull(denialMessage, "denialMessage");
     }
 
     @Override
@@ -82,7 +96,7 @@ public final class InvseeCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            error(sender, tr("utility.invsee.denied"));
+            messageSender.accept(sender, denialMessage.apply(sender));
             return true;
         }
 

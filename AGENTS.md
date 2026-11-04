@@ -50,6 +50,12 @@ All player-facing system messages must follow VapeeCore's central chat design sy
 - Preserve existing prefix rules, operator overrides and click/hover behavior; usage suggests editable commands and never executes them.
 - Keep full help pages, contextual choices, real errors and security confirmations distinct from simple usage.
 
+### Permission Denials
+
+- Ordinary command permission denials use `MessageService.commandDenied(recipient)` and `common.command-denied`, with the existing delivery and SocialChannel prefix.
+- Do not duplicate denial formatting or expose technical permission/group details to players.
+- Authorization stays at the existing execution boundary; specific self/others, target and security errors remain separate messages.
+
 ### Feature Prefix Styling
 
 All system prefixes must use the central MessageStyle API.

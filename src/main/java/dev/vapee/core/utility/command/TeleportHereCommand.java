@@ -38,6 +38,7 @@ public final class TeleportHereCommand implements TabExecutor {
     private final Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier;
     private final Predicate<UUID> activityCheck;
     private final BiConsumer<CommandSender, Component> messageSender;
+    private final Function<CommandSender, Component> denialMessage;
 
     public TeleportHereCommand(
             JavaPlugin plugin,
@@ -54,7 +55,8 @@ public final class TeleportHereCommand implements TabExecutor {
                 () -> plugin.getServer().getOnlinePlayers(),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(messageService, "messageService")::send,
-                staffTargetGuard
+                staffTargetGuard,
+                sender -> messageService.commandDenied(sender, "utility.teleport-here.denied")
         );
     }
 
@@ -66,12 +68,25 @@ public final class TeleportHereCommand implements TabExecutor {
             BiConsumer<CommandSender, Component> messageSender,
             OnlineStaffTargetGuard staffTargetGuard
     ) {
+        this(utilityService, playerLookup, onlinePlayersSupplier, activityCheck, messageSender, staffTargetGuard, sender -> MessageStyle.commandDenied());
+    }
+
+    private TeleportHereCommand(
+            UtilityService utilityService,
+            Function<String, Player> playerLookup,
+            Supplier<? extends Collection<? extends Player>> onlinePlayersSupplier,
+            Predicate<UUID> activityCheck,
+            BiConsumer<CommandSender, Component> messageSender,
+            OnlineStaffTargetGuard staffTargetGuard,
+            Function<CommandSender, Component> denialMessage
+    ) {
         this.utilityService = Objects.requireNonNull(utilityService, "utilityService");
         this.playerLookup = Objects.requireNonNull(playerLookup, "playerLookup");
         this.onlinePlayersSupplier = Objects.requireNonNull(onlinePlayersSupplier, "onlinePlayersSupplier");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
         this.staffTargetGuard = Objects.requireNonNull(staffTargetGuard, "staffTargetGuard");
+        this.denialMessage = Objects.requireNonNull(denialMessage, "denialMessage");
     }
 
     @Override
@@ -90,7 +105,7 @@ public final class TeleportHereCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            error(sender, tr("utility.teleport-here.denied"));
+            messageSender.accept(sender, denialMessage.apply(sender));
             return true;
         }
 

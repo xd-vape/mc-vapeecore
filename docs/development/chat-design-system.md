@@ -47,6 +47,59 @@ EN/DE behalten dieselbe Struktur und dieselben fachlichen Platzhalter. Werte als
 
 Bestehende Presence-Sprach-Overrides aus der Version vor Step 06B dürfen für `friends.presence.online` und `friends.presence.offline` weiterhin ausschließlich `<player>` enthalten. Die neuen gebündelten Texte verwenden zusätzlich `<status>`. Nur diese zwei bekannten alten Override-Verträge werden beim Laden und Reload akzeptiert; die gebündelte EN-/DE-Parität sowie fehlende, umbenannte oder zusätzliche Parameter anderer Texte bleiben strikt. Vorhandene Dateien und ihre Gestaltung werden dabei nicht umgeschrieben. Alte Overrides behalten deshalb auch ihre bisherigen Statusfarben, bis der Operator sie bewusst anpasst.
 
+## Gewöhnliche Command-Permission-Denials
+
+Nach einer vorhandenen fehlgeschlagenen Berechtigungsprüfung liefert
+`MessageService.commandDenied(recipient)` den lokalisierten Fehlertext aus
+`common.command-denied`: EN `You do not have permission to use this command.`;
+DE `Du hast keine Berechtigung, diesen Befehl zu verwenden.`.
+`MessageStyle.commandDenied()` ist die gemeinsame übersetzbare Komposition;
+der MessageService berücksichtigt zusätzlich installierte Betreibertexte.
+Die API entscheidet niemals über Berechtigungen und sendet selbst keine Nachricht.
+
+```java
+messages.send(sender, messages.commandDenied(sender));
+SocialChannel.STAFF.send(messages, player,
+        messages.commandDenied(player, "staff.denied"));
+```
+
+Die Standardnachricht ist eine kompakte rote Zeile (`MessageStyle.ERROR`), ohne
+technische Nodes, Gruppen oder zusätzlichen Error-Label. Die bestehende Delivery
+bleibt erhalten: Friends GOLD, Clan DARK_PURPLE und Staff DARK_GRAY behalten ihre
+Label-Farben und getrennte BRACKET-Klammern. Präfixfreie Commands bleiben
+präfixfrei; ein bestehender globaler Operator-Wrapper wird nur dort verwendet,
+wo bereits normale `send`-Delivery gilt. TPA und Navigator verwenden Raw-Delivery.
+
+Für migrierte frühere Feature-Texte akzeptiert `commandDenied(recipient, legacyKey)`
+einen vollständigen abweichenden Override der Empfängersprache. Dessen Wortlaut,
+explizite Farben und Interaktionen bleiben wirksam; ein solcher Override kann
+daher absichtlich vom roten einzeiligen Standard abweichen. Exakt mit dem aktuellen
+gebündelten Wert übereinstimmende Kopien verwenden den gemeinsamen Text.
+Ein einziger expliziter Altstandard wird zusätzlich erkannt: der unformatierte
+deutsche Wert `Du darfst diesen Command nicht verwenden.` ausschließlich unter
+`common.command-denied`. Er wird beim Rendern durch den neuen gebündelten
+deutschen Standard ersetzt. Abweichende Formatierung oder ähnliche Texte werden
+nicht heuristisch umgedeutet. Ein absichtlich identisch belassener alter Standard
+ist technisch nicht von einer unveränderten Kopie unterscheidbar.
+Abweichende Feature-Overrides haben Vorrang vor dem gemeinsamen Override;
+ohne sie bleiben eigene `common.command-denied`-Overrides wirksam.
+Keine installierte Sprachdatei wird geschrieben. Die Darstellung liest den
+aktuellen Localization-Snapshot; Prepare/Apply/Rollback bleiben unverändert.
+Bestehende Keys und ihre platzhalterfreien Denial-Verträge bleiben erhalten.
+
+Self-/Others-Rechte, Staff-Target-Hierarchie, Activity-Sperren, Player-only,
+Argument-/Datenfehler und GUI-/Session-Fehler bleiben eigenständige Rückmeldungen.
+Beim StaffPanel müssen weiterhin der Panel-Node und die aktuelle primäre
+Staff-Gruppe gemeinsam vorliegen; `/staff list` bleibt öffentlich.
+
+Bukkit/Paper kann eine Descriptor-Permission bereits vor dem Executor prüfen.
+Diese Ablehnung gehört der Plattform und verwendet gegebenenfalls deren Text.
+Die Descriptor-Gates bleiben vollständig erhalten; keine Preprocess-Interception
+oder schwächere Registrierung zur kosmetischen Vereinheitlichung.
+`PermissionDenialHarness` prüft echte Commands, lokalisierte Farbspannen,
+Staff-Zugriff und Operator-/Katalog-/Reload-Fälle. Die bestehenden Sicherheits-,
+Usage- und Interaktionsharnesses bleiben zusätzliche Regressionen.
+
 ## Einfache Command-Usage
 
 Neue Commands verwenden `MessageStyle.usage("/friend add", "<player|uuid>")`.

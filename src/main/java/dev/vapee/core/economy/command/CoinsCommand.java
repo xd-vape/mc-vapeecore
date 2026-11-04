@@ -312,7 +312,7 @@ public final class CoinsCommand implements TabExecutor {
     }
 
     private void sendDenied(CommandSender sender) {
-        messageService.send(sender, tr("economy.denied"));
+        messageService.send(sender, messageService.commandDenied(sender, "economy.denied"));
     }
 
     private void sendUsage(CommandSender sender, Component error, String command, String arguments) {

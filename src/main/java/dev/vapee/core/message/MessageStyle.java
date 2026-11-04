@@ -56,6 +56,8 @@ public final class MessageStyle {
     /** These helpers color status labels, not whole explanations or rank-colored player names. */
     public static Component success(Component label) { return label.color(SUCCESS); }
     public static Component error(Component label) { return label.color(ERROR); }
+    /** Presentation only; the caller owns the permission decision and delivery wrapper. */
+    public static Component commandDenied() { return dev.vapee.core.i18n.Translations.tr("common.command-denied").color(ERROR); }
     public static Component warning(Component label) { return label.color(WARNING); }
     public static Component status(Component label, boolean online) { return label.color(online ? ONLINE : OFFLINE); }
 

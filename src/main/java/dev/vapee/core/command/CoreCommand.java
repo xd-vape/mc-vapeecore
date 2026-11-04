@@ -201,7 +201,7 @@ public final class CoreCommand implements TabExecutor {
         }
 
         if (args[0].equalsIgnoreCase("quest")) {
-            if (!sender.hasPermission(ADMIN_PERMISSION)) messageService.send(sender, tr("core.quest.denied"));
+            if (!sender.hasPermission(ADMIN_PERMISSION)) messageService.send(sender, messageService.commandDenied(sender, "core.quest.denied"));
             else if (questCommands == null) messageService.send(sender, tr("core.quest.failed"));
             else questCommands.onCommand(sender, command, label, java.util.Arrays.copyOfRange(args, 1, args.length));
             return true;
@@ -302,7 +302,7 @@ public final class CoreCommand implements TabExecutor {
 
     private void reloadConfig(CommandSender sender) {
         if (!sender.hasPermission(ADMIN_PERMISSION)) {
-            messageService.send(sender, tr("core.reload.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "core.reload.denied"));
             return;
         }
 

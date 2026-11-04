@@ -107,7 +107,7 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
         }
         if (!active || !current(player)) { return true; }
         prune();
-        if (!player.hasPermission(PERMISSION)) { tell(player, tr("tpa.permission")); return true; }
+        if (!player.hasPermission(PERMISSION)) { tell(player, messages.commandDenied(player, "tpa.permission")); return true; }
         String name = command.getName().toLowerCase(Locale.ROOT);
         switch (name) {
             case "tpa", "tpahere" -> {

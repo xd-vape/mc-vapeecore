@@ -61,7 +61,7 @@ public final class ProfileCommand implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("common.command-denied").color(NamedTextColor.RED));
+            messageService.send(sender, messageService.commandDenied(sender));
             return true;
         }
         if (args.length > 1) {

@@ -64,7 +64,7 @@ common:
   activity-self: "Du kannst diesen Command während einer Aktivität nicht verwenden."
   activity-target: "Dieser Spieler nimmt an einer Aktivität teil."
   ambiguous-player.message: "<yellow>Mehrere bekannte Spieler verwenden diesen Namen.</yellow>"
-  command-denied: "Du darfst diesen Command nicht verwenden."
+  command-denied: "Du hast keine Berechtigung, diesen Befehl zu verwenden."
   console-target: "Bei Verwendung über die Konsole muss ein Spieler angegeben werden."
   invalid-usage: "Ungültige Verwendung."
   inventory-player-only: "Dieser Command kann nur von einem Spieler verwendet werden, da er ein Inventar öffnet."

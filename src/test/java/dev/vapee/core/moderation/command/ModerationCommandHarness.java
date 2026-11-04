@@ -567,8 +567,14 @@ public final class ModerationCommandHarness {
                             : scenario.equals("revoked") ? "You do not have permission to use this command."
                             : "You cannot target a staff member at your level or above.";
                     boolean silent = List.of("logout", "reconnect", "disabled").contains(scenario);
-                    check(silent ? f.staff.output.isEmpty() : f.staff.output.size() == 1 && f.staff.text().trim().equals("[Staff] Error: " + expected),
+                    String heading = scenario.equals("revoked") ? "[Staff] " : "[Staff] Error: ";
+                    check(silent ? f.staff.output.isEmpty() : f.staff.output.size() == 1 && f.staff.text().trim().equals(heading + expected),
                             "fresh hierarchy denies without success/history feedback " + label + "; received " + f.staff.text());
+                    if (scenario.equals("revoked")) check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(
+                            f.staff.output.getFirst(), expected, dev.vapee.core.message.MessageStyle.ERROR)
+                            && dev.vapee.core.message.MessageColorAssertions.hasSplitPrefix(f.staff.output.getFirst(), "Staff",
+                            dev.vapee.core.message.MessageStyle.BRACKET, dev.vapee.core.message.MessageStyle.STAFF_LABEL),
+                            "resumed permission denial preserves body and prefix roles " + label);
                     check(f.repository.saves == before && f.repository.saved == snapshot && f.service.getAllRecords().equals(records)
                             && f.service.getHistory(OFFLINE).equals(history), "denied save/snapshot/history unchanged " + label);
                     check(f.service.getActiveBan(OFFLINE).equals(ban) && f.service.getActiveMute(OFFLINE).equals(mute)

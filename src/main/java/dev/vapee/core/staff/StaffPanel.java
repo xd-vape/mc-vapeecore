@@ -139,7 +139,7 @@ public final class StaffPanel implements TabExecutor, Listener {
 
     private boolean open(Player viewer, StaffPanelHolder.View view, int page, Player selected) {
         if (!canOpen(viewer)) {
-            SocialChannel.STAFF.send(messages, viewer, tr("staff.denied"));
+            SocialChannel.STAFF.send(messages, viewer, messages.commandDenied(viewer, "staff.denied"));
             Binding existing = views.get(viewer.getUniqueId());
             if (existing != null && existing.viewer == viewer) closeOwned(viewer.getUniqueId());
             return false;

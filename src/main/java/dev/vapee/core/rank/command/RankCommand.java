@@ -55,7 +55,7 @@ public final class RankCommand implements TabExecutor {
             @NotNull String[] args
     ) {
         if (!sender.hasPermission(PERMISSION)) {
-            messageService.send(sender, tr("rank.denied"));
+            messageService.send(sender, messageService.commandDenied(sender, "rank.denied"));
             return true;
         }
         if (args.length > 1) {

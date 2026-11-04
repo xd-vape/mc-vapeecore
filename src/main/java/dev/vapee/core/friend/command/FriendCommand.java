@@ -117,7 +117,7 @@ public final class FriendCommand implements TabExecutor {
             return true;
         }
         if (!sender.hasPermission(PERMISSION)) {
-            send(sender, tr("common.command-denied"), NamedTextColor.RED);
+            dev.vapee.core.message.SocialChannel.FRIENDS.send(messages, sender, messages.commandDenied(sender));
             return true;
         }
         try {
