@@ -6,15 +6,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-/** Active Markdown links only; historical reports intentionally retain historical path prose. */
+/** Markdown links in guides and reports; historical path prose is intentionally not a link. */
 public final class RepoLinkHarness {
     private static int checks;
     private static final Pattern LINK = Pattern.compile("\\]\\(([^)]+\\.md)(?:#[^)]*)?\\)");
 
     public static void main(String[] args) throws Exception {
         List<Path> active = new ArrayList<>(List.of(Path.of("README.md")));
-        try (var paths = Files.walk(Path.of("docs"))) {
-            active.addAll(paths.filter(p -> p.toString().endsWith(".md")).sorted().toList());
+        for (Path directory : List.of(Path.of("docs"), Path.of("reports"))) {
+            try (var paths = Files.walk(directory)) {
+                active.addAll(paths.filter(p -> p.toString().endsWith(".md")).sorted().toList());
+            }
         }
         for (Path file : active) {
             for (Path target : targets(file, Files.readString(file))) {
@@ -25,6 +27,10 @@ public final class RepoLinkHarness {
                 .stream().noneMatch(Files::exists), "detect removed root-relative report link");
         check(targets(Path.of("docs/DEVELOPER_GUIDE.md"), "[old](FULL_CODEBASE_AUDIT.md)")
                 .stream().noneMatch(Files::exists), "detect removed docs-relative report link");
+        check(targets(Path.of("README.md"), "[old](reports/architecture-modernization/PHASE_05B_MODULE_LIFECYCLE_AUDIT.md)")
+                .stream().noneMatch(Files::exists), "detect pre-archive report link");
+        check(targets(Path.of("reports/OLD/architecture-modernization/PHASE_04A_MODULE_LIFECYCLE.md"), "[guide](../../docs/MODULE_DEVELOPMENT.md)")
+                .stream().noneMatch(Files::exists), "detect archive link with missing parent traversal");
         check(Files.isRegularFile(Path.of("docs/DEVELOPER_GUIDE.md"))
                 && Files.isRegularFile(Path.of("docs/FORMATTING.md"))
                 && Files.isRegularFile(Path.of("docs/PERMISSIONS.md")), "durable guides remain under docs");

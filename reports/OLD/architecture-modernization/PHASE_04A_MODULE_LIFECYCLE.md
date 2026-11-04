@@ -34,7 +34,7 @@ VapeeCore composition root / explicit registration order
 
 The diagram shows relative relevant order, not every intervening production module. The complete production list remains authoritative. Operationally the existing FriendRequestPolicy consults ignore state and request privacy; it is not duplicated in the module or GUI. Identity owns online/offline resolution; localization occurs at the message/menu boundary. FriendService owns relationship/request snapshots and commits through its repository. FriendModule creates that runtime but does not acquire ownership of foreign services or Bukkit's PluginCommand descriptor.
 
-The complete creator/owner/acquisition/availability/release table is maintained in [MODULE_DEVELOPMENT.md](../../docs/MODULE_DEVELOPMENT.md). JavaPlugin supplies actual Paper boundaries; ConfigService's supplier and the narrow policy are already appropriate dependencies. Whole Player/Social/Identity module references could later be narrowed if acquisition timing and fresh runtime semantics remain explicit. This phase deliberately retains the public constructor.
+The complete creator/owner/acquisition/availability/release table is maintained in [MODULE_DEVELOPMENT.md](../../../docs/MODULE_DEVELOPMENT.md). JavaPlugin supplies actual Paper boundaries; ConfigService's supplier and the narrow policy are already appropriate dependencies. Whole Player/Social/Identity module references could later be narrowed if acquisition timing and fresh runtime semantics remain explicit. This phase deliberately retains the public constructor.
 
 ## Confirmed original defects
 

@@ -65,7 +65,7 @@ Cleanup unterschiedlich. Ein Root-Loggerfehler verändert keine Modul-Ergebnisse
 Report als weiterer immutable Snapshot erfasst. Ohne Manager/Report wird kein Cleanup-Ergebnis erfunden.
 Paper kann weiterhin stoppen; private In-Memory-Arbeit kann beim JVM-Ende verloren gehen. Ein Report
 autorisiert keinen Retry nach Ende geliehener Dependencies und löst keine Saves oder Rewards aus.
-Tests, konkrete Owner-Fälle und native Grenzen: [Phase 5J-B](../reports/architecture-modernization/PHASE_05J_B_SHUTDOWN_REPORTING.md).
+Tests, konkrete Owner-Fälle und native Grenzen: [Phase 5J-B](../reports/OLD/architecture-modernization/PHASE_05J_B_SHUTDOWN_REPORTING.md).
 
 `ModuleShutdownReportingHarness` verwendet den tatsächlichen Manager und Root sowie reale Player-/
 Reward-/Quest-Fixtures mit Wegwerf-Dateien. Kompilierte Gegenproben:
@@ -221,7 +221,7 @@ Die zehn temporär kompilierten Gegenproben prüfen echte Verhaltensfehler; posi
 
 ## Task-Owner mit ausstehender Persistenz: Reward
 
-Der [repositoryweite Lifecycle-Audit](../reports/architecture-modernization/PHASE_05B_MODULE_LIFECYCLE_AUDIT.md) trennt bestätigte Defekte, starke Verdachtsfälle und Architekturbeobachtungen für alle 28 Module. Nur Reward wurde in dieser Phase geändert. Der Audit ist kein Nachweis, dass die übrigen Owner gegen alle Fehler abgesichert sind.
+Der [repositoryweite Lifecycle-Audit](../reports/OLD/architecture-modernization/PHASE_05B_MODULE_LIFECYCLE_AUDIT.md) trennt bestätigte Defekte, starke Verdachtsfälle und Architekturbeobachtungen für alle 28 Module. Nur Reward wurde in dieser Phase geändert. Der Audit ist kein Nachweis, dass die übrigen Owner gegen alle Fehler abgesichert sind.
 
 `RewardModule` besitzt RewardService samt Dirty-UUIDs, einen LOWEST-Quit-Listener und genau einen synchronen 20-Tick-Flush-Task. EconomyService und PlayerService sind geliehen. Es besitzt weder Commands noch Menü-Observer oder eine eigene Persistenzdatei. Ein Fehler beim finalen Startup-Logging gehört nach dem Task-Erwerb weiterhin zum Teilstart und muss Listener und Task zurücknehmen.
 
@@ -244,7 +244,7 @@ pwsh -File ./scripts/tests/reward-lifecycle.Tests.ps1
 pwsh -File ./scripts/verify.ps1
 ```
 
-Die neun Kontrollen oben dokumentieren den Phase-5B-Stand. Für den aktuellen strikten Shutdown laufen die 15 kompilierten Verhaltenskontrollen mit `pwsh -File ./scripts/tests/reward-strict-shutdown.Tests.ps1`; Receipts liegen unter `target/verification/reward-strict-shutdown/`. `RewardShutdownFlushHarness` ergänzt echte isolierte Profil-Commits, mehrere Save-Fehler, inaktive Retries, Unload-/Player-Handoff und ungewisse Commit-Ausgänge. Nachweise: [Phase-5I-Bericht](../reports/architecture-modernization/PHASE_05I_REWARD_STRICT_SHUTDOWN.md). Ein nativer Neustart stoppt alle Consumer und baut aktuelle Services neu auf; isolierter Reward-Neustart unter laufendem OnlineReward/Quest ist kein unterstützter Hot-Swap.
+Die neun Kontrollen oben dokumentieren den Phase-5B-Stand. Für den aktuellen strikten Shutdown laufen die 15 kompilierten Verhaltenskontrollen mit `pwsh -File ./scripts/tests/reward-strict-shutdown.Tests.ps1`; Receipts liegen unter `target/verification/reward-strict-shutdown/`. `RewardShutdownFlushHarness` ergänzt echte isolierte Profil-Commits, mehrere Save-Fehler, inaktive Retries, Unload-/Player-Handoff und ungewisse Commit-Ausgänge. Nachweise: [Phase-5I-Bericht](../reports/OLD/architecture-modernization/PHASE_05I_REWARD_STRICT_SHUTDOWN.md). Ein nativer Neustart stoppt alle Consumer und baut aktuelle Services neu auf; isolierter Reward-Neustart unter laufendem OnlineReward/Quest ist kein unterstützter Hot-Swap.
 
 ## Player: Lifecycle mit eigenem Aggregate-Cache und Save-Verantwortung
 
@@ -300,7 +300,7 @@ pwsh -File ./scripts/verify.ps1
 ```
 
 Receipts liegen unter `target/verification/player-lifecycle/`. Befunde und nachgewiesene Grenzen
-stehen im [Phase-5C-Bericht](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
+stehen im [Phase-5C-Bericht](../reports/OLD/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
 
 ## OnlineReward: ein Task mit exakter Service-Generation
 
@@ -355,7 +355,7 @@ pwsh -File ./scripts/verify.ps1
 ```
 
 Receipts: `target/verification/online-reward-lifecycle/`. Reproduktionen, Grenzen und native
-Akzeptanz stehen im [Phase-5E-Bericht](../reports/architecture-modernization/PHASE_05E_ONLINE_REWARD_LIFECYCLE.md).
+Akzeptanz stehen im [Phase-5E-Bericht](../reports/OLD/architecture-modernization/PHASE_05E_ONLINE_REWARD_LIFECYCLE.md).
 
 ## Quest lifecycle und Flush-Sicherheit
 
@@ -431,7 +431,7 @@ pwsh -File ./scripts/verify.ps1
 
 Neue Testquellen werden mit Google Java Format 1.22.0/AOSP formatiert; die sechs Datei-Pilot-Allowlist
 bleibt unverändert. Receipts: `target/verification/quest-lifecycle/`. Reproduktionen, native Grenzen
-und Ergebnisse: [Phase-5F-Bericht](../reports/architecture-modernization/PHASE_05F_QUEST_LIFECYCLE.md).
+und Ergebnisse: [Phase-5F-Bericht](../reports/OLD/architecture-modernization/PHASE_05F_QUEST_LIFECYCLE.md).
 
 ## DailyQuest: Lifecycle, Observer und zwei Tasks
 
@@ -505,4 +505,4 @@ Harnesses messen echte HandlerLists, PluginCommand-Bindungen, Observer-Sets, Cal
 isolierte Profile. Ergänzend kompiliert `scripts/tests/daily-quest-lifecycle.Tests.ps1` temporäre
 Mutationen und instrumentiert echte finale API-Klassen ausschließlich im Wegwerf-Overlay für Fehler
 vor/nach Setter- und Reload-Wirkungen. Vollständige Nachweise und native Testgrenzen stehen im
-[Phase-5G-Bericht](../reports/architecture-modernization/PHASE_05G_DAILY_QUEST_LIFECYCLE.md).
+[Phase-5G-Bericht](../reports/OLD/architecture-modernization/PHASE_05G_DAILY_QUEST_LIFECYCLE.md).

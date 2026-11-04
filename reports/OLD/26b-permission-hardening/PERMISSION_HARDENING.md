@@ -124,7 +124,7 @@ EconomyService, CoinWallet, EconomyResult, PlayerService/Repository und RewardSe
 
 ## Descriptor-/Permission-Audit (Abschluss 47–58)
 
-Vollständiger kanonischer Audit mit allen 36 Roots, Aliases, Usage, Bukkit-/Executor-Gates und Rangempfehlungen: [PERMISSIONS.md](PERMISSIONS.md#vollständiger-command-descriptor-audit-phase-26b). Frozen Descriptor-Harness prüft sämtliche 36 Verträge und alle 49 Nodes programmatisch; echte Executor-/Completion-Verhaltenstests und Paper-Registrierung ergänzen ihn. Keine rein textbasierte Ersatzverifikation.
+Vollständiger kanonischer Audit mit allen 36 Roots, Aliases, Usage, Bukkit-/Executor-Gates und Rangempfehlungen: [PERMISSIONS.md](../../../docs/PERMISSIONS.md#vollständiger-command-descriptor-audit-phase-26b). Frozen Descriptor-Harness prüft sämtliche 36 Verträge und alle 49 Nodes programmatisch; echte Executor-/Completion-Verhaltenstests und Paper-Registrierung ergänzen ihn. Keine rein textbasierte Ersatzverifikation.
 
 plugin.yml war bereits korrekt: unverändert. Keine neue Permission, kein Wildcard, Alias als zusätzlicher Root oder unbeabsichtigtes Capability-Bundle. Zehn normale Player-Basisrechte bleiben default:true; alle 39 übrigen Nodes default:op. OP-Defaults sind keine Hierarchieausnahme.
 
@@ -155,7 +155,7 @@ plugin.yml war bereits korrekt: unverändert. Keine neue Permission, kein Wildca
 
 ## Rank-Inheritance-Audit (Abschluss 59–66)
 
-Die vollständige konservative Node-Zuweisung für User, VIP, Builder, Moderator, Admin und Owner steht in [PERMISSIONS.md](PERMISSIONS.md#empfohlene-rangmatrix). Kurzfassung: User zehn Basisrechte; VIP dieselben ohne erfundene Cosmetics. Builder Build/Fly/Speed/Gamemode/Visibility plus optional Self-TP, keine Others/Moderation. Moderator Warn/Mute/Unmute/Kick/History, Self-Fly/TP, tphere, Self-Heal/Feed, Ping-Others, Visibility und optional Invsee. Admin gezielt Ban/Unban, starke Others/World-/Inventory-Rechte, Economy-Admin, Setspawn/Warp/Blackjack. Owner ergänzt technisch notwendiges Core-Reload und nur benötigte externe Rechte, ohne Wildcard.
+Die vollständige konservative Node-Zuweisung für User, VIP, Builder, Moderator, Admin und Owner steht in [PERMISSIONS.md](../../../docs/PERMISSIONS.md#empfohlene-rangmatrix). Kurzfassung: User zehn Basisrechte; VIP dieselben ohne erfundene Cosmetics. Builder Build/Fly/Speed/Gamemode/Visibility plus optional Self-TP, keine Others/Moderation. Moderator Warn/Mute/Unmute/Kick/History, Self-Fly/TP, tphere, Self-Heal/Feed, Ping-Others, Visibility und optional Invsee. Admin gezielt Ban/Unban, starke Others/World-/Inventory-Rechte, Economy-Admin, Setspawn/Warp/Blackjack. Owner ergänzt technisch notwendiges Core-Reload und nur benötigte externe Rechte, ohne Wildcard.
 
 Empfohlene Parents: vip→default, builder→default, moderator→default, admin→moderator, owner→admin. VIP erbt keine Staff-Rolle; Staff erbt nicht VIP. Builder ist keine Moderator-Elternrolle. Parent-Vererbung ist keine Staff-Level-Quelle und ersetzt keine explizite Primary Group. Plugin verändert weder Groups, Parents, Users, Tracks noch Permission-Zuweisungen.
 

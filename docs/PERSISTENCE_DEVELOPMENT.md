@@ -58,7 +58,7 @@ candidate validation, atomic/fallback recovery and post-commit indexing are unch
 Economy and Social keep their immediate transaction rules; Reward/Quest keep existing deferred
 flush rules. The Player shutdown fallback runs after its dependent modules in the existing order.
 See [module lifecycle guidance](MODULE_DEVELOPMENT.md) and the
-[Phase 5C evidence](../reports/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
+[Phase 5C evidence](../reports/OLD/architecture-modernization/PHASE_05C_PLAYER_LIFECYCLE.md).
 
 ### Reward strict shutdown flush and retry
 
@@ -80,7 +80,7 @@ the current aggregate and never re-grants Coins. No second wallet, profile cache
 An incomplete or uncertain save return is not proof that no bytes committed; dirty tracking, loaded
 state and independently read file values are separate evidence. Same-process retention is not recovery
 after JVM exit. ModuleManager's global policy is unchanged. Behavioral and native evidence:
-[Reward shutdown report](../reports/architecture-modernization/PHASE_05I_REWARD_STRICT_SHUTDOWN.md).
+[Reward shutdown report](../reports/OLD/architecture-modernization/PHASE_05I_REWARD_STRICT_SHUTDOWN.md).
 
 ### Quest shutdown flush and the original aggregate
 
@@ -177,7 +177,7 @@ their existing behavior. They can still affect a permissive read or startup when
 this correction does not promise global diagnostic isolation. Uncertain effectful file failures can
 still leave immediate-domain RAM/disk disagreement and require reconciliation. There is no fsync,
 directory-sync, hardware or power-loss durability guarantee. Executable cases and limits are recorded
-in the [Phase 5J-A report](../reports/architecture-modernization/PHASE_05J_A_PERSISTENCE_DIAGNOSTICS.md).
+in the [Phase 5J-A report](../reports/OLD/architecture-modernization/PHASE_05J_A_PERSISTENCE_DIAGNOSTICS.md).
 
 Settings mutate in memory before saving. A failed repository commit must throw so `PlayerSettingsService` restores the exact previous Boolean, mode or membership and emits no successful observer event. Unload must not evict after failed save; the name index must not publish an attempted rename. Preserve the exception and diagnostic chain. Other domains' deferred persistence remains intentional; extracting mapping does not change reward batching or quest retry behavior.
 

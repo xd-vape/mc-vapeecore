@@ -9,7 +9,7 @@ The branch, exact HEAD and clean working tree were verified before editing.
 
 **MOD-001 resolved by this phase.** This is the High / Security finding
 “stale offline-target authority at resume” in
-[the historical audit](FULL_CODEBASE_AUDIT.md#mod-001--stale-offline-target-authority-at-resume).
+[the historical audit](../30a-full-codebase-audit/FULL_CODEBASE_AUDIT.md#mod-001--stale-offline-target-authority-at-resume).
 That audit remains byte-identical to the baseline; its original finding is retained.
 Only the shared moderation authorization handoff is fixed.
 

@@ -56,7 +56,7 @@ Eigene Sidebar sowie persönliche Tablist-Header/Footer können `<i18n:presentat
 
 Bei einer bestehenden Installation müssen alte feste Standardtexte ausdrücklich auf die Katalogreferenzen umgestellt werden; das Update des JARs allein aktiviert für diese Felder keine Übersetzung. Dies betrifft insbesondere Tablist-Header/Footer, Sidebar-Labels, Lobby-Namen/Lore einschließlich Friends und filtered Visibility sowie alte PM-/Reward-Wrapper. Die konkrete Feldzuordnung und das Vorgehen ohne Verlust eigener Einstellungen stehen in [FORMATTING.md – Bestehende Installation auf übersetzte Standardtexte umstellen](FORMATTING.md#bestehende-installation-auf-übersetzte-standardtexte-umstellen). Keinen Laufzeitvergleich mit englischen Anzeigenamen zum Übersetzen oder Routen einführen.
 
-`CatalogUsageHarness` rendert jeden Key mit sicheren Platzhaltern in beiden Sprachen und prüft Java-/Resource-Referenzen sowie dynamische Enum-Captions. Sprachtests prüfen gleichzeitig DE/EN in den echten Menüpfaden einschließlich Player Menu, locale change, native Bindings, Quest-Namen, PM, Hotbar/PDC/Skin, Console und Broadcasts. `LocalizationReloadHarness` prüft den echten Teilnehmer und den ReloadService einschließlich Fehler eines späteren Apply. Ergebnisse, Negativkontrollen und bewusste Ausnahmen der Localization-Basis: [LOCALIZATION_I18N.md](../reports/localization-i18n/LOCALIZATION_I18N.md); aktuelle Konsolidierung: [CORE_EXPERIENCE_CONSOLIDATION.md](../reports/core-experience-consolidation/CORE_EXPERIENCE_CONSOLIDATION.md).
+`CatalogUsageHarness` rendert jeden Key mit sicheren Platzhaltern in beiden Sprachen und prüft Java-/Resource-Referenzen sowie dynamische Enum-Captions. Sprachtests prüfen gleichzeitig DE/EN in den echten Menüpfaden einschließlich Player Menu, locale change, native Bindings, Quest-Namen, PM, Hotbar/PDC/Skin, Console und Broadcasts. `LocalizationReloadHarness` prüft den echten Teilnehmer und den ReloadService einschließlich Fehler eines späteren Apply. Ergebnisse, Negativkontrollen und bewusste Ausnahmen der Localization-Basis: [LOCALIZATION_I18N.md](../reports/OLD/localization-i18n/LOCALIZATION_I18N.md); aktuelle Konsolidierung: [CORE_EXPERIENCE_CONSOLIDATION.md](../reports/OLD/core-experience-consolidation/CORE_EXPERIENCE_CONSOLIDATION.md).
 
 ## Core player experience
 
@@ -319,7 +319,7 @@ Die sieben Reload-Teilnehmer sind ConfigService, LocalizationModule (beide `lang
 
 ## Module map und Reihenfolge
 
-Seit Phase 30D teilen die sechs Config-Owner nur kleine Lese-/Dateihelfer: `ConfigFiles` kopiert Resource-Bytes ausschließlich bei fehlender Datei; `ConfigValues` prüft Boolean, String und nichtleere Strings. Warnungen, Defaults, Missing-/Null-Sonderfälle, Domain-Validierung und typed Reload-State bleiben beim Feature. `ConfigService` nutzt weiterhin `saveDefaultConfig`. Utility erfasst Command-Hooks vor dem ersten Setter und Listener vor der Registrierung; fehlgeschlagenes Enable räumt lokale Kandidaten auf, isoliert Cleanup-Ausnahmen als suppressed und veröffentlicht keine Services. Normaler Disable versucht ebenfalls alle Ressourcen und leert anschließend die Referenzen. Details und Nachweise: [Config Registration and Module Cleanup](../reports/30d-config-registration-module-cleanup/CONFIG_REGISTRATION_MODULE_CLEANUP.md).
+Seit Phase 30D teilen die sechs Config-Owner nur kleine Lese-/Dateihelfer: `ConfigFiles` kopiert Resource-Bytes ausschließlich bei fehlender Datei; `ConfigValues` prüft Boolean, String und nichtleere Strings. Warnungen, Defaults, Missing-/Null-Sonderfälle, Domain-Validierung und typed Reload-State bleiben beim Feature. `ConfigService` nutzt weiterhin `saveDefaultConfig`. Utility erfasst Command-Hooks vor dem ersten Setter und Listener vor der Registrierung; fehlgeschlagenes Enable räumt lokale Kandidaten auf, isoliert Cleanup-Ausnahmen als suppressed und veröffentlicht keine Services. Normaler Disable versucht ebenfalls alle Ressourcen und leert anschließend die Referenzen. Details und Nachweise: [Config Registration and Module Cleanup](../reports/OLD/30d-config-registration-module-cleanup/CONFIG_REGISTRATION_MODULE_CLEANUP.md).
 
 Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen Modulen bewusst gepflegt werden:
 
@@ -472,7 +472,7 @@ nennen positive Werte. Der konkrete 1.21.11-Setter akzeptiert **0**, lehnt negat
 verwendet 0 als Standard. Dies wurde am installierten Paper-Bytecode und nativ geprüft: Cleanup
 kann sowohl 0 als auch frühere positive Werte exakt über die öffentliche API restaurieren.
 Tests und native Grenzen stehen im
-[Rank-Order-Bericht](../reports/architecture-modernization/RANK_BASED_TABLIST_ORDER.md).
+[Rank-Order-Bericht](../reports/OLD/architecture-modernization/RANK_BASED_TABLIST_ORDER.md).
 
 `ScoreboardService.ownsScoreboard(viewer)` prüft UUID-State **und** Identität des
 aktuell angezeigten Boards und wird auch von Update/Cleanup verwendet. Ein
@@ -512,7 +512,7 @@ Chat und Tablist behalten RGB. Bestehende Live-Dateien
 werden nicht migriert; neue Keys verwenden validierte Defaults. Configuration
 und Rendering bleiben Teil des bestehenden Presentation-Reload-Plans.
 Rank-/Permission-Authority bleibt LuckPerms; Glyphs bleiben optionaler Future Input.
-Der Phase-30F-Vertrag ist in [Presentation and Nametag Polish](../reports/30f-presentation-nametag-polish/PRESENTATION_NAMETAG_POLISH.md) dokumentiert.
+Der Phase-30F-Vertrag ist in [Presentation and Nametag Polish](../reports/OLD/30f-presentation-nametag-polish/PRESENTATION_NAMETAG_POLISH.md) dokumentiert.
 
 ## Player Identity & Profile Foundation (Phase 17C)
 
@@ -806,7 +806,7 @@ Die Anzahl täglicher Quest-Zuweisungen (`quests-per-day`), Reset-Zeit, Zeitzone
 
 Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
 
-Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](../reports/29-quest-completion/QUEST_COMPLETION.md).
+Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](../reports/OLD/29-quest-completion/QUEST_COMPLETION.md).
 
 ### DailyQuest-Reset-Uhr anpassen
 
