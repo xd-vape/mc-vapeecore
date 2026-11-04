@@ -124,7 +124,7 @@ EconomyService, CoinWallet, EconomyResult, PlayerService/Repository und RewardSe
 
 ## Descriptor-/Permission-Audit (Abschluss 47–58)
 
-Vollständiger kanonischer Audit mit allen 36 Roots, Aliases, Usage, Bukkit-/Executor-Gates und Rangempfehlungen: [PERMISSIONS.md](../../../docs/PERMISSIONS.md#vollständiger-command-descriptor-audit-phase-26b). Frozen Descriptor-Harness prüft sämtliche 36 Verträge und alle 49 Nodes programmatisch; echte Executor-/Completion-Verhaltenstests und Paper-Registrierung ergänzen ihn. Keine rein textbasierte Ersatzverifikation.
+Vollständiger kanonischer Audit mit allen 36 Roots, Aliases, Usage, Bukkit-/Executor-Gates und Rangempfehlungen: [PERMISSIONS.md](../../../docs/PERMISSIONS.md#vollständiger-command-descriptor-audit-aktueller-phase-29-vertrag). Frozen Descriptor-Harness prüft sämtliche 36 Verträge und alle 49 Nodes programmatisch; echte Executor-/Completion-Verhaltenstests und Paper-Registrierung ergänzen ihn. Keine rein textbasierte Ersatzverifikation.
 
 plugin.yml war bereits korrekt: unverändert. Keine neue Permission, kein Wildcard, Alias als zusätzlicher Root oder unbeabsichtigtes Capability-Bundle. Zehn normale Player-Basisrechte bleiben default:true; alle 39 übrigen Nodes default:op. OP-Defaults sind keine Hierarchieausnahme.
 
