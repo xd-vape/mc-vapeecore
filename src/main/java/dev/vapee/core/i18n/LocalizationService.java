@@ -50,7 +50,7 @@ public final class LocalizationService {
             if (!Files.exists(file)) { live.put(language, Map.of()); continue; }
             try (var reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 Map<String, String> values = TranslationCatalog.read(reader);
-                TranslationCatalog.validateParity(snapshot.bundled().get(Language.ENGLISH), values, false);
+                TranslationCatalog.validateOverrides(snapshot.bundled().get(Language.ENGLISH), values);
                 live.put(language, values);
             } catch (java.io.IOException exception) { throw new IllegalStateException("Could not read " + file, exception); }
         }

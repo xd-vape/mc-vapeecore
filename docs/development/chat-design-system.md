@@ -45,6 +45,8 @@ Gebündelte Sprachtexte können `<accent>` sowie `<vc_prefix>` (Klammerfarbe), `
 
 EN/DE behalten dieselbe Struktur und dieselben fachlichen Platzhalter. Werte als `Component.text` beziehungsweise `MessageStyle.value`, Namen über den bestehenden Rank-Formatter übergeben. Niemals Spielernamen, Gründe oder Texte aus Commands in MiniMessage-Strings konkatenieren.
 
+Bestehende Presence-Sprach-Overrides aus der Version vor Step 06B dürfen für `friends.presence.online` und `friends.presence.offline` weiterhin ausschließlich `<player>` enthalten. Die neuen gebündelten Texte verwenden zusätzlich `<status>`. Nur diese zwei bekannten alten Override-Verträge werden beim Laden und Reload akzeptiert; die gebündelte EN-/DE-Parität sowie fehlende, umbenannte oder zusätzliche Parameter anderer Texte bleiben strikt. Vorhandene Dateien und ihre Gestaltung werden dabei nicht umgeschrieben. Alte Overrides behalten deshalb auch ihre bisherigen Statusfarben, bis der Operator sie bewusst anpasst.
+
 ## Mehrzeilige Blöcke und Interaktionen
 
 `messages.sendRawBlock(recipient, lines...)` lokalisiert zuerst und verwendet danach `MessageStyle.block`. Ein Block ist ein einzelner ausgelieferter Component mit genau einer leeren Zeile davor/danach und zwei Leerzeichen Einrückung je Inhaltszeile. Auch Newlines innerhalb einer Übersetzung werden eingerückt. Bei einem Feature-Block den Prefix einmal am ersten Inhalt einsetzen. Die Methode ergänzt keinen globalen Operator-Wrapper.

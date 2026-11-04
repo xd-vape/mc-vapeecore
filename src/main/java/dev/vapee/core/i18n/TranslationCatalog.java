@@ -47,9 +47,24 @@ public final class TranslationCatalog {
         if (complete && !english.keySet().equals(other.keySet()))
             throw new IllegalArgumentException("Bundled language key sets differ");
         other.forEach((key, value) -> {
-            String canonical = english.get(key);
-            if (canonical != null && !placeholders(canonical).equals(placeholders(value)))
-                throw new IllegalArgumentException("Translation placeholder mismatch: " + key);
+            validateEntry(key, english.get(key), value, false);
         });
+    }
+
+    /** Operator overrides may retain the player-only presence contract shipped before Step 06B. */
+    public static void validateOverrides(Map<String, String> canonical, Map<String, String> overrides) {
+        overrides.forEach((key, value) -> validateEntry(key, canonical.get(key), value, true));
+    }
+
+    private static void validateEntry(String key, String canonical, String value, boolean operatorOverride) {
+        if (canonical == null) return; // Existing support for operator-only keys.
+        Set<String> expected = placeholders(canonical);
+        Set<String> actual = placeholders(value);
+        boolean legacyPresence = operatorOverride
+                && (key.equals("friends.presence.online") || key.equals("friends.presence.offline"))
+                && expected.equals(Set.of("player", "status")) && actual.equals(Set.of("player"));
+        if (!expected.equals(actual) && !legacyPresence)
+            throw new IllegalArgumentException("Translation placeholder mismatch: " + key
+                    + " (expected " + new TreeSet<>(expected) + ", actual " + new TreeSet<>(actual) + ")");
     }
 }
