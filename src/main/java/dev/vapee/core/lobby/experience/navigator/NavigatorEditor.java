@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.experience.navigator;
 
+import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.i18n.LocalizedText;
 import dev.vapee.core.lobby.warp.WarpPoint;
 import dev.vapee.core.lobby.warp.WarpService;
@@ -197,32 +198,32 @@ public final class NavigatorEditor implements TabExecutor, Listener {
     private void syntax(Player player, String[] args) {
         String family = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
         String action = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : "";
-        String usage = switch (family) {
+        Component usage = switch (family) {
             case "menu" -> switch (action) {
-                case "create" -> "/navigator menu create <id> <name...>";
-                case "select", "delete" -> "/navigator menu " + action + " <id>";
-                case "rename" -> "/navigator menu rename [en|de|all] <name...>";
-                case "icon" -> "/navigator menu icon <material>";
-                case "size" -> "/navigator menu size <27|36|45|54>";
-                case "back" -> "/navigator menu back <-1|slot>";
-                default -> "/navigator menu <create|select|rename|icon|size|back|delete>";
+                case "create" -> MessageStyle.usage("/navigator menu create", "<id> <name...>");
+                case "select", "delete" -> MessageStyle.usage("/navigator menu " + action, "<id>");
+                case "rename" -> MessageStyle.usage("/navigator menu rename", "[en|de|all] <name...>");
+                case "icon" -> MessageStyle.usage("/navigator menu icon", "<material>");
+                case "size" -> MessageStyle.usage("/navigator menu size", "<27|36|45|54>");
+                case "back" -> MessageStyle.usage("/navigator menu back", "<-1|slot>");
+                default -> MessageStyle.usage("/navigator menu", "<create|select|rename|icon|size|back|delete>");
             };
             case "entry" -> switch (action) {
-                case "icon" -> "/navigator entry icon <material>";
-                case "name", "lore" -> "/navigator entry " + action + " [en|de|all] <text...>";
-                case "permission" -> "/navigator entry permission <node|none>";
-                case "move" -> "/navigator entry move <menu> <slot> [page]";
-                case "stack" -> "/navigator entry stack <true|false>";
-                case "remove" -> "/navigator entry remove";
-                default -> "/navigator entry <icon|name|lore|permission|move|remove|stack>";
+                case "icon" -> MessageStyle.usage("/navigator entry icon", "<material>");
+                case "name", "lore" -> MessageStyle.usage("/navigator entry " + action, "[en|de|all] <text...>");
+                case "permission" -> MessageStyle.usage("/navigator entry permission", "<node|none>");
+                case "move" -> MessageStyle.usage("/navigator entry move", "<menu> <slot> [page]");
+                case "stack" -> MessageStyle.usage("/navigator entry stack", "<true|false>");
+                case "remove" -> MessageStyle.usage("/navigator entry remove", "");
+                default -> MessageStyle.usage("/navigator entry", "<icon|name|lore|permission|move|remove|stack>");
             };
-            case "region" -> "/navigator region <mark|cancel|pos1|pos2|clear|info>";
-            case "add" -> "/navigator add <warp|menu|unavailable> <id> [slot]";
-            case "select" -> "/navigator select <entry-id>";
-            case "page" -> "/navigator page <0..999>";
-            default -> "/navigator edit — /navigator help";
+            case "region" -> MessageStyle.usage("/navigator region", "<mark|cancel|pos1|pos2|clear|info>");
+            case "add" -> MessageStyle.usage("/navigator add", "<warp|menu|unavailable> <id> [slot]");
+            case "select" -> MessageStyle.usage("/navigator select", "<entry-id>");
+            case "page" -> MessageStyle.usage("/navigator page", "<0..999>");
+            default -> MessageStyle.usage("/navigator", "edit — /navigator help");
         };
-        say(player, "Usage: " + usage, "Syntax: " + usage);
+        messages.sendRaw(player, usage);
     }
     private void help(Player player) {
         say(player, "/navigator edit | preview | save | discard", "/navigator edit | preview | save | discard");

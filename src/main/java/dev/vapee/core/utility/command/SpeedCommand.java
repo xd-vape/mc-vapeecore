@@ -181,8 +181,7 @@ public final class SpeedCommand implements TabExecutor {
     private void invalidUsage(CommandSender sender) {
         messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/speed <1-10> [player]", NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/speed", "<1-10> [player]")));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

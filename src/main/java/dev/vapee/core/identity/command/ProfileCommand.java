@@ -112,7 +112,7 @@ public final class ProfileCommand implements TabExecutor {
     }
 
     private void usage(CommandSender sender) {
-        messageService.send(sender, tr("profile.usage").color(NamedTextColor.YELLOW));
+        messageService.send(sender, messageService.usage(sender, "profile.usage", "/profile", "[player|uuid]"));
     }
 
     private void sendProfile(CommandSender sender, PlayerProfile profile) {

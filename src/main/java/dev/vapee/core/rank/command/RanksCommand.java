@@ -53,8 +53,7 @@ public final class RanksCommand implements TabExecutor {
         if (args.length != 0) {
             messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                     .append(Component.newline())
-                    .append(tr("common.use").color(NamedTextColor.YELLOW))
-                    .append(Component.text("/ranks", NamedTextColor.AQUA)));
+                    .append(MessageStyle.usage("/ranks", "")));
             return true;
         }
 

@@ -73,7 +73,7 @@ public final class RankCommandHarness {
         check(fixture.last().endsWith("That player is not online."),
                 "/rank unknown rejects offline players");
         command.onCommand(self, null, "rank", new String[]{"Other", "extra"});
-        check(fixture.last().contains("Use: /rank [player]"),
+        check(fixture.last().contains("Usage: /rank [player]"),
                 "/rank rejects too many arguments with concise usage");
 
         CommandSender console = fixture.console(Set.of(RankCommand.PERMISSION));

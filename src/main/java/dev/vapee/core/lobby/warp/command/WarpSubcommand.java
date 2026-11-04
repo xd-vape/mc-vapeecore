@@ -62,6 +62,8 @@ enum WarpSubcommand {
         return "/warp " + token;
     }
 
+    String arguments() { return arguments.stripLeading(); }
+
     String syntax() {
         return command() + arguments;
     }

@@ -38,6 +38,18 @@ public final class MessageService {
         return localization.component(audience, key, placeholders);
     }
     public Component localize(Audience audience, Component component) { return localization.render(audience, component); }
+
+    /** Keep complete operator-owned legacy usage texts; bundled defaults use the shared composition. */
+    public Component usage(Audience audience, String legacyKey, String command, String arguments) {
+        var language = dev.vapee.core.i18n.LanguageResolver.resolve(localization.locale(audience));
+        var snapshot = localization.snapshot();
+        String live = snapshot.live().getOrDefault(language, java.util.Map.of()).get(legacyKey);
+        String bundled = snapshot.bundled().getOrDefault(language, java.util.Map.of()).get(legacyKey);
+        // Startup copies the bundled catalog to disk too; an unchanged declared default is not custom wording.
+        if (live != null && !live.equals(bundled))
+            return dev.vapee.core.i18n.Translations.tr(legacyKey).colorIfAbsent(MessageStyle.TEXT);
+        return MessageStyle.usage(command, arguments);
+    }
     public void sendTranslated(Audience audience, String key, TagResolver... placeholders) {
         send(audience, component(audience, key, placeholders));
     }

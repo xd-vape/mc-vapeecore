@@ -34,7 +34,7 @@ public final class CoreQuestCommand implements TabExecutor {
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission(PERMISSION)) { messages.send(sender,tr("core.quest.denied")); return true; }
         if (args.length<1 || args.length>2 || !args[0].equalsIgnoreCase("force")) {
-            messages.send(sender,tr("core.quest.usage")); return true;
+            messages.send(sender, messages.usage(sender, "core.quest.usage", "/core quest force", "[player]")); return true;
         }
         Player player;
         if (args.length==1) {

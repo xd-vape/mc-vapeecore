@@ -102,7 +102,7 @@ public final class NavigatorEditorUxHarness {
             t.cmd(p,"menu select root");t.cmd(p,"select custom_000");
             for(String command:List.of("unknown","menu create","menu unknown","entry permission","entry unknown","region unknown","menu back not-a-number")) {
                 int n=p.received.size();t.cmd(p,command);
-                check(p.received.size()==n+1&&last(p).startsWith("Syntax: "),"one relevant syntax line for "+command);
+                check(p.received.size()==n+1&&last(p).startsWith("Verwendung: /navigator"),"one relevant localized syntax line for "+command);
                 check(!last(p).contains("edit | preview | save | discard"),"no full command-tree dump for "+command);
             }
             int n=p.received.size();t.cmd(p,"help");check(p.received.size()==n+5,"explicit /navigator help retains complete reference");

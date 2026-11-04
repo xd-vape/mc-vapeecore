@@ -171,14 +171,14 @@ public final class WarpCommand implements TabExecutor {
         if (args.length == 1) {
             helpRenderer.send(sender, HELP_PAGE);
         } else {
-            sendInvalidUsage(sender, WarpSubcommand.HELP.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.HELP);
         }
     }
 
     private void set(CommandSender sender, String[] args) {
         if (args.length != 2 || !(sender instanceof Player player)) {
             if (args.length != 2) {
-                sendInvalidUsage(sender, WarpSubcommand.SET.syntax());
+                sendInvalidUsage(sender, WarpSubcommand.SET);
             } else {
                 messageService.send(sender, tr("warp.player-only"));
             }
@@ -196,7 +196,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void remove(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, WarpSubcommand.REMOVE.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.REMOVE);
             return;
         }
         WarpResult result = warpService.removeWarp(args[1]);
@@ -209,7 +209,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void list(CommandSender sender, String[] args) {
         if (args.length != 1) {
-            sendInvalidUsage(sender, WarpSubcommand.LIST.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.LIST);
             return;
         }
         List<WarpPoint> warps = warpService.getWarps();
@@ -222,7 +222,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void info(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, WarpSubcommand.INFO.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.INFO);
             return;
         }
         WarpPoint warp = warpService.getWarp(args[1]).orElse(null);
@@ -235,7 +235,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void name(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sendInvalidUsage(sender, WarpSubcommand.NAME.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.NAME);
             return;
         }
         WarpResult result = warpService.setDisplayName(args[1], String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
@@ -249,7 +249,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void icon(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendInvalidUsage(sender, WarpSubcommand.ICON.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.ICON);
             return;
         }
         Material material = Material.matchMaterial(args[2]);
@@ -264,7 +264,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void visibility(CommandSender sender, String[] args, boolean visible) {
         if (args.length != 2) {
-            sendInvalidUsage(sender, (visible ? WarpSubcommand.SHOW : WarpSubcommand.HIDE).syntax());
+            sendInvalidUsage(sender, visible ? WarpSubcommand.SHOW : WarpSubcommand.HIDE);
             return;
         }
         WarpResult result = warpService.setNavigatorVisible(args[1], visible);
@@ -278,7 +278,7 @@ public final class WarpCommand implements TabExecutor {
 
     private void order(CommandSender sender, String[] args) {
         if (args.length != 3) {
-            sendInvalidUsage(sender, WarpSubcommand.ORDER.syntax());
+            sendInvalidUsage(sender, WarpSubcommand.ORDER);
             return;
         }
         Integer value = parseOrder(args[2]);
@@ -325,15 +325,13 @@ public final class WarpCommand implements TabExecutor {
     private void sendUnknown(CommandSender sender, String subcommand) {
         messageService.send(sender, tr("warp.unknown", Map.of("command", Component.text(subcommand, MessageStyle.HIGHLIGHT))).color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text(WarpSubcommand.HELP.syntax(), NamedTextColor.AQUA)));
+                .append(MessageStyle.usage(WarpSubcommand.HELP.command(), "")));
     }
 
-    private void sendInvalidUsage(CommandSender sender, String syntax) {
+    private void sendInvalidUsage(CommandSender sender, WarpSubcommand action) {
         messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text(syntax, NamedTextColor.AQUA)));
+                .append(MessageStyle.usage(action.command(), action.arguments())));
     }
 
     private static Component setSuccessMessage(WarpPoint warp, boolean existed) {

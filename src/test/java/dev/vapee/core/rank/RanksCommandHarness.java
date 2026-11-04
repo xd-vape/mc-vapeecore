@@ -79,7 +79,7 @@ public final class RanksCommandHarness {
         check(fixture.last().endsWith("No public ranks are configured yet."),
                 "empty track returns a controlled response");
         command.onCommand(console, null, "ranks", new String[]{"extra"});
-        check(fixture.last().contains("Use: /ranks"),
+        check(fixture.last().contains("Usage: /ranks"),
                 "/ranks rejects arguments with concise usage");
         fixture.permitted = false;
         command.onCommand(player, null, "ranks", new String[0]);

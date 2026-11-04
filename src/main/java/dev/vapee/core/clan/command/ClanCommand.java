@@ -139,7 +139,7 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleHelp(Player actor, String[] args) {
         if (args.length != 1) {
-            sendUsage(actor, "/clan help");
+            sendUsage(actor, "/clan help", "");
             return;
         }
         help.send(actor, HELP);
@@ -147,7 +147,7 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleInvites(Player actor, String[] args) {
         if (args.length != 1) {
-            sendUsage(actor, "/clan invites");
+            sendUsage(actor, "/clan invites", "");
             return;
         }
         openInvites.accept(actor);
@@ -155,7 +155,7 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleInfo(Player actor, UUID self, String[] args) {
         if (args.length > 2) {
-            sendUsage(actor, "/clan info [tag|uuid]");
+            sendUsage(actor, "/clan info", "[tag|uuid]");
             return;
         }
         Clan clan = args.length == 1 ? clans.getClanOf(self).orElse(null) : resolveClan(args[1]);
@@ -171,14 +171,12 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleCreate(Player actor, UUID self, String[] args) {
         if (args.length == 1) {
-            send(actor, tr("clan.command.missing-tag-name"), NamedTextColor.YELLOW);
-            sendUsage(actor, "/clan create <tag> <name...>");
+            sendUsage(actor, "/clan create", "<tag> <name...>");
             sendExample(actor, "/clan create BMW BMW Community");
             return;
         }
         if (args.length == 2) {
-            send(actor, tr("clan.command.missing-name"), NamedTextColor.YELLOW);
-            sendUsage(actor, "/clan create <tag> <name...>");
+            sendUsage(actor, "/clan create", "<tag> <name...>");
             sendExample(actor, "/clan create BMW BMW Community");
             return;
         }
@@ -188,8 +186,7 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleRename(Player actor, UUID self, String[] args) {
         if (args.length == 1) {
-            send(actor, tr("clan.command.missing-name"), NamedTextColor.YELLOW);
-            sendUsage(actor, "/clan rename <name...>");
+            sendUsage(actor, "/clan rename", "<name...>");
             sendExample(actor, "/clan rename BMW Drivers");
             return;
         }
@@ -199,13 +196,11 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleTag(Player actor, UUID self, String[] args) {
         if (args.length == 1) {
-            send(actor, tr("clan.command.missing-tag"), NamedTextColor.YELLOW);
-            sendUsage(actor, "/clan tag <tag>");
-            sendExample(actor, "/clan tag BMW");
+            sendUsage(actor, "/clan tag", "<tag>");
             return;
         }
         if (args.length != 2) {
-            sendUsage(actor, "/clan tag <tag>");
+            sendUsage(actor, "/clan tag", "<tag>");
             return;
         }
         feedback.report(actor, "tag", args[1], clans.changeTag(self, args[1]));
@@ -213,7 +208,7 @@ public final class ClanCommand implements TabExecutor {
 
     private void handleLeave(Player actor, UUID self, String[] args) {
         if (args.length != 1) {
-            sendUsage(actor, "/clan leave");
+            sendUsage(actor, "/clan leave", "");
             return;
         }
         String tag = clans.getClanOf(self).map(Clan::tag).orElse("");
@@ -235,7 +230,7 @@ public final class ClanCommand implements TabExecutor {
             return;
         }
         if (args.length != 2) {
-            sendUsage(actor, "/clan " + action + " <tag|uuid>");
+            sendUsage(actor, "/clan " + action, "<tag|uuid>");
             return;
         }
         Clan target = resolveClan(args[1]);
@@ -257,17 +252,11 @@ public final class ClanCommand implements TabExecutor {
             if (action.equals("cancel") && sendOutgoingInviteChoices(actor, self)) {
                 return;
             }
-            if (action.equals("invite")) {
-                send(actor, tr("common.missing-player"), NamedTextColor.YELLOW);
-                sendUsage(actor, "/clan invite <player|uuid>");
-                send(actor, tr("clan.command.tab-hint"), NamedTextColor.GRAY);
-            } else {
-                sendUsage(actor, "/clan " + action + " <player|uuid>");
-            }
+            sendUsage(actor, "/clan " + action, "<player|uuid>");
             return;
         }
         if (args.length != 2) {
-            sendUsage(actor, "/clan " + action + " <player|uuid>");
+            sendUsage(actor, "/clan " + action, "<player|uuid>");
             return;
         }
         PlayerLookupResult lookup = identities.resolve(args[1]);
@@ -320,7 +309,7 @@ public final class ClanCommand implements TabExecutor {
                     : clanIdentity(source);
             messages.send(actor, identity.append(Component.space()).append(actionButton(action, identifier)));
         }
-        sendUse(actor, "/clan " + action + " <tag|uuid>");
+        sendUse(actor, "/clan " + action, "<tag|uuid>");
     }
 
     /** @return true when the actor owns a clan and the missing-target case was fully handled. */
@@ -342,7 +331,7 @@ public final class ClanCommand implements TabExecutor {
                     .append(Component.space())
                     .append(actionButton("cancel", argument)));
         }
-        sendUse(actor, "/clan cancel <player|uuid>");
+        sendUse(actor, "/clan cancel", "<player|uuid>");
         return true;
     }
 
@@ -363,35 +352,34 @@ public final class ClanCommand implements TabExecutor {
         return button.clickEvent(ClickEvent.runCommand("/clan " + action + " " + UUID.fromString(argument)));
     }
 
-    private Component commandSuggestion(Component label, String command, NamedTextColor color, Component hover) {
+    private Component commandSuggestion(Component label, String command, net.kyori.adventure.text.format.TextColor color, Component hover) {
         return label.color(color)
                 .clickEvent(ClickEvent.suggestCommand(command))
                 .hoverEvent(HoverEvent.showText(hover.color(NamedTextColor.GRAY)));
     }
 
-    private Component commandSuggestion(String command, NamedTextColor color, Component hover) {
+    private Component commandSuggestion(String command, net.kyori.adventure.text.format.TextColor color, Component hover) {
         return commandSuggestion(Component.text(command), command, color, hover);
     }
 
-    private void sendUsage(Player actor, String syntax) {
-        messages.send(actor, tr("common.usage").color(NamedTextColor.GRAY)
-                .append(commandSuggestion(syntax, NamedTextColor.AQUA, tr("common.command-insert"))));
+    private void sendUsage(Player actor, String command, String arguments) {
+        SocialChannel.CLAN.send(messages, actor, MessageStyle.usage(command, arguments));
     }
 
     private void sendExample(Player actor, String command) {
         messages.send(actor, tr("common.example").color(NamedTextColor.GRAY)
-                .append(commandSuggestion(command, NamedTextColor.AQUA, tr("common.example-click"))));
+                .append(commandSuggestion(command, MessageStyle.accent(), tr("common.example-click"))));
     }
 
-    private void sendUse(Player actor, String syntax) {
-        messages.send(actor, tr("common.use-short").color(NamedTextColor.GRAY)
-                .append(commandSuggestion(syntax, NamedTextColor.AQUA, tr("common.command-insert"))));
+    private void sendUse(Player actor, String command, String arguments) {
+        messages.send(actor, tr("common.use-short").color(MessageStyle.TEXT)
+                .append(MessageStyle.usageSyntax(command, arguments)));
     }
 
     private void sendUnknownCommand(Player actor, String input) {
         SocialChannel.CLAN.error(messages, actor, tr("clan.command.unknown", java.util.Map.of("command", Component.text(input, MessageStyle.HIGHLIGHT)))
                 .append(Component.newline())
-                .append(tr("clan.command.help", java.util.Map.of("command", commandSuggestion("/clan help", NamedTextColor.AQUA, tr("clan.command.help-hover")))).color(NamedTextColor.GRAY)));
+                .append(tr("clan.command.help", java.util.Map.of("command", commandSuggestion("/clan help", MessageStyle.accent(), tr("clan.command.help-hover")))).color(NamedTextColor.GRAY)));
     }
 
     private Clan resolveClan(String token) {

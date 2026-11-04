@@ -140,8 +140,7 @@ public final class UnignoreCommand implements TabExecutor {
     private void sendUsage(Player player) {
         messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/unignore <player|uuid>", NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/unignore", "<player|uuid>")));
     }
 
     private record ResolvedTarget(UUID uniqueId, String displayName) {

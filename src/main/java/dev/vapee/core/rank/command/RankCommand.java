@@ -112,8 +112,7 @@ public final class RankCommand implements TabExecutor {
     private void sendUsage(CommandSender sender) {
         messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/rank [player]", NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/rank", "[player]")));
     }
 
     static Component rankMessage(String serverName, String playerName, RankInfo rank) {

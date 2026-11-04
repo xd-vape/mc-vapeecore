@@ -3,6 +3,8 @@ package dev.vapee.core.message;
 import dev.vapee.core.i18n.Translations;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.TextReplacementConfig;
@@ -134,6 +136,30 @@ public final class MessageStyle {
         int split = syntax.indexOf(' ');
         return split < 0 ? value(syntax) : value(syntax.substring(0, split))
                 .append(Component.text(syntax.substring(split), BODY));
+    }
+
+    /** Compact localized usage. Pass literal executable tokens separately from argument syntax. */
+    public static Component usage(String command, String arguments) {
+        return Translations.tr("common.usage").color(TEXT).append(usageSyntax(command, arguments));
+    }
+
+    /** Usage-only rendering; help pages deliberately retain syntax(String)'s existing contract. */
+    public static Component usageSyntax(String command, String arguments) {
+        Objects.requireNonNull(command);
+        Objects.requireNonNull(arguments);
+        if (!command.startsWith("/") || command.isBlank()
+                || command.chars().anyMatch(c -> c == '<' || c == '>' || c == '[' || c == ']'
+                        || Character.isISOControl(c)))
+            throw new IllegalArgumentException("Usage command must contain executable tokens, not placeholders");
+        Component result = Component.text(command, accent());
+        if (!arguments.isEmpty()) {
+            Component syntax = Component.text(arguments, TEXT).replaceText(TextReplacementConfig.builder()
+                    .match("\\[[^\\]]*\\]").replaceInsideHoverEvents(false)
+                    .replacement((match, builder) -> builder.color(MUTED).build()).build());
+            result = result.append(Component.space().color(TEXT)).append(syntax);
+        }
+        return result.clickEvent(ClickEvent.suggestCommand(command + (arguments.isEmpty() ? "" : " ")))
+                .hoverEvent(HoverEvent.showText(Translations.tr("common.command-insert").color(TEXT)));
     }
     public static Component activity(Component label, Component body) {
         return Translations.tr("activity.context", Map.of("activity", label, "body", body.colorIfAbsent(BODY)));

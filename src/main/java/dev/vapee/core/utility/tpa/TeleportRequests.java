@@ -111,15 +111,15 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
         String name = command.getName().toLowerCase(Locale.ROOT);
         switch (name) {
             case "tpa", "tpahere" -> {
-                if (args.length != 1) tell(player, tr("tpa.usage-send"));
+                if (args.length != 1) tell(player, messages.usage(player, "tpa.usage-send", "/" + name, "<player>"));
                 else send(player, args[0], name.equals("tpahere"));
             }
             case "tpaccept", "tpdeny" -> {
-                if (args.length > 1) tell(player, tr("tpa.usage-answer"));
+                if (args.length > 1) tell(player, messages.usage(player, "tpa.usage-answer", "/" + name, "[player]"));
                 else answer(player, args.length == 0 ? null : args[0], name.equals("tpaccept"));
             }
             case "tpcancel" -> {
-                if (args.length != 0) tell(player, tr("tpa.usage-cancel"));
+                if (args.length != 0) tell(player, messages.usage(player, "tpa.usage-cancel", "/" + name, ""));
                 else {
                     Request request = outgoing.get(player.getUniqueId());
                     if (request == null || request.sender != player) tell(player, tr("tpa.none-outgoing"));

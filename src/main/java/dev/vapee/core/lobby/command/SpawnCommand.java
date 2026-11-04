@@ -1,5 +1,6 @@
 package dev.vapee.core.lobby.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.lobby.LobbyService;
@@ -86,8 +87,6 @@ public final class SpawnCommand implements TabExecutor {
     private void sendInvalidUsage(CommandSender sender) {
         messageService.send(sender, tr("common.invalid-usage").color(net.kyori.adventure.text.format.NamedTextColor.RED)
                 .append(net.kyori.adventure.text.Component.newline())
-                .append(tr("common.use").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
-                .append(net.kyori.adventure.text.Component.text(
-                        "/spawn", net.kyori.adventure.text.format.NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/spawn", "")));
     }
 }

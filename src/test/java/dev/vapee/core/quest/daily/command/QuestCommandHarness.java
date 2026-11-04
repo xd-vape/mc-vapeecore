@@ -32,7 +32,7 @@ public final class QuestCommandHarness {
         p.permission = true;
         for (String sub : List.of("help", "reload", "claim", "reroll", "abandon", "accept", "page")) {
             p.output.clear(); run(command, p.player, "quests", sub);
-            check(p.received().contains("Invalid usage.") && p.received().contains("/quests") && f.syncCalls == 0,
+            check(p.output.size() == 1 && plain(p.output.getFirst()).equals("Usage: /quests") && f.syncCalls == 0,
                     "no extra command capability: " + sub);
         }
         for (String alias : List.of("quests", "vapeecore:quests")) {

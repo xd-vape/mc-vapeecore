@@ -1,5 +1,6 @@
 package dev.vapee.core.privatemessage.command;
 
+import dev.vapee.core.message.MessageStyle;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.message.MessageService;
@@ -108,8 +109,7 @@ public final class MessageCommand implements TabExecutor {
     private void sendUsage(Player player) {
         messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/msg <player> <message>", NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/msg", "<player> <message>")));
     }
 
     private void sendResult(Player player, PrivateMessageResult result) {

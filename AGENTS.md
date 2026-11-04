@@ -39,6 +39,17 @@ All player-facing system messages must follow VapeeCore's central chat design sy
 - Do not hardcode shared colors inside feature implementations.
 - Preserve `messages.accent-color`, including reload and fallback.
 
+### Command Usage
+
+- New commands use `MessageStyle.usage(command, arguments)` for simple syntax feedback.
+- Pass executable root/subcommand tokens separately from literal argument syntax.
+- Usage commands use the current `MessageStyle.accent()`; required arguments stay TEXT and optional arguments MUTED.
+- Do not hardcode Aqua or Yellow for general usage formatting.
+- Localize the usage label through `common.usage`; keep command tokens language-independent.
+- Simple missing arguments produce compact feedback without redundant duplicate messages.
+- Preserve existing prefix rules, operator overrides and click/hover behavior; usage suggests editable commands and never executes them.
+- Keep full help pages, contextual choices, real errors and security confirmations distinct from simple usage.
+
 ### Feature Prefix Styling
 
 All system prefixes must use the central MessageStyle API.

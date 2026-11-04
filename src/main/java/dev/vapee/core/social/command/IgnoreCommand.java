@@ -120,7 +120,6 @@ public final class IgnoreCommand implements TabExecutor {
     private void sendUsage(Player player) {
         messageService.send(player, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text("/ignore <player>", NamedTextColor.AQUA)));
+                .append(MessageStyle.usage("/ignore", "<player>")));
     }
 }

@@ -142,21 +142,21 @@ public final class ClanCommandHarness {
         ClanCommand command = command(syntax);
 
         run(command, actor, "create");
-        check(all(actor).contains("Missing clan tag and name.")
-                        && all(actor).contains("Usage: /clan create <tag> <name...>")
+        check(actor.received.size() == 2 && !all(actor).contains("Missing clan tag and name.")
+                        && all(actor).contains("[Clan] Usage: /clan create <tag> <name...>")
                         && all(actor).contains("Example: /clan create BMW BMW Community"),
-                "create without arguments explains both missing values, syntax, and example");
-        check(hasClick(actor, "/clan create <tag> <name...>")
+                "create without arguments keeps compact usage and useful multi-word example");
+        check(hasClick(actor, "/clan create ")
                         && hasClick(actor, "/clan create BMW BMW Community"),
                 "create usage and example are suggestable");
 
         clear(actor);
         run(command, actor, "create", "BMW");
-        check(all(actor).contains("Missing clan name.")
-                        && all(actor).contains("Usage: /clan create <tag> <name...>")
+        check(actor.received.size() == 2 && !all(actor).contains("Missing clan name.")
+                        && all(actor).contains("[Clan] Usage: /clan create <tag> <name...>")
                         && all(actor).contains("Example: /clan create BMW BMW Community")
                         && !all(actor).contains("/clan help"),
-                "create with tag identifies only the missing clan name");
+                "create with tag preserves usage and example without duplicate missing-name notice");
 
         clear(actor);
         run(command, actor, "info", "BMW", "extra");
@@ -166,10 +166,8 @@ public final class ClanCommandHarness {
         check(last(actor).contains("Usage: /clan invites"), "invites rejects extra arguments locally");
         clear(actor);
         run(command, actor, "invite");
-        check(all(actor).contains("Missing player.")
-                        && all(actor).contains("Usage: /clan invite <player|uuid>")
-                        && all(actor).contains("Use Tab"),
-                "invite without target gives targeted guidance");
+        check(actor.received.size() == 1 && last(actor).equals("[Clan] Usage: /clan invite <player|uuid>"),
+                "invite without target emits one concrete usage");
         clear(actor);
         run(command, actor, "invite", "Player", "extra");
         check(last(actor).contains("Usage: /clan invite <player|uuid>"),
@@ -317,16 +315,14 @@ public final class ClanCommandHarness {
                 "transfer missing target has local usage");
         clear(owner);
         run(choicesCommand, owner, "rename");
-        check(all(owner).contains("Missing clan name.")
-                        && all(owner).contains("Usage: /clan rename <name...>")
+        check(owner.received.size() == 2 && !all(owner).contains("Missing clan name.")
+                        && all(owner).contains("[Clan] Usage: /clan rename <name...>")
                         && all(owner).contains("Example: /clan rename BMW Drivers"),
                 "rename missing name has usage and example");
         clear(owner);
         run(choicesCommand, owner, "tag");
-        check(all(owner).contains("Missing clan tag.")
-                        && all(owner).contains("Usage: /clan tag <tag>")
-                        && all(owner).contains("Example: /clan tag BMW"),
-                "tag missing value has usage and example");
+        check(owner.received.size() == 1 && last(owner).equals("[Clan] Usage: /clan tag <tag>"),
+                "tag missing value emits one compact usage");
         clear(owner);
         run(choicesCommand, owner, "tag", "BMW", "EXTRA");
         check(last(owner).contains("Usage: /clan tag <tag>"), "tag rejects extra arguments locally");

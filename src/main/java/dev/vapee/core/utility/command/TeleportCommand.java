@@ -283,19 +283,20 @@ public final class TeleportCommand implements TabExecutor {
     }
 
     private void invalidUsage(CommandSender sender, String[] args) {
-        String syntax;
-        if (args.length > 0 && args[0].equalsIgnoreCase("world"))
-            syntax = "/tp world <world> <x> <y> <z> [yaw pitch]";
-        else if (args.length > 1 && args[1].equalsIgnoreCase("world"))
-            syntax = "/tp <source> world <world> <x> <y> <z> [yaw pitch]";
+        String command = "/tp";
+        String arguments;
+        if (args.length > 0 && args[0].equalsIgnoreCase("world")) {
+            command = "/tp world";
+            arguments = "<world> <x> <y> <z> [yaw pitch]";
+        } else if (args.length > 1 && args[1].equalsIgnoreCase("world"))
+            arguments = "<source> world <world> <x> <y> <z> [yaw pitch]";
         else if (args.length > 0 && coordinateStart(args[0]))
-            syntax = "/tp <x> <y> <z> [yaw pitch]";
+            arguments = "<x> <y> <z> [yaw pitch]";
         else if (args.length > 1 && coordinateStart(args[1]))
-            syntax = "/tp <source> <x> <y> <z> [yaw pitch]";
-        else syntax = args.length > 1 || !(sender instanceof Player) ? "/tp <source> <target>" : "/tp <player>";
+            arguments = "<source> <x> <y> <z> [yaw pitch]";
+        else arguments = args.length > 1 || !(sender instanceof Player) ? "<source> <target>" : "<player>";
         messageSender.accept(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
-                .append(Component.space()).append(tr("common.use").color(MessageStyle.BODY))
-                .append(MessageStyle.syntax(syntax)));
+                .append(Component.space()).append(MessageStyle.usage(command, arguments)));
     }
 
     private void playerNotOnline(CommandSender sender, String name) {

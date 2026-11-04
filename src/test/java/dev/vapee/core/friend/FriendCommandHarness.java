@@ -328,13 +328,14 @@ public final class FriendCommandHarness {
         }
         for (String action : List.of("add", "accept", "deny", "cancel", "remove", "list", "requests", "help")) {
             run(c, actor, action, "one", "extra");
-            check(f.last().equals("Usage: /friend " + action
+            check(f.last().equals("[Friends] Usage: /friend " + action
                     + (List.of("list", "requests", "help").contains(action) ? "" : " <player|uuid>")),
                     "concrete extra-argument usage " + action);
         }
+        int beforeUsage = f.messages.get(actor.getUniqueId()).size();
         run(c, actor, "ADD");
-        check(f.all(actor.getUniqueId()).contains("Missing player.")
-                && f.last().contains("/friend add <player|uuid>"), "add missing player explains syntax");
+        check(f.messages.get(actor.getUniqueId()).size() == beforeUsage + 1
+                && f.last().equals("[Friends] Usage: /friend add <player|uuid>"), "add missing player emits exactly one compact usage");
         String attack = "<click:run_command:'/op @s'>x</click>";
         run(c, actor, attack);
         check(f.last().contains("Unknown friend command: " + attack)

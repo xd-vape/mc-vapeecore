@@ -171,7 +171,11 @@ public final class TeleportRequestsHarness {
         a.permissions.clear();check(f.tab(a,"tpa","").isEmpty(),"completion requires current player permission");
         List<Component> console=new ArrayList<>(); var sender=proxy(ConsoleCommandSender.class,(method,args)-> {if(method.equals("sendMessage")){for(Object arg:args)if(arg instanceof Component c)console.add(c);return null;}throw new AssertionError(method);});
         f.requests.onCommand(sender,command("tpa"),"tpa",new String[]{"Beta"});check(console.size()==1 && plain(console.getFirst()).contains("only"),"console cannot send requests");
-        f.requests.onCommand(b.player,command("tpaccept"),"tpaccept",new String[]{"Alpha","extra"});check(b.last().contains("Verwende"),"invalid usage concise, no help tree");
+        int beforeUsage = b.received.size();
+        f.requests.onCommand(b.player,command("tpaccept"),"tpaccept",new String[]{"Alpha","extra"});
+        check(b.received.size() == beforeUsage + 1 && b.last().equals("Verwendung: /tpaccept [player]")
+                && clicks(b.received.getLast()).equals(List.of(ClickEvent.suggestCommand("/tpaccept ")))
+                && !b.last().contains("OPERATOR"), "invalid usage is one localized raw line with a safe editable suggestion");
     }
     private static boolean containsColor(Component component,String text,NamedTextColor color) {
         return plain(component).equals(text) && color.equals(component.color()) || component.children().stream().anyMatch(c->containsColor(c,text,color));

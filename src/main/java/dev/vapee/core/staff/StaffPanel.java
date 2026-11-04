@@ -114,7 +114,8 @@ public final class StaffPanel implements TabExecutor, Listener {
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!active || !runtime.getAsBoolean()) return true;
         if (args.length == 1 && args[0].equalsIgnoreCase("list")) { publicRoster(sender); return true; }
-        if (args.length != 0) { SocialChannel.STAFF.send(messages, sender, tr("staff.usage")); return true; }
+        if (args.length != 0) { SocialChannel.STAFF.send(messages, sender,
+                messages.usage(sender, "staff.usage", "/staff", "[list]")); return true; }
         if (!(sender instanceof Player player)) { SocialChannel.STAFF.send(messages, sender, tr("common.inventory-player-only")); return true; }
         open(player, StaffPanelHolder.View.STAFF, 0, null);
         return true;

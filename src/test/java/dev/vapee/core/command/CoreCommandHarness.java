@@ -50,7 +50,7 @@ public final class CoreCommandHarness {
                     "version reports literal plugin, Paper and Java data through " + alias);
         }
         for (String action : List.of("help", "version", "reload")) {
-            run(command, player, "core", "Use: /core " + action, action, "extra");
+            run(command, player, "core", "Usage: /core " + action, action, "extra");
             check(player.text().contains("Invalid usage."), "exact core subcommand arity for " + action);
         }
         check(reloads[0] == 0, "bad reload arity never reaches coordinator");

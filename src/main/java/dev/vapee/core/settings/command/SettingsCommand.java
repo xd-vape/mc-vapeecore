@@ -94,7 +94,7 @@ public final class SettingsCommand implements TabExecutor {
             return true;
         }
         if (!args[0].equalsIgnoreCase("visibility")) {
-            sendUsage(player, "/settings visibility");
+            sendUsage(player, "/settings visibility", "");
             return true;
         }
         if (args.length == 1) {
@@ -103,17 +103,17 @@ public final class SettingsCommand implements TabExecutor {
         }
         String action = args[1].toLowerCase(Locale.ROOT);
         if (action.equals("add")) {
-            if (args.length != 3) sendUsage(player, "/settings visibility add <player|uuid>");
+            if (args.length != 3) sendUsage(player, "/settings visibility add", "<player|uuid>");
             else add(player, args[2]);
             return true;
         }
         if (action.equals("remove")) {
-            if (args.length != 3) sendUsage(player, "/settings visibility remove <player|uuid>");
+            if (args.length != 3) sendUsage(player, "/settings visibility remove", "<player|uuid>");
             else remove(player, args[2]);
             return true;
         }
-        sendUsage(player, "/settings visibility add <player|uuid>");
-        sendUsage(player, "/settings visibility remove <player|uuid>");
+        sendUsage(player, "/settings visibility add", "<player|uuid>");
+        sendUsage(player, "/settings visibility remove", "<player|uuid>");
         return true;
     }
 
@@ -263,9 +263,8 @@ public final class SettingsCommand implements TabExecutor {
         }
     }
 
-    private void sendUsage(CommandSender sender, String syntax) {
-        messageService.send(sender, tr("common.usage").color(MessageStyle.BODY)
-                .append(MessageStyle.syntax(syntax)));
+    private void sendUsage(CommandSender sender, String command, String arguments) {
+        messageService.send(sender, MessageStyle.usage(command, arguments));
     }
 
     private static List<String> matching(List<String> values, String prefix) {

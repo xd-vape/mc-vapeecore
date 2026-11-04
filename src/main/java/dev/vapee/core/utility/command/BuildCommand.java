@@ -6,6 +6,7 @@ import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.LobbyService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.utility.UtilityService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -34,6 +35,7 @@ public final class BuildCommand implements TabExecutor {
     private final Predicate<UUID> activityCheck;
     private final Consumer<Player> managedFlightCleanup;
     private final BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender;
+    private final Consumer<Player> usageSender;
 
     public BuildCommand(
             JavaPlugin plugin,
@@ -49,7 +51,9 @@ public final class BuildCommand implements TabExecutor {
                 buildStateAccess(lobbyPlayerStateService),
                 Objects.requireNonNull(activityService, "activityService")::isParticipating,
                 Objects.requireNonNull(utilityService, "utilityService")::clearManagedFlight,
-                Objects.requireNonNull(messageService, "messageService")::send
+                Objects.requireNonNull(messageService, "messageService")::send,
+                player -> messageService.send(player,
+                        messageService.usage(player, "utility.build.usage", "/build", ""))
         );
     }
 
@@ -61,12 +65,22 @@ public final class BuildCommand implements TabExecutor {
             Consumer<Player> managedFlightCleanup,
             BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender
     ) {
+        this(logger, lobbyWorldCheck, buildStateAccess, activityCheck, managedFlightCleanup,
+                messageSender, player -> messageSender.accept(player, MessageStyle.usage("/build", "")));
+    }
+
+    private BuildCommand(Logger logger, Predicate<Player> lobbyWorldCheck,
+                         BuildStateAccess buildStateAccess, Predicate<UUID> activityCheck,
+                         Consumer<Player> managedFlightCleanup,
+                         BiConsumer<CommandSender, net.kyori.adventure.text.Component> messageSender,
+                         Consumer<Player> usageSender) {
         this.logger = Objects.requireNonNull(logger, "logger");
         this.lobbyWorldCheck = Objects.requireNonNull(lobbyWorldCheck, "lobbyWorldCheck");
         this.buildStateAccess = Objects.requireNonNull(buildStateAccess, "buildStateAccess");
         this.activityCheck = Objects.requireNonNull(activityCheck, "activityCheck");
         this.managedFlightCleanup = Objects.requireNonNull(managedFlightCleanup, "managedFlightCleanup");
         this.messageSender = Objects.requireNonNull(messageSender, "messageSender");
+        this.usageSender = Objects.requireNonNull(usageSender, "usageSender");
     }
 
     @Override
@@ -85,7 +99,7 @@ public final class BuildCommand implements TabExecutor {
             return true;
         }
         if (args.length != 0) {
-            send(player, tr("utility.build.usage"));
+            usageSender.accept(player);
             return true;
         }
 

@@ -47,6 +47,63 @@ EN/DE behalten dieselbe Struktur und dieselben fachlichen Platzhalter. Werte als
 
 Bestehende Presence-Sprach-Overrides aus der Version vor Step 06B dürfen für `friends.presence.online` und `friends.presence.offline` weiterhin ausschließlich `<player>` enthalten. Die neuen gebündelten Texte verwenden zusätzlich `<status>`. Nur diese zwei bekannten alten Override-Verträge werden beim Laden und Reload akzeptiert; die gebündelte EN-/DE-Parität sowie fehlende, umbenannte oder zusätzliche Parameter anderer Texte bleiben strikt. Vorhandene Dateien und ihre Gestaltung werden dabei nicht umgeschrieben. Alte Overrides behalten deshalb auch ihre bisherigen Statusfarben, bis der Operator sie bewusst anpasst.
 
+## Einfache Command-Usage
+
+Neue Commands verwenden `MessageStyle.usage("/friend add", "<player|uuid>")`.
+Der ausführbare Command einschließlich Subcommand und die Argumentsyntax werden
+explizit getrennt übergeben; die API errät diese Grenze nicht aus einem Gesamtstring.
+Die Bezeichnung kommt aus `common.usage` (EN `Usage: `, DE `Verwendung: `) und
+verwendet TEXT. Command und Subcommand verwenden die beim Erzeugen angewendete
+`MessageStyle.accent()` aus `messages.accent-color`. Pflichtargumente bleiben
+TEXT; eckig geklammerte optionale Argumentgruppen verwenden MUTED. Argumente
+sind Literal-Components und werden nicht als MiniMessage interpretiert.
+
+```java
+SocialChannel.FRIENDS.send(messages, player,
+        MessageStyle.usage("/friend add", "<player|uuid>"));
+messages.send(sender, MessageStyle.usage("/profile", "[player|uuid]"));
+```
+
+Die API fügt keinen Prefix hinzu. Friends/Clan verwenden ihren bestehenden
+SocialChannel mit unveränderten Klammer-/Label-Farben; andere Commands behalten
+ihre bestehende Delivery. Insbesondere TPA verwendet weiterhin Raw-Delivery.
+`usageSyntax(command, arguments)` liefert dieselbe Syntax ohne Bezeichnung für
+bestehende kontextabhängige Einleitungstexte. Beide Varianten besitzen einen
+SUGGEST_COMMAND und den lokalisierten `common.command-insert`-Hover. Der Vorschlag
+enthält nur den ausführbaren Command, bei Argumenten gefolgt von einem Leerzeichen;
+Platzhalter werden nicht eingefügt und Usage führt keinen Command direkt aus.
+Command-Parameter mit Platzhaltern oder Steuerzeichen werden zurückgewiesen.
+
+Ein erfolgreicher Config-Apply färbt neu erzeugte Usage-Components mit dem neuen
+Akzent; Rollback stellt den vorherigen Akzent wieder her. Bereits erzeugte
+Components behalten ihre Farbe. `MessageStyle.syntax` und CommandHelpRenderer
+bleiben mit ihrem bisherigen Help-Vertrag unverändert: nur der Root ist akzentuiert,
+und die existierenden vollständigen Help-Vorschläge bleiben bestehen.
+
+Einfache fehlende Argumente brauchen keine zusätzliche Missing-Meldung. Friends
+liefert bei `/friend add` genau eine Zeile. Clan behält sinnvolle mehrteilige
+Namensbeispiele bei create/rename; tag/invite liefern eine kompakte Usage.
+Kontextabhängige Auswahlaktionen, echte fachliche Fehler und insbesondere
+`/clan disband confirm` bleiben eigene Nachrichten mit ihren bisherigen Rollen.
+Neue Features dürfen diese Fälle nicht pauschal in Usage umwandeln.
+
+Einige frühere Katalogschlüssel besitzen vollständige Usage-Texte. Dafür wählt
+`MessageService.usage(recipient, legacyKey, command, arguments)` die zentrale
+Komposition für gebündelte Defaults und erhält einen davon abweichenden
+Override der Empfängersprache als vollständigen Text. Dies betrifft Profile,
+Core-Quest, DailyQuest, Build, Staff und TPA. Localization kopiert beim ersten
+Start ebenfalls vollständige Kataloge auf die Platte. Ein exakter Vergleich
+mit dem aktuell deklarierten gebündelten Wert erkennt solche unveränderten
+Defaults; dafür gilt ebenfalls die zentrale Komposition. Abweichende Texte und
+Farben bleiben maßgeblich, ohne historische Standardtexte heuristisch zu erraten.
+`common.usage`-Overrides bleiben auch bei der gemeinsamen
+Komposition wirksam. Keine Sprachdatei wird migriert oder überschrieben, kein
+neuer Übersetzungsschlüssel und kein zusätzlicher Platzhaltervertrag eingeführt.
+
+`CommandUsageHarness` prüft tatsächliche Farbspannen und Events der echten
+Friends-/Clan-Commands, zwei Sprachen/Akzentfarben, gemischte Argumentrollen,
+Operator-Overrides, echte Config-Reload-/Rollback-Pfade und unveränderte Help-Seiten.
+
 ## Mehrzeilige Blöcke und Interaktionen
 
 `messages.sendRawBlock(recipient, lines...)` lokalisiert zuerst und verwendet danach `MessageStyle.block`. Ein Block ist ein einzelner ausgelieferter Component mit genau einer leeren Zeile davor/danach und zwei Leerzeichen Einrückung je Inhaltszeile. Auch Newlines innerhalb einer Übersetzung werden eingerückt. Bei einem Feature-Block den Prefix einmal am ersten Inhalt einsetzen. Die Methode ergänzt keinen globalen Operator-Wrapper.

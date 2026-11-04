@@ -27,7 +27,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
     AbstractModerationCommand(ModerationCommandContext context, String name, String syntax) {
         this.context = Objects.requireNonNull(context);
         this.name = name;
-        this.syntax = "/" + name + " " + syntax;
+        this.syntax = syntax;
     }
 
     @Override public final boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
@@ -124,7 +124,7 @@ abstract class AbstractModerationCommand implements TabExecutor {
 
     protected final void usage(CommandSender sender, Component error) {
         context.error(sender, error.append(Component.space())
-                .append(tr("common.usage")).append(MessageStyle.syntax(syntax)));
+                .append(MessageStyle.usage("/" + name, syntax)));
     }
 
     protected final String reason(String[] args, int start) {

@@ -339,8 +339,7 @@ public final class CoreCommand implements TabExecutor {
     private void sendInvalidUsage(CommandSender sender, String syntax) {
         messageService.send(sender, tr("common.invalid-usage").color(NamedTextColor.RED)
                 .append(Component.newline())
-                .append(tr("common.use").color(NamedTextColor.YELLOW))
-                .append(Component.text(syntax, NamedTextColor.AQUA)));
+                .append(MessageStyle.usage(syntax, "")));
     }
 
     private Component labeledValue(String label, String value, net.kyori.adventure.text.format.TextColor valueColor) {

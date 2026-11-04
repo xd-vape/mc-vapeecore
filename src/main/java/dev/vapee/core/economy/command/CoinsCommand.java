@@ -95,7 +95,7 @@ public final class CoinsCommand implements TabExecutor {
         String action = args[0].toLowerCase(Locale.ROOT);
         if (action.equals("help")) {
             if (args.length == 1) helpRenderer.send(sender, HELP_PAGE);
-            else sendUsage(sender, null, "/coins help");
+            else sendUsage(sender, null, "/coins help", "");
             return true;
         }
         if (!ADMIN_ACTIONS.contains(action)) {
@@ -158,7 +158,7 @@ public final class CoinsCommand implements TabExecutor {
 
     private void handleGet(CommandSender sender, String[] args) {
         if (args.length != 2) {
-            sendUsage(sender, args.length == 1 ? tr("common.missing-player") : null, "/coins get <player|uuid>");
+            sendUsage(sender, args.length == 1 ? tr("common.missing-player") : null, "/coins get", "<player|uuid>");
             return;
         }
         Target target = resolve(sender, args[1]);
@@ -214,8 +214,8 @@ public final class CoinsCommand implements TabExecutor {
         if (args.length != 3) {
             Component missing = args.length == 1 ? tr("economy.missing-player-amount")
                     : args.length == 2 ? tr("economy.missing-amount") : null;
-            sendUsage(sender, missing, "/coins " + mutation.name().toLowerCase(Locale.ROOT)
-                    + " <player|uuid> <amount>");
+            sendUsage(sender, missing, "/coins " + mutation.name().toLowerCase(Locale.ROOT),
+                    "<player|uuid> <amount>");
             return;
         }
         Target target = resolve(sender, args[1]);
@@ -315,11 +315,10 @@ public final class CoinsCommand implements TabExecutor {
         messageService.send(sender, tr("economy.denied"));
     }
 
-    private void sendUsage(CommandSender sender, Component error, String syntax) {
+    private void sendUsage(CommandSender sender, Component error, String command, String arguments) {
         Component message = error == null ? Component.empty()
                 : error.color(NamedTextColor.RED).append(Component.newline());
-        messageService.send(sender, message.append(tr("common.usage").color(NamedTextColor.YELLOW))
-                .append(Component.text(syntax, NamedTextColor.AQUA)));
+        messageService.send(sender, message.append(MessageStyle.usage(command, arguments)));
     }
 
     private static List<String> matches(List<String> values, String prefix) {

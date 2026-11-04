@@ -37,7 +37,7 @@ public final class DailyQuestCommand implements CommandExecutor, TabCompleter {
         } else if (!(sender instanceof Player player)) {
             messages.send(sender, tr("daily-quests.command-player-only"));
         } else if (args.length != 0) {
-            messages.send(sender, tr("daily-quests.command-usage"));
+            messages.send(sender, messages.usage(sender, "daily-quests.command-usage", "/quests", ""));
         } else open.accept(player);
         return true;
     }

@@ -133,7 +133,7 @@ public final class FriendCommand implements TabExecutor {
                 return true;
             }
             if (List.of("help", "list", "requests").contains(action)) {
-                if (args.length != 1) usage(sender, "/friend " + action);
+                if (args.length != 1) usage(sender, "/friend " + action, "");
                 else if (action.equals("help")) helpRenderer.send(sender, HELP);
                 else if (action.equals("list")) listFriends(player);
                 else listRequests(player);
@@ -144,8 +144,7 @@ public final class FriendCommand implements TabExecutor {
                 return true;
             }
             if (args.length != 2) {
-                if (args.length == 1) send(sender, tr("common.missing-player"), NamedTextColor.YELLOW);
-                usage(sender, "/friend " + action + " <player|uuid>");
+                usage(sender, "/friend " + action, "<player|uuid>");
                 return true;
             }
             UUID targetId = existingTargetId(player.getUniqueId(), action, args[1]);
@@ -277,9 +276,8 @@ public final class FriendCommand implements TabExecutor {
         return FriendMessages.commandArgument(identities, id);
     }
 
-    private void usage(CommandSender sender, String syntax) {
-        messages.send(sender, tr("common.usage").color(NamedTextColor.YELLOW)
-                .append(Component.text(syntax, NamedTextColor.AQUA)));
+    private void usage(CommandSender sender, String command, String arguments) {
+        SocialChannel.FRIENDS.send(messages, sender, MessageStyle.usage(command, arguments));
     }
 
     private void listRequests(Player player) {
