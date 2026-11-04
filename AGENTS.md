@@ -1,10 +1,8 @@
-
 # VapeeCore – Codex Project Instructions
 
 ## Project
 
-VapeeCore is a modular Minecraft core plugin built with Java,
-Maven and the Paper API.
+VapeeCore is a modular Minecraft core plugin built with Java, Maven and the Paper API.
 
 Preserve the existing architecture, conventions and behavior.
 Prefer small, maintainable changes over unnecessary abstractions.
@@ -127,6 +125,6 @@ These rules apply automatically to future modules and features.
 
 - Keep permanent technical documentation under docs/.
 - Keep phase reports and audit artifacts under reports/.
-- Use reports/<phase>/ for phase-specific results.
+- Use `reports/<phase>/` for phase-specific results.
 - Document important architectural decisions.
 - Keep documentation consistent with the actual implementation.
