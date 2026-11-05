@@ -7,6 +7,7 @@ import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import dev.vapee.core.onlinereward.OnlineRewardConfig;
 import dev.vapee.core.message.MessageStyle;
+import dev.vapee.core.permission.CommandVisibilityConfig;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -29,6 +30,7 @@ public final class ConfigService implements ReloadParticipant {
     private final Runnable defaultConfigSaver;
     private final Logger logger;
     private final Path configFile;
+    private final Runnable refreshCommands;
 
     private volatile CoreConfigState state = CoreConfigState.defaults();
 
@@ -40,14 +42,23 @@ public final class ConfigService implements ReloadParticipant {
                 .resolve(RESOURCE_NAME)
                 .toAbsolutePath()
                 .normalize();
+        this.refreshCommands = () -> {
+            for (var player : java.util.List.copyOf(validatedPlugin.getServer().getOnlinePlayers()))
+                if (player.isOnline()) player.updateCommands();
+        };
     }
 
     ConfigService(Path configFile, Logger logger) {
+        this(configFile, logger, () -> { });
+    }
+
+    ConfigService(Path configFile, Logger logger, Runnable refreshCommands) {
         this.defaultConfigSaver = () -> { };
         this.logger = Objects.requireNonNull(logger, "logger");
         this.configFile = Objects.requireNonNull(configFile, "configFile")
                 .toAbsolutePath()
                 .normalize();
+        this.refreshCommands = Objects.requireNonNull(refreshCommands);
     }
 
     public void load() {
@@ -79,10 +90,13 @@ public final class ConfigService implements ReloadParticipant {
     }
 
     public TextColor getMessageAccentColor() { return state.messageAccentColor(); }
+    public CommandVisibilityConfig getCommandVisibilityConfig() { return state.commandVisibilityConfig(); }
 
     private void applyState(CoreConfigState candidate) {
+        boolean visibilityChanged = !state.commandVisibilityConfig().equals(candidate.commandVisibilityConfig());
         state = candidate;
         MessageStyle.applyAccentColor(candidate.messageAccentColor());
+        if (visibilityChanged) refreshCommands.run();
     }
 
     public boolean isDebugEnabled() {
@@ -118,8 +132,28 @@ public final class ConfigService implements ReloadParticipant {
                 readOnlineRewardConfig(configuration),
                 readFriendLimits(configuration),
                 readClanLimits(configuration),
-                readStaffHierarchy(configuration)
+                readStaffHierarchy(configuration),
+                readCommandVisibility(configuration)
         );
+    }
+
+    private CommandVisibilityConfig readCommandVisibility(YamlConfiguration configuration) {
+        for (String section : java.util.List.of("commands", "commands.visibility")) {
+            if (configuration.contains(section) && !configuration.isConfigurationSection(section)) {
+                warnInvalidValue(section, "a configuration section", "visibility filter disabled");
+                return new CommandVisibilityConfig(false, false);
+            }
+        }
+        return new CommandVisibilityConfig(readVisibilityFlag(configuration, "enabled"),
+                readVisibilityFlag(configuration, "hide-profile"));
+    }
+
+    private boolean readVisibilityFlag(YamlConfiguration configuration, String key) {
+        String path = "commands.visibility." + key;
+        if (!configuration.contains(path)) return true;
+        if (configuration.get(path) instanceof Boolean value) return value;
+        warnInvalidValue(path, "a boolean", false); // Invalid cosmetic options keep commands visible.
+        return false;
     }
 
     private FriendLimits readFriendLimits(YamlConfiguration configuration) {
@@ -250,6 +284,7 @@ public final class ConfigService implements ReloadParticipant {
             String source = Files.readString(configFile);
             configuration.loadFromString(source);
             retainExplicitStaffNull(configuration, source);
+            retainExplicitVisibilityNull(configuration, source);
             return configuration;
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalStateException("Could not load configuration at " + configFile + ".", exception);
@@ -273,6 +308,24 @@ public final class ConfigService implements ReloadParticipant {
                 configuration.set(path, false); // Non-list sentinel triggers the usual warning/default path.
                 return;
             }
+        }
+    }
+
+    private static void retainExplicitVisibilityNull(YamlConfiguration configuration, String source) {
+        var root = new org.yaml.snakeyaml.Yaml().compose(new java.io.StringReader(source));
+        for (String path : java.util.List.of("commands", "commands.visibility",
+                "commands.visibility.enabled", "commands.visibility.hide-profile")) {
+            var node = root;
+            for (String key : path.split("\\.")) {
+                if (!(node instanceof org.yaml.snakeyaml.nodes.MappingNode mapping)) { node = null; break; }
+                node = mapping.getValue().stream()
+                        .filter(tuple -> tuple.getKeyNode() instanceof org.yaml.snakeyaml.nodes.ScalarNode scalar
+                                && scalar.getValue().equals(key))
+                        .map(org.yaml.snakeyaml.nodes.NodeTuple::getValueNode).findFirst().orElse(null);
+                if (node == null) break;
+            }
+            if (node != null && node.getTag().equals(org.yaml.snakeyaml.nodes.Tag.NULL))
+                configuration.set(path, "invalid explicit null");
         }
     }
 
@@ -366,7 +419,8 @@ public final class ConfigService implements ReloadParticipant {
             OnlineRewardConfig onlineRewardConfig,
             FriendLimits friendLimits,
             ClanLimits clanLimits,
-            StaffHierarchyConfig staffHierarchyConfig
+            StaffHierarchyConfig staffHierarchyConfig,
+            CommandVisibilityConfig commandVisibilityConfig
     ) {
 
         private CoreConfigState {
@@ -378,6 +432,7 @@ public final class ConfigService implements ReloadParticipant {
             Objects.requireNonNull(friendLimits, "friendLimits");
             Objects.requireNonNull(clanLimits, "clanLimits");
             Objects.requireNonNull(staffHierarchyConfig, "staffHierarchyConfig");
+            Objects.requireNonNull(commandVisibilityConfig, "commandVisibilityConfig");
         }
 
         private static CoreConfigState defaults() {
@@ -390,7 +445,8 @@ public final class ConfigService implements ReloadParticipant {
                     OnlineRewardConfig.defaults(),
                     FriendLimits.defaults(),
                     ClanLimits.defaults(),
-                    StaffHierarchyConfig.defaults()
+                    StaffHierarchyConfig.defaults(),
+                    CommandVisibilityConfig.defaults()
             );
         }
     }

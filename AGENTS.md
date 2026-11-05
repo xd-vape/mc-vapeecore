@@ -56,6 +56,14 @@ All player-facing system messages must follow VapeeCore's central chat design sy
 - Do not duplicate denial formatting or expose technical permission/group details to players.
 - Authorization stays at the existing execution boundary; specific self/others, target and security errors remain separate messages.
 
+### Command Visibility
+
+- New roots declare correct base permissions in `plugin.yml`; deliberately public composite roots remain public.
+- Root suggestions follow effective permissions. Cosmetic hiding never replaces execution or target authorization.
+- Keep visibility remove-only, check actual command ownership, and preserve unknown/future foreign commands without a global whitelist.
+- Prefer the operator's `spigot.yml` `commands.send-namespaced: false` for namespace duplicates; never rewrite operator files for this.
+- Preserve subcommand completion, usage, chat actions and denial messages as separate contracts.
+
 ### Feature Prefix Styling
 
 All system prefixes must use the central MessageStyle API.

@@ -67,6 +67,77 @@ Warp keeps `vapeecore.warp.admin` centrally enforced before execution and comple
 
 Use existing identity/target services. `OnlinePlayerResolver` accepts a complete case-insensitive online name, rejects partial/offline fallback and offers filtered online suggestions. Profile/known-identity commands can have different UUID/offline semantics; Friend and Clan also resolve domain-known identities. Do not add network/offline-player lookups to tab completion. For guarded online mutations, preserve `OnlineStaffTargetGuard` after capability and exact target resolution. Moderation's offline policy remains its own existing authority. Teleport source and destination are not interchangeable staff targets.
 
+## Root suggestions and command visibility
+
+`PermissionModule` owns one `CommandVisibilityListener` for
+`PlayerCommandSendEvent`. It only removes entries, without changing registration,
+executors, completers, permissions or dispatch. Paper prepares its permission-aware
+tree first; the listener rechecks owned VapeeCore roots with
+`Command.testPermissionSilent(player)`, which uses effective Bukkit permissions.
+There is no rank/group lookup or complete root whitelist. Future registered roots
+therefore work through their declared permissions. Intentionally public composite
+roots (`staff`, `vapeecore`/`core`) retain their lack of a base permission; `coins`
+retains its public base permission, independently of its admin subcommands.
+
+Default cosmetics hide Bukkit `?`, `help`, `about`, `version`, `ver`, `plugins`,
+`pl` and the actual LuckPerms root/aliases, including `permission`. They remain
+discoverable for an effective `vapeecore.admin` holder only when their existing
+command gate also permits them and Paper already offered them. This marker grants
+no LuckPerms or other plugin authority. The vanilla `w` alias is hidden for ordinary
+players only when its platform owner is Minecraft and VapeeCore owns `msg`.
+Other vanilla roots are left to Paper. All VapeeCore aliases, including `r`, remain
+available; hiding never disables manual spelling or namespaced execution.
+
+Ownership is checked before any cosmetic name rule. Legacy plugin commands use
+`PluginIdentifiableCommand` identity. Exact Bukkit builtin classes and Paper
+1.21.11's `VanillaCommandWrapper` public help-owner and `apiCommandMeta.pluginMeta()` metadata distinguish
+Bukkit/Minecraft commands from foreign Brigadier commands exposed via the same
+wrapper. This narrow metadata read adds no server implementation dependency;
+an unknown wrapper/metadata shape is left visible. A same-name foreign `help`,
+`profile`, `lp` or `w` is not assumed to be the builtin or VapeeCore command.
+
+Optional existing `config.yml` settings (missing keys use these runtime defaults):
+
+```yaml
+commands:
+  visibility:
+    enabled: true
+    hide-profile: true
+```
+
+`hide-profile` suppresses the owned profile command for ordinary players only;
+operators with the existing admin marker can still see it if otherwise allowed.
+Setting it false retains profile suggestions. Setting `enabled` false disables
+this cosmetic filter, while Paper and executor security remain unchanged.
+Invalid cosmetic flags preserve visibility; invalid section shapes disable this
+filter with a warning. Prepare has no effect until apply. Changed policy triggers
+one `updateCommands()` per still-online player on apply and rollback; unchanged
+policy triggers none. Reload does not register handlers. These optional runtime
+keys deliberately add no ConfigEvolution revision or bundled-key migration;
+installed files are never rewritten to add them.
+
+Permission changes use LuckPerms' existing command-list updater, which schedules
+`Player.updateCommands()` on the server thread and skips absent players. Its
+5.5.84 implementation was inspected; VapeeCore adds no duplicate LP subscription,
+permission cache, scheduler or polling loop. The event handler itself never calls
+`updateCommands()`. Keep LuckPerms `update-client-command-list: true` (verified default in 5.5.84). If an operator disables it, permission changes await another explicit Paper refresh or reconnect; VapeeCore does not rewrite that preference. Other permission providers must arrange the usual Paper refresh.
+See the [LuckPerms implementation](https://github.com/LuckPerms/LuckPerms/blob/master/bukkit/src/main/java/me/lucko/luckperms/bukkit/listeners/BukkitCommandListUpdater.java).
+
+Recommended **operator-managed** `spigot.yml` setting:
+
+```yaml
+commands:
+  send-namespaced: false
+```
+
+Paper handles namespace duplicates in tree preparation. VapeeCore adds no generic
+colon filter and never changes that server file. With the setting true, permitted
+namespace duplicates can remain. See [Paper's setting reference](https://docs.papermc.io/paper/reference/spigot-configuration/)
+and the [1.21.11 event contract](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/player/PlayerCommandSendEvent.html).
+Root visibility is UX, never a security boundary. Argument/subcommand completion,
+usage suggestions, RUN_COMMAND actions and execution authorization stay with each
+existing adapter and service.
+
 ## Completion conventions
 
 - Authorize and apply sender restrictions before inspecting candidate state. Return an empty list on denied/inapplicable contexts; returning null may enable Bukkit fallback suggestions.
