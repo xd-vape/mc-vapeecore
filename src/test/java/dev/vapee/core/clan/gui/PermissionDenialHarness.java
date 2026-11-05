@@ -225,9 +225,9 @@ public final class PermissionDenialHarness {
                     f.list(p);
                     check(
                             p.messages.size() == 1
-                                    && !plain(p.messages.getFirst())
-                                            .contains(locale.equals(Locale.GERMANY) ? DE : EN),
-                            "staff list stays public with no panel permission");
+                                    && plain(p.messages.getFirst()).equals(locale.equals(Locale.GERMANY)
+                                            ? "[Team] Verwendung: /staff" : "[Staff] Usage: /staff"),
+                            "retired staff list emits only localized compact usage, without roster data");
                 }
             }
             var actor = f.admin();

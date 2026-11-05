@@ -43,7 +43,6 @@ public final class CommandVisibilityHarness {
                         "tpaccept",
                         "tpdeny",
                         "tpcancel",
-                        "staff",
                         "quests",
                         "vapeecore",
                         "core",
@@ -70,8 +69,9 @@ public final class CommandVisibilityHarness {
                     "independent default-player visibility: " + label);
         check(
                 !visible.contains("profile")
-                        && visible.containsAll(Set.of("staff", "core", "vapeecore", "coins")),
-                "profile cosmetic exception does not hide public composite roots");
+                        && visible.containsAll(Set.of("core", "vapeecore", "coins"))
+                        && !visible.contains("staff"),
+                "private staff root is hidden while public core and coins remain visible");
         user.attachment.setPermission("vapeecore.utility.fly", true);
         visible = f.filtered(user);
         check(
@@ -113,6 +113,11 @@ public final class CommandVisibilityHarness {
                 "OP uses actual Bukkit permission defaults");
         op.attachment.setPermission("vapeecore.moderation.ban", false);
         check(!f.filtered(op).contains("ban"), "explicit Bukkit denial overrides the OP default");
+        check(!f.filtered(op).contains("staff"), "OP alone does not imply the explicit panel permission");
+        user.attachment.setPermission(dev.vapee.core.staff.StaffPanel.PERMISSION, true);
+        check(f.filtered(user).contains("staff"), "panel permission offers staff; group eligibility stays at execution");
+        user.attachment.setPermission(dev.vapee.core.staff.StaffPanel.PERMISSION, false);
+        check(!f.filtered(user).contains("staff"), "panel permission revoke removes the root without a descriptor gate");
         var future = f.command("future", f.plugin, "future.permission");
         f.commands.put("future", future);
         user.attachment.setPermission("future.permission", true);

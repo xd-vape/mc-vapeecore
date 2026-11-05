@@ -355,7 +355,7 @@ public final class CommandUsageHarness {
             {"core.quest.usage", "/core quest force", "[player]"},
             {"daily-quests.command-usage", "/quests", ""},
             {"utility.build.usage", "/build", ""},
-            {"staff.usage", "/staff", "[list]"},
+            {"staff.usage", "/staff", ""},
             {"tpa.usage-send", "/tpa", "<player>"},
             {"tpa.usage-answer", "/tpaccept", "[player]"},
             {"tpa.usage-cancel", "/tpcancel", ""}

@@ -63,6 +63,7 @@ All player-facing system messages must follow VapeeCore's central chat design sy
 - Keep visibility remove-only, check actual command ownership, and preserve unknown/future foreign commands without a global whitelist.
 - Prefer the operator's `spigot.yml` `commands.send-namespaced: false` for namespace duplicates; never rewrite operator files for this.
 - Preserve subcommand completion, usage, chat actions and denial messages as separate contracts.
+- The private `/staff` root stays descriptor-ungated for localized executor denials; its suggestions require `vapeecore.staff.panel`, and execution also requires the current eligible primary staff group.
 
 ### Feature Prefix Styling
 
@@ -105,7 +106,7 @@ Use `docs/development/chat-design-system.md` as the detailed reference.
 - Preserve interactive Component click and hover events.
 - Keep the prefix-free TPA and friend Join Summary delivery contracts.
 - Preserve existing operator-defined message overrides unless explicitly instructed otherwise.
-- Staff HIDDEN affects the public staff roster only; it is not a disguise and must not change chat ranks, names, nametags, scoreboards or tablist appearance.
+- The private Staff panel must preserve external player visibility, chat ranks, names, nametags, scoreboards and tablist appearance; it has no public roster or PUBLIC/HIDDEN status.
 
 If the central message API is missing or insufficient, extend existing infrastructure conservatively rather than duplicating styling.
 

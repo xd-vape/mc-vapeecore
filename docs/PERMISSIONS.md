@@ -7,7 +7,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | Permission | Default | Command/Funktion | Hinweis |
 |---|---:|---|---|
 | `vapeecore.admin` | `op` | `/core reload` und `/core quest force [player]` | Kritisches Owner-Recht; kein Wildcard-Parent für alle VapeeCore-Rechte. |
-| `vapeecore.staff.panel` | `false` | Privates `/staff`-Panel und eigener PUBLIC/HIDDEN-Status | Zusätzlich ist eine aktuelle primäre Gruppe aus `staff.hierarchy.protected-groups` erforderlich. Keine Moderationsrechte als Children. `/staff list` ist öffentlich und benötigt diesen Node nicht. |
+| `vapeecore.staff.panel` | `false` | Privates `/staff`-Panel | Zusätzlich ist eine aktuelle primäre Gruppe aus `staff.hierarchy.protected-groups` erforderlich. Keine Moderationsrechte als Children. Root-Vorschläge benötigen diesen Node; die Root bleibt im Descriptor ohne Gate für die lokalisierte Executor-Ablehnung. Keine öffentliche Teamliste. |
 | `vapeecore.lobby.spawn` | `true` | `/spawn` | Teleport zum konfigurierten Lobby-Spawn. |
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |

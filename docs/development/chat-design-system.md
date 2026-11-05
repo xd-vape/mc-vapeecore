@@ -90,7 +90,8 @@ Bestehende Keys und ihre platzhalterfreien Denial-Verträge bleiben erhalten.
 Self-/Others-Rechte, Staff-Target-Hierarchie, Activity-Sperren, Player-only,
 Argument-/Datenfehler und GUI-/Session-Fehler bleiben eigenständige Rückmeldungen.
 Beim StaffPanel müssen weiterhin der Panel-Node und die aktuelle primäre
-Staff-Gruppe gemeinsam vorliegen; `/staff list` bleibt öffentlich.
+Staff-Gruppe gemeinsam vorliegen. `/staff` öffnet nur das private Panel;
+`/staff list` und andere Argumente liefern ausschließlich kompakte Usage.
 
 Bukkit/Paper kann eine Descriptor-Permission bereits vor dem Executor prüfen.
 Diese Ablehnung gehört der Plattform und verwendet gegebenenfalls deren Text.
@@ -149,6 +150,12 @@ Start ebenfalls vollständige Kataloge auf die Platte. Ein exakter Vergleich
 mit dem aktuell deklarierten gebündelten Wert erkennt solche unveränderten
 Defaults; dafür gilt ebenfalls die zentrale Komposition. Abweichende Texte und
 Farben bleiben maßgeblich, ohne historische Standardtexte heuristisch zu erraten.
+Step 06D.1 erkennt zusätzlich ausschließlich die beiden exakten alten EN-/DE-Werte
+von `staff.usage` aus unveränderten kopierten Katalogen und rendert dafür die neue
+`/staff`-Usage. Absichtlich formatierte oder anders formulierte Operator-Texte
+bleiben vollständig erhalten, auch wenn ihr Wortlaut veraltet ist. Die alten
+Roster-/Status-Schlüssel bleiben zur Katalogkompatibilität ungenutzt vorhanden;
+ihre Overrides können keine entfernte Funktion aktivieren.
 `common.usage`-Overrides bleiben auch bei der gemeinsamen
 Komposition wirksam. Keine Sprachdatei wird migriert oder überschrieben, kein
 neuer Übersetzungsschlüssel und kein zusätzlicher Platzhaltervertrag eingeführt.
@@ -194,9 +201,9 @@ messages.sendRawBlock(viewer,
 
 Kein eigenes NamedTextColor für gemeinsam genutzte Systemfarben und keine zusätzliche Prefix-Implementierung notwendig. Die Delivery-Regel des Features bewusst wählen: normale `send` für den ausdrücklich gewünschten Operator-Wrapper, `sendRaw`/`sendRawBlock` für einen vollständig selbst besessenen Wrapper.
 
-## Staff PUBLIC/HIDDEN
+## Privates Staff-Panel
 
-PUBLIC erlaubt die Aufnahme in die öffentliche Staff-Liste, vorbehaltlich aktueller Staff-Eignung, Online-Session und vorhandener `canSee`-Prüfung. HIDDEN schließt den Spieler aus dieser Liste aus. Der Status ist sessiongebunden; ein berechtigtes privates Panel kann Hidden-Staff weiterhin anzeigen. Es handelt sich nicht um einen Disguise und nicht um einen Unsichtbarkeits-/Moderations-Bypass. Rang, Prefix, Chat, Name, Nametag, Scoreboard und Tablist dürfen davon nicht verändert werden.
+Die öffentliche `/staff list`-Ausgabe und der ausschließlich dafür verwendete PUBLIC/HIDDEN-Schalter sind entfernt. Das private Panel zeigt weiterhin alle für den berechtigten Betrachter sichtbaren Staff-Mitglieder und verfügbare Spielerziele unter den bestehenden `canSee`-, Hierarchie-, Permission- und Session-Prüfungen. Rang, Prefix, Chat, Name, Nametag, Scoreboard, Tablist und externe Sichtbarkeit werden nicht verändert. Der entfernte Status-Slot bleibt leer; Navigation und Moderationsaktionen behalten ihre Positionen.
 
 ## Regression und Architekturregel
 

@@ -31,18 +31,18 @@ import org.bukkit.event.player.*;
 import org.bukkit.inventory.*;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Small roster/action presentation owned by ModerationModule; all moderation rules stay in their executors. */
+/** Private staff/action presentation owned by ModerationModule; moderation rules stay in their executors. */
 public final class StaffPanel implements TabExecutor, Listener {
     public static final String PERMISSION = "vapeecore.staff.panel";
-    public enum Action { PREVIOUS, MODE, REFRESH, STATUS, CLOSE, PAGE, NEXT, TARGET, BACK, TELEPORT, HISTORY, WARN, MUTE, KICK }
+    public enum Action { PREVIOUS, MODE, REFRESH, CLOSE, PAGE, NEXT, TARGET, BACK, TELEPORT, HISTORY, WARN, MUTE, KICK }
     public static final MenuLayout<Action> ROSTER_LAYOUT = MenuLayout.builder(27, Action.class)
             .content(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)).emptyState(13)
             .button(Action.PREVIOUS, 18).button(Action.MODE, 19).button(Action.REFRESH, 20)
-            .setting(Action.STATUS, 22).button(Action.CLOSE, 24).button(Action.PAGE, 25).button(Action.NEXT, 26).build();
+            .button(Action.CLOSE, 24).button(Action.PAGE, 25).button(Action.NEXT, 26).build();
     public static final MenuLayout<Action> TARGET_LAYOUT = MenuLayout.builder(27, Action.class)
             .button(Action.TARGET, 4).button(Action.TELEPORT, 10).button(Action.HISTORY, 11)
             .button(Action.WARN, 12).button(Action.MUTE, 14).button(Action.KICK, 15)
-            .button(Action.BACK, 18).setting(Action.STATUS, 22).button(Action.CLOSE, 26).build();
+            .button(Action.BACK, 18).button(Action.CLOSE, 26).build();
 
     private final StaffHierarchyService hierarchy;
     private final Function<UUID, Optional<RankInfo>> ranks;
@@ -57,7 +57,6 @@ public final class StaffPanel implements TabExecutor, Listener {
     private final BiConsumer<Player, CommandRequest> commands;
     private final Logger logger;
     private final Map<UUID, Binding> views = new HashMap<>();
-    private final Map<UUID, Player> hidden = new HashMap<>();
     private final Consumer<Player> localeChanges = player -> { if (current(player)) refresh(player.getUniqueId()); };
     private boolean active = true;
 
@@ -108,33 +107,17 @@ public final class StaffPanel implements TabExecutor, Listener {
         return player != null && player.isOnline() && onlinePlayer.apply(player.getUniqueId()) == player;
     }
 
-    /** Public roster eligibility only; never an appearance, rank, nametag or tablist disguise. */
-    public boolean isPublic(UUID id) { return !hidden.containsKey(id) || hidden.get(id) != onlinePlayer.apply(id); }
-
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!active || !runtime.getAsBoolean()) return true;
-        if (args.length == 1 && args[0].equalsIgnoreCase("list")) { publicRoster(sender); return true; }
         if (args.length != 0) { SocialChannel.STAFF.send(messages, sender,
-                messages.usage(sender, "staff.usage", "/staff", "[list]")); return true; }
+                messages.usage(sender, "staff.usage", "/staff", "")); return true; }
         if (!(sender instanceof Player player)) { SocialChannel.STAFF.send(messages, sender, tr("common.inventory-player-only")); return true; }
         open(player, StaffPanelHolder.View.STAFF, 0, null);
         return true;
     }
 
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
-        return active && runtime.getAsBoolean() && args.length == 1 && "list".startsWith(args[0].toLowerCase(Locale.ROOT))
-                ? List.of("list") : List.of();
-    }
-
-    private void publicRoster(CommandSender viewer) {
-        List<Component> names = onlinePlayers.get().stream().filter(this::current).filter(this::staff)
-                .filter(p -> isPublic(p.getUniqueId())).filter(p -> !(viewer instanceof Player v) || v.canSee(p))
-                .sorted(Comparator.comparing(Player::getName, String.CASE_INSENSITIVE_ORDER).thenComparing(p -> p.getUniqueId().toString()))
-                .map(p -> rank(p).map(r -> r.displayComponent().append(Component.space())).orElse(Component.empty())
-                        .append(playerName(p))).toList();
-        Component list = names.isEmpty() ? tr("staff.roster-empty")
-                : Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Component.text(", ", NamedTextColor.GRAY)), names);
-        SocialChannel.STAFF.send(messages, viewer, tr("staff.roster", Map.of("players", list)));
+        return List.of();
     }
 
     private boolean open(Player viewer, StaffPanelHolder.View view, int page, Player selected) {
@@ -237,11 +220,6 @@ public final class StaffPanel implements TabExecutor, Listener {
             }
             place(viewer, contents, actions, layout, Action.BACK, Material.ARROW, tr("common.back"));
         }
-        int statusSlot = layout.slot(Action.STATUS);
-        contents[statusSlot] = heads.apply(viewer.getUniqueId(), item(viewer, Material.PLAYER_HEAD,
-                tr(isPublic(viewer.getUniqueId()) ? "staff.status-public" : "staff.status-hidden"), List.of(
-                        tr("staff.status-scope"), tr(isPublic(viewer.getUniqueId()) ? "staff.hide-hint" : "staff.public-hint"))));
-        actions.put(statusSlot, Action.STATUS);
         place(viewer, contents, actions, layout, Action.CLOSE, Material.BARRIER, tr("common.close"));
         binding.inventory.setContents(contents);
         binding.holder.content(new StaffPanelHolder.Content(view, page, selected, targets, actions));
@@ -250,7 +228,6 @@ public final class StaffPanel implements TabExecutor, Listener {
     private ItemStack head(Player viewer, Player target) {
         List<Component> lore = new ArrayList<>();
         lore.add(tr("staff.rank", Map.of("rank", rank(target).map(RankInfo::displayComponent).orElse(tr("staff.rank-unavailable")))));
-        if (staff(target)) lore.add(tr(isPublic(target.getUniqueId()) ? "staff.member-public" : "staff.member-hidden"));
         lore.add(tr(CAPABILITIES.stream().anyMatch(a -> allowed(viewer, target, a)) ? "staff.select" : "staff.no-actions"));
         return heads.apply(target.getUniqueId(), item(viewer, Material.PLAYER_HEAD, playerName(target), lore));
     }
@@ -300,10 +277,6 @@ public final class StaffPanel implements TabExecutor, Listener {
         Player viewer = binding.viewer;
         switch (action) {
             case CLOSE -> closeOwned(viewer.getUniqueId());
-            case STATUS -> {
-                if (!hidden.remove(viewer.getUniqueId(), viewer)) hidden.put(viewer.getUniqueId(), viewer);
-                refreshAll();
-            }
             case MODE -> open(viewer, content.view() == StaffPanelHolder.View.STAFF ? StaffPanelHolder.View.PLAYERS : StaffPanelHolder.View.STAFF, 0, null);
             case PREVIOUS -> open(viewer, content.view(), Math.max(0, content.page() - 1), null);
             case NEXT -> open(viewer, content.view(), content.page() + 1, null);
@@ -366,12 +339,10 @@ public final class StaffPanel implements TabExecutor, Listener {
         Player leaving = event.getPlayer();
         Binding bound = views.get(leaving.getUniqueId());
         if (bound != null && bound.viewer == leaving) views.remove(leaving.getUniqueId(), bound);
-        hidden.remove(leaving.getUniqueId(), leaving);
         nextTick.accept(() -> { if (active && runtime.getAsBoolean()) refreshAll(); });
     }
     @EventHandler public void onJoin(PlayerJoinEvent event) {
         if (!current(event.getPlayer())) return;
-        hidden.remove(event.getPlayer().getUniqueId());
         nextTick.accept(() -> { if (active && runtime.getAsBoolean()) refreshAll(); });
     }
     @EventHandler public void onWorld(PlayerChangedWorldEvent event) {
@@ -405,7 +376,7 @@ public final class StaffPanel implements TabExecutor, Listener {
             try { closeOwned(id); }
             catch (RuntimeException exception) { if (failure == null) failure = exception; else if (failure != exception) failure.addSuppressed(exception); }
         }
-        views.clear(); hidden.clear();
+        views.clear();
         if (failure != null) throw failure;
     }
 

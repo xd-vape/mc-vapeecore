@@ -72,7 +72,7 @@ public final class ChatPresentationHarness {
         f.open(viewer);f.select(viewer,target);f.click(viewer,StaffPanel.TARGET_LAYOUT.slot(StaffPanel.Action.WARN));f.drain();Component suggestion=viewer.messages.getLast();
         check(plain(suggestion).startsWith(prefix(locale)+" ")&&events(suggestion).stream().anyMatch(event->event.action()==ClickEvent.Action.SUGGEST_COMMAND&&event.value().equals("/warn "+target.id+" ")),"Staff suggestion heading and original UUID SUGGEST_COMMAND preserved");
         check(events(suggestion).stream().noneMatch(event->event.action()==ClickEvent.Action.RUN_COMMAND),"staff text input does not run a sanction");
-        f.list(target);check(plain(target.messages.getLast()).startsWith(prefix(locale)+" ")&&plain(target.messages.getLast()).contains("Viewer"),"public roster uses Staff heading while retaining scope");
+        f.list(target);check(plain(target.messages.getLast()).equals(prefix(locale)+" "+(locale.equals(Locale.GERMANY)?"Verwendung: /staff":"Usage: /staff")),"retired staff list uses only localized compact usage with the Staff heading");
     }
     private static void help(Locale locale)throws Exception{
         var f=new ModerationTestSupport.Fixture();f.staff.locale=locale;f.staff.allowAll=false;f.staff.permissions.clear();var renderer=new CommandHelpRenderer(messages(f));

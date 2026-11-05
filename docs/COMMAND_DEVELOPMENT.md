@@ -76,8 +76,17 @@ tree first; the listener rechecks owned VapeeCore roots with
 `Command.testPermissionSilent(player)`, which uses effective Bukkit permissions.
 There is no rank/group lookup or complete root whitelist. Future registered roots
 therefore work through their declared permissions. Intentionally public composite
-roots (`staff`, `vapeecore`/`core`) retain their lack of a base permission; `coins`
+roots (`vapeecore`/`core`) retain their lack of a base permission; `coins`
 retains its public base permission, independently of its admin subcommands.
+
+The private `staff` root is the explicit executor-denial exception: it has no
+descriptor permission so manual execution receives the localized Staff/Team denial.
+The listener requires effective `vapeecore.staff.panel` for its suggestions; the
+executor additionally requires the current eligible primary staff group and its
+existing runtime/session checks. The listener does not look up groups. `/staff`
+opens only the private panel. Every nonempty argument sequence, including the
+retired `list`, returns compact `/staff` usage without opening UI or listing names;
+there are no subcommand suggestions.
 
 Default cosmetics hide Bukkit `?`, `help`, `about`, `version`, `ver`, `plugins`,
 `pl` and the actual LuckPerms root/aliases, including `permission`. They remain

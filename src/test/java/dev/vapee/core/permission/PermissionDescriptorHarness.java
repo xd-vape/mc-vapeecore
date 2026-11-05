@@ -25,7 +25,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("tpaccept", new Root("vapeecore.tpa.use", List.of(), "/tpaccept [player]")),
             Map.entry("tpdeny", new Root("vapeecore.tpa.use", List.of(), "/tpdeny [player]")),
             Map.entry("tpcancel", new Root("vapeecore.tpa.use", List.of(), "/tpcancel")),
-            Map.entry("staff", new Root("", List.of(), "/staff [list]")),
+            Map.entry("staff", new Root("", List.of(), "/staff")),
             Map.entry("quests", new Root("vapeecore.quest.use", List.of(), "/quests")),
             Map.entry("mute", new Root("vapeecore.moderation.mute", List.of(), "/mute <player|uuid> <duration|permanent> <reason...>")),
             Map.entry("unmute", new Root("vapeecore.moderation.unmute", List.of(), "/unmute <player|uuid> [reason...]")),

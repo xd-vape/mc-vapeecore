@@ -1,5 +1,7 @@
 package dev.vapee.core.permission;
 
+import dev.vapee.core.staff.StaffPanel;
+
 import org.bukkit.command.Command;
 import org.bukkit.command.PluginIdentifiableCommand;
 import org.bukkit.command.defaults.BukkitCommand;
@@ -59,6 +61,9 @@ public final class CommandVisibilityListener implements Listener {
                             if (command instanceof PluginIdentifiableCommand identified
                                     && identified.getPlugin() == owner) {
                                 if (!command.testPermissionSilent(player)) return true;
+                                // Keep the descriptor ungated so execution can deliver localized denials.
+                                if (command.getName().equalsIgnoreCase("staff")
+                                        && !player.hasPermission(StaffPanel.PERMISSION)) return true;
                                 return settings.hideProfile()
                                         && !operator
                                         && command.getName().equalsIgnoreCase("profile");

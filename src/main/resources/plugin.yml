@@ -29,8 +29,8 @@ commands:
     usage: /tpcancel
     permission: vapeecore.tpa.use
   staff:
-    description: Open the staff panel or view the public staff roster
-    usage: /staff [list]
+    description: Open the private staff panel
+    usage: /staff
   navigator:
     description: Edit and preview the Navigator in game
     usage: /navigator help
@@ -196,7 +196,7 @@ permissions:
     description: Send and answer consensual player teleport requests
     default: true
   vapeecore.staff.panel:
-    description: Allows eligible staff to open the private panel and change their session roster visibility; grants no moderation actions
+    description: Allows eligible staff to open the private panel; grants no moderation actions
     default: false
   vapeecore.quest.use:
     description: Allows viewing your daily quests

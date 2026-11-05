@@ -927,12 +927,12 @@ activity:
 # MODERATION
 # ==================================================
 
-# Staff Panel and Public Roster
+# Private Staff Panel (unused public-roster/status keys retained for catalog compatibility)
 staff:
   prefix: "[Staff]"
   title: "Staff Panel"
   target-title: "Staff Actions"
-  usage: "Use /staff to open the panel or /staff list for the public team list."
+  usage: "Usage: /staff"
   denied: "The private staff panel requires an eligible staff primary group and panel permission."
   roster: "Online team: <players>"
   roster-empty: "No staff are publicly listed right now."

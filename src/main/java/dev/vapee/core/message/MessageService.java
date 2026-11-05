@@ -67,7 +67,11 @@ public final class MessageService {
         String live = snapshot.live().getOrDefault(language, java.util.Map.of()).get(legacyKey);
         String bundled = snapshot.bundled().getOrDefault(language, java.util.Map.of()).get(legacyKey);
         // Startup copies the bundled catalog to disk too; an unchanged declared default is not custom wording.
-        if (live != null && !live.equals(bundled))
+        // Step 06D.1 retires only these exact copied staff defaults; deliberate overrides remain complete.
+        boolean copiedStaffDefault = legacyKey.equals("staff.usage") && (language == dev.vapee.core.i18n.Language.GERMAN
+                ? "Mit /staff öffnest du das Panel, mit /staff list die öffentliche Teamliste."
+                : "Use /staff to open the panel or /staff list for the public team list.").equals(live);
+        if (live != null && !live.equals(bundled) && !copiedStaffDefault)
             return dev.vapee.core.i18n.Translations.tr(legacyKey).colorIfAbsent(MessageStyle.TEXT);
         return MessageStyle.usage(command, arguments);
     }
