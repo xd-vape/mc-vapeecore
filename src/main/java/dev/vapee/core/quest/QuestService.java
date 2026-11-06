@@ -23,6 +23,7 @@ import java.util.logging.Logger;
  */
 public final class QuestService {
     private final java.util.Set<QuestChangeListener> changeListeners = new java.util.LinkedHashSet<>();
+    private final Set<QuestProgressListener> progressListeners = new LinkedHashSet<>();
 
 
     private static final String REWARD_REASON_PREFIX = "quest:";
@@ -191,6 +192,9 @@ public final class QuestService {
 
         PlayerQuestState state = player.get().getQuestState();
         List<String> completedQuestIds = new ArrayList<>();
+        Object assignments = state.assignmentToken();
+        Object catalog = definitionRegistry.snapshotById();
+        List<String> increasedQuestIds = new ArrayList<>();
         List<String> rewardPendingQuestIds = new ArrayList<>();
         List<String> reachedQuestIds = new ArrayList<>();
         int updatedQuests = 0;
@@ -242,6 +246,7 @@ public final class QuestService {
                 newProgress = currentProgress + applied;
             }
 
+            if (newProgress > currentProgress) increasedQuestIds.add(definition.id());
             if (newProgress < definition.target()) {
                 state.update(progress.with(newProgress, QuestStatus.ACTIVE));
                 updatedQuests++;
@@ -273,13 +278,27 @@ public final class QuestService {
         if (updatedQuests == 0 && !rewardAttempted) {
             return QuestProgressResult.noChange();
         }
-        return QuestProgressResult.processed(
+        QuestProgressResult result = QuestProgressResult.processed(
                 updatedQuests,
                 completedQuestIds,
                 rewardPendingQuestIds,
                 reachedQuestIds
         );
+        if (!increasedQuestIds.isEmpty()) {
+            var increased = List.copyOf(increasedQuestIds);
+            for (var listener : List.copyOf(progressListeners)) {
+                try { listener.onProgress(validatedPlayerId, assignments, catalog, increased, result); }
+                catch (RuntimeException failure) {
+                    try { logger.log(Level.WARNING, "Quest progress observer failed; processed progress and rewards are retained.", failure); }
+                    catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+                }
+            }
+        }
+        return result;
     }
+
+    void addProgressListener(QuestProgressListener listener) { progressListeners.add(Objects.requireNonNull(listener)); }
+    void removeProgressListener(QuestProgressListener listener) { progressListeners.remove(listener); }
 
     public QuestProgressResult retryPendingRewards(UUID playerId) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");

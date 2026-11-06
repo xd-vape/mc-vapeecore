@@ -907,6 +907,11 @@ daily-quests:
 
 quests:
 
+  # Temporary progress HUD (no chat prefix)
+  hud:
+    progress: "<vc_text><quest> <vc_muted>·</vc_muted> <progress><vc_muted>/</vc_muted><target> <vc_muted>·</vc_muted> <percentage>"
+    percentage: "<value>%"
+
   # General
   feedback:
     complete: "<green>Daily quest complete: <white><quest></white>\n<gold>+<coins> Coins</gold></green>"

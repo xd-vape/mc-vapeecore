@@ -119,6 +119,7 @@ public final class QuestModule implements CoreModule {
     private void cleanup(RuntimeResources resources, RuntimeException failure) {
         resources.seeding = false;
         resources.reporter.silence();
+        cleanupHud(resources, failure);
         cleanupMovement(resources, failure);
         if (resources.task != null && cancelTask(resources.task, failure)) resources.task = null;
         // Failed startup never earns progress. Normal shutdown samples before persistence.
@@ -180,6 +181,58 @@ public final class QuestModule implements CoreModule {
     public QuestDefinitionRegistry getDefinitionRegistry() { return activeRuntime().registry; }
     public QuestService getQuestService() { return activeRuntime().service; }
     public QuestProgressReporter getProgressReporter() { return activeRuntime().reporter; }
+
+    /** Bind generic quest presentation after the existing Lobby and Activity owners are available. */
+    public void startHud(LobbyPlayerStateService lobby, ActivityService activities) {
+        Objects.requireNonNull(lobby);Objects.requireNonNull(activities);
+        RuntimeResources resources = activeRuntime();
+        if (resources.hud != null) throw new IllegalStateException("Quest HUD is already bound or awaiting cleanup");
+        resources.hudLobby = lobby;resources.hudActivities = activities;
+        resources.hud = new QuestProgressHud(resources.players, resources.service, resources.registry, messages,
+                plugin.getServer()::getPlayer, id -> !lobby.isBuildMode(id) && !activities.isParticipating(id),
+                Bukkit::getCurrentTick, () -> owns(resources) && resources.hudReady, plugin.getLogger());
+        resources.hudForeground = resources.hud::foreground;
+        try {
+            resources.hudProgressPending = true;resources.service.addProgressListener(resources.hud);
+            resources.hudLobbyPending = true;lobby.addStateListener(resources.hud);
+            resources.hudActivityPending = true;activities.addMembershipListener(resources.hud);
+            resources.hudForegroundPending = true;messages.addActionBarObserver(resources.hudForeground);
+            plugin.getServer().getPluginManager().registerEvents(resources.hud, plugin);
+            resources.hudTask = plugin.getServer().getScheduler().runTaskTimer(plugin,
+                    () -> { if (owns(resources) && resources.hudReady) resources.hud.tick(); },
+                    QuestProgressHud.UPDATE_TICKS, QuestProgressHud.UPDATE_TICKS);
+            resources.hudReady = true;
+        } catch (RuntimeException failure) { cleanupHud(resources, failure);throw failure; }
+    }
+
+    private void cleanupHud(RuntimeResources resources, RuntimeException failure) {
+        resources.hudReady = false;
+        if (resources.hud == null) return;
+        if (resources.hudTask != null && cancelTask(resources.hudTask, failure)) resources.hudTask = null;
+        try { resources.hud.close(); }
+        catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        boolean unregistered = unregister(resources.hud, failure);
+        if (resources.hudProgressPending) {
+            try { resources.service.removeProgressListener(resources.hud);resources.hudProgressPending = false; }
+            catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (resources.hudForegroundPending) {
+            try { messages.removeActionBarObserver(resources.hudForeground);resources.hudForegroundPending = false; }
+            catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (resources.hudLobbyPending) {
+            try { resources.hudLobby.removeStateListener(resources.hud);resources.hudLobbyPending = false; }
+            catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (resources.hudActivityPending) {
+            try { resources.hudActivities.removeMembershipListener(resources.hud);resources.hudActivityPending = false; }
+            catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (resources.hud.released() && resources.hudTask == null && unregistered && !resources.hudProgressPending
+                && !resources.hudForegroundPending && !resources.hudLobbyPending && !resources.hudActivityPending) {
+            resources.hud = null;resources.hudForeground = null;resources.hudLobby = null;resources.hudActivities = null;
+        }
+    }
 
     /** Bind after the existing module startup sequence has made both borrowed context owners available. */
     public void startMovement(LobbyPlayerStateService lobby, ActivityService activities) {
@@ -296,6 +349,12 @@ public final class QuestModule implements CoreModule {
         private final QuestProgressReporter reporter;
         private final QuestPlaytimeProducer playtime;
         private QuestListener listener;
+        private QuestProgressHud hud;
+        private BukkitTask hudTask;
+        private LobbyPlayerStateService hudLobby;
+        private ActivityService hudActivities;
+        private java.util.function.Consumer<Player> hudForeground;
+        private boolean hudReady, hudProgressPending, hudForegroundPending, hudLobbyPending, hudActivityPending;
         private QuestMovementProducer movement;
         private LobbyPlayerStateService movementLobby;
         private ActivityService movementActivities;
@@ -318,7 +377,7 @@ public final class QuestModule implements CoreModule {
         }
 
         private boolean released() {
-            return task == null && listener == null && movement == null && !finalSamplePending && !flushPending && samplesReleased;
+            return task == null && listener == null && movement == null && hud == null && !finalSamplePending && !flushPending && samplesReleased;
         }
     }
 }

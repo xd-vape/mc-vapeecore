@@ -491,7 +491,7 @@ public final class NavigatorMenu {
             }
             activeInventories.put(player.getUniqueId(), inventory);
             if (!parents.isEmpty() && backHints.add(player.getUniqueId()))
-                player.sendActionBar(messageService.localize(player, tr("navigator.back-hint")).color(NamedTextColor.GRAY));
+                messageService.sendActionBar(player, messageService.localize(player, tr("navigator.back-hint")).color(NamedTextColor.GRAY));
             return true;
         } finally { renderingFor = previousViewer; }
     }

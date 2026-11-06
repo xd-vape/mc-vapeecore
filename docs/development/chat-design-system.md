@@ -174,6 +174,12 @@ Warn-/Mute-Bestätigungen an Moderatoren verwenden einen solchen Block mit genau
 
 Klickbare `[Accept]`, `[Deny]` oder ähnliche Labels sind Aktionen, keine System-Präfixe. Nicht mit dem Prefix-Formatter färben oder ihre RUN_COMMAND-/SUGGEST_COMMAND-Semantik verändern. Aktionen weiterhin serverseitig anhand UUID, Request-ID, Session und effektiven Permissions autorisieren.
 
+## Core-Actionbars und Quest-HUD
+
+Temporäre Quest-HUDs verwenden ebenfalls die zentrale Palette und Lokalisierung, aber keinen Chat-Prefix. `quests.hud.progress` erhält Name/Zahlen als literale Components; ACTIVE-Prozent ist Accent, COMPLETED ist SUCCESS und REWARD_PENDING WARNING. Normale Fortschrittsmeldungen erzeugen keinen Chat-Spam.
+
+Vordergründige Core-Actionbars werden mit `MessageService.sendActionBar(Player, Component)` lokalisiert und zugestellt. Dessen schlanke Observer-Grenze lässt das Quest-HUD vorher freigeben und kurz pausieren; beide Navigator-Ausgaben verwenden sie. Der HUD-eigene niedriger priorisierte Player-Pfad löst diese Vordergrundbenachrichtigung nicht selbst aus. Kein Cleanup löscht fremde Actionbars mit einem leeren Component. Fremde direkte Paket-Ausgaben lassen sich ohne Kooperation nicht vollständig erkennen.
+
 ## Beispiel für ein neues Feature
 
 Nur ein Verwendungsbeispiel, kein implementiertes Party-System. Die betreffenden Übersetzungsschlüssel würde das Feature parallel in beiden Katalogen ergänzen:

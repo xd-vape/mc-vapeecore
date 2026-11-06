@@ -14,6 +14,7 @@ public final class MessageService {
     private final Supplier<String> prefixSupplier;
     private final MiniMessage miniMessage;
     private final dev.vapee.core.i18n.LocalizationService localization;
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> actionBarObservers = new java.util.LinkedHashSet<>();
 
     public MessageService(ConfigService configService) {
         this(Objects.requireNonNull(configService, "configService")::getMessagePrefix);
@@ -38,6 +39,23 @@ public final class MessageService {
         return localization.component(audience, key, placeholders);
     }
     public Component localize(Audience audience, Component component) { return localization.render(audience, component); }
+
+    /** Foreground core actionbars take precedence over a temporary quest HUD. No text clearing or player cache. */
+    public void sendActionBar(org.bukkit.entity.Player player, Component message) {
+        Component localized = localize(Objects.requireNonNull(player), Objects.requireNonNull(message));
+        for (var observer : java.util.List.copyOf(actionBarObservers)) {
+            try { observer.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Actionbar observer failed; foreground delivery continues.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+        player.sendActionBar(localized);
+    }
+
+    public void addActionBarObserver(java.util.function.Consumer<org.bukkit.entity.Player> observer) { actionBarObservers.add(Objects.requireNonNull(observer)); }
+    public void removeActionBarObserver(java.util.function.Consumer<org.bukkit.entity.Player> observer) { actionBarObservers.remove(observer); }
 
     public Component commandDenied(Audience audience) {
         return commandDenied(audience, "common.command-denied");

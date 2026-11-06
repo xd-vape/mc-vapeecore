@@ -426,7 +426,7 @@ public final class NavigatorEditor implements TabExecutor, Listener {
         if (!toolValid(player, target)) throw problem("This selection expired.", "Diese Auswahl ist abgelaufen.");
         var s = session(player); position(player, s, first ? "pos1" : "pos2", at, true); changed(player, s);
     }
-    void toolFeedback(Player player, String english, String german) { player.sendActionBar(Component.text(text(player, english, german), NamedTextColor.GRAY)); }
+    void toolFeedback(Player player, String english, String german) { messages.sendActionBar(player, Component.text(text(player, english, german), NamedTextColor.GRAY)); }
     void toolFailure(Player player, RuntimeException failure) { toolFeedback(player, failure.getMessage(), failure instanceof EditorProblem known ? known.german : failure.getMessage()); }
     boolean toolAuthorized(Player player) { return authorized(player); }
     void toolPermissionLost(Player player) { release(player); }

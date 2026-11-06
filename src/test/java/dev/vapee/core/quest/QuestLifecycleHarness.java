@@ -113,16 +113,17 @@ public final class QuestLifecycleHarness {
                         && !questSource.contains("import dev.vapee.core.permission"),
                 "Quest production code has no Economy, OnlineReward, presentation, rank, or permission dependency");
         String domain = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestService.java"));
-        String foundation = questProductionSource("QuestModule.java", "QuestMovementProducer.java");
+        String foundation = questProductionSource("QuestModule.java", "QuestMovementProducer.java", "QuestProgressHud.java");
         check(!questSource.contains("org.bukkit.command")
                         && !domain.contains("dev.vapee.core.message") && !domain.contains("net.kyori")
                         && !questSource.contains("BlockBreakEvent")
                         && !foundation.contains("PlayerMoveEvent") && !foundation.contains("PlayerJumpEvent")
                         && !foundation.contains("import dev.vapee.core.activity")
                         && !foundation.contains("import dev.vapee.core.lobby"),
-                "Quest domain and foundation stay independent of UI and gameplay hooks outside the movement adapter/composition");
+                "Quest domain and foundation stay independent of UI and gameplay hooks outside the movement/HUD adapters and composition");
         String module = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestModule.java"));
         String movement = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestMovementProducer.java"));
+        String hud = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestProgressHud.java"));
         check(count(module, "import dev.vapee.core.activity") == 1
                         && module.contains("import dev.vapee.core.activity.ActivityService;")
                         && count(module, "import dev.vapee.core.lobby") == 1
@@ -130,8 +131,12 @@ public final class QuestLifecycleHarness {
                         && count(movement, "import dev.vapee.core.activity") == 1
                         && movement.contains("import dev.vapee.core.activity.ActivityMembershipListener;")
                         && count(movement, "import dev.vapee.core.lobby") == 1
-                        && movement.contains("import dev.vapee.core.lobby.player.LobbyPlayerStateListener;"),
-                "movement composition borrows only the two context owners; the adapter imports only their observer contracts");
+                        && movement.contains("import dev.vapee.core.lobby.player.LobbyPlayerStateListener;")
+                        && count(hud, "import dev.vapee.core.activity") == 1
+                        && hud.contains("import dev.vapee.core.activity.ActivityMembershipListener;")
+                        && count(hud, "import dev.vapee.core.lobby") == 1
+                        && hud.contains("import dev.vapee.core.lobby.player.LobbyPlayerStateListener;"),
+                "composition borrows only the two context owners; movement/HUD adapters import only their observer contracts");
         check(!questSource.contains("new QuestDefinition("),
                 "production starts with no concrete quest definition");
     }
@@ -193,8 +198,8 @@ public final class QuestLifecycleHarness {
         String moduleSource = normalizeLineEndings(Files.readString(
                 Path.of("src/main/java/dev/vapee/core/quest/QuestModule.java")
         ));
-        check(count(moduleSource, "runTaskTimer(") == 1,
-                "QuestModule owns exactly one shared scheduler task and no task per player");
+        check(count(moduleSource, "runTaskTimer(") == 2,
+                "QuestModule owns the existing shared flush task and one bounded shared HUD task, never tasks per player");
         // Actual cadence, final sampling/silencing, persistence and independent failed-cancel cleanup.
         QuestModuleLifecycleHarness.assertTaskAndShutdownLifecycle();
         checks += 2;
