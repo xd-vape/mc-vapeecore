@@ -108,17 +108,30 @@ public final class QuestLifecycleHarness {
         String questSource = questProductionSource();
         check(!questSource.contains("import dev.vapee.core.economy")
                         && !questSource.contains("import dev.vapee.core.onlinereward")
-                        && !questSource.contains("import dev.vapee.core.activity")
                         && !questSource.contains("import dev.vapee.core.presentation")
                         && !questSource.contains("import dev.vapee.core.rank")
                         && !questSource.contains("import dev.vapee.core.permission"),
-                "Quest production code has no Economy, OnlineReward, gameplay, presentation, rank, or permission dependency");
+                "Quest production code has no Economy, OnlineReward, presentation, rank, or permission dependency");
         String domain = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestService.java"));
+        String foundation = questProductionSource("QuestModule.java", "QuestMovementProducer.java");
         check(!questSource.contains("org.bukkit.command")
                         && !domain.contains("dev.vapee.core.message") && !domain.contains("net.kyori")
                         && !questSource.contains("BlockBreakEvent")
-                        && !questSource.contains("PlayerMoveEvent"),
-                "QuestService stays independent of UI and feature-specific hooks");
+                        && !foundation.contains("PlayerMoveEvent") && !foundation.contains("PlayerJumpEvent")
+                        && !foundation.contains("import dev.vapee.core.activity")
+                        && !foundation.contains("import dev.vapee.core.lobby"),
+                "Quest domain and foundation stay independent of UI and gameplay hooks outside the movement adapter/composition");
+        String module = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestModule.java"));
+        String movement = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestMovementProducer.java"));
+        check(count(module, "import dev.vapee.core.activity") == 1
+                        && module.contains("import dev.vapee.core.activity.ActivityService;")
+                        && count(module, "import dev.vapee.core.lobby") == 1
+                        && module.contains("import dev.vapee.core.lobby.player.LobbyPlayerStateService;")
+                        && count(movement, "import dev.vapee.core.activity") == 1
+                        && movement.contains("import dev.vapee.core.activity.ActivityMembershipListener;")
+                        && count(movement, "import dev.vapee.core.lobby") == 1
+                        && movement.contains("import dev.vapee.core.lobby.player.LobbyPlayerStateListener;"),
+                "movement composition borrows only the two context owners; the adapter imports only their observer contracts");
         check(!questSource.contains("new QuestDefinition("),
                 "production starts with no concrete quest definition");
     }
@@ -190,11 +203,12 @@ public final class QuestLifecycleHarness {
                 "QuestModule exposes its service and future definition registration boundary");
     }
 
-    private static String questProductionSource() throws IOException {
+    private static String questProductionSource(String... excludedFiles) throws IOException {
         StringBuilder source = new StringBuilder();
         try (Stream<Path> files = Files.walk(Path.of("src/main/java/dev/vapee/core/quest"))) {
             for (Path file : files.filter(path -> path.toString().endsWith(".java")
-                    && path.getParent().equals(Path.of("src/main/java/dev/vapee/core/quest"))).toList()) {
+                    && path.getParent().equals(Path.of("src/main/java/dev/vapee/core/quest"))
+                    && !List.of(excludedFiles).contains(path.getFileName().toString())).toList()) {
                 source.append(Files.readString(file));
             }
         }

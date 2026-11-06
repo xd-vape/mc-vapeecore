@@ -777,11 +777,35 @@ Der frühere Blackjack-Outcome-Producer ist seit Prototype Step 02 entfernt. His
 
 Reload bleibt der siebte Teilnehmer: Prepare verändert nichts, Apply wechselt Config/Registry und schließt Views, Rollback stellt beide Snapshots wieder her. Player-State wird bei Apply nicht ersetzt. Ein später fehlgeschlagener anderer Apply kann Views geschlossen lassen; nächster Open synchronisiert gegen den zurückgerollten State. Dadurch bleiben keine stale Definitionen sichtbar und kein neuer UI-Scheduler wird benötigt.
 
+### Movement Quest Progress (Step 08A)
+
+`QuestMovementProducer` liefert ausschließlich technische Ereignisse an den vorhandenen `QuestProgressReporter`; `QuestService` besitzt weiterhin Assignment, Fortschritt, Completion und Rewards. IDs, Texte, Ziele und Coin-Werte stehen ausschließlich in `daily-quests.yml`. Es werden keine neuen Defaultquests installiert und keine 47-Quest-Konfiguration aktiviert.
+
+| Key | Zählweise |
+| --- | --- |
+| `movement:walk` | Ganze horizontale Blöcke aller gültigen Bodenbewegungen, einschließlich Sprint/Schleichen. |
+| `movement:sprint` | Zusätzliche Sprintstrecke; bei widersprüchlichen Sprint-/Sneak-Flags hat Sneak Vorrang. |
+| `movement:sneak` | Zusätzliche Schleichstrecke. |
+| `movement:jump` | Ein von Paper erkanntes, nicht gecanceltes `PlayerJumpEvent`, bestätigt durch das passende gültige Move-Event. |
+| `movement:rotation_full` | Eine beobachtete Netto-Yaw-Drehung von +360° oder -360°; Gegenbewegungen ziehen ab. |
+
+Die UUID-basierten Messwerte enthalten nur numerische Positionen/Yaw, Tickbudgets, Sprungbestätigung und Streckenreste, keine Player-Referenzen oder zweite Questpersistenz. Ganze Einheiten werden vor dem Reporter-Aufruf aus dem Rest entnommen; dieselbe Event-Endposition verdient keine zweite Gutschrift. Nur aktuell zugewiesene, nicht abgeschlossene Keys werden beobachtet. Das bestehende In-Memory-Profil und der Registry-Katalog sind autoritativ; kein YAML-/Datenbankzugriff im Move-Handler.
+
+Gültige Erdbewegung setzt aktuelle Online-Session, geladenes Profil, NORMAL statt BUILD, keine Activity, Survival/Adventure, keine Fahrzeuge/Flug/Glide/Wasser/Schwimmen/Klettern/Riptide voraus. Strecke braucht zusätzlich Bodenberührung und Richtungsinput. `allowFlight` allein sperrt nichts: Das normale LobbyGlide-Arming bleibt kompatibel. Luftstrecke zählt nicht; echte von Paper erkannte Sprünge werden separat bestätigt. Der Producer verändert weder Events noch Geschwindigkeit, Flug- oder Elytra-Zustand.
+
+Konservative Grenzen: höchstens 1 horizontaler Block pro Segment und Server-Tick, höchstens 1 Block vertikale Änderung pro Segment; größere Versätze werden verworfen. Yaw wird über den kürzesten Übergang normalisiert; mehr als 90° pro Event oder Tick beginnen keine nachträglich geschätzte Drehung. Gegenläufiges Wackeln zählt nicht durch Addition absoluter Winkel. Eine Beobachtungslücke über 40 Ticks rebased. Sprungbestätigung gilt höchstens zwei Ticks, Sprünge werden mindestens fünf Ticks getrennt. Ein wirksames `PlayerVelocityEvent` sperrt 20 Ticks und verwirft alte Reste. Dies ist eine konservative Progress-Quelle, keine vollständige Anti-Cheat-/Physikrekonstruktion; starke Geschwindigkeitsboni und nicht eindeutig beobachtbare Bewegungen können ungezählt bleiben.
+
+Teleport, Welt-/Session-/GameMode-/Flight-/Glide-/Mount-Wechsel, Tod, Respawn, Quit und ungültige Samples verwerfen Messwerte. Die bestehenden `LobbyPlayerStateListener`-/`ActivityMembershipListener`-Callbacks löschen sie auch bei Übergängen ohne Move-Event. `PlayerQuestState.assignmentToken` ist eine ausschließlich flüchtige Identität: Assignment-/Restore-/Clear-Wechsel invalidieren Reste, normale Progress-Writes und Flushes nicht. Ein ausgetauschter Registry-Katalog invalidiert Messungen vor dem nächsten Signal, einschließlich Reload/Rollback. Kein neues Player-YAML-Feld.
+
+Nach `moduleManager.enableAll()` bindet `QuestModule.startMovement` die inzwischen verfügbaren Lobby-/Activity-Owner. Die bestehende Reihenfolge der 27 Module und sieben Reload-Teilnehmer bleibt unverändert. Der Quest-Runtime gehören ein Movement-Listener und die zwei schmalen Observer-Abonnements; kein zusätzlicher Task. Teilweise erfolgte Registrierung wird aufgeräumt; unbestätigte Release-Fehler bleiben im bestehenden Pending-Cleanup und sperren Re-enable bis zum expliziten Disable-Retry. Shutdown stoppt zuerst die Producer-Autorität und flusht danach weiter über die vorhandenen Quest-/Reward-/Player-Owner.
+
+Mehrere YAML-Definitionen desselben Keys erhalten dasselbe Signal mit eigenen Zielwerten. Pending Rewards, Overflow-Ablehnung, erfolgreiche in-memory Coin-Gutschrift und spätere Save-/Retry-Semantik bleiben bei den vorhandenen Services. Ein Producer bucht niemals selbst Coins. Andere syntaktisch gültige Progress-Keys bleiben als zukünftige Integrationspunkte erlaubt.
+
 ## Daily Quest Cycle & Configuration
 
 DailyQuestModule hängt von JavaPlugin, PlayerModule, QuestModule und MessageService ab. Es besitzt daily-quests.yml, DailyQuestConfig, DailyQuestService, Join-Listener, /quests-Executor und TabCompleter, konkretes Menü mit separatem UI-Listener sowie genau einen 1200-Tick-Sync-Task. Kein Save-Task. Enable-Fehler räumen Task, beide Listener, Handler, Menü und Referenzen auf und stellen den vorigen Registry-Katalog wieder her. Disable stoppt den Task, schließt eigene Views, meldet beide Listener ab und entfernt beide Handler. Die Quest Foundation bleibt Owner von Registry, Progress, Completion, Reward-Retry und 100-Tick-Flush.
 
-Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Der eingebaute Producer unterstützt playtime:minute; eine Parser-Allowlist gibt es nicht. blackjack:win bleibt als historischer Key gültig, erhält im Core aber keine Signale mehr. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
+Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Eingebaute Producer unterstützen playtime:minute und die fünf oben dokumentierten movement:-Keys; eine Parser-Allowlist gibt es nicht. blackjack:win bleibt als historischer Key gültig, erhält im Core aber keine Signale mehr. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
 
 ```yaml
 enabled: true
@@ -806,7 +830,7 @@ Die Anzahl täglicher Quest-Zuweisungen (`quests-per-day`), Reset-Zeit, Zeitzone
 
 Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
 
-Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](../reports/OLD/29-quest-completion/QUEST_COMPLETION.md).
+Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Bewegungsmessungen → QuestMovementProducer im QuestModule-Runtime; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](../reports/OLD/29-quest-completion/QUEST_COMPLETION.md).
 
 ### DailyQuest-Reset-Uhr anpassen
 
@@ -1138,7 +1162,7 @@ Historischer Code, Tischschema, PDC-Owner, Clean-Shutdown-/Crash-Grenzen und Tes
 | Invsee-Snapshot, Read-only-Schutz und View-Lifecycle | `InvseeService` und `InvseeInventoryHolder` |
 | Quest Progress Engine | `QuestService` |
 | Quest Definition Domain und Katalog | `QuestDefinition` / `QuestDefinitionRegistry` |
-| Technische Quest Progress Keys | `QuestProgressKey`; playtime:minute im QuestPlaytimeProducer; blackjack:win nur noch historisch ohne Core-Producer |
+| Technische Quest Progress Keys | `QuestProgressKey`; playtime:minute im QuestPlaytimeProducer; movement:walk/sprint/sneak/jump/rotation_full im QuestMovementProducer; blackjack:win nur noch historisch ohne Core-Producer |
 | Player Quest Persistence | `PlayerQuestState`, `PlayerQuestProgress` und `FilePlayerRepository` |
 | Daily-Quest-Anzahl, Reset, Zeitzone und Definitionen | `daily-quests.yml` |
 | Daily-Cycle-Berechnung | `DailyQuestCycleResolver` |

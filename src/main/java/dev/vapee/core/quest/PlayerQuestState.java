@@ -12,6 +12,8 @@ import java.util.TreeMap;
 public final class PlayerQuestState {
 
     private final TreeMap<String, PlayerQuestProgress> activeQuests;
+    // Runtime measurement identity only; never serialized as player progress.
+    private Object assignmentToken = new Object();
 
     private PlayerQuestState(TreeMap<String, PlayerQuestProgress> activeQuests) {
         this.activeQuests = activeQuests;
@@ -55,6 +57,8 @@ public final class PlayerQuestState {
         return List.copyOf(activeQuests.values());
     }
 
+    Object assignmentToken() { return assignmentToken; }
+
     boolean assign(String questId) {
         String validatedQuestId = QuestDefinition.requireValidId(questId);
         if (activeQuests.containsKey(validatedQuestId)) {
@@ -64,6 +68,7 @@ public final class PlayerQuestState {
                 validatedQuestId,
                 new PlayerQuestProgress(validatedQuestId, 0L, QuestStatus.ACTIVE)
         );
+        assignmentToken = new Object();
         return true;
     }
 
@@ -82,6 +87,7 @@ public final class PlayerQuestState {
         }
         activeQuests.clear();
         activeQuests.putAll(replacements);
+        assignmentToken = new Object();
     }
 
     /** Validated snapshot replacement, used by explicit administrative reconciliation and rollback. */
@@ -89,6 +95,7 @@ public final class PlayerQuestState {
         PlayerQuestState validated = of(entries);
         activeQuests.clear();
         activeQuests.putAll(validated.activeQuests);
+        assignmentToken = new Object();
     }
 
     boolean clear() {
@@ -96,6 +103,7 @@ public final class PlayerQuestState {
             return false;
         }
         activeQuests.clear();
+        assignmentToken = new Object();
         return true;
     }
 

@@ -6,6 +6,9 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.reward.RewardModule;
 import dev.vapee.core.reward.RewardService;
 import dev.vapee.core.message.MessageService;
+import dev.vapee.core.activity.ActivityService;
+import dev.vapee.core.lobby.player.LobbyPlayerStateService;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -116,6 +119,7 @@ public final class QuestModule implements CoreModule {
     private void cleanup(RuntimeResources resources, RuntimeException failure) {
         resources.seeding = false;
         resources.reporter.silence();
+        cleanupMovement(resources, failure);
         if (resources.task != null && cancelTask(resources.task, failure)) resources.task = null;
         // Failed startup never earns progress. Normal shutdown samples before persistence.
         if (resources.finalSamplePending) {
@@ -143,7 +147,7 @@ public final class QuestModule implements CoreModule {
         resources.failure = failure;
     }
 
-    private boolean unregister(QuestListener listener, RuntimeException failure) {
+    private boolean unregister(org.bukkit.event.Listener listener, RuntimeException failure) {
         try {
             HandlerList.unregisterAll(listener);
         } catch (RuntimeException exception) {
@@ -176,6 +180,54 @@ public final class QuestModule implements CoreModule {
     public QuestDefinitionRegistry getDefinitionRegistry() { return activeRuntime().registry; }
     public QuestService getQuestService() { return activeRuntime().service; }
     public QuestProgressReporter getProgressReporter() { return activeRuntime().reporter; }
+
+    /** Bind after the existing module startup sequence has made both borrowed context owners available. */
+    public void startMovement(LobbyPlayerStateService lobby, ActivityService activities) {
+        Objects.requireNonNull(lobby);
+        Objects.requireNonNull(activities);
+        RuntimeResources resources = activeRuntime();
+        if (resources.movement != null) throw new IllegalStateException("Movement quests are already bound or awaiting cleanup");
+        resources.movementLobby = Objects.requireNonNull(lobby);
+        resources.movementActivities = Objects.requireNonNull(activities);
+        resources.movement = new QuestMovementProducer(resources.players, resources.registry, resources.reporter,
+                plugin.getServer()::getPlayer, id -> !lobby.isBuildMode(id) && !activities.isParticipating(id),
+                Bukkit::getCurrentTick, () -> owns(resources) && resources.movementReady, plugin.getLogger());
+        try {
+            resources.movementLobbyPending = true;
+            lobby.addStateListener(resources.movement);
+            resources.movementActivityPending = true;
+            activities.addMembershipListener(resources.movement);
+            plugin.getServer().getPluginManager().registerEvents(resources.movement, plugin);
+            resources.movementReady = true;
+        } catch (RuntimeException failure) {
+            cleanupMovement(resources, failure);
+            throw failure;
+        }
+    }
+
+    private void cleanupMovement(RuntimeResources resources, RuntimeException failure) {
+        resources.movementReady = false;
+        if (resources.movement == null) return;
+        resources.movement.clear();
+        boolean unregistered = unregister(resources.movement, failure);
+        if (resources.movementLobbyPending) {
+            try {
+                resources.movementLobby.removeStateListener(resources.movement);
+                resources.movementLobbyPending = false;
+            } catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (resources.movementActivityPending) {
+            try {
+                resources.movementActivities.removeMembershipListener(resources.movement);
+                resources.movementActivityPending = false;
+            } catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        }
+        if (unregistered && !resources.movementLobbyPending && !resources.movementActivityPending) {
+            resources.movement = null;
+            resources.movementLobby = null;
+            resources.movementActivities = null;
+        }
+    }
 
     private RuntimeResources activeRuntime() {
         return Objects.requireNonNull(active ? runtime : null, "QuestModule is not enabled");
@@ -238,11 +290,16 @@ public final class QuestModule implements CoreModule {
 
     // Retired resources, not another player cache; the service borrows the original aggregate owner.
     private final class RuntimeResources {
+        private final PlayerService players;
         private final QuestDefinitionRegistry registry = new QuestDefinitionRegistry();
         private final QuestService service;
         private final QuestProgressReporter reporter;
         private final QuestPlaytimeProducer playtime;
         private QuestListener listener;
+        private QuestMovementProducer movement;
+        private LobbyPlayerStateService movementLobby;
+        private ActivityService movementActivities;
+        private boolean movementReady, movementLobbyPending, movementActivityPending;
         private BukkitTask task;
         private boolean seeding;
         private boolean finalSampling;
@@ -252,6 +309,7 @@ public final class QuestModule implements CoreModule {
         private RuntimeException failure;
 
         private RuntimeResources(PlayerService players, RewardService rewards) {
+            this.players = players;
             service = new QuestService(registry, players, rewards, plugin.getLogger());
             reporter = new QuestProgressReporter(service, messages, plugin.getServer()::getPlayer, plugin.getLogger());
             playtime = new QuestPlaytimeProducer(players, reporter, plugin.getLogger(),
@@ -260,7 +318,7 @@ public final class QuestModule implements CoreModule {
         }
 
         private boolean released() {
-            return task == null && listener == null && !finalSamplePending && !flushPending && samplesReleased;
+            return task == null && listener == null && movement == null && !finalSamplePending && !flushPending && samplesReleased;
         }
     }
 }
