@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.logging.Logger;
 
 public final class DailyQuestConfig {
@@ -66,7 +68,9 @@ public final class DailyQuestConfig {
         }
         YamlConfiguration yaml = new YamlConfiguration();
         try {
-            yaml.load(configFile.toFile());
+            String source = Files.readString(configFile);
+            yaml.loadFromString(source);
+            rejectSelectionNulls(source);
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalStateException("Could not load daily quest configuration at " + configFile, exception);
         }
@@ -93,14 +97,79 @@ public final class DailyQuestConfig {
         ZoneId zone = timezoneSetting.equals(DEFAULT_TIMEZONE)
                 ? ZoneId.systemDefault() : ZoneId.of(timezoneSetting);
         List<QuestDefinition> definitions = readDefinitions(yaml);
+        DailyQuestSelection selection = readSelection(yaml, definitions);
         if (enabled && definitions.isEmpty()) {
             logger.warning("Daily quests are enabled in " + configFile
                     + " but the catalog is empty; no assignments will be made.");
         } else if (enabled && definitions.size() < questsPerDay) {
             logger.warning("Daily quest catalog in " + configFile + " has " + definitions.size()
-                    + " definition(s) for " + questsPerDay + " daily slots; every available quest will be used.");
+                    + " definition(s) for " + questsPerDay + " daily slots; fewer quests may be assigned.");
         }
-        return new State(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions);
+        return new State(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, selection);
+    }
+
+    private DailyQuestSelection readSelection(YamlConfiguration yaml, List<QuestDefinition> definitions) {
+        if (yaml.contains("selection") && !yaml.isConfigurationSection("selection"))
+            throw invalid("selection", "expected a YAML section");
+        Map<String, DailyQuestSelection.Quest> metadata = new LinkedHashMap<>();
+        for (QuestDefinition definition : definitions) {
+            String path = "quests." + definition.id();
+            ConfigurationSection entry = yaml.getConfigurationSection(path);
+            boolean enabled = true;
+            if (entry.contains("enabled")) {
+                if (!(entry.get("enabled") instanceof Boolean flag))
+                    throw invalid(path + ".enabled", "expected a boolean");
+                enabled = flag;
+            }
+            metadata.put(definition.id(), new DailyQuestSelection.Quest(enabled,
+                    optionalIdentifier(entry, path, "category"), optionalIdentifier(entry, path, "group")));
+        }
+        return new DailyQuestSelection(metadata, optionalLimit(yaml, "selection.max-per-category"),
+                optionalLimit(yaml, "selection.max-per-group"));
+    }
+
+    private String optionalIdentifier(ConfigurationSection entry, String path, String key) {
+        if (!entry.contains(key)) return null;
+        String value = requiredString(entry, path, key);
+        try { return DailyQuestSelection.requireIdentifier(value); }
+        catch (IllegalArgumentException exception) { throw invalid(path + "." + key, exception.getMessage()); }
+    }
+
+    private Long optionalLimit(YamlConfiguration yaml, String path) {
+        if (!yaml.contains(path)) return null;
+        Object value = yaml.get(path);
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            long number = ((Number) value).longValue();
+            if (number > 0) return number;
+        }
+        throw invalid(path, "expected a positive whole number");
+    }
+
+    private void rejectSelectionNulls(String source) {
+        // Like ConfigService's strict settings: Bukkit erases explicit nulls, which are not missing legacy fields.
+        var root = new org.yaml.snakeyaml.Yaml().compose(new java.io.StringReader(source));
+        var selection = child(root, "selection");
+        rejectNull(selection, "selection");
+        for (String key : List.of("max-per-category", "max-per-group")) rejectNull(child(selection, key), "selection." + key);
+        if (child(root, "quests") instanceof org.yaml.snakeyaml.nodes.MappingNode quests) {
+            for (var entry : quests.getValue()) {
+                if (entry.getKeyNode() instanceof org.yaml.snakeyaml.nodes.ScalarNode id) {
+                    for (String key : List.of("enabled", "category", "group"))
+                        rejectNull(child(entry.getValueNode(), key), "quests." + id.getValue() + "." + key);
+                }
+            }
+        }
+    }
+
+    private static org.yaml.snakeyaml.nodes.Node child(org.yaml.snakeyaml.nodes.Node node, String key) {
+        if (!(node instanceof org.yaml.snakeyaml.nodes.MappingNode mapping)) return null;
+        return mapping.getValue().stream().filter(tuple -> tuple.getKeyNode() instanceof org.yaml.snakeyaml.nodes.ScalarNode scalar
+                && scalar.getValue().equals(key)).map(org.yaml.snakeyaml.nodes.NodeTuple::getValueNode).findFirst().orElse(null);
+    }
+
+    private void rejectNull(org.yaml.snakeyaml.nodes.Node node, String path) {
+        if (node != null && node.getTag().equals(org.yaml.snakeyaml.nodes.Tag.NULL))
+            throw invalid(path, "explicit null is not a valid selection setting; omit the optional field instead");
     }
 
     private boolean readEnabled(YamlConfiguration yaml) {
@@ -223,7 +292,13 @@ public final class DailyQuestConfig {
     }
 
     public record State(boolean enabled, int questsPerDay, LocalTime resetTime,
-                        String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions) {
+                        String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions,
+                        DailyQuestSelection selection) {
+
+        public State(boolean enabled, int questsPerDay, LocalTime resetTime,
+                     String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions) {
+            this(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, DailyQuestSelection.unrestricted());
+        }
 
         public State {
             if (questsPerDay <= 0) throw new IllegalArgumentException("questsPerDay must be positive");
@@ -231,6 +306,7 @@ public final class DailyQuestConfig {
             Objects.requireNonNull(timezoneSetting, "timezoneSetting");
             Objects.requireNonNull(zone, "zone");
             definitions = List.copyOf(Objects.requireNonNull(definitions, "definitions"));
+            Objects.requireNonNull(selection, "selection");
         }
 
         public static State defaults() {

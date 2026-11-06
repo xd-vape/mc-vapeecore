@@ -133,6 +133,8 @@ public final class DailyQuestConfigHarness {
                     "invalid settings warn without rewriting the administrator file");
             check(config.getState() == prepared, "fallback preparation alone leaves active state unchanged");
 
+            selection(config, file, valid, prepared);
+
             Files.writeString(file, "enabled: true\nquests: {}\n");
             warnings.clear();
             check(config.prepareReloadState().definitions().isEmpty()
@@ -148,5 +150,58 @@ public final class DailyQuestConfigHarness {
     private static void check(boolean condition, String message) {
         checks++;
         if (!condition) throw new AssertionError(message);
+    }
+
+    private static void selection(DailyQuestConfig config, Path file, String legacy, DailyQuestConfig.State active) throws Exception {
+        Files.writeString(file, legacy);
+        var old = config.prepareReloadState();
+        check(old.selection().quest("first").enabled() && old.selection().quest("first").category() == null
+                        && old.selection().quest("first").group() == null && old.selection().maxPerCategory() == null
+                        && old.selection().maxPerGroup() == null,
+                "legacy optional metadata defaults to enabled with no buckets or limits");
+        String metadata = legacy.replace("  first:\n", "  first:\n    enabled: false\n    category: custom_category\n    group: walking\n")
+                + "selection:\n  max-per-category: 3\n  max-per-group: 1\n";
+        Files.writeString(file, metadata);
+        var parsed = config.prepareReloadState();
+        check(parsed.enabled() && parsed.definitions().size() == 2 && !parsed.selection().quest("first").enabled()
+                        && parsed.selection().quest("second").enabled(),
+                "per-quest disable retains every definition and leaves root enable independent");
+        check(parsed.selection().quest("first").category().equals("custom_category")
+                        && parsed.selection().quest("first").group().equals("walking")
+                        && parsed.selection().maxPerCategory() == 3 && parsed.selection().maxPerGroup() == 1,
+                "custom identifiers and both positive limits are parsed without an allowlist");
+        Files.writeString(file, metadata.replace("enabled: true", "enabled: false"));
+        check(!config.prepareReloadState().enabled() && config.prepareReloadState().definitions().size() == 2,
+                "root disable does not delete catalog or metadata");
+        for (String value : List.of("'false'", "'true'", "0", "[]", "{}", "null"))
+            invalidSelection(config, file, legacy.replace("  first:\n", "  first:\n    enabled: " + value + "\n"), "quests.first.enabled", active);
+        for (String key : List.of("category", "group")) {
+            for (String value : List.of("''", "'two words'", "'UPPER'", "'bad.id'", "'bad/key'", "\"bad\\nkey\"", "false", "7", "[]", "{}", "null", "'" + "a".repeat(65) + "'"))
+                invalidSelection(config, file, legacy.replace("  first:\n", "  first:\n    " + key + ": " + value + "\n"), "quests.first." + key, active);
+        }
+        for (String key : List.of("max-per-category", "max-per-group")) {
+            for (String value : List.of("0", "-1", "1.5", "'1'", "true", "[]", "{}", "null", "9223372036854775808"))
+                invalidSelection(config, file, legacy + "selection:\n  " + key + ": " + value + "\n", "selection." + key, active);
+        }
+        for (String value : List.of("false", "'false'", "[]", "1", "null"))
+            invalidSelection(config, file, legacy + "selection: " + value + "\n", "selection", active);
+        Files.writeString(file, legacy + "selection:\n  max-per-group: 9223372036854775807\n");
+        check(config.prepareReloadState().selection().maxPerGroup() == Long.MAX_VALUE, "large positive limits remain safe without narrowing overflow");
+        Files.writeString(file, metadata.replace("test:first", "future:external"));
+        check(config.prepareReloadState().definitions().getFirst().progressKey().equals(dev.vapee.core.quest.QuestProgressKey.of("future:external")),
+                "disabled future progress keys remain valid definitions");
+        check(Files.readString(file).equals(metadata.replace("test:first", "future:external")) && config.getState() == active,
+                "selection parsing neither rewrites YAML nor publishes before apply");
+    }
+
+    private static void invalidSelection(DailyQuestConfig config, Path file, String source, String path, DailyQuestConfig.State active) throws Exception {
+        Files.writeString(file, source);
+        try {
+            config.prepareReloadState();
+            throw new AssertionError("Expected invalid selection at " + path);
+        } catch (IllegalArgumentException expected) {
+            check(expected.getMessage().contains("'" + path + "'"), "invalid field identifies exact YAML path " + path);
+        }
+        check(config.getState() == active && Files.readString(file).equals(source), "invalid selection preserves active state and operator bytes");
     }
 }

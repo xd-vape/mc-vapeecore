@@ -12,14 +12,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public final class DailyQuestSelector {
 
     public List<String> select(UUID playerId, DailyQuestCycleId cycleId,
                                Collection<QuestDefinition> definitions, int requestedCount) {
+        return select(playerId, cycleId, definitions, requestedCount, DailyQuestSelection.unrestricted());
+    }
+
+    public List<String> select(UUID playerId, DailyQuestCycleId cycleId,
+                               Collection<QuestDefinition> definitions, int requestedCount,
+                               DailyQuestSelection selection) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
         DailyQuestCycleId validatedCycleId = Objects.requireNonNull(cycleId, "cycleId");
         Objects.requireNonNull(definitions, "definitions");
+        Objects.requireNonNull(selection, "selection");
         if (requestedCount <= 0) {
             throw new IllegalArgumentException("requestedCount must be positive");
         }
@@ -39,7 +48,22 @@ public final class DailyQuestSelector {
                 .sorted(Comparator.comparing(RankedQuest::digest, Arrays::compareUnsigned)
                         .thenComparing(RankedQuest::id))
                 .toList();
-        return ranked.stream().limit(requestedCount).map(RankedQuest::id).toList();
+        List<String> selected = new ArrayList<>();
+        var categories = new HashMap<String, Integer>();
+        var groups = new HashMap<String, Integer>();
+        for (RankedQuest candidate : ranked) {
+            var metadata = selection.quest(candidate.id());
+            if (!metadata.enabled()) continue;
+            if (metadata.category() != null && selection.maxPerCategory() != null
+                    && categories.getOrDefault(metadata.category(), 0) >= selection.maxPerCategory()) continue;
+            if (metadata.group() != null && selection.maxPerGroup() != null
+                    && groups.getOrDefault(metadata.group(), 0) >= selection.maxPerGroup()) continue;
+            selected.add(candidate.id());
+            if (metadata.category() != null) categories.merge(metadata.category(), 1, Integer::sum);
+            if (metadata.group() != null) groups.merge(metadata.group(), 1, Integer::sum);
+            if (selected.size() == requestedCount) break;
+        }
+        return List.copyOf(selected);
     }
 
     private byte[] digest(UUID playerId, DailyQuestCycleId cycleId, String questId) {

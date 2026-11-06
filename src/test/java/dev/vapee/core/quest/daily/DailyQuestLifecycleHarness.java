@@ -104,6 +104,26 @@ public final class DailyQuestLifecycleHarness {
             }
             check(failed && config.getState() == before && registry.snapshot().equals(oldDefinitions),
                     "invalid definition fails prepare without partial catalog activation");
+
+            String selection = yaml("first", 10).replace("  first:\n", "  first:\n    enabled: false\n    category: movement\n    group: walking\n")
+                    + "selection:\n  max-per-category: 2\n  max-per-group: 1\n";
+            Files.writeString(file, selection);
+            ReloadPlan metadata = DailyQuestModule.prepareReloadPlan(config, registry);
+            check(config.getState() == before && registry.snapshot().equals(oldDefinitions), "metadata reload prepare publishes nothing");
+            metadata.apply();
+            check(!config.getState().selection().quest("first").enabled() && config.getState().selection().maxPerGroup() == 1
+                            && registry.findById("first").isPresent() && registry.snapshot().equals(oldDefinitions),
+                    "metadata apply keeps disabled definitions in the authoritative registry");
+            metadata.rollback();
+            check(config.getState() == before && config.getState().selection().quest("first").enabled()
+                            && config.getState().selection().maxPerGroup() == null && registry.snapshot().equals(oldDefinitions),
+                    "rollback restores enabled flags, limits and definitions together");
+            Files.writeString(file, selection.replace("max-per-group: 1", "max-per-group: '1'"));
+            try { DailyQuestModule.prepareReloadPlan(config, registry); throw new AssertionError("Invalid metadata reload accepted"); }
+            catch (IllegalArgumentException expected) {
+                check(expected.getMessage().contains("'selection.max-per-group'") && config.getState() == before
+                                && registry.snapshot().equals(oldDefinitions), "invalid metadata rejects the whole prepare without changing either active snapshot");
+            }
         } finally {
             Files.deleteIfExists(file);
             Files.deleteIfExists(directory);

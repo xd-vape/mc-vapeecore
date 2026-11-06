@@ -30,6 +30,7 @@ public final class DailyQuestService {
     private final DailyQuestSelector selector;
     private final Logger logger;
     private final Set<UUID> warnedUnknownPending = new HashSet<>();
+    private DailyQuestConfig.State warnedSelection;
 
     public DailyQuestService(PlayerService playerService, QuestService questService,
                              QuestDefinitionRegistry registry,
@@ -79,8 +80,9 @@ public final class DailyQuestService {
         }
         warnedUnknownPending.remove(validatedPlayerId);
 
-        List<String> selected = selector.select(validatedPlayerId, currentCycle,
-                config.definitions(), config.questsPerDay());
+        List<String> selected = select(validatedPlayerId, currentCycle, config);
+        // Match the existing empty-catalog contract: no implicit erasure or cycle advance.
+        if (selected.isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
         QuestAssignmentResult assignment;
         try {
             assignment = questService.replaceAssignments(validatedPlayerId, selected);
@@ -110,7 +112,7 @@ public final class DailyQuestService {
         CorePlayer player = loaded.get();
         if (hasPendingReward(player)) return DailyQuestSyncResult.BLOCKED_PENDING_REWARD;
         var current = cycleResolver.resolve(now, config.zone(), config.resetTime());
-        var selected = selector.select(id, current, config.definitions(), config.questsPerDay());
+        var selected = select(id, current, config);
         var previousCycle = player.getDailyQuestState().cycleId();
         // The full profile write below commits cycle and assignment snapshot together.
         player.getDailyQuestState().setCycleId(current);
@@ -130,6 +132,17 @@ public final class DailyQuestService {
     private boolean hasPendingReward(CorePlayer player) {
         return player.getQuestState().snapshot().values().stream()
                 .anyMatch(progress -> progress.status() == QuestStatus.REWARD_PENDING);
+    }
+
+    private List<String> select(UUID id, DailyQuestCycleId cycle, DailyQuestConfig.State config) {
+        var selected = selector.select(id, cycle, config.definitions(), config.questsPerDay(), config.selection());
+        if (selected.size() < config.questsPerDay() && config.selection().constrained() && warnedSelection != config) {
+            warnedSelection = config;
+            logger.warning("Daily quest selection filled " + selected.size() + " of " + config.questsPerDay()
+                    + " requested slots while respecting quest enabled flags and selection limits."
+                    + " Counts may differ by player/cycle; this warning is emitted once per active configuration snapshot.");
+        }
+        return selected;
     }
 
     private void warnUnknownPendingOnce(UUID playerId, CorePlayer player) {

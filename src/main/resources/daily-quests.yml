@@ -13,5 +13,12 @@ reset:
   time: "00:00"
   timezone: "system"
 
+# Optional selection limits (positive whole numbers); omitted limits are unrestricted:
+# selection:
+#   max-per-category: 3
+#   max-per-group: 1
 # Operator catalog; progress/reward validation remains in DailyQuestConfig and QuestDefinition.
+# Each quest may specify enabled: true (default), category: movement, group: walking.
+# Categories/groups are lowercase technical IDs; omitted metadata does not share a bucket.
+# enabled: false excludes future selection, retaining the definition and current progress/rewards.
 quests: {}

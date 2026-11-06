@@ -11,6 +11,7 @@ import dev.vapee.core.quest.daily.DailyQuestConfig;
 import dev.vapee.core.quest.daily.DailyQuestCycleId;
 import dev.vapee.core.quest.daily.DailyQuestService;
 import dev.vapee.core.quest.daily.DailyQuestSyncResult;
+import dev.vapee.core.quest.daily.DailyQuestSelection;
 import dev.vapee.core.quest.daily.PlayerDailyQuestState;
 import dev.vapee.core.reward.RewardResult;
 import dev.vapee.core.reward.RewardSource;
@@ -40,10 +41,14 @@ public final class DailyQuestServiceHarness {
     private DailyQuestServiceHarness() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         testInitializationSameCycleAndRotation();
         testPendingProtection();
         testDisabledEmptyAndFewerDefinitions();
+        testSelectionLifecycle();
+        testDisabledPending();
+        testEmptySelection();
+        testSelectionPersistence();
         System.out.println("DailyQuestServiceHarness passed " + checks + " checks.");
     }
 
@@ -166,8 +171,9 @@ public final class DailyQuestServiceHarness {
         private final MutableGranter granter = new MutableGranter();
         private final QuestService quests = new QuestService(registry, players, granter, logger());
         private final AtomicReference<DailyQuestConfig.State> config = new AtomicReference<>();
+        private final Logger dailyLogger = logger();
         private final DailyQuestService service = new DailyQuestService(
-                players, quests, registry, config::get, logger()
+                players, quests, registry, config::get, dailyLogger
         );
         private final List<QuestDefinition> definitions;
 
@@ -186,6 +192,12 @@ public final class DailyQuestServiceHarness {
         private void configure(int slots, boolean enabled) {
             config.set(new DailyQuestConfig.State(enabled, slots, LocalTime.MIDNIGHT,
                     "UTC", ZoneId.of("UTC"), definitions));
+        }
+
+        private void selection(DailyQuestSelection rules) {
+            var current = config.get();
+            config.set(new DailyQuestConfig.State(current.enabled(), current.questsPerDay(), current.resetTime(),
+                    current.timezoneSetting(), current.zone(), definitions, rules));
         }
 
         private UUID load(PlayerQuestState quests, PlayerDailyQuestState daily) {
@@ -224,10 +236,127 @@ public final class DailyQuestServiceHarness {
 
     private static final class MemoryRepository implements PlayerRepository {
         private final Map<UUID, CorePlayer> players = new HashMap<>();
+        private boolean fail;
 
         @Override public Optional<CorePlayer> findByUniqueId(UUID id) { return Optional.ofNullable(players.get(id)); }
-        @Override public void save(CorePlayer player) { players.put(player.getUniqueId(), player); }
+        @Override public void save(CorePlayer player) { if (fail) throw new IllegalStateException("test save failure"); players.put(player.getUniqueId(), player); }
         @Override public boolean exists(UUID id) { return players.containsKey(id); }
+    }
+
+    private static void testSelectionLifecycle() {
+        Fixture f = new Fixture(6, 4, true);
+        UUID id = f.load(PlayerQuestState.empty(), PlayerDailyQuestState.uninitialized());
+        f.service.syncPlayer(id, TODAY);
+        var initial = f.state(id).snapshot();
+        var ids = new ArrayList<>(initial.keySet());
+        String retained = ids.getFirst(), disabled = ids.get(1);
+        f.quests.addProgress(id, QuestProgressKey.of("test:" + retained), 2);
+        f.quests.addProgress(id, QuestProgressKey.of("test:" + disabled), 3);
+        f.quests.flushPlayer(id);
+        var progressed = f.state(id).snapshot();
+        var rules = new HashMap<String, DailyQuestSelection.Quest>();
+        for (var def : f.definitions) rules.put(def.id(), new DailyQuestSelection.Quest(def.id().equals(retained), "movement", "walking"));
+        f.selection(new DailyQuestSelection(rules, 1L, 1L));
+        check(f.service.syncPlayer(id, TODAY) == DailyQuestSyncResult.CURRENT && f.state(id).snapshot().equals(progressed) && !f.quests.isDirty(id),
+                "same-cycle metadata reload preserves exact assignments/progress and avoids dirty writes");
+        check(f.registry.findById(disabled).isPresent() && f.quests.getActiveQuests(id).orElseThrow().size() == 4,
+                "disabled assigned definitions remain available to existing views");
+        f.quests.addProgress(id, QuestProgressKey.of("test:" + disabled), 7);
+        check(f.state(id).snapshot().get(disabled).status() == QuestStatus.COMPLETED && f.granter.calls.size() == 1,
+                "disabled same-cycle task still completes through original QuestService");
+        f.quests.addProgress(id, QuestProgressKey.of("test:" + disabled), 100);
+        check(f.granter.calls.size() == 1, "disabled completion cannot pay twice");
+        var beforeForce = f.state(id).snapshot(); var beforeCycle = f.cycle(id);
+        f.repository.fail = true;
+        check(f.service.forcePlayer(id, TOMORROW) == DailyQuestSyncResult.ASSIGNMENT_FAILED && f.state(id).snapshot().equals(beforeForce) && f.cycle(id).equals(beforeCycle),
+                "new-selection force save failure restores old progress and cycle");
+        f.repository.fail = false;
+        check(f.service.forcePlayer(id, TODAY) == DailyQuestSyncResult.ROTATED && f.state(id).snapshot().keySet().equals(java.util.Set.of(retained))
+                        && f.state(id).snapshot().get(retained).progress() == 2 && f.granter.calls.size() == 1,
+                "explicit force adopts metadata selection and preserves overlapping progress without rewards");
+        check(f.service.syncPlayer(id, TOMORROW) == DailyQuestSyncResult.ROTATED && f.state(id).snapshot().keySet().equals(java.util.Set.of(retained))
+                        && f.state(id).snapshot().get(retained).progress() == 0,
+                "normal next-cycle rotation uses new eligibility and limits with the established reset contract");
+    }
+
+    private static void testDisabledPending() {
+        Fixture f = new Fixture(6, 4, true);
+        UUID id = f.load(PlayerQuestState.of(List.of(new PlayerQuestProgress("quest_0", 10, QuestStatus.REWARD_PENDING))),
+                PlayerDailyQuestState.initialized(DailyQuestCycleId.parse("2026-09-21")));
+        f.selection(new DailyQuestSelection(Map.of("quest_0", new DailyQuestSelection.Quest(false, null, null)), null, null));
+        f.granter.outcomes.addLast(RewardStatus.BALANCE_OVERFLOW);
+        var pending = f.state(id).snapshot();
+        check(f.service.forcePlayer(id, TODAY) == DailyQuestSyncResult.BLOCKED_PENDING_REWARD && f.granter.calls.isEmpty(),
+                "force still refuses disabled pending tasks without bypassing retry ownership");
+        check(f.service.syncPlayer(id, TODAY) == DailyQuestSyncResult.BLOCKED_PENDING_REWARD && f.state(id).snapshot().equals(pending)
+                        && f.cycle(id).equals("2026-09-21") && f.granter.calls.size() == 1,
+                "disabled pending definition survives unsuccessful retry and blocks erasure");
+        check(f.service.syncPlayer(id, TODAY) == DailyQuestSyncResult.ROTATED && !f.state(id).snapshot().containsKey("quest_0")
+                        && f.registry.findById("quest_0").isPresent() && f.granter.calls.size() == 2,
+                "successful disabled pending retry allows rotation excluding the old definition");
+        f.service.syncPlayer(id, TODAY);
+        check(f.granter.calls.size() == 2, "disabled pending reward is not duplicated after successful retry");
+    }
+
+    private static void testEmptySelection() {
+        Fixture f = new Fixture(3, 4, true);
+        var rules = new HashMap<String, DailyQuestSelection.Quest>();
+        for (var def : f.definitions) rules.put(def.id(), new DailyQuestSelection.Quest(false, null, null));
+        f.selection(new DailyQuestSelection(rules, null, null));
+        var warnings = new ArrayList<String>();
+        f.dailyLogger.addHandler(new java.util.logging.Handler() {
+            public void publish(java.util.logging.LogRecord record) { warnings.add(record.getMessage()); }
+            public void flush() { } public void close() { }
+        });
+        UUID fresh = f.load(PlayerQuestState.empty(), PlayerDailyQuestState.uninitialized());
+        for (int n = 0; n < 8; n++) check(f.service.syncPlayer(fresh, TODAY) == DailyQuestSyncResult.NO_DEFINITIONS,
+                "all disabled behaves like no selectable catalog, never assignment failure");
+        check(f.cycle(fresh) == null && f.state(fresh).isEmpty() && !f.quests.isDirty(fresh) && warnings.size() == 1,
+                "empty selection advances no cycle, writes no state and warns once per snapshot");
+        UUID existing = f.load(PlayerQuestState.of(List.of(new PlayerQuestProgress("quest_0", 3, QuestStatus.ACTIVE))),
+                PlayerDailyQuestState.initialized(DailyQuestCycleId.parse("2026-09-22")));
+        check(f.service.syncPlayer(existing, TODAY) == DailyQuestSyncResult.CURRENT && f.state(existing).snapshot().get("quest_0").progress() == 3,
+                "all-disabled reload leaves same-cycle tasks intact");
+        check(f.service.syncPlayer(existing, TOMORROW) == DailyQuestSyncResult.NO_DEFINITIONS && f.cycle(existing).equals("2026-09-22")
+                        && f.state(existing).snapshot().get("quest_0").progress() == 3 && warnings.size() == 1,
+                "zero selectable tasks preserves prior state across a boundary like the existing empty-catalog contract");
+        check(f.service.forcePlayer(existing, TOMORROW) == DailyQuestSyncResult.ROTATED && f.state(existing).isEmpty()
+                        && f.cycle(existing).equals("2026-09-23"),
+                "explicit force may reconcile to an empty eligible selection and commit the current cycle");
+        f.selection(new DailyQuestSelection(rules, 1L, null)); f.service.syncPlayer(fresh, TODAY);
+        check(warnings.size() == 2, "a newly published constrained snapshot can issue one fresh diagnostic");
+    }
+
+    private static void testSelectionPersistence() throws Exception {
+        var directory = java.nio.file.Files.createTempDirectory("vapeecore-selection-player-");
+        try {
+            var log = logger(); var repository = new dev.vapee.core.player.repository.FilePlayerRepository(directory, log);repository.initialize();
+            var players = new PlayerService(repository, log); var registry = new QuestDefinitionRegistry();
+            var definitions = List.of(new QuestDefinition("stored", "Stored", "Test", QuestProgressKey.of("test:stored"), 10, 5)); registry.replaceAll(definitions);
+            int[] rewards = {0};
+            var quests = new QuestService(registry, players, (id, amount, source, reason) -> { rewards[0]++;return new RewardResult(RewardStatus.SUCCESS, amount, OptionalLong.of(amount)); }, log);
+            var config = new AtomicReference<>(new DailyQuestConfig.State(true, 4, LocalTime.MIDNIGHT, "UTC", ZoneId.of("UTC"), definitions));
+            var service = new DailyQuestService(players, quests, registry, config::get, log);
+            UUID id = UUID.randomUUID();players.loadPlayer(id, "SelectionPlayer");service.syncPlayer(id, TODAY);quests.addProgress(id, QuestProgressKey.of("test:stored"), 2);quests.flushAllOrThrow();
+            var file = directory.resolve(id + ".yml");byte[] committed = java.nio.file.Files.readAllBytes(file);
+            config.set(new DailyQuestConfig.State(true, 4, LocalTime.MIDNIGHT, "UTC", ZoneId.of("UTC"), definitions,
+                    new DailyQuestSelection(Map.of("stored", new DailyQuestSelection.Quest(false, "movement", "walking")), 1L, 1L)));
+            check(service.syncPlayer(id, TODAY) == DailyQuestSyncResult.CURRENT && java.util.Arrays.equals(committed, java.nio.file.Files.readAllBytes(file)),
+                    "metadata update leaves existing player YAML bytes untouched without migration");
+            players.unloadPlayer(id);players.loadPlayer(id, "SelectionPlayer");
+            check(service.syncPlayer(id, TODAY) == DailyQuestSyncResult.CURRENT && players.getPlayer(id).orElseThrow().getQuestState().snapshot().get("stored").progress() == 2,
+                    "persisted cycle and disabled assignment survive reload through the real file repository");
+            quests.addProgress(id, QuestProgressKey.of("test:stored"), 8);quests.flushAllOrThrow();players.unloadPlayer(id);players.loadPlayer(id, "SelectionPlayer");
+            quests.addProgress(id, QuestProgressKey.of("test:stored"), 100);
+            check(rewards[0] == 1 && players.getPlayer(id).orElseThrow().getQuestState().snapshot().get("stored").status() == QuestStatus.COMPLETED,
+                    "disabled completion persists and cannot pay twice after profile reload");
+            var yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file.toFile());
+            check(yaml.getConfigurationSection("quests").getKeys(false).equals(java.util.Set.of("active", "daily"))
+                            && !java.nio.file.Files.readString(file).contains("walking"), "selection metadata creates no player schema or persistence fields");
+        } finally {
+            try (var files = java.nio.file.Files.list(directory)) { for (var file : files.toList()) java.nio.file.Files.deleteIfExists(file); }
+            java.nio.file.Files.deleteIfExists(directory);
+        }
     }
 
     private static Logger logger() {

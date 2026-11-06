@@ -805,7 +805,7 @@ Mehrere YAML-Definitionen desselben Keys erhalten dasselbe Signal mit eigenen Zi
 
 DailyQuestModule hängt von JavaPlugin, PlayerModule, QuestModule und MessageService ab. Es besitzt daily-quests.yml, DailyQuestConfig, DailyQuestService, Join-Listener, /quests-Executor und TabCompleter, konkretes Menü mit separatem UI-Listener sowie genau einen 1200-Tick-Sync-Task. Kein Save-Task. Enable-Fehler räumen Task, beide Listener, Handler, Menü und Referenzen auf und stellen den vorigen Registry-Katalog wieder her. Disable stoppt den Task, schließt eigene Views, meldet beide Listener ab und entfernt beide Handler. Die Quest Foundation bleibt Owner von Registry, Progress, Completion, Reward-Retry und 100-Tick-Flush.
 
-Die Resource bleibt byte-identisch mit enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}. Betreiber bestimmen Inhalte und Balance selbst. Eingebaute Producer unterstützen playtime:minute und die fünf oben dokumentierten movement:-Keys; eine Parser-Allowlist gibt es nicht. blackjack:win bleibt als historischer Key gültig, erhält im Core aber keine Signale mehr. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
+Die Resource behält die sicheren Werte enabled: false, quests-per-day: 4, reset.time: "00:00", reset.timezone: "system" und quests: {}; neue Auswahloptionen werden nur kommentiert. Betreiber bestimmen Inhalte und Balance selbst. Eingebaute Producer unterstützen playtime:minute und die fünf oben dokumentierten movement:-Keys; eine Parser-Allowlist gibt es nicht. blackjack:win bleibt als historischer Key gültig, erhält im Core aber keine Signale mehr. Das folgende Beispiel ist Dokumentation, kein ausgelieferter Default:
 
 ```yaml
 enabled: true
@@ -831,6 +831,36 @@ Die Anzahl täglicher Quest-Zuweisungen (`quests-per-day`), Reset-Zeit, Zeitzone
 Vor jeder Rotation versucht der Service vorhandene `REWARD_PENDING`-Einträge über `QuestService#retryPendingRewards` erneut. Bleibt ein Pending offen, bleiben alte Assignments und Cycle-ID stehen; eine unbekannte Pending-ID wird nur sparsam gewarnt und muss durch Wiederherstellung ihrer Definition oder bewusste administrative Bereinigung gelöst werden. Ein erfolgreicher Retry erlaubt die Rotation, ohne doppelte Auszahlung. Der Join-Listener läuft bei `HIGHEST` nach `PlayerListener` (`NORMAL`); bei fehlendem CorePlayer überspringt er den Join und der globale Task versucht es später. Daily-Cycle und Assignments werden zusammen im bestehenden `CorePlayer` gespeichert, weil `replaceAssignments` QuestService dirty markiert. Bei einem Hard Crash vor dem Flush kann der alte Cycle wieder erscheinen, aber UUID, Datum und Katalog ergeben erneut dieselbe Auswahl. Legacy-Profile ohne Cycle-ID sind gültig; ungültige optionale Daily-Sections warnen und werden uninitialisiert, während `quests.active` weiter geladen wird.
 
 Ownership: Daily-Anzahl, Reset und Definitionen → daily-quests.yml; Cycle → Resolver; Auswahl → Selector; Assignment/Rotation → DailyQuestService; Fortschritt/Completion/Coins → QuestService und RewardService; Chat → QuestProgressReporter; Playtime-Samples → QuestPlaytimeProducer; Bewegungsmessungen → QuestMovementProducer im QuestModule-Runtime; Spieleransicht → DailyQuestMenu. Kein neues Player-YAML-Feld, Schema, History-File oder Claim-Pfad. FORMATTING.md und historische Phasenberichte bleiben unverändert. Vollständige Verifikation: [QUEST_COMPLETION.md](../reports/OLD/29-quest-completion/QUEST_COMPLETION.md).
+
+### DailyQuest-Auswahl (Step 08A.1)
+
+`DailyQuestConfig.State.selection()` enthält einen unveränderlichen `DailyQuestSelection`-Snapshot mit Metadaten pro ID und optionalen Limits. `QuestDefinition`, Registry, Fortschritt, Rewards und Player-YAML bleiben unverändert. Der bisherige öffentliche sechsteilige State-Konstruktor und der vierteilige Selector-Aufruf bleiben verfügbar und verwenden unbeschränkte Legacy-Auswahl.
+
+```yaml
+selection:
+  max-per-category: 3
+  max-per-group: 1
+quests:
+  walk_100:
+    enabled: true
+    category: movement
+    group: walking
+    name: {en: Small Walk, de: Kleiner Spaziergang}
+    description: {en: Walk 100 blocks., de: Laufe 100 Blöcke.}
+    progress-key: movement:walk
+    target: 100
+    reward-coins: 10
+```
+
+Pro Quest ist `enabled` standardmäßig true. `category` und `group` fehlen standardmäßig; fehlende Werte bilden keinen gemeinsamen Bucket. Technische IDs entsprechen `[a-z0-9][a-z0-9_-]{0,63}`, ohne Allowlist, Whitespace oder automatische Normalisierung. Dieselbe Gruppe gilt katalogweit, auch über unterschiedliche Kategorien. Limits sind positive Ganzzahlen bis Long.MAX_VALUE; fehlt ein Limit oder die gesamte `selection`-Section, ist diese Beschränkung inaktiv. Kategorien/Gruppen allein ändern keine Reihenfolge. Falsch typisierte Werte einschließlich Strings wie `"false"`/`"1"`, ungültige IDs und explizite Nullwerte brechen Prepare mit exaktem YAML-Pfad ab; Live-Dateien werden nicht umgeschrieben. Allgemeine Root-Fallbacks bleiben wie bisher.
+
+Der Selector erhält dieselben SHA-256-Ränge aus UUID, Cycle-ID und Quest-ID sowie den bisherigen ID-Tie-Breaker. Er überspringt deaktivierte Kandidaten und solche, deren explizite Kategorie oder Gruppe ihr Limit bereits erreicht hat. Nur ausgewählte Kandidaten verbrauchen Limits. Es gibt kein Backtracking oder nachträgliches Lockern der Grenzen; eine gültige Auswahl kann kleiner als `quests-per-day` sein und ist unabhängig von YAML-/Map-Reihenfolge. Ein begrenzter Service-Hinweis meldet eine tatsächliche Unterbelegung einmal während eines unveränderten aktiven Config-Snapshots, ohne neue Player-/Cycle-Caches.
+
+Alle Definitionen einschließlich deaktivierter Einträge bleiben registriert und müssen vollständig gültig sein. Laufende Same-Cycle-Assignments behalten IDs und Fortschritt, bleiben in der GUI sichtbar und können normal abschließen. Normaler Reload ersetzt Config/Registry, würfelt aber den laufenden Cycle nicht neu; Rollback stellt Metadaten und Definitionen gemeinsam zurück. Pending Rewards deaktivierter Quests werden vor einer späteren Rotation über den bisherigen Retry aufgelöst; ungelöste Pending-Zustände sperren Rotation und Force weiterhin.
+
+Bei mindestens einem auswählbaren Kandidaten rotiert der nächste Cycle auf die beschränkte Auswahl. Sind alle Kandidaten deaktiviert, verhält sich normaler Sync wie beim bisherigen leeren Katalog: `NO_DEFINITIONS`, keine implizite Löschung und kein Cycle-Fortschritt. Das erhält vorhandenen State auch über die Grenze hinaus, bis Kandidaten verfügbar sind oder bewusst Force genutzt wird. `/core quest force` übernimmt die neue Auswahl sofort, erhält Fortschritt überlappender IDs und kann bei nichtleerem Definitionskatalog auch auf null auswählbare Aufgaben reconciliieren. Pending- und Save-/Rollback-Schutz bleiben dabei unverändert.
+
+Eine Schema-/ConfigEvolution-Migration ist für diese rein optionalen Felder nicht nötig: Version 1 und alle aktiven Resource-Defaults bleiben erhalten; keine 47 Quests werden installiert. Weitere Beispiele und Nachweise stehen im [Step-08A.1-Bericht](../reports/08a1/STEP_08A_1_DAILY_QUEST_SELECTION.md).
 
 ### DailyQuest-Reset-Uhr anpassen
 

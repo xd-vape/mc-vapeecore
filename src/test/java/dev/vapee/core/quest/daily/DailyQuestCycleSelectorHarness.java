@@ -85,6 +85,8 @@ public final class DailyQuestCycleSelectorHarness {
                         .equals(List.of("quest_8", "quest_9", "quest_2", "quest_7")),
                 "fixed next cycle has its own exact deterministic selection");
 
+        selection(selector, firstPlayer, firstCycle, catalog);
+
         System.out.println("DailyQuestCycleSelectorHarness passed " + checks + " checks.");
     }
 
@@ -96,6 +98,66 @@ public final class DailyQuestCycleSelectorHarness {
                     1L, 1L));
         }
         return List.copyOf(values);
+    }
+
+    private static void selection(DailyQuestSelector selector, UUID player, DailyQuestCycleId cycle, List<QuestDefinition> catalog) {
+        var all = selector.select(player, cycle, catalog, 100);
+        var rules = new java.util.HashMap<String, DailyQuestSelection.Quest>();
+        rules.put("quest_7", new DailyQuestSelection.Quest(false, "movement", "walking"));
+        var disabled = new DailyQuestSelection(rules, null, null);
+        check(selector.select(player, cycle, catalog, 4, disabled).equals(all.stream().filter(id -> !id.equals("quest_7")).limit(4).toList()),
+                "disabled highest-ranked ID is skipped using the original SHA ranks");
+        for (var definition : catalog) rules.put(definition.id(), new DailyQuestSelection.Quest(false, null, null));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, null, null)).isEmpty(), "all disabled gives an empty selection");
+        check(!disabled.quest("quest_7").enabled() && disabled.quest("quest_3").enabled(), "selection metadata is an immutable snapshot of its input map");
+        rules.clear();
+        rules.put("quest_7", new DailyQuestSelection.Quest(true, "movement", "walking"));
+        rules.put("quest_3", new DailyQuestSelection.Quest(true, "movement", "walking"));
+        rules.put("quest_1", new DailyQuestSelection.Quest(true, "movement", "rotation"));
+        rules.put("quest_4", new DailyQuestSelection.Quest(true, "playtime", null));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, null, 1L))
+                        .equals(all.stream().filter(id -> !id.equals("quest_3")).limit(4).toList()), "group limit skips a similar task and fills from later SHA ranks");
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, 1L, null))
+                        .equals(all.stream().filter(id -> !id.equals("quest_3") && !id.equals("quest_1")).limit(4).toList()), "category limit spans multiple groups");
+        String extraMovement = all.get(4);
+        rules.put(extraMovement, new DailyQuestSelection.Quest(true, "movement", "sprinting"));
+        var combined = new DailyQuestSelection(rules, 2L, 1L);
+        var chosen = selector.select(player, cycle, catalog, 4, combined);
+        check(chosen.equals(all.stream().filter(id -> !id.equals("quest_3") && !id.equals(extraMovement)).limit(4).toList()), "both limits independently reject candidates and count only selected explicit metadata");
+        var reverse = new ArrayList<>(catalog); java.util.Collections.reverse(reverse);
+        check(chosen.equals(selector.select(player, cycle, reverse, 4, combined)), "constrained selection is independent of YAML order");
+        check(chosen.equals(new DailyQuestSelector().select(player, cycle, catalog, 4, combined)), "constrained selection survives selector recreation");
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(java.util.Map.of(), 1L, 1L)).size() == 4,
+                "missing categories and groups do not collide in invented default buckets");
+        rules.put("quest_3", new DailyQuestSelection.Quest(true, "other_category", "walking"));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, 10L, 1L)).stream().noneMatch("quest_3"::equals),
+                "a group limit is shared across categories with the same technical group ID");
+        for (var definition : catalog) rules.put(definition.id(), new DailyQuestSelection.Quest(true, "custom", "shared"));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, 2L, null)).equals(all.subList(0, 2)), "category shortages return fewer tasks instead of relaxing limits");
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, null, 1L)).equals(all.subList(0, 1)), "group shortages return fewer tasks instead of relaxing limits");
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, null, null)).equals(all.subList(0, 4)), "metadata alone never changes legacy selection");
+        for (var definition : catalog) rules.put(definition.id(), new DailyQuestSelection.Quest(true, "custom", null));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, 2L, 1L)).size() == 2, "missing groups do not collide while a category limit applies");
+        for (var definition : catalog) rules.put(definition.id(), new DailyQuestSelection.Quest(true, null, "shared"));
+        check(selector.select(player, cycle, catalog, 4, new DailyQuestSelection(rules, 1L, 2L)).size() == 2, "missing categories do not collide while a group limit applies");
+        for (int p = 1; p <= 24; p++) for (int day = 1; day <= 3; day++) for (int count : List.of(1, 4, 12)) {
+            UUID id = new UUID(0, p); var date = new DailyQuestCycleId(java.time.LocalDate.of(2026, 9, day));
+            check(selector.select(id, date, catalog, count).equals(legacy(id, date, catalog, count)), "exact previous SHA-256 algorithm across UUID/cycle/slot fixtures");
+        }
+        try { selector.select(player, cycle, List.of(catalog.getFirst(), catalog.getFirst()), 4, new DailyQuestSelection(rules, 1L, 1L)); throw new AssertionError("duplicates accepted"); }
+        catch (IllegalArgumentException expected) { check(expected.getMessage().contains("Duplicate"), "duplicate IDs remain invalid before filtering"); }
+    }
+
+    // Frozen pre-08A.1 ordering oracle; metadata must not alter rank inputs or byte comparison.
+    private static List<String> legacy(UUID player, DailyQuestCycleId cycle, List<QuestDefinition> definitions, int count) {
+        return definitions.stream().map(QuestDefinition::id).sorted((a, b) -> {
+            try {
+                var hash = java.security.MessageDigest.getInstance("SHA-256");
+                int rank = java.util.Arrays.compareUnsigned(hash.digest((player + "\n" + cycle + "\n" + a).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        hash.digest((player + "\n" + cycle + "\n" + b).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                return rank == 0 ? a.compareTo(b) : rank;
+            } catch (java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
+        }).limit(count).toList();
     }
 
     private static void check(boolean condition, String message) {
