@@ -238,6 +238,11 @@ public final class UtilityModule implements CoreModule {
         return utilityService;
     }
 
+    public TeleportRequests getTeleportRequests() {
+        getUtilityService();
+        return Objects.requireNonNull(teleportRequests, "TPA is not enabled").requests();
+    }
+
     private void registerCommand(String name, TabExecutor executor) {
         CommandHook command = Objects.requireNonNull(hooks.command(name),
                 "Command '" + name + "' is missing from plugin.yml");

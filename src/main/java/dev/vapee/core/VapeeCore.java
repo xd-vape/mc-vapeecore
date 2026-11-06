@@ -193,6 +193,7 @@ public final class VapeeCore extends JavaPlugin {
 
         questModule.startMovement(lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
         questModule.startHud(lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());
+        questModule.startCommunity(chatModule, moderationModule, privateMessageModule, friendModule, utilityModule);
 
         ReloadService reloadService = new ReloadService(
                 getLogger(),

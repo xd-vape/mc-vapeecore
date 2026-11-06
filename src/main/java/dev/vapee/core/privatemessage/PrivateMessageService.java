@@ -37,6 +37,7 @@ public final class PrivateMessageService {
     private final MiniMessage strictMiniMessage;
     private final Map<UUID, UUID> lastConversationPartners = new HashMap<>();
     private final Predicate<UUID> senderMuted;
+    private final java.util.Set<DeliveryListener> deliveryListeners = new java.util.LinkedHashSet<>();
 
     private volatile RuntimeState state;
 
@@ -102,6 +103,10 @@ public final class PrivateMessageService {
     }
 
     public PrivateMessageResult send(Player sender, Player recipient, String rawMessage) {
+        return send(sender, recipient, rawMessage, false);
+    }
+
+    private PrivateMessageResult send(Player sender, Player recipient, String rawMessage, boolean reply) {
         Player validatedSender = Objects.requireNonNull(sender, "sender");
         Player validatedRecipient = Objects.requireNonNull(recipient, "recipient");
         String validatedMessage = requireMessage(rawMessage);
@@ -155,6 +160,13 @@ public final class PrivateMessageService {
 
         lastConversationPartners.put(senderUniqueId, recipientUniqueId);
         lastConversationPartners.put(recipientUniqueId, senderUniqueId);
+        for (var listener : java.util.List.copyOf(deliveryListeners)) {
+            try { listener.onDelivered(validatedSender, validatedRecipient, reply); }
+            catch (RuntimeException failure) {
+                try { logger.log(Level.WARNING, "Private message delivery observer failed; delivery and conversation are retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
         return PrivateMessageResult.SUCCESS;
     }
 
@@ -178,8 +190,17 @@ public final class PrivateMessageService {
             removePlayer(targetUniqueId);
             return PrivateMessageResult.TARGET_OFFLINE;
         }
-        return send(validatedSender, target, validatedMessage);
+        return send(validatedSender, target, validatedMessage, true);
     }
+
+    /** Main-thread, post-delivery signal. No message text is retained or exposed to observers. */
+    @FunctionalInterface
+    public interface DeliveryListener {
+        void onDelivered(Player sender, Player recipient, boolean reply);
+    }
+
+    public void addDeliveryListener(DeliveryListener listener) { deliveryListeners.add(Objects.requireNonNull(listener)); }
+    public void removeDeliveryListener(DeliveryListener listener) { deliveryListeners.remove(listener); }
 
     public boolean isEnabled() {
         return state.enabled();

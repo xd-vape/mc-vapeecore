@@ -24,6 +24,7 @@ public final class FriendService {
     private final FriendRequestPolicy requestPolicy;
     private final Clock clock;
     private final Set<FriendRelationshipListener> relationshipListeners = new LinkedHashSet<>();
+    private final Set<SuccessListener> successListeners = new LinkedHashSet<>();
     private Map<FriendPair, Friendship> friendships;
     private Map<RequestKey, FriendRequest> requests;
 
@@ -92,6 +93,7 @@ public final class FriendService {
             HashMap<FriendPair, Friendship> nextFriendships = new HashMap<>(friendships);
             nextFriendships.put(pair, new Friendship(validatedSender, validatedRecipient, clock.instant()));
             persist(nextFriendships, nextRequests);
+            notifySuccess(validatedSender, validatedRecipient, true);
             notifyRelationshipChanged(validatedSender, validatedRecipient);
             return FriendResult.AUTO_ACCEPTED;
         }
@@ -109,6 +111,7 @@ public final class FriendService {
                 new FriendRequest(validatedSender, validatedRecipient, clock.instant())
         );
         persist(friendships, nextRequests);
+        notifySuccess(validatedSender, validatedRecipient, false);
         return FriendResult.SUCCESS;
     }
 
@@ -142,6 +145,7 @@ public final class FriendService {
         HashMap<FriendPair, Friendship> nextFriendships = new HashMap<>(friendships);
         nextFriendships.put(pair, new Friendship(validatedSender, validatedRecipient, clock.instant()));
         persist(nextFriendships, nextRequests);
+        notifySuccess(validatedSender, validatedRecipient, true);
         notifyRelationshipChanged(validatedSender, validatedRecipient);
         return FriendResult.SUCCESS;
     }
@@ -265,6 +269,26 @@ public final class FriendService {
 
     public FriendLimits getLimits() {
         return Objects.requireNonNull(limitsSupplier.get(), "friend limits");
+    }
+
+    /** Operation-specific post-persistence success; Remove/Deny/Cancel never publish here. */
+    @FunctionalInterface
+    public interface SuccessListener {
+        void onSuccess(UUID sender, UUID recipient, boolean friendship);
+    }
+
+    public void addSuccessListener(SuccessListener listener) { successListeners.add(Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(SuccessListener listener) { successListeners.remove(listener); }
+
+    private void notifySuccess(UUID sender, UUID recipient, boolean friendship) {
+        for (var listener : List.copyOf(successListeners)) {
+            try { listener.onSuccess(sender, recipient, friendship); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Friend success observer failed; persisted domain operation is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
     }
 
     public void addRelationshipListener(FriendRelationshipListener listener) {

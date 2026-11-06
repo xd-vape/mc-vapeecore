@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 public final class QuestService {
     private final java.util.Set<QuestChangeListener> changeListeners = new java.util.LinkedHashSet<>();
     private final Set<QuestProgressListener> progressListeners = new LinkedHashSet<>();
+    private final Set<java.util.function.Consumer<UUID>> assignmentListeners = new LinkedHashSet<>();
 
 
     private static final String REWARD_REASON_PREFIX = "quest:";
@@ -75,6 +76,7 @@ public final class QuestService {
             return QuestAssignmentResult.ALREADY_ASSIGNED;
         }
         dirtyPlayers.add(validatedPlayerId);
+        assignmentsChanged(validatedPlayerId);
         return QuestAssignmentResult.ASSIGNED;
     }
 
@@ -106,6 +108,7 @@ public final class QuestService {
         }
         state.replaceAssignments(validatedQuestIds);
         dirtyPlayers.add(validatedPlayerId);
+        assignmentsChanged(validatedPlayerId);
         return QuestAssignmentResult.REPLACED;
     }
 
@@ -128,10 +131,12 @@ public final class QuestService {
         var replacements = selected.stream().map(questId -> previous.getOrDefault(questId,
                 new PlayerQuestProgress(questId, 0L, QuestStatus.ACTIVE))).toList();
         state.restore(replacements);
+        assignmentsChanged(id);
         try {
             playerService.savePlayer(id);
         } catch (RuntimeException exception) {
             state.restore(previous.values());
+            assignmentsChanged(id);
             logger.log(Level.WARNING, "Forced quest selection for " + id
                     + " could not be committed; prior assignments were restored.", exception);
             return QuestAssignmentResult.PERSISTENCE_FAILED;
@@ -151,7 +156,21 @@ public final class QuestService {
             return QuestAssignmentResult.NO_CHANGE;
         }
         dirtyPlayers.add(validatedPlayerId);
+        assignmentsChanged(validatedPlayerId);
         return QuestAssignmentResult.CLEARED;
+    }
+
+    // Runtime invalidation only; no persistence, presentation refresh or second assignment authority.
+    void addAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.add(Objects.requireNonNull(listener)); }
+    void removeAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.remove(listener); }
+    private void assignmentsChanged(UUID id) {
+        for (var listener : List.copyOf(assignmentListeners)) {
+            try { listener.accept(id); }
+            catch (RuntimeException failure) {
+                try { logger.log(Level.WARNING, "Quest assignment observer failed; assignment is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
     }
 
     public Optional<List<QuestView>> getActiveQuests(UUID playerId) {

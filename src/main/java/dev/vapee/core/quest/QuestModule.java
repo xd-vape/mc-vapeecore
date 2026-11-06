@@ -8,6 +8,11 @@ import dev.vapee.core.reward.RewardService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.activity.ActivityService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
+import dev.vapee.core.chat.ChatModule;
+import dev.vapee.core.friend.FriendModule;
+import dev.vapee.core.moderation.ModerationModule;
+import dev.vapee.core.privatemessage.PrivateMessageModule;
+import dev.vapee.core.utility.UtilityModule;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
@@ -119,6 +124,7 @@ public final class QuestModule implements CoreModule {
     private void cleanup(RuntimeResources resources, RuntimeException failure) {
         resources.seeding = false;
         resources.reporter.silence();
+        cleanupCommunity(resources, failure);
         cleanupHud(resources, failure);
         cleanupMovement(resources, failure);
         if (resources.task != null && cancelTask(resources.task, failure)) resources.task = null;
@@ -181,6 +187,38 @@ public final class QuestModule implements CoreModule {
     public QuestDefinitionRegistry getDefinitionRegistry() { return activeRuntime().registry; }
     public QuestService getQuestService() { return activeRuntime().service; }
     public QuestProgressReporter getProgressReporter() { return activeRuntime().reporter; }
+
+    /** Acquire success signals only after all 27 existing modules have enabled. */
+    public void startCommunity(ChatModule chatOwner, ModerationModule moderationOwner,
+            PrivateMessageModule pmOwner, FriendModule friendOwner, UtilityModule utilityOwner) {
+        var chat = chatOwner.getChatService();var mutes = moderationOwner.getMuteProjection();
+        var pm = pmOwner.getPrivateMessageService();var friends = friendOwner.getFriendService();
+        var requests = utilityOwner.getTeleportRequests();
+        RuntimeResources resources = activeRuntime();
+        if (resources.community != null) throw new IllegalStateException("Community producers already bound or awaiting cleanup");
+        resources.community = new QuestCommunityProducer(resources.players, resources.registry, resources.service,
+                resources.reporter, plugin.getServer()::getPlayer, plugin.getServer()::isPrimaryThread,
+                action -> plugin.getServer().getScheduler().runTask(plugin, action),
+                () -> owns(resources) && resources.communityReady, System::nanoTime, plugin.getLogger());
+        try {
+            resources.community.bind(chat, pm, friends, requests, mutes::isMuted,
+                    () -> chatOwner.getChatService() == chat && moderationOwner.getMuteProjection() == mutes
+                            && pmOwner.getPrivateMessageService() == pm && friendOwner.getFriendService() == friends
+                            && utilityOwner.getTeleportRequests() == requests);
+            plugin.getServer().getPluginManager().registerEvents(resources.community, plugin);
+            for (Player player : plugin.getServer().getOnlinePlayers()) resources.community.seed(player);
+            resources.communityReady = true;
+        } catch (RuntimeException failure) { cleanupCommunity(resources, failure);throw failure; }
+    }
+
+    private void cleanupCommunity(RuntimeResources resources, RuntimeException failure) {
+        resources.communityReady = false;
+        if (resources.community == null) return;
+        try { resources.community.close(); }
+        catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        boolean unregistered = unregister(resources.community, failure);
+        if (unregistered && resources.community.released()) resources.community = null;
+    }
 
     /** Bind generic quest presentation after the existing Lobby and Activity owners are available. */
     public void startHud(LobbyPlayerStateService lobby, ActivityService activities) {
@@ -350,6 +388,8 @@ public final class QuestModule implements CoreModule {
         private final QuestPlaytimeProducer playtime;
         private QuestListener listener;
         private QuestProgressHud hud;
+        private QuestCommunityProducer community;
+        private boolean communityReady;
         private BukkitTask hudTask;
         private LobbyPlayerStateService hudLobby;
         private ActivityService hudActivities;
@@ -377,7 +417,7 @@ public final class QuestModule implements CoreModule {
         }
 
         private boolean released() {
-            return task == null && listener == null && movement == null && hud == null && !finalSamplePending && !flushPending && samplesReleased;
+            return task == null && listener == null && movement == null && hud == null && community == null && !finalSamplePending && !flushPending && samplesReleased;
         }
     }
 }

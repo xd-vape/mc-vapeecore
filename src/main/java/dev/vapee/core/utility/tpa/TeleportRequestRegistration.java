@@ -81,6 +81,11 @@ public final class TeleportRequestRegistration {
         if (failure != null) throw failure;
     }
 
+    public TeleportRequests requests() {
+        if (!enabled) throw new IllegalStateException("TPA registration is not enabled");
+        return requests;
+    }
+
     private RuntimeException cleanup(RuntimeException failure) {
         enabled = false;
         failure = attempt(failure, requests::disable);

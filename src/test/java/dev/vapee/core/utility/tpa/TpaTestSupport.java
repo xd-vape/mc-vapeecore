@@ -122,7 +122,10 @@ public final class TpaTestSupport {
             this.fixture = fixture; this.id = id; this.name = name; location = new Location(fixture.ground.world, .5, 64, .5);
             player = proxy(Player.class, (method, args) -> switch (method) {
                 case "getUniqueId" -> id;
+                case "getEntityId" -> System.identityHashCode(this);
                 case "getName" -> name;
+                case "displayName" -> Component.text(name);
+                case "getStatistic" -> 0;
                 case "isOnline" -> online;
                 case "isDead" -> dead;
                 case "isInsideVehicle" -> vehicle;

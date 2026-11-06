@@ -11,7 +11,8 @@ import java.util.TreeMap;
 
 public final class QuestDefinitionRegistry {
 
-    private Map<String, QuestDefinition> definitions = Map.of();
+    // Immutable snapshot publication also lets the chat handoff reject pre-reload events safely.
+    private volatile Map<String, QuestDefinition> definitions = Map.of();
 
     public Optional<QuestDefinition> findById(String questId) {
         return Optional.ofNullable(definitions.get(QuestDefinition.requireValidId(questId)));

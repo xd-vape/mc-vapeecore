@@ -59,7 +59,17 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
     private final Map<UUID, Request> outgoing = new LinkedHashMap<>();
     private final Map<UUID, Cooldown> cooldowns = new HashMap<>();
     private final Set<UUID> teleporting = new HashSet<>();
+    private final Set<SuccessListener> successListeners = new LinkedHashSet<>();
     private boolean active;
+
+    /** Emitted only after the consented UtilityService teleport returned true. */
+    @FunctionalInterface
+    public interface SuccessListener {
+        void onTeleport(Player requester, Player recipient, boolean here);
+    }
+    public void addSuccessListener(SuccessListener listener) { requireThread(); successListeners.add(Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(SuccessListener listener) { requireThread(); successListeners.remove(listener); }
+    public boolean isActive() { return active; }
 
     private record Request(UUID id, Player sender, Player recipient, boolean here, long created,
                            World senderWorld, World recipientWorld) { }
@@ -196,6 +206,15 @@ public final class TeleportRequests implements TabExecutor, Listener, ActivityMe
             logger.log(Level.WARNING, "Consented player teleport failed", failure); success = false;
         } finally {
             teleporting.remove(request.sender.getUniqueId()); teleporting.remove(request.recipient.getUniqueId());
+        }
+        if (success && active && current(request.sender) && current(request.recipient)) {
+            for (var listener : List.copyOf(successListeners)) {
+                try { listener.onTeleport(request.sender, request.recipient, request.here); }
+                catch (RuntimeException failure) {
+                    try { logger.log(Level.WARNING, "TPA success observer failed; completed teleport is retained.", failure); }
+                    catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+                }
+            }
         }
         notifyBoth(request, success ? tr("tpa.success") : tr("tpa.failed"));
     }
