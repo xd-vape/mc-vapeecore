@@ -261,3 +261,122 @@ Native API assertions do not constitute this visual/network-client acceptance.
 
 No push, merge, PR, deployment, live-server intervention, new command/permission,
 Economy/Reward persistence change or subsequent feature phase belongs to this step.
+
+## Post-Audit Correction – Chat Duplicate Guard
+
+Date: 2026-11-07. Correction on the existing
+`codex/step08c-community-quest-progress` branch, immediately after original
+implementation commit `6ec47d3a1f065b0afcaf400961ba6cd1aab5d66c`.
+The implementation commit and historical verification above are retained unchanged.
+The attempted integration was stopped before fast-forward or push.
+
+### Confirmed defect and minimal state rule
+
+With only an active `social:chat_unique` assignment, process these public messages
+in order: `Schöne Lobby!`, `Hi`, `Schöne Lobby!`. `Hi` is a valid classified
+greeting but too short for Unique and has no matching assigned greeting quest.
+The old branch `if (!hello && !thanks && !unique)` removed `chatStates[id]`.
+This erased both the last credited timestamp and all fingerprints in an otherwise
+valid session/assignment/catalog epoch. The next repeated message could count
+again, even inside three seconds or later within the fingerprint window.
+
+The production correction changes only that branch to a side-effect-free return,
+with a short invariant comment. A nonmatching candidate creates no progress or
+reward and does not delete, restart, extend or otherwise modify the current guard.
+No classifier, key, threshold, handoff, observer, reward or persistence API changes.
+
+Real invalidation remains at the existing boundaries: Quit/rejoin, closed runtime,
+disable/re-enable, assignment replacement, Force, reset and catalog publication/
+rollback. Current-profile/session/owner checks and existing cleanup calls remain
+in place. A changed catalog still invalidates old queued work and lazily replaces
+the old measurement context before the next credited message. The Developer Guide
+now states explicitly that a nonmatching candidate is not an epoch transition.
+
+### Executed red/green regression
+
+The executable tests were added **before** changing the producer. The red run
+compiled and executed the actual original producer, reporter and QuestService
+with the existing controlled-monotonic-clock fixture. It exited **1**, with
+**18 failing scenario groups out of 20**. Both direct reproductions logged
+`expected progress=1 ... actual=2`, once inside the cooldown and once at its
+three-second boundary while the fingerprint should still block the duplicate.
+No historical red result is inferred or invented.
+
+The correction then passed the expanded chat harness with **148 checks**:
+the original 78 plus **70 new checks**. Focused Social and Module harnesses also
+passed unchanged at **59** and **65** checks. New coverage includes:
+
+* A: the reported Unique → unassigned `Hi` → same Unique sequence, with no
+  completion/coin/feedback caused by the duplicate.
+* B: the same duplicate after three seconds but before fingerprint expiry.
+* C: a different valid message remains blocked one nanosecond before three
+  seconds and counts exactly at three seconds; the intervening nonmatch neither
+  shortens nor restarts the cooldown.
+* Fingerprint retention one nanosecond before 120 seconds and normal expiry at
+  exactly 120 seconds; a nonmatch near expiry does not extend retention.
+* D: all seven nonempty combinations of greeting/thanks/unique assignments,
+  matching-key-only progress and the common cross-key cooldown/fingerprints.
+* E: assignment, Force, reset, catalog replacement, changed-identity rollback,
+  session and closed-runtime/rebind epochs reject queued old events, allow a
+  fresh measurement and establish a guard that subsequent nonmatches cannot erase.
+* F: empty/blank/command/spam/nonmatching candidates, mute and cancelled events
+  preserve protection; completed and unrelated quests cannot receive extra
+  progress/rewards. Existing unloaded-profile, stale-session and duplicate checks
+  remain executable in the same harness.
+
+There are no new waits or sleeps. All timing expectations use a controlled
+monotonic nanosecond clock and literal three-/120-second boundaries. The scenario
+collector reports all new failures and throws on any failure; it does not turn a
+failed scenario into a successful harness result. The canonical zero-argument
+main runs all new scenarios and every original chat check.
+
+### Correction verification and scope
+
+Full canonical correction verification was actually executed with the installed
+JDK 21 and `pwsh -NoProfile -File .\scripts\verify.ps1`:
+**242/242 harnesses passed, 35,699 checks, Failed=0, Missing/Invalid=0,
+Maven clean package PASS, Spotless PASS**. All 242 previous harnesses remain;
+the inventory comparison shows only Chat increasing from 78 to 148 checks.
+The prior 35,629 total therefore increases by exactly 70. The original chat
+methods remain unchanged and execute after the new regression scenarios.
+All 33 local Markdown targets in the two changed documents resolve;
+`git diff --check` passes. These checks are separate from the historical results.
+
+No native Paper/LuckPerms run is repeated for this correction: the change is a
+synchronous state-retention decision after the already validated handoff. It
+changes no Paper API, event priority, main-thread transition, scheduler, observer,
+delivery or teleport boundary. The **47 native checks above are historical
+evidence for the original `6ec47d3` Step-08C implementation**, not newly executed
+tests or a native acceptance claim for this follow-up. The original failed native
+fixture attempts remain documented. Real Minecraft-client acceptance stays open.
+
+Only these four paths belong to the correction:
+
+1. `src/main/java/dev/vapee/core/quest/QuestCommunityProducer.java`
+2. `src/test/java/dev/vapee/core/quest/QuestCommunityChatHarness.java`
+3. `docs/DEVELOPER_GUIDE.md`
+4. `reports/08c/STEP_08C_COMMUNITY_QUEST_PROGRESS.md`
+
+PM/reply, Friend request/accept, TPA/TPAHere, Movement/Playtime, generic HUD,
+QuestService/Reporter, Economy/Reward and Player schema implementations are not
+changed. Limits remain three seconds, 32 SHA-256 fingerprints and up to 120 seconds,
+with the same Unicode/spam classifier and transient-history limitations.
+
+Protection comparison covers **1,503 original files** in both existing worktrees.
+Only the four correction paths above change. Both Run configurations and protected
+receipts retain their initial SHA-256 values; the protected worktree and its
+existing untracked report, Recovery branches, other refs and original implementation
+commit are preserved. Operator data is not used as a fixture or claimed
+byte-identical while it may change externally.
+
+The correction is recorded as one additional local fix commit directly after
+`6ec47d3`; the full SHA and pre-/post-commit results belong to the external
+delivery receipt and final response. The branch then has exactly two commits over
+unchanged master `2e3081a60f34aa43391b2b24e47a21c507212b0a`.
+No amend, push, merge, PR, deployment, new feature branch, server intervention or
+subsequent feature phase.
+
+Correction evidence is outside the repository under
+`C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08c-duplicate-guard-20261107-011556/`:
+before snapshots, red source hash/exit/log, green logs, full verifier receipt,
+inventory comparison and pre-/post-commit preservation receipts.

@@ -160,7 +160,8 @@ public final class QuestCommunityProducer implements Listener, PrivateMessageSer
         var text = input.text;
         boolean hello = text.hello() && wants(context, HELLO), thanks = text.thanks() && wants(context, THANKS),
                 unique = text.unique() && wants(context, UNIQUE);
-        if (!hello && !thanks && !unique) { chatStates.remove(id);return; }
+        // No candidate is not an epoch change: retain this session's cooldown and fingerprints.
+        if (!hello && !thanks && !unique) return;
         ChatState state = chatStates.get(id);
         if (state == null || state.session != input.session || !same(state.context, context)) {
             state = new ChatState(input.session, context);chatStates.put(id, state);

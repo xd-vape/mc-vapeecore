@@ -7,8 +7,179 @@ import java.util.*;
 public final class QuestCommunityChatHarness {
     private static int checks;
     public static void main(String[] args) throws Exception {
+        duplicateGuardRegression();
         classification();boundaries();handoff();epochs();bounds();
         System.out.println("QuestCommunityChatHarness passed " + checks + " checks.");
+    }
+    private static void duplicateGuardRegression() {
+        Map<String, Runnable> scenarios = new LinkedHashMap<>();
+        scenarios.put("A duplicate inside cooldown", () -> nonmatchingDuplicate(false));
+        scenarios.put("B duplicate after cooldown", () -> nonmatchingDuplicate(true));
+        scenarios.put("C unchanged cooldown boundary", QuestCommunityChatHarness::nonmatchingCooldown);
+        scenarios.put("fingerprint expiry not extended", QuestCommunityChatHarness::nonmatchingExpiry);
+        scenarios.put("F negative content preserves guard", QuestCommunityChatHarness::negativeContent);
+        scenarios.put("F completed and unrelated quests", QuestCommunityChatHarness::completedAndUnrelated);
+        for (int mask = 1; mask <= 7; mask++) {
+            int assigned = mask;
+            scenarios.put("D assigned chat keys " + mask, () -> mixedGuard(assigned));
+        }
+        for (String epoch : List.of("assign", "force", "reset", "catalog", "rollback", "session", "runtime"))
+            scenarios.put("E valid epoch " + epoch, () -> guardEpoch(epoch));
+        List<AssertionError> failures = new ArrayList<>();
+        scenarios.forEach((name, scenario) -> {
+            try { scenario.run(); }
+            catch (AssertionError failure) {
+                System.err.println("REGRESSION FAILED [" + name + "]: " + failure.getMessage());
+                failures.add(failure);
+            }
+        });
+        if (!failures.isEmpty()) {
+            AssertionError failure = new AssertionError(failures.size() + " duplicate-guard scenarios failed");
+            failures.forEach(failure::addSuppressed);
+            throw failure;
+        }
+    }
+
+    private static void nonmatchingDuplicate(boolean afterCooldown) {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");
+            f.define("unique", "social:chat_unique", 2, 7);f.assign(a, "unique");
+            f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 1 && f.coins(a) == 0, "first unique message counted without reward");
+            f.seconds(1);f.say(a, "Hi");
+            check(f.progress(a, "unique") == 1 && f.feedback.isEmpty(), "unassigned greeting creates no progress/feedback");
+            if (afterCooldown) f.seconds(2);
+            f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 1, "expected progress=1 after intervening Hi, actual=" + f.progress(a, "unique") + ", afterCooldown=" + afterCooldown);
+            check(f.coins(a) == 0 && f.feedback.isEmpty(), "duplicate cannot complete quest or award coins");
+        }
+    }
+
+    private static void nonmatchingCooldown() {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");f.define("unique", "social:chat_unique", 10, 7);f.assign(a, "unique");
+            f.say(a, "Schöne Lobby!");f.seconds(2);f.say(a, "Hi");
+            f.social.now = 3_000_000_000L - 1;
+            f.say(a, "Ein schöner Server!");
+            check(f.progress(a, "unique") == 1, "Hi must not shorten cooldown: expected=1, actual=" + f.progress(a, "unique"));
+            f.social.now++;
+            f.say(a, "Ein schöner Server!");
+            check(f.progress(a, "unique") == 2, "Hi must not restart cooldown; different message counts at exactly three seconds");
+            f.seconds(2);f.say(a, "Hi");f.seconds(1);f.say(a, "Eine hilfreiche Community!");
+            check(f.progress(a, "unique") == 3 && f.coins(a) == 0, "nonmatching messages also preserve the next cooldown boundary");
+        }
+    }
+
+    private static void nonmatchingExpiry() {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");f.define("unique", "social:chat_unique", 10, 7);f.assign(a, "unique");
+            f.say(a, "Schöne Lobby!");f.seconds(119);f.say(a, "Hi");
+            f.social.now = 120_000_000_000L - 1;f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 1, "Hi must not erase fingerprint before expiry: actual=" + f.progress(a, "unique"));
+            f.social.now++;f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 2, "Hi must not extend fingerprint expiry beyond exactly 120 seconds");
+        }
+    }
+
+    private static void mixedGuard(int mask) {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");
+            String[] ids = {"hello", "thanks", "unique"};
+            String[] keys = {"social:chat_hello", "social:chat_thanks", "social:chat_unique"};
+            List<String> assigned = new ArrayList<>();
+            Map<String, Long> expected = new TreeMap<>();
+            for (int i = 0; i < ids.length; i++) {
+                f.define(ids[i], keys[i], 10, 7);
+                if ((mask & (1 << i)) != 0) { assigned.add(ids[i]);expected.put(ids[i], 0L); }
+            }
+            f.assign(a, assigned.toArray(String[]::new));
+            f.say(a, "Hello dear friends");
+            if (expected.containsKey("hello")) expected.put("hello", 1L);
+            if (expected.containsKey("unique")) expected.put("unique", 1L);
+            check(counts(f, a.id).equals(expected), "first message credits only matching assigned keys " + mask);
+            boolean initialMatch = (mask & 5) != 0;
+            f.seconds(1);f.say(a, "ok");f.say(a, "Thanks dear friends");
+            if (!initialMatch && expected.containsKey("thanks")) expected.put("thanks", 1L);
+            check(counts(f, a.id).equals(expected), "shared cooldown survives nonmatching content " + mask + ": expected=" + expected + ", actual=" + counts(f, a.id));
+            f.seconds(2);f.say(a, "Thanks dear friends");
+            if (initialMatch) {
+                if (expected.containsKey("thanks")) expected.put("thanks", 1L);
+                if (expected.containsKey("unique")) expected.put("unique", 2L);
+            }
+            check(counts(f, a.id).equals(expected), "shared cooldown is not extended across keys " + mask);
+            f.say(a, "ok");f.say(a, "Hello dear friends");
+            check(counts(f, a.id).equals(expected) && f.coins(a) == 0, "fingerprints span keys without duplicate rewards " + mask);
+        }
+    }
+
+    private static Map<String, Long> counts(CommunityTestSupport f, UUID id) {
+        Map<String, Long> result = new TreeMap<>();
+        f.social.players.getPlayer(id).orElseThrow().getQuestState().snapshot()
+                .forEach((key, value) -> result.put(key, value.progress()));
+        return result;
+    }
+
+    private static void guardEpoch(String epoch) {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");f.define("unique", "social:chat_unique", 20, 7);f.assign(a, "unique");
+            f.say(a, "Schöne Lobby!");f.seconds(1);f.say(a, "Hi");
+            f.producer.onChat(f.event(a, "Queued before epoch transition", true));
+            boolean numericReset = epoch.equals("assign") || epoch.equals("reset");
+            switch (epoch) {
+                case "assign" -> f.assign(a, "unique");
+                case "force" -> f.quests.reconcileAssignments(a.id, List.of("unique"));
+                case "reset" -> { f.quests.clearAssignments(a.id);f.assign(a, "unique"); }
+                case "catalog" -> f.definitions.replaceAll(f.definitions.snapshot());
+                case "rollback" -> {
+                    var previous = f.definitions.snapshot();
+                    f.definitions.replaceAll(List.of());f.definitions.replaceAll(previous);
+                }
+                case "session" -> {
+                    f.producer.onQuit(new PlayerQuitEvent(a.player, net.kyori.adventure.text.Component.empty()));
+                    a.online = false;a = f.social.user(a.id, "Alpha");f.producer.seed(a.player);
+                }
+                case "runtime" -> {
+                    f.active = false;f.drain();f.producer.close();
+                    f.producer.bind(f.chat, f.pm, f.friends, f.social.requests, f.muted::contains, () -> f.available);
+                    f.producer.seed(a.player);f.active = true;
+                }
+                default -> throw new AssertionError(epoch);
+            }
+            f.drain();long retained = numericReset ? 0 : 1;
+            check(f.progress(a, "unique") == retained, "old queued event cannot cross epoch " + epoch);
+            f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == retained + 1, "legitimate epoch permits fresh measurement " + epoch);
+            f.say(a, "Hi");f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == retained + 1 && f.coins(a) == 0, "new epoch establishes a fresh guard that Hi cannot erase " + epoch);
+        }
+    }
+
+    private static void negativeContent() {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");f.define("unique", "social:chat_unique", 2, 7);f.assign(a, "unique");
+            f.say(a, "Schöne Lobby!");f.seconds(3);
+            for (String text : List.of("", " ", "/quests", "aaaaaaa", "Hi")) {
+                f.say(a, text);f.say(a, "Schöne Lobby!");
+                check(f.progress(a, "unique") == 1 && f.coins(a) == 0, "negative candidate retains duplicate protection: " + text);
+            }
+            f.muted.add(a.id);f.say(a, "A muted different message");f.muted.clear();
+            var cancelled = f.event(a, "A cancelled different message", true);cancelled.setCancelled(true);
+            f.producer.onChat(cancelled);f.drain();f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 1 && f.feedback.isEmpty(), "muted/cancelled events cannot clear fingerprints or trigger rewards");
+        }
+    }
+
+    private static void completedAndUnrelated() {
+        try (var f = new CommunityTestSupport()) {
+            var a = f.actor("Alpha");f.define("unique", "social:chat_unique", 1, 7);
+            f.define("private", "social:pm_sent", 2, 11);f.assign(a, "unique", "private");
+            f.say(a, "Schöne Lobby!");f.say(a, "Hi");f.seconds(3);f.say(a, "Schöne Lobby!");
+            check(f.progress(a, "unique") == 1 && f.progress(a, "private") == 0 && f.coins(a) == 7 && f.feedback.size() == 1,
+                    "completed quest and unrelated key cannot earn extra progress/rewards");
+            f.assign(a, "private");f.say(a, "Hello dear friends");f.say(a, "Hi");f.say(a, "Hello dear friends");
+            check(f.progress(a, "private") == 0 && f.coins(a) == 7 && f.feedback.size() == 1,
+                    "no matching active chat key emits no progress or reward");
+        }
     }
     private static void classification() {
         for (String text : List.of("Hallo!","HI","hey Leute","Hello everyone","Ｈｉ"))
