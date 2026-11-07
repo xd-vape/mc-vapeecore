@@ -152,3 +152,61 @@ Confirm command/item/Player Menu opens, denied/cancelled opens, pages/tabs/local
 - `src/test/java/dev/vapee/core/settings/SettingsMenuHarness.java`
 - `src/test/java/dev/vapee/core/settings/visibility/VisibilitySettingsMenuHarness.java`
 - `src/test/java/dev/vapee/core/utility/command/UtilityCommandHarness.java`
+
+## Post-Audit Correction – Distinct Pending Reward Integrity
+
+Date: 2026-11-07. Follow-up on the same `codex/step08d-lobby-quest-progress` branch, directly after unchanged implementation commit `e53fa9ab4975c03547d788ded1a6e22af353dae3`. Integration was stopped during the read-only audit; master and origin/master remain `550fadbf2e2b6d90306b04f4f9910d3b366733d4`. Historical Step-08D results above are retained as historical results.
+
+### Confirmed defect
+
+A distinct assignment with target 1 counts one identity, reaches REWARD_PENDING, and cannot pay due to balance overflow. Reloading the same ID with target 2 followed by another failed retry changed numeric progress to 2 while retaining the old target-1 signature and one identity. Full save/load then classified this core-generated record as corrupt and replaced its identities with the blocked sentinel. Target reduction 2 -> 1 similarly reduced numeric progress while retaining two identities. Both `retryPendingRewards` and the pending branch shared by numeric/distinct progress signals performed this normalization before checking distinct compatibility.
+
+The audit's in-memory reproduction is now backed by executable regressions using real QuestService, RewardService, EconomyService, PlayerService and FilePlayerRepository instances, plus actual disk saves and reconstructed service owners. No operator profile or server is a fixture.
+
+### Minimal shared domain rule
+
+Only QuestService production code changes. Its common `canRetryPending` predicate protects both pending paths before any mutation, normalization or grant. Distinct retries require unblocked evidence, the same progress key/target signature, and `progress == stored target == identity count`. Incompatible, blocked or incomplete evidence remains unchanged and pending, without invoking RewardService. Target increase/decrease never invents or truncates identities, rewrites the signature or fabricates numeric progress. A distinct signal while pending does not consume its new identity. Valid compatible pending retries retain the original once-only completion/reward path.
+
+If all candidates are suspended, the service returns NO_CHANGE; actual REWARD_PENDING remains authoritative. DailyQuestService therefore continues to block Force and daily rotation. Restoring a compatible catalog key/target allows the normal retry; successful retry can then release ordinary daily rotation. Names/descriptions are not identity. Reward amounts retain their existing current-catalog semantics after compatibility is established; no frozen definition or transaction journal is added.
+
+Legacy pending records without distinct evidence retain the original numeric target normalization and retry semantics. No progress producer, menu, HUD, Paper callback, LuckPerms integration, configuration, command, permission or capacity limit changes. FilePlayerRepository and its strict corruption validation remain byte-identical to the implementation commit. Whole-profile persistence remains the only persistence authority.
+
+### Operator recovery and remaining limits
+
+An incompatible but valid pending record requires restoration of its compatible definition before payout/rotation can proceed. Neither ordinary reload, numeric/distinct signals nor Force silently clear it. The correction prevents new integrity damage; it cannot reconstruct identities already lost to a previously persisted blocked sentinel. Such records need operator recovery of valid evidence from a trusted player snapshot or another explicit administrative resolution. Catalog restoration alone does not unblock genuinely damaged evidence. No actual player data is migrated or rewritten by this task. Existing delayed-save/hard-crash boundaries remain.
+
+### Actual red/green regression
+
+Tests were added before changing production. The first real red run covered 36 scenario groups, with 26 failures and exit 1. Six additional explicit disk-roundtrip cases were then added before the correction; the complete red suite ran 42 groups, with **32 failing groups and exit 1**. The original production source SHA-256 was `046295906F1B63D75A3363CD621A37F29DEB3C339F770F3EB95B6A96D7ED6375` throughout both red runs.
+
+| Scenario | Expected | Actual with original production |
+| --- | --- | --- |
+| Target 1 -> 2, failed explicit/numeric/distinct retry | Pending progress 1, signature target 1, original one identity | Pending progress 2, signature target 1, one identity |
+| Target 2 -> 1, failed retry | Pending progress 2, signature target 2, original two identities | Pending progress 1, signature target 2, two identities |
+| Actual save/load after either transition | Original valid pending evidence retained | Blocked sentinel with empty identities |
+| Incompatible key/target with available funds | No unchecked grant or completion | Reward attempted/completed under incompatible definition |
+| Already blocked or unearned evidence | No payout/unlock | Pending branch could pay/normalize |
+| Daily cycle transition with incompatible pending | Rotation remains blocked | Retry could release rotation through incompatible payout |
+
+After the shared correction, **all 42 groups pass; QuestDistinctHarness passes 529 checks, exit 0**. This includes all 38 original checks plus 491 new assertions. The same test source was used in the complete red and green runs. The red failures are diagnostic evidence, never counted as successful tests.
+
+Coverage includes both target directions across all three entry points, unavailable/available funds, changed progress keys, repeated suspended signals, valid compatible failure/success, full logout/reconstructed-service restart, catalog restoration, once-only payouts, legacy normalization, strict malformed-state blocking, preserved unrelated settings/social/identity and foreign YAML extensions, incomplete evidence, actual Daily sync/Force/rotation, failed Force-save snapshot/cycle rollback, and two independent same-key assignments with different targets. Reward-attempt observations wrap the real RewardService, not a replacement reward implementation. All test folders are newly created temporary folders and are removed by a checked fixture-local cleanup path.
+
+Final canonical verification actually executed: `pwsh -NoProfile -File .\scripts\verify.ps1` passed **245/245 discovered/executed/passed harnesses, 36,362 checks, Failed=0, Missing/Invalid=0, Maven clean package PASS, Spotless PASS (the existing pilot allowlist)**. Inventory comparison preserves exactly the same 245 classes. Only QuestDistinctHarness changes its count, from 38 to 529 (+491); all other harness counts are unchanged. All 34 local Markdown file targets in this report and the Developer Guide resolve, and `git diff --check` passes. These are new correction-verification results, separate from the historical 35,871 / native-51 results above.
+
+### Native/API scope
+
+The correction is entirely in the quest domain and its regression harness. It changes no native Paper/LuckPerms boundary or persistence parser/format. The **51 native checks above remain historical acceptance for Step 08D**, not a newly executed native test of this correction. No native server is started for Step 08D.1. Real Minecraft-client visual/network acceptance remains open.
+
+### Exact correction paths and protection
+
+Only these four paths belong to the follow-up commit:
+
+- `src/main/java/dev/vapee/core/quest/QuestService.java`
+- `src/test/java/dev/vapee/core/quest/QuestDistinctHarness.java`
+- `docs/DEVELOPER_GUIDE.md`
+- `reports/08d/STEP_08D_LOBBY_QUEST_PROGRESS.md`
+
+Before snapshots cover 1510 original tracked/nonignored/protected files across both existing worktrees. Final hashes/status/ref comparisons are recorded outside the repository. An evidence-reference file was briefly created at the wrong external worktree path by the task's snapshot helper; only that self-created reference was moved to its intended evidence location immediately. The foreign worktree returned to its original status, with its pre-existing untracked report retained; no original project file there was modified. Both Run configurations, protected receipts, Recovery branches, unrelated branches and live operator data remain protected.
+
+Evidence is outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08d1-pending-integrity-20261107-180858/`: before hashes/refs, both red logs/results, green log/results and the final verifier/preservation receipts. The exact one additional local fix-commit SHA belongs to the final response/external receipt. No amend, push, merge, PR, deployment, operator-server intervention, history rewrite or Step 08E.

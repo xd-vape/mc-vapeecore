@@ -247,6 +247,7 @@ public final class QuestService {
                 continue;
             }
             if (progress.status() == QuestStatus.REWARD_PENDING) {
+                if (!canRetryPending(progress, definition)) continue;
                 PlayerQuestProgress pendingProgress = progress;
                 boolean normalized = progress.progress() != definition.target();
                 if (normalized) {
@@ -369,8 +370,9 @@ public final class QuestService {
                 continue;
             }
 
-            attempted = true;
             QuestDefinition definition = definitionResult.get();
+            if (!canRetryPending(progress, definition)) continue;
+            attempted = true;
             PlayerQuestProgress pendingProgress = progress;
             boolean normalized = progress.progress() != definition.target();
             if (normalized) {
@@ -400,6 +402,17 @@ public final class QuestService {
                 completedQuestIds,
                 rewardPendingQuestIds
         );
+    }
+
+    /** Only compatible, fully earned distinct evidence can authorize a pending reward.
+     * Incompatible or blocked evidence stays pending until explicitly resolved; legacy retries
+     * retain their existing numeric normalization without an identity history.
+     */
+    private static boolean canRetryPending(PlayerQuestProgress progress, QuestDefinition definition) {
+        QuestDistinctProgress distinct = progress.distinct();
+        return distinct == null || distinct.compatible(definition)
+                && progress.progress() == distinct.target()
+                && progress.progress() == distinct.identities().size();
     }
 
     public void flushPlayer(UUID playerId) {
