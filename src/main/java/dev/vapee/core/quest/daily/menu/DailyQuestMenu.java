@@ -31,6 +31,20 @@ import java.util.logging.Logger;
 
 /** Read-only quest view with a scoped presentation-only reset clock. */
 public final class DailyQuestMenu {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
     private dev.vapee.core.quest.QuestChangeListener committedChanges;
     private boolean observingChanges;
     private boolean localeSubscriptionPending;
@@ -163,6 +177,14 @@ public final class DailyQuestMenu {
     }
 
     public void open(Player player, int requestedPage) {
+        renderOpen(player, requestedPage, true);
+    }
+
+    public void openPage(Player player, int requestedPage) {
+        renderOpen(player, requestedPage, false);
+    }
+
+    private void renderOpen(Player player, int requestedPage, boolean rootOpen) {
         Objects.requireNonNull(player, "player");
         if (!isAvailable()) return;
         Object opening = activation;
@@ -238,6 +260,7 @@ public final class DailyQuestMenu {
                 && opening == activation && isAvailable()) {
             active.put(player.getUniqueId(), inventory);
             ensureCountdownTask();
+            if (rootOpen && rerenderInventory == null && isActive(player, inventory, holder)) succeeded(player);
         }
         } finally { renderingFor = opening == activation && isAvailable() ? previousViewer : null; }
     }
@@ -339,7 +362,7 @@ public final class DailyQuestMenu {
             forgetIfActive(owner, inventory); return;
         }
         if (!canUse(player)) { forgetIfActive(owner, inventory); player.closeInventory(); return; }
-        try { rerenderInventory = inventory; open(player, holder.page()); }
+        try { rerenderInventory = inventory; openPage(player, holder.page()); }
         catch (RuntimeException exception) {
             forgetIfActive(owner, inventory);
             if (player.getOpenInventory().getTopInventory() == inventory) player.closeInventory();

@@ -106,14 +106,15 @@ public final class QuestLifecycleHarness {
                 "DailyQuest adds exactly its own configuration resource");
 
         String questSource = questProductionSource();
-        check(!questSource.contains("import dev.vapee.core.economy")
+        String nonLobbySource = questProductionSource("QuestLobbyProducer.java");
+        check(!nonLobbySource.contains("import dev.vapee.core.economy")
                         && !questSource.contains("import dev.vapee.core.onlinereward")
                         && !questSource.contains("import dev.vapee.core.presentation")
-                        && !questSource.contains("import dev.vapee.core.rank")
+                        && !nonLobbySource.contains("import dev.vapee.core.rank")
                         && !questSource.contains("import dev.vapee.core.permission"),
-                "Quest production code has no Economy, OnlineReward, presentation, rank, or permission dependency");
+                "Quest domain excludes Economy/Rank; only the lobby success adapter observes their commands");
         String domain = Files.readString(Path.of("src/main/java/dev/vapee/core/quest/QuestService.java"));
-        String foundation = questProductionSource("QuestModule.java", "QuestMovementProducer.java", "QuestProgressHud.java");
+        String foundation = questProductionSource("QuestModule.java", "QuestMovementProducer.java", "QuestProgressHud.java", "QuestLobbyProducer.java");
         check(!questSource.contains("org.bukkit.command")
                         && !domain.contains("dev.vapee.core.message") && !domain.contains("net.kyori")
                         && !questSource.contains("BlockBreakEvent")

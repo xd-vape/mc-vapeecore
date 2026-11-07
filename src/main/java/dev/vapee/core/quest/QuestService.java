@@ -128,8 +128,12 @@ public final class QuestService {
             if (!selected.add(validated)) return QuestAssignmentResult.DUPLICATE_QUEST_ID;
             if (definitionRegistry.findById(validated).isEmpty()) return QuestAssignmentResult.DEFINITION_NOT_FOUND;
         }
-        var replacements = selected.stream().map(questId -> previous.getOrDefault(questId,
-                new PlayerQuestProgress(questId, 0L, QuestStatus.ACTIVE))).toList();
+        var replacements = selected.stream().map(questId -> {
+            var prior = previous.get(questId);
+            if (prior == null || prior.distinct() != null && !prior.distinct().compatible(definitionRegistry.findById(questId).orElseThrow()))
+                return new PlayerQuestProgress(questId, 0L, QuestStatus.ACTIVE);
+            return prior;
+        }).toList();
         state.restore(replacements);
         assignmentsChanged(id);
         try {
@@ -198,6 +202,14 @@ public final class QuestService {
             QuestProgressKey progressKey,
             long amount
     ) {
+        return applyProgress(playerId, progressKey, amount, null);
+    }
+
+    public QuestProgressResult addDistinctProgress(UUID playerId, QuestProgressKey key, String identity) {
+        return applyProgress(playerId, key, 1L, QuestDistinctProgress.requireIdentity(identity));
+    }
+
+    private QuestProgressResult applyProgress(UUID playerId, QuestProgressKey progressKey, long amount, String identity) {
         UUID validatedPlayerId = Objects.requireNonNull(playerId, "playerId");
         QuestProgressKey validatedProgressKey = Objects.requireNonNull(progressKey, "progressKey");
         if (amount <= 0L) {
@@ -255,6 +267,22 @@ public final class QuestService {
                 continue;
             }
 
+            if (identity != null) {
+                var distinct = progress.distinct();
+                if (distinct == null) {
+                    if (progress.progress() != 0 || definition.target() > QuestDistinctProgress.MAX_IDENTITIES) continue;
+                    distinct = new QuestDistinctProgress(validatedProgressKey.value(), definition.target(), Set.of(), false);
+                }
+                if (!distinct.compatible(definition) || distinct.identities().contains(identity)
+                        || distinct.identities().size() != progress.progress()) continue;
+                long total = state.progressEntries().stream().filter(p -> p.distinct() != null)
+                        .mapToLong(p -> p.distinct().identities().size()).sum();
+                if (total >= QuestDistinctProgress.MAX_PLAYER_IDENTITIES) continue;
+                progress = new PlayerQuestProgress(progress.questId(), progress.progress(), progress.status(), distinct.including(identity));
+            } else if (progress.distinct() != null) {
+                // Numeric producers cannot discard or bypass assignment-local identity evidence.
+                continue;
+            }
             long currentProgress = progress.progress();
             long newProgress;
             if (currentProgress >= definition.target()) {

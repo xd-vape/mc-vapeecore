@@ -24,6 +24,20 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class RankCommand implements TabExecutor {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
 
     public static final String PERMISSION = "vapeecore.rank.view";
 
@@ -86,6 +100,7 @@ public final class RankCommand implements TabExecutor {
             return true;
         }
         messageService.send(sender, rankMessage(serverNameSupplier.get(), target.getName(), rank));
+        if (args.length == 0 && sender instanceof Player player) succeeded(player);
         return true;
     }
 

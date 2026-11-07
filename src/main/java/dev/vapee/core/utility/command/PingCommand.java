@@ -23,6 +23,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class PingCommand implements TabExecutor {
+    private final java.util.Set<BiConsumer<Player, Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(BiConsumer<Player, Player> listener) { successListeners.add(Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(BiConsumer<Player, Player> listener) { successListeners.remove(listener); }
+
 
     public static final String PERMISSION = "vapeecore.utility.ping";
     public static final String OTHERS_PERMISSION = "vapeecore.utility.ping.others";
@@ -101,6 +105,16 @@ public final class PingCommand implements TabExecutor {
                 : tr("utility.ping.other", java.util.Map.of("ping", Component.text(target.getPing(), MessageStyle.HIGHLIGHT), "player", Component.text(target.getName(), MessageStyle.HIGHLIGHT))))
                 .color(MessageStyle.BODY);
         messageSender.accept(sender, message);
+        if (sender instanceof Player player && target.isOnline()) {
+            for (var listener : List.copyOf(successListeners)) {
+                try { listener.accept(player, target); }
+                catch (RuntimeException failure) {
+                    try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                            "Ping success observer failed; output is retained.", failure); }
+                    catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+                }
+            }
+        }
         return true;
     }
 

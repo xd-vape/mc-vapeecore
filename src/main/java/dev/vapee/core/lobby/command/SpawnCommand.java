@@ -27,7 +27,7 @@ public final class SpawnCommand implements TabExecutor {
 
     public SpawnCommand(LobbyService lobbyService, MessageService messageService) {
         this(Objects.requireNonNull(lobbyService, "lobbyService")::hasSpawn,
-                () -> lobbyService.getSpawnLocation().isPresent(), lobbyService::teleportToSpawn, messageService);
+                () -> lobbyService.getSpawnLocation().isPresent(), lobbyService::teleportToSpawnFromCommand, messageService);
     }
 
     SpawnCommand(BooleanSupplier hasSpawn, BooleanSupplier spawnAvailable,

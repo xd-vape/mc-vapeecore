@@ -124,6 +124,7 @@ public final class QuestModule implements CoreModule {
     private void cleanup(RuntimeResources resources, RuntimeException failure) {
         resources.seeding = false;
         resources.reporter.silence();
+        cleanupLobby(resources, failure);
         cleanupCommunity(resources, failure);
         cleanupHud(resources, failure);
         cleanupMovement(resources, failure);
@@ -187,6 +188,68 @@ public final class QuestModule implements CoreModule {
     public QuestDefinitionRegistry getDefinitionRegistry() { return activeRuntime().registry; }
     public QuestService getQuestService() { return activeRuntime().service; }
     public QuestProgressReporter getProgressReporter() { return activeRuntime().reporter; }
+
+    /** Lobby owners are already enabled; commands retain their own authorization boundaries. */
+    public void startLobby(dev.vapee.core.lobby.LobbyModule lobbyOwner,
+            dev.vapee.core.lobby.warp.WarpModule warpOwner, dev.vapee.core.lobby.experience.LobbyExperienceModule experienceOwner,
+            dev.vapee.core.quest.daily.DailyQuestModule dailyOwner, dev.vapee.core.settings.SettingsModule settingsOwner,
+            FriendModule friendOwner, dev.vapee.core.visibility.VisibilityModule visibilityOwner, ActivityService activities) {
+        RuntimeResources resources = activeRuntime();
+        if (resources.lobby != null) throw new IllegalStateException("Lobby producers already bound or awaiting cleanup");
+        var lobby = lobbyOwner.getLobbyService(); var states = lobbyOwner.getLobbyPlayerStateService();
+        var warps = warpOwner.getWarpService(); var navigator = experienceOwner.getNavigatorMenu();
+        var daily = dailyOwner.getMenu(); var settings = settingsOwner.getSettingsMenu();
+        var visibilityMenu = settingsOwner.getVisibilitySettingsMenu(); var friends = friendOwner.getFriendMenu();
+        var visibility = visibilityOwner.getVisibilityService();
+        var coins = command("coins", dev.vapee.core.economy.command.CoinsCommand.class);
+        var rank = command("rank", dev.vapee.core.rank.command.RankCommand.class);
+        var ranks = command("ranks", dev.vapee.core.rank.command.RanksCommand.class);
+        var ping = command("ping", dev.vapee.core.utility.command.PingCommand.class);
+        resources.lobby = new QuestLobbyProducer(resources.players, resources.registry, resources.service, resources.reporter,
+                plugin.getServer()::getPlayer,
+                player -> lobby.isLobbyWorld(player.getWorld()) && !states.isBuildMode(player.getUniqueId())
+                        && !activities.isParticipating(player.getUniqueId()) && !player.isDead(),
+                visibility::canSee, player -> player.getWorld().getNearbyPlayers(player.getLocation(), QuestLobbyProducer.ENCOUNTER_RADIUS),
+                action -> {
+                    var task = plugin.getServer().getScheduler().runTask(plugin, action);
+                    return () -> { task.cancel(); if (!task.isCancelled()) throw new IllegalStateException("Lobby task cancellation unconfirmed"); };
+                }, () -> owns(resources) && resources.lobbyReady, plugin.getServer()::isPrimaryThread,
+                Bukkit::getCurrentTick, plugin.getLogger());
+        try {
+            var producer = resources.lobby;
+            producer.bind(lobby, warps, navigator, daily, settings, friends, visibilityMenu, coins, rank, ranks, ping, visibility,
+                    () -> lobbyOwner.getLobbyService() == lobby && lobbyOwner.getLobbyPlayerStateService() == states
+                            && warpOwner.getWarpService() == warps && experienceOwner.getNavigatorMenu() == navigator
+                            && dailyOwner.getMenu() == daily && settingsOwner.getSettingsMenu() == settings
+                            && settingsOwner.getVisibilitySettingsMenu() == visibilityMenu && friendOwner.getFriendMenu() == friends
+                            && visibilityOwner.getVisibilityService() == visibility
+                            && command("coins", dev.vapee.core.economy.command.CoinsCommand.class) == coins
+                            && command("rank", dev.vapee.core.rank.command.RankCommand.class) == rank
+                            && command("ranks", dev.vapee.core.rank.command.RanksCommand.class) == ranks
+                            && command("ping", dev.vapee.core.utility.command.PingCommand.class) == ping);
+            producer.own(() -> states.addStateListener(producer), () -> states.removeStateListener(producer));
+            producer.own(() -> activities.addMembershipListener(producer), () -> activities.removeMembershipListener(producer));
+            plugin.getServer().getPluginManager().registerEvents(producer, plugin);
+            resources.lobbyReady = true;
+            for (Player player : plugin.getServer().getOnlinePlayers()) producer.seed(player);
+        } catch (RuntimeException failure) { cleanupLobby(resources, failure); throw failure; }
+    }
+
+    private <T> T command(String name, Class<T> type) {
+        var command = Objects.requireNonNull(plugin.getCommand(name), "Missing command: " + name);
+        if (command.getPlugin() != plugin || !type.isInstance(command.getExecutor()))
+            throw new IllegalStateException("Command owner changed: " + name);
+        return type.cast(command.getExecutor());
+    }
+
+    private void cleanupLobby(RuntimeResources resources, RuntimeException failure) {
+        resources.lobbyReady = false;
+        if (resources.lobby == null) return;
+        try { resources.lobby.close(); }
+        catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
+        boolean unregistered = unregister(resources.lobby, failure);
+        if (unregistered && resources.lobby.released()) resources.lobby = null;
+    }
 
     /** Acquire success signals only after all 27 existing modules have enabled. */
     public void startCommunity(ChatModule chatOwner, ModerationModule moderationOwner,
@@ -388,6 +451,8 @@ public final class QuestModule implements CoreModule {
         private final QuestPlaytimeProducer playtime;
         private QuestListener listener;
         private QuestProgressHud hud;
+        private QuestLobbyProducer lobby;
+        private boolean lobbyReady;
         private QuestCommunityProducer community;
         private boolean communityReady;
         private BukkitTask hudTask;
@@ -417,7 +482,7 @@ public final class QuestModule implements CoreModule {
         }
 
         private boolean released() {
-            return task == null && listener == null && movement == null && hud == null && community == null && !finalSamplePending && !flushPending && samplesReleased;
+            return task == null && listener == null && movement == null && hud == null && community == null && lobby == null && !finalSamplePending && !flushPending && samplesReleased;
         }
     }
 }

@@ -7,6 +7,7 @@ import dev.vapee.core.persistence.SafeFileWriter;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.social.PlayerSocial;
 import dev.vapee.core.quest.PlayerQuestProgress;
+import dev.vapee.core.quest.QuestDistinctProgress;
 import dev.vapee.core.quest.PlayerQuestState;
 import dev.vapee.core.quest.daily.DailyQuestCycleId;
 import dev.vapee.core.quest.daily.PlayerDailyQuestState;
@@ -159,6 +160,15 @@ public final class FilePlayerRepository implements PlayerRepository {
                 String questPath = "quests.active." + progress.questId();
                 configuration.set(questPath + ".progress", progress.progress());
                 configuration.set(questPath + ".status", progress.status().name());
+                var distinct = progress.distinct();
+                if (distinct != null) {
+                    configuration.set(questPath + ".distinct.blocked", distinct.blocked());
+                    if (!distinct.blocked()) {
+                        configuration.set(questPath + ".distinct.key", distinct.key());
+                        configuration.set(questPath + ".distinct.target", distinct.target());
+                        configuration.set(questPath + ".distinct.identities", List.copyOf(distinct.identities()));
+                    }
+                }
             }
             List<String> ignoredPlayers = player.getSocial().getIgnoredPlayers().stream()
                     .map(UUID::toString)
@@ -407,6 +417,7 @@ public final class FilePlayerRepository implements PlayerRepository {
         }
 
         List<PlayerQuestProgress> progressEntries = new ArrayList<>();
+        int distinctBudget = QuestDistinctProgress.MAX_PLAYER_IDENTITIES;
         for (String questId : activeSection.getKeys(false).stream().sorted().toList()) {
             String questPath = "quests.active." + questId;
             ConfigurationSection questSection = configuration.getConfigurationSection(questPath);
@@ -450,7 +461,30 @@ public final class FilePlayerRepository implements PlayerRepository {
 
             try {
                 QuestStatus status = QuestStatus.valueOf(statusName);
-                progressEntries.add(new PlayerQuestProgress(questId, progress, status));
+                QuestDistinctProgress distinct = null;
+                if (questSection.contains("distinct")) {
+                    try {
+                        var section = questSection.getConfigurationSection("distinct");
+                        if (section == null) throw new IllegalArgumentException("expected distinct section");
+                        if (Boolean.TRUE.equals(section.get("blocked"))) distinct = QuestDistinctProgress.blockedState();
+                        else {
+                            Object target = section.get("target"), raw = section.get("identities");
+                            if (!(target instanceof Integer || target instanceof Long) || !(raw instanceof List<?> values)
+                                    || values.size() > QuestDistinctProgress.MAX_IDENTITIES || values.size() > distinctBudget
+                                    || values.size() != progress || values.stream().anyMatch(v -> !(v instanceof String)))
+                                throw new IllegalArgumentException("invalid distinct evidence or progress mismatch");
+                            var identities = new java.util.TreeSet<String>();
+                            for (Object value : values) identities.add(QuestDistinctProgress.requireIdentity((String) value));
+                            if (identities.size() != values.size()) throw new IllegalArgumentException("duplicate distinct identity");
+                            distinct = new QuestDistinctProgress(section.getString("key"), ((Number) target).longValue(), identities, false);
+                            distinctBudget -= identities.size();
+                        }
+                    } catch (RuntimeException invalid) {
+                        distinct = QuestDistinctProgress.blockedState();
+                        logInvalidQuestState(uniqueId, playerFile, questPath + ".distinct", "invalid evidence; distinct measurement blocked until reassignment");
+                    }
+                }
+                progressEntries.add(new PlayerQuestProgress(questId, progress, status, distinct));
             } catch (IllegalArgumentException exception) {
                 logInvalidQuestState(
                         uniqueId,

@@ -36,6 +36,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class CoinsCommand implements TabExecutor {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
 
     private static final String BASE_PERMISSION = "vapeecore.economy.coins";
     private static final String ADMIN_PERMISSION = "vapeecore.economy.admin";
@@ -154,6 +168,7 @@ public final class CoinsCommand implements TabExecutor {
             return;
         }
         messageService.send(sender, tr("economy.balance", java.util.Map.of("balance", Component.text(format(balance.getAsLong()), MessageStyle.HIGHLIGHT))).color(NamedTextColor.GRAY));
+        succeeded(player);
     }
 
     private void handleGet(CommandSender sender, String[] args) {

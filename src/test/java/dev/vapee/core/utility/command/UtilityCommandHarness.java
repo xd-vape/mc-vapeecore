@@ -443,6 +443,7 @@ public final class UtilityCommandHarness {
         other.ping = 42;
 
         PingCommand ping = new PingCommand(fixture::lookup, fixture::onlinePlayers, fixture.messages);
+        int[] successes={0,0};ping.addSuccessListener((actor,target)->successes[actor==target?0:1]++);
         ping.onCommand(self.player, null, "ping", new String[0]);
         check(fixture.last().equals("Your ping: 24 ms"), "ping reports self latency");
         ping.onCommand(self.player, null, "ping", new String[]{"Other"});
@@ -461,6 +462,7 @@ public final class UtilityCommandHarness {
         check(ping.onTabComplete(self.player, null, "ping", new String[]{""}).isEmpty(),
                 "ping hides completion without others permission");
 
+        check(successes[0]==1&&successes[1]==1,"Ping distinguishes self/other; console, denial and offline do not signal");
         ClearCommand clear = new ClearCommand(
                 fixture.service, fixture::lookup, fixture::onlinePlayers,
                 fixture.activityPlayers::contains, fixture.buildPlayers::contains, fixture.messages

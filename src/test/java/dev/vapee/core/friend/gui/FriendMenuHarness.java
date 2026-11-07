@@ -22,6 +22,7 @@ public final class FriendMenuHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        successContract();
         emptyAndControls();
         renderingAndPagination();
         actionsAndStaleState();
@@ -284,6 +285,14 @@ public final class FriendMenuHarness {
             return true;
         }
         return component.children().stream().anyMatch(FriendMenuHarness::hasSuggestCommand);
+    }
+
+    private static void successContract() throws Exception {
+        var f=new FriendMenuFixture();var p=f.player("Owner",true);int[] count={0};f.menu.addSuccessListener(player->count[0]++);
+        p.permitted=false;f.menu.open(p.player);check(count[0]==0,"Friend denied open has no signal");p.permitted=true;
+        check(f.menu.open(p.player)&&count[0]==1,"Friend root open signals once");
+        f.menu.open(p.player,FriendMenuView.INCOMING,0);f.menu.open(p.player,FriendMenuView.OUTGOING,0);f.menu.refreshActive(p.id);
+        check(count[0]==1,"Friend tabs, page opens and refresh do not count as root open");f.menu.shutdown();
     }
 
     private static void check(boolean condition, String message) {

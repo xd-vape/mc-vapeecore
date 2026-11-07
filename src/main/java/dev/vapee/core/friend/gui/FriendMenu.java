@@ -38,6 +38,20 @@ import java.util.logging.Logger;
 
 /** A focused, holder-bound view of the existing friends service. */
 public final class FriendMenu {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
     private UUID presenceTarget;
     private boolean presenceOnline;
 
@@ -126,7 +140,10 @@ public final class FriendMenu {
     }
 
     public boolean open(Player player) {
-        return open(player, FriendMenuView.FRIENDS, 0);
+        boolean opened = open(player, FriendMenuView.FRIENDS, 0);
+        var top = player.getOpenInventory().getTopInventory();
+        if (opened && top.getHolder() instanceof FriendMenuHolder holder && isActive(player, top, holder)) succeeded(player);
+        return opened;
     }
 
     public boolean open(Player player, FriendMenuView view, int requestedPage) {
@@ -196,7 +213,9 @@ public final class FriendMenu {
         }
         holder.finishRender();
         var opened = inventory == rerenderInventory ? viewer.getOpenInventory() : viewer.openInventory(inventory);
-        if (opened != null && opened.getTopInventory() == inventory) {
+        if (opened != null && opened.getTopInventory() == inventory
+                && viewer.getOpenInventory().getTopInventory() == inventory && viewer.hasPermission(FriendCommand.PERMISSION)
+                && inventory.getHolder() == holder && holder.getInventory() == inventory) {
             activeInventories.put(owner, inventory);
             return true;
         }

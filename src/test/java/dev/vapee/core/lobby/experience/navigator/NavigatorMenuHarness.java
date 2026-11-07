@@ -14,6 +14,7 @@ public final class NavigatorMenuHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        successContract();
         var f = new NavigatorFixture();
         var player = f.player();
         check(f.menu.open(player.player), "valid empty registry opens");
@@ -92,6 +93,12 @@ public final class NavigatorMenuHarness {
                         && hidden.menu.isActive(hiddenPlayer.player, preserved, (NavigatorInventoryHolder) preserved.getHolder()),
                 "cancelled replacement does not publish a new inventory");
         System.out.println("NavigatorMenuHarness passed " + checks + " checks.");
+    }
+
+    private static void successContract() throws Exception {
+        var f=new NavigatorFixture();var p=f.player();int[] count={0};f.menu.addSuccessListener(player->count[0]++);
+        check(f.menu.open(p.player)&&count[0]==1,"Legacy Navigator root signals once");
+        f.menu.open(p.player,0);f.menu.refreshActive(p.id);check(count[0]==1,"Navigator page and refresh remain silent");f.menu.shutdown();
     }
 
     private static void check(boolean condition, String message) {

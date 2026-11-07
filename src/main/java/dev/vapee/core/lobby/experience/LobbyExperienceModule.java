@@ -102,6 +102,8 @@ public final class LobbyExperienceModule implements CoreModule {
                 settingsModule::getSettingsMenu, friendModule::getFriendMenu, () -> visibilityAction, () -> playerMenu);
     }
 
+    public NavigatorMenu getNavigatorMenu() { return Objects.requireNonNull(navigatorMenu, "LobbyExperienceModule is not enabled"); }
+
     @Override
     public String getName() {
         return "LobbyExperience";

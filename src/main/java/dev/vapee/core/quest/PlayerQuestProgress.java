@@ -5,7 +5,8 @@ import java.util.Objects;
 public record PlayerQuestProgress(
         String questId,
         long progress,
-        QuestStatus status
+        QuestStatus status,
+        QuestDistinctProgress distinct
 ) {
 
     public PlayerQuestProgress {
@@ -16,7 +17,11 @@ public record PlayerQuestProgress(
         Objects.requireNonNull(status, "status");
     }
 
+    public PlayerQuestProgress(String questId, long progress, QuestStatus status) {
+        this(questId, progress, status, null);
+    }
+
     PlayerQuestProgress with(long newProgress, QuestStatus newStatus) {
-        return new PlayerQuestProgress(questId, newProgress, newStatus);
+        return new PlayerQuestProgress(questId, newProgress, newStatus, distinct);
     }
 }

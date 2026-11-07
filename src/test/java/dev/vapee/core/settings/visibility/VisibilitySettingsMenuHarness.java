@@ -11,6 +11,7 @@ public final class VisibilitySettingsMenuHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        successContract();
         VisibilityMenuFixture fixture = new VisibilityMenuFixture();
         var owner = fixture.player("Owner", true);
         var added = fixture.player("Added", false);
@@ -133,6 +134,13 @@ public final class VisibilitySettingsMenuHarness {
 
     private static String plain(net.kyori.adventure.text.Component component) {
         return PLAIN.serialize(component);
+    }
+
+    private static void successContract() throws Exception {
+        var f=new VisibilityMenuFixture();var p=f.player("Owner",true);int[] count={0};f.visibilityMenu.addSuccessListener(player->count[0]++);
+        p.permitted=false;f.visibilityMenu.open(p.player);check(count[0]==0,"Visibility denied open has no signal");p.permitted=true;
+        f.visibilityMenu.open(p.player);check(count[0]==1,"Visibility bound top signals once");f.visibilityMenu.refreshActive(p.id);
+        check(count[0]==1,"Visibility refresh has no signal");f.visibilityMenu.shutdown();
     }
 
     private static void check(boolean condition, String message) {

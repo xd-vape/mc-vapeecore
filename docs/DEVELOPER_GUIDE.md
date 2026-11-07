@@ -730,7 +730,7 @@ Bei `enabled: false` wird die In-Memory-Baseline regelmäßig auf die aktuelle S
 
 `QuestDefinitionRegistry` hält den zur Laufzeit bekannten Katalog. `findById`, `snapshot` und `snapshotById` liefern immutable Sichten in deterministischer ID-Reihenfolge. `replaceAll` baut zuerst einen vollständigen Kandidaten auf und lehnt Nullwerte oder Duplicate-IDs ab, bevor es den Runtime-Katalog austauscht. Ein Fehler lässt den alten Katalog vollständig erhalten. `QuestModule` erzeugt zunächst ein leeres Registry; `DailyQuestModule` lädt danach die Definitionen aus `daily-quests.yml` hinein. Der ausgelieferte Katalog ist absichtlich leer.
 
-`CorePlayer` besitzt genau einen `PlayerQuestState`. Dessen aktuelle Assignment-Map enthält pro Quest ausschließlich ein immutable `PlayerQuestProgress(questId, progress, status)`; Definition, Name, Beschreibung, Target und Reward werden nicht dupliziert. Die Statuswerte bedeuten:
+`CorePlayer` besitzt genau einen `PlayerQuestState`. Dessen aktuelle Assignment-Map enthält pro Quest ein immutable `PlayerQuestProgress(questId, progress, status, distinct)`; der Drei-Argument-Konstruktor bleibt erhalten. Nur Distinct-Messungen besitzen zusätzlich begrenzte Identitätsevidenz und eine Kompatibilitätssignatur. Namen, Beschreibungen und Rewards werden nicht dupliziert. Die Statuswerte bedeuten:
 
 - `ACTIVE`: Fortschritt liegt im normalen Servicepfad unter dem aktuellen Target.
 - `REWARD_PENDING`: Target wurde erreicht, aber der Reward wurde nicht erfolgreich bestätigt; der Fortschritt wird am Target gehalten.
@@ -847,9 +847,51 @@ Der Community-Listener läuft bei `AsyncChatEvent` mit MONITOR/ignoreCancelled. 
 
 `PrivateMessageService.DeliveryListener`, `FriendService.SuccessListener` und `TeleportRequests.SuccessListener` publizieren ausschließlich nach ihrer jeweiligen Erfolgsgrenze. Friends enthält weiterhin keine Bukkit-Player oder Quest-Abhängigkeit. PM-/TPA-Callbacks reichen Player nur während des synchronen Aufrufs durch; die Producer-Maps speichern keine Bukkit-Player. Observer-Fehler werden isoliert protokolliert, erfolgreiche Aktionen bleiben erhalten; nach einem Fortschrittsfehler gibt es keinen automatischen Replay. Bestehende PM-Templates, Conversations, Ignore-/Mute-/Settings-Gates und Friend-/TPA-Nachrichten bleiben ihren Ownern zugeordnet.
 
-Nach `enableAll()` erwirbt `QuestModule.startCommunity` die inzwischen verfügbaren Owner. Die 27 Module und sieben Reload-Teilnehmer bleiben bestehen. Teilweise erworbene Subscriptions werden vor dem Add besessen, unabhängig freigegeben und bei verweigerter Freigabe im vorhandenen Pending-Cleanup behalten. Disable schließt zuerst die Autorität; ausstehende einmalige Callbacks sind inert. Re-enable ist erst nach bestätigtem Cleanup möglich. Es gibt weder neue Player-Persistenz noch Default-Aktivierung, Economy-Schreibpfade, Commands oder Permissions. `social:meet_unique` und andere syntaktisch gültige zukünftige Keys bleiben ohne Producer zulässig.
+Nach `enableAll()` erwirbt `QuestModule.startCommunity` die inzwischen verfügbaren Owner. Die 27 Module und sieben Reload-Teilnehmer bleiben bestehen. Teilweise erworbene Subscriptions werden vor dem Add besessen, unabhängig freigegeben und bei verweigerter Freigabe im vorhandenen Pending-Cleanup behalten. Disable schließt zuerst die Autorität; ausstehende einmalige Callbacks sind inert. Re-enable ist erst nach bestätigtem Cleanup möglich. Es gibt weder neue Player-Persistenz noch Default-Aktivierung, Economy-Schreibpfade, Commands oder Permissions. Weitere syntaktisch gültige zukünftige Keys bleiben ohne Producer zulässig; `social:meet_unique` besitzt seit Step 08D den unten beschriebenen persistenten Producer.
 
 Die ausführbaren `QuestCommunityChatHarness`, `QuestCommunitySocialHarness` und `QuestCommunityModuleHarness` prüfen diese Grenzen einschließlich echter Domain-Services, HUD, Rewards, YAML-Kompatibilität, Teilstart und Cleanup-Retry. Native Abnahme, genaue Ergebnisse und verbleibende Client-Checks: [Step-08C-Bericht](../reports/08c/STEP_08C_COMMUNITY_QUEST_PROGRESS.md).
+
+### Lobby & player interaction progress (Step 08D)
+
+`QuestModule.startLobby` binds the existing owners after `enableAll()`. Local post-success listeners feed `QuestLobbyProducer`, then Reporter -> QuestService -> RewardService and the existing generic HUD. There is no command-string observer, global event bus, new module, reload participant, quest catalog or direct coin writer. All 27 modules and seven reload participants retain their order. Commands retain their effective permissions and domain gates. Queries and Settings/Friends menus work wherever their existing owners allow them; NORMAL/Lobby/no-Activity applies additionally to Navigator access and encounters.
+
+| Key | Authoritative success boundary |
+| --- | --- |
+| `lobby:spawn_arrived` | Successful existing teleport through `LobbyService.teleportToSpawnFromCommand`, used only by explicit SpawnCommand. Join/respawn retain the silent `teleportToSpawn`. |
+| `lobby:warp_visit` | Successful `WarpService.teleportFromNavigator`, used by both legacy and V2 Navigator, with the configured WarpPoint still current after teleport callbacks. |
+| `lobby:warp_unique` | That Navigator success or ordinary `WarpService.teleport`; once per canonical technical warp ID per assignment. |
+| `lobby:navigator_open` | Successful regular `NavigatorMenu.open(Player)` with the exact bound, currently open holder/inventory. |
+| `lobby:quests_open` | Successful `DailyQuestMenu.open`; internal `openPage`, refresh and countdown paths are silent. |
+| `lobby:settings_open`, `lobby:friends_open`, `lobby:visibility_open` | Successful owning root menu open, with permission/profile gates and exact current bound top inventory. Friend tabs/pages are internal opens. |
+| `lobby:coins_check` | `CoinsCommand.sendOwnBalance`, after actual loaded balance output for argument-free `/coins`. |
+| `lobby:rank_check` | Argument-free own Rank output with an available primary rank. |
+| `lobby:ranks_check` | Successful nonempty public rank-track output. |
+| `lobby:ping_self`, `lobby:ping_other` | Successful Ping output, actual UUID self classification and existing Others authorization. Explicit own name is self. |
+| `social:meet_unique` | First eligible nearby visible player UUID in the same lobby world, as defined below. |
+
+Commands, registered lobby-item actions and Player Menu destinations share the owning menu success boundary. Locale/reload renders, refreshes, pagination, Navigator submenus and admin previews do not publish root-open success. Observers own no inventories and cannot roll back/replay an already successful action. Signals require the current online Player instance and loaded CorePlayer, live module/source owners and a matching unfinished ACTIVE assignment. Retired callbacks cannot earn progress.
+
+#### Persistent distinct evidence
+
+`QuestService.addDistinctProgress(UUID, key, identity)` and `QuestProgressReporter.reportDistinct` update immutable numeric progress and `QuestDistinctProgress` together before the unchanged pending/reward path. Two assignments sharing a key keep independent identity sets. Numeric signals cannot bypass evidence once an active assignment is distinct-managed.
+
+The additive optional `quests.active.<id>.distinct` section contains `key`, `target`, sorted `identities` and `blocked: false`. Blocked evidence stores only `blocked: true`. It is saved inside the already wholly owned `quests.active` field of the same full CorePlayer document; player schema version remains 1. This key/target signature checks compatibility and is not another definition registry. Old files and three-argument progress records remain compatible. A zero-progress legacy assignment can begin evidence. A nonzero legacy assignment without history fails closed for distinct measurement until a fresh assignment/reset; prior identities cannot be reconstructed safely.
+
+Identities match `[a-z0-9][a-z0-9_:/-]{0,127}`. Warps use `warp:` plus SHA-256 of the canonical technical ID, supporting even long valid configured IDs without storing unbounded strings. Encounters use `player:` plus UUID. Display names never establish identity. Removing/recreating the same ID retains identity within this assignment; a renamed ID is new. No physical-destination continuity or global player/warp history is promised.
+
+Limits: **1024 identities per assignment, 4096 across all current assignments per player**. Distinct targets over 1024 or exhausted total capacity stop accepting new evidence, without target clamping or early payout. These measurement limits do not change general YAML validation; configure appropriate targets/selection sizes. Malformed, duplicated, excessive or numeric-inconsistent optional evidence logs a warning and becomes blocked while preserving numeric progress, status and the rest of the profile. A later save persists that block instead of inventing empty history.
+
+Same-cycle assignments and compatible reloads retain evidence. Catalog identity changes invalidate queued observations, not stored identities. A changed key/target signature stops further distinct measurement; compatible rollback can continue. Explicit Force retains compatible surviving evidence, starts incompatible/blocked records fresh and restores complete prior records on save failure. Pending rewards still block Force and retain evidence during retry/completion. New assignments and real daily resets start fresh. Normal logout/shutdown/restart stores evidence with numeric progress through existing full-profile saves. The existing deferred-flush and hard-JVM/OS-crash limits remain; no new transaction/history storage is introduced.
+
+#### Encounter semantics and ownership
+
+Both players must be current online instances with loaded profiles, alive, NORMAL, outside Activity membership and in the same configured lobby world. Self is excluded. The three-dimensional radius is **six blocks, inclusive**. `VisibilityService.canSee(viewer,target)` combines the existing directional VisibilityPolicy, including bidirectional Ignore, with `Player.canSee` to respect other plugins' hide ownership. Both viewer directions are considered separately.
+
+Move/Join/World/Teleport/Respawn, existing visibility refreshes, assignments and BUILD/Activity changes can request a next-tick scan. One shared event-driven one-shot task drains at most **32 spatial queries per tick**, per UUID no sooner than **20 ticks**, and validates at most **32 candidates per query** from `World.getNearbyPlayers`. A rotating offset avoids permanently selecting the same dense local subset. The API may still materialize a result proportional to local density. No global online-pair scan or global polling is introduced. A catalog without `social:meet_unique` schedules no encounter work. There are at most 4096 session slots and 1024 pending contexts. Capacity/throttle pressure can undercount. Maps retain no Bukkit Player/World objects. Ordinary move sampling does no file I/O; actual new evidence follows existing persistence/reward boundaries.
+
+This is a server proximity/visibility decision, without ray tracing or proof of client rendering/human perception. Brief encounters, stationary players after an in-throttle change, and foreign show/hide changes without another observed event may wait for the next eligible movement. Rejoining/revisiting/restarting/reloading cannot recount a stored target.
+
+Queued work rechecks session/entity, CorePlayer, assignment and catalog identities. Quit removes only its matching session. Disable revokes authority before independently releasing owned subscriptions, handlers and the waiting task. Release ownership is recorded before acquisition; failed cleanup retains original resources for explicit retry and blocks re-enable. Foreign observers survive. Executable Distinct/Lobby/Module and extended menu/command harnesses cover these contracts. Native evidence and real-client work: [Step 08D report](../reports/08d/STEP_08D_LOBBY_QUEST_PROGRESS.md).
 
 ## Daily Quest Cycle & Configuration
 

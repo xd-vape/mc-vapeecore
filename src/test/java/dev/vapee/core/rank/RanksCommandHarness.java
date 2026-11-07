@@ -39,7 +39,9 @@ public final class RanksCommandHarness {
         );
         Player player = fixture.player("Player", "vip");
 
+        int[] successes={0};command.addSuccessListener(p->successes[0]++);
         command.onCommand(player, null, "ranks", new String[0]);
+        check(successes[0]==1,"public Ranks track output signals once");
         String playerList = fixture.last();
         check(playerList.contains("Vapee Community • Ranks")
                         && playerList.indexOf("1. Member") < playerList.indexOf("2. VIP")
@@ -70,10 +72,12 @@ public final class RanksCommandHarness {
         check(!fixture.last().contains("• You") && fixture.last().contains("2. VIP"),
                 "console receives the rank list without a player marker");
 
+        int beforeFailure=successes[0];
         fixture.trackGroups = null;
         command.onCommand(console, null, "ranks", new String[0]);
         check(fixture.last().contains("configured LuckPerms rank track 'ranks' does not exist"),
                 "missing track returns a controlled response");
+        check(successes[0]==beforeFailure,"missing track never signals");
         fixture.trackGroups = List.of();
         command.onCommand(console, null, "ranks", new String[0]);
         check(fixture.last().endsWith("No public ranks are configured yet."),

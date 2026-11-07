@@ -24,6 +24,7 @@ public final class DailyQuestMenuLifecycleHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        successContract();
         if (args.length != 0) {
             switch (args[0]) {
                 case "observers" -> observerFailures();
@@ -375,6 +376,14 @@ public final class DailyQuestMenuLifecycleHarness {
         } catch (RuntimeException e) {
             return e;
         }
+    }
+
+    private static void successContract() throws Exception {
+        var f=new QuestMenuFixture();var p=f.player();f.domain.define(QuestCompletionFixture.definition("fixture","lobby:quests_open",20,7));
+        int[] count={0};f.menu.addSuccessListener(player->count[0]++);
+        p.cancelNextOpen=true;f.menu.open(p.player,0);check(count[0]==0,"cancelled DailyQuest open has no signal");
+        f.menu.open(p.player,0);check(count[0]==1,"DailyQuest bound top signals once");
+        f.menu.openPage(p.player,0);f.menu.refreshActive(p.id);f.tick();check(count[0]==1,"DailyQuest page/refresh/countdown do not signal");f.menu.shutdown();
     }
 
     private static void check(boolean ok, String message) {

@@ -44,7 +44,14 @@ public final class QuestProgressReporter {
     }
 
     public QuestProgressResult report(UUID playerId, QuestProgressKey key, long amount) {
-        QuestProgressResult result = quests.addProgress(playerId, key, amount);
+        return feedback(playerId, quests.addProgress(playerId, key, amount));
+    }
+
+    public QuestProgressResult reportDistinct(UUID playerId, QuestProgressKey key, String identity) {
+        return feedback(playerId, quests.addDistinctProgress(playerId, key, identity));
+    }
+
+    private QuestProgressResult feedback(UUID playerId, QuestProgressResult result) {
         if (!feedbackEnabled || result.status() != QuestProgressResult.Status.PROCESSED) return result;
         // QuestService views follow persisted ID order, also when several quests complete together.
         for (QuestView view : quests.getActiveQuests(playerId).orElse(java.util.List.of())) {

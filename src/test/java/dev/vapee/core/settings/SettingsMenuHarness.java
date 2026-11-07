@@ -15,6 +15,7 @@ public final class SettingsMenuHarness {
     private static int checks;
 
     public static void main(String[] args) throws Exception {
+        successContract();
         design();
         functions();
         failures();
@@ -139,6 +140,17 @@ public final class SettingsMenuHarness {
         f.players.unloadPlayer(refresh.id);
         f.click(refresh, refresh.open, MenuTestLayouts.SETTINGS.slot(SettingsMenu.Action.REFRESH), ClickType.LEFT);
         check(refresh.open == refresh.bottom, "refresh closes if profile disappeared");
+    }
+
+    private static void successContract() throws Exception {
+        var f = new SettingsMenuFixture(); var p = f.player("Owner"); int[] count={0};
+        f.menu.addSuccessListener(player->count[0]++);
+        p.cancelNextOpen=true; check(!f.menu.open(p.player)&&count[0]==0,"cancelled Settings open has no signal");
+        p.permitted=false;f.menu.open(p.player);check(count[0]==0,"Settings denial has no signal");p.permitted=true;
+        check(f.menu.open(p.player)&&count[0]==1,"Settings bound top inventory publishes once");
+        f.menu.refreshActive(p.id);f.menu.refresh(p.player,p.open);check(count[0]==1,"Settings refresh and locale render do not signal");
+        f.menu.addSuccessListener(player->{throw new IllegalStateException("observer refused");});
+        check(f.menu.open(p.player)&&count[0]==2,"Settings observer cannot undo successful open");f.menu.shutdown();
     }
 
     private static void check(boolean condition, String message) {

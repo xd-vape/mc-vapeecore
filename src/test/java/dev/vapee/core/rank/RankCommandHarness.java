@@ -44,6 +44,13 @@ public final class RankCommandHarness {
                 fixture::onlinePlayers
         );
 
+        int[] successes={0};command.addSuccessListener(player->successes[0]++);
+        command.onCommand(self, null, "rank", new String[0]);
+        check(successes[0]==1,"own Rank output signals after success");
+        command.onCommand(self,null,"rank",new String[]{"Other"});
+        command.onCommand(self,null,"rank",new String[]{"Missing"});
+        command.onCommand(fixture.console(Set.of(RankCommand.PERMISSION)),null,"rank",new String[]{"Other"});
+        check(successes[0]==1,"other, failed and console Rank queries never signal");
         command.onCommand(self, null, "rank", new String[0]);
         check(fixture.last().contains("Vapee Community • Rank")
                         && fixture.last().contains("Player: Self")

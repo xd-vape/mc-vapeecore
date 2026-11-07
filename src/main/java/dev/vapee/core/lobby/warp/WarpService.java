@@ -19,6 +19,26 @@ import java.util.TreeMap;
 import java.util.function.Function;
 
 public final class WarpService {
+    @FunctionalInterface public interface SuccessListener { void onSuccess(Player player, String warpId, boolean navigator); }
+    private final java.util.Set<SuccessListener> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(SuccessListener listener) { successListeners.add(Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(SuccessListener listener) { successListeners.remove(listener); }
+    private WarpResult teleportAndObserve(Player player, WarpPoint warp, boolean navigator) {
+        WarpResult result = teleport(player, warp);
+        // Reentrant teleport callbacks can remove/replace the configured target.
+        if (result == WarpResult.SUCCESS && warps.get(warp.id()) == warp) {
+            for (var listener : List.copyOf(successListeners)) {
+                try { listener.onSuccess(player, warp.id(), navigator); }
+                catch (RuntimeException failure) {
+                    try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                            "Warp success observer failed; teleport is retained.", failure); }
+                    catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+                }
+            }
+        }
+        return result;
+    }
+
     private final java.util.Set<WarpChangeListener> changeListeners = new java.util.LinkedHashSet<>();
 
 
@@ -166,7 +186,7 @@ public final class WarpService {
         if (!warp.navigation().visible()) {
             return WarpResult.NOT_NAVIGABLE;
         }
-        return teleport(player, warp);
+        return teleportAndObserve(player, warp, true);
     }
 
     public WarpResult teleport(Player player, String id) {
@@ -175,7 +195,7 @@ public final class WarpService {
         if (warp == null) {
             return WarpResult.NOT_FOUND;
         }
-        return teleport(validatedPlayer, warp);
+        return teleportAndObserve(validatedPlayer, warp, false);
     }
 
     private WarpResult teleport(Player validatedPlayer, WarpPoint warp) {

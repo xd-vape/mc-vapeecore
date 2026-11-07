@@ -219,6 +219,8 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
         return Objects.requireNonNull(active ? runtime : null, "DailyQuestModule is not enabled");
     }
 
+    public DailyQuestMenu getMenu() { return requireRuntime().menu; }
+
     public DailyQuestService getDailyQuestService() { return requireRuntime().service; }
 
     private void syncOnlineSafely(RuntimeResources current) {

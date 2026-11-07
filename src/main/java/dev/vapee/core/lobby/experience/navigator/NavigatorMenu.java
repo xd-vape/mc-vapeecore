@@ -29,6 +29,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class NavigatorMenu {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
     private final Map<UUID, NavigatorConfig.State> previews = new HashMap<>();
     private java.util.function.Predicate<Player> previewAccess = player -> false;
     public void previewAccess(java.util.function.Predicate<Player> access) { previewAccess = Objects.requireNonNull(access); }
@@ -135,7 +149,11 @@ public final class NavigatorMenu {
     }
 
     public boolean open(Player player) {
-        return open(player, 0);
+        boolean opened = open(player, 0);
+        var top = player.getOpenInventory().getTopInventory();
+        if (opened && top.getHolder() instanceof NavigatorInventoryHolder holder && isActive(player, top, holder)
+                && canAccess(player)) succeeded(player);
+        return opened;
     }
 
     public boolean open(Player player, int requestedPage) {
@@ -336,7 +354,7 @@ public final class NavigatorMenu {
             NavigatorConfig.State current = current(player);
             if (holder.configuration() != null && holder.configuration() != current
                     || holder.configuration() == null && current.enabled()) {
-                open(player); return;
+                open(player, holder.getPage()); return;
             }
             rerenderInventory = inventory;
             openPage(player, holder, holder.getPage());
@@ -384,7 +402,7 @@ public final class NavigatorMenu {
         if (holder.configuration() == current && current.enabled() && routeAllowed(player, holder.menuId(), holder.parents(), current))
             return true;
         messageService.send(player, tr("navigator.unavailable"));
-        open(player);
+        open(player, 0);
         return false;
     }
 

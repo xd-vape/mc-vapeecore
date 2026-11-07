@@ -31,6 +31,12 @@ public final class CoinsCommandHarness {
     };
 
     public static void main(String[] args) throws Exception {
+        var successFixture=new Fixture();var successPlayer=successFixture.player("Own",42L,true);int[] signals={0};
+        successFixture.command.addSuccessListener(p->signals[0]++);
+        successFixture.run(successPlayer);check(signals[0]==1,"own Coins query signals once");
+        for(String action:List.of("get","set","add","remove"))successFixture.run(successPlayer,action,successPlayer.id.toString(),"1");
+        successFixture.run(successPlayer,"help");successFixture.run(successPlayer,"bogus");
+        check(signals[0]==1,"Coins admin operations/help/usage do not signal");
         testPermissionsHelpAndUsage();
         testKnownReads();
         testMutations();

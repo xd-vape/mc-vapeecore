@@ -35,6 +35,26 @@ public final class VisibilityService {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
+    private final Set<java.util.function.Consumer<UUID>> refreshListeners = new LinkedHashSet<>();
+    public void addRefreshListener(java.util.function.Consumer<UUID> listener) { refreshListeners.add(Objects.requireNonNull(listener)); }
+    public void removeRefreshListener(java.util.function.Consumer<UUID> listener) { refreshListeners.remove(listener); }
+
+    /** The effective viewer-specific decision, including other plugins' hide ownership. */
+    public boolean canSee(Player viewer, Player target) {
+        return inLobby(viewer) && inLobby(target) && policy.shouldShow(viewer.getUniqueId(), target.getUniqueId(),
+                target.hasPermission(STAFF_MARKER)) && viewer.canSee(target);
+    }
+
+    private void refreshed(UUID id) {
+        for (var listener : List.copyOf(refreshListeners)) {
+            try { listener.accept(id); }
+            catch (RuntimeException failure) {
+                try { logger.log(Level.WARNING, "Visibility observer failed; visibility is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
     public void synchronizePlayer(Player player) {
         Player joined = Objects.requireNonNull(player, "player");
         if (!inLobby(joined)) return;
@@ -43,6 +63,7 @@ public final class VisibilityService {
             if (viewer.getUniqueId().equals(joined.getUniqueId()) || !inLobby(viewer)) continue;
             apply(viewer, joined);
         }
+        refreshed(joined.getUniqueId());
     }
 
     public void applyViewerPreference(Player viewer) {
@@ -52,6 +73,7 @@ public final class VisibilityService {
             if (target.getUniqueId().equals(checked.getUniqueId()) || !inLobby(target)) continue;
             apply(checked, target);
         }
+        refreshed(checked.getUniqueId());
     }
 
     /** Re-evaluates both directions because viewer preferences are intentionally asymmetric. */
@@ -65,6 +87,7 @@ public final class VisibilityService {
         if (firstPlayer == null || secondPlayer == null || !inLobby(firstPlayer) || !inLobby(secondPlayer)) return;
         apply(firstPlayer, secondPlayer);
         apply(secondPlayer, firstPlayer);
+        refreshed(checkedFirst); refreshed(checkedSecond);
     }
 
     public void restorePlayer(Player player) {

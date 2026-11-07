@@ -12,6 +12,20 @@ import java.util.Objects;
 import java.util.Optional;
 
 public final class LobbyService {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
 
     private final JavaPlugin plugin;
     private final LobbyConfig lobbyConfig;
@@ -84,6 +98,13 @@ public final class LobbyService {
     public void applySpawn(Optional<LobbySpawn> newSpawn) {
         spawn = Objects.requireNonNull(newSpawn, "newSpawn").orElse(null);
         warnedMissingWorldName = null;
+    }
+
+    /** Explicit command boundary; join and respawn keep using teleportToSpawn. */
+    public boolean teleportToSpawnFromCommand(Player player) {
+        if (!teleportToSpawn(player)) return false;
+        succeeded(player);
+        return true;
     }
 
     public boolean teleportToSpawn(Player player) {

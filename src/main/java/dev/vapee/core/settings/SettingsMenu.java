@@ -32,6 +32,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public final class SettingsMenu {
+    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
+    private void succeeded(org.bukkit.entity.Player player) {
+        for (var listener : java.util.List.copyOf(successListeners)) {
+            try { listener.accept(player); }
+            catch (RuntimeException failure) {
+                try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
+                        "Success observer failed; completed action is retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+    }
+
     private final dev.vapee.core.player.settings.PlayerSettingsChangeListener committedChanges = this::refreshActive;
     private boolean observingChanges;
 
@@ -131,8 +145,12 @@ public final class SettingsMenu {
             return false;
         }
         var opened = validatedPlayer.openInventory(inventory);
-        if (opened != null && opened.getTopInventory() == inventory) {
+        if (opened != null && opened.getTopInventory() == inventory
+                && validatedPlayer.getOpenInventory().getTopInventory() == inventory
+                && validatedPlayer.hasPermission(SettingsCommand.PERMISSION)
+                && playerSettingsService.getSettings(uniqueId).isPresent() && inventory.getHolder() == holder && holder.getInventory() == inventory) {
             activeInventories.put(uniqueId, inventory);
+            succeeded(validatedPlayer);
             return true;
         }
         return false;
