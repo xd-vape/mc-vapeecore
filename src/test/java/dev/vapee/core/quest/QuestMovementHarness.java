@@ -18,6 +18,11 @@ public final class QuestMovementHarness {
     private static int checks;
 
     public static void main(String[] args) {
+        if (args.length == 1 && args[0].equals("--confirmed-sneak")) {
+            confirmedSneak();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         if (args.length == 1 && args[0].equals("--velocity-guard")) {
             velocityGuard();
             System.out.println("QuestMovementHarness passed " + checks + " checks.");
@@ -46,6 +51,7 @@ public final class QuestMovementHarness {
         velocityGuard();
         lifecycleGuard();
         sneakReconciliation();
+        confirmedSneak();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -120,7 +126,7 @@ public final class QuestMovementHarness {
         check(
                 f.progress(a, "walk") == before + 1 && a.writes == 0,
                 "armed lobby double-jump allowFlight does not disable walking or mutate glide"
-                    + " flags");
+                        + " flags");
         f.move(a, 0.6, 0, 0.8, a.at.getYaw());
         check(
                 f.progress(a, "walk") == before + 2,
@@ -614,8 +620,13 @@ public final class QuestMovementHarness {
         f.producer.onSneak(beforeCommit);
         f.producer.onSneak(beforeCommit);
         check(
+                f.progress(a, "toggle") == 3,
+                "duplicate pre-commit callbacks grant no provisional credit");
+        a.sneak = true;
+        f.confirm();
+        check(
                 f.progress(a, "toggle") == 4,
-                "duplicate delivery before native flag commit counts only once");
+                "duplicate delivery confirms only once after native flag commit");
         f.tick += 10;
         f.producer.onSneak(beforeCommit);
         check(
@@ -1207,7 +1218,7 @@ public final class QuestMovementHarness {
                         && f.coins(a) == 7
                         && hudSignals[0] == 1,
                 "post-expiry ordinary completion/retry grants one reward and one numeric HUD"
-                    + " signal");
+                        + " signal");
         f.tick += 10;
         guardUnit(f, a, key);
         f.domain.quests.retryPendingRewards(a.id);
@@ -2173,6 +2184,402 @@ public final class QuestMovementHarness {
         check(
                 f.progress(a, "walk") == 2 && f.progress(a, "sprint") == 1,
                 "later fresh move resumes after the original one-tick exclusion");
+    }
+
+    private static void confirmedSneak() {
+        int beforeCases = guardScenarios, beforeFailures = guardFailures;
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 4, Integer.MIN_VALUE + 4}) {
+            for (boolean respawn : new boolean[] {false, true})
+                guardCase(
+                        "confirmed loading / " + origin + " / " + respawn,
+                        () -> confirmationLoading(origin, respawn));
+            for (int elapsed : new int[] {9, 10, 11})
+                guardCase(
+                        "confirmed cooldown / " + origin + " / " + elapsed,
+                        () -> confirmationCooldown(origin, elapsed));
+            for (String order :
+                    List.of(
+                            "end",
+                            "restart",
+                            "duplicate",
+                            "cancel-start",
+                            "cancel-end",
+                            "supersede"))
+                guardCase(
+                        "confirmed ordering / " + origin + " / " + order,
+                        () -> confirmationOrder(origin, order));
+            guardCase("confirmed guarded state / " + origin, () -> confirmationGuard(origin));
+            guardCase(
+                    "confirmed guard expiry boundary / " + origin,
+                    () -> confirmationGuardBoundary(origin));
+            guardCase("confirmed target-two / " + origin, () -> confirmationTargetTwo(origin));
+        }
+        for (String invalidation :
+                List.of(
+                        "assignment",
+                        "catalog",
+                        "rollback",
+                        "logout",
+                        "respawn",
+                        "teleport",
+                        "flight",
+                        "glide",
+                        "world",
+                        "death",
+                        "build",
+                        "activity",
+                        "velocity",
+                        "reject",
+                        "runtime",
+                        "unloaded"))
+            guardCase(
+                    "confirmed invalidation / " + invalidation,
+                    () -> confirmationInvalidation(invalidation));
+        for (String failure :
+                List.of("before", "after", "cancelled", "expired", "clear-retry", "unknown"))
+            guardCase("confirmed scheduling / " + failure, () -> confirmationFailure(failure));
+        guardCase("confirmed bounded shared batch", QuestMovementHarness::confirmationBatch);
+        guardCase(
+                "confirmed old callback after new batch",
+                QuestMovementHarness::confirmationOldCallback);
+        guardCase("confirmed lost task recovery", QuestMovementHarness::confirmationLostTask);
+        int cases = guardScenarios - beforeCases, failed = guardFailures - beforeFailures;
+        System.out.println("Confirmed sneak scenarios: " + cases + ", failed: " + failed);
+        if (failed != 0) throw new AssertionError("Confirmed sneak failed scenarios: " + failed);
+    }
+
+    private static Fixture confirmationFixture(long target) {
+        Fixture f = reconcileFixture(target);
+        f.autoConfirm = false;
+        return f;
+    }
+
+    private static void confirmationLoading(int origin, boolean respawn) {
+        Fixture f = confirmationFixture(1);
+        Actor a = reconcileActor(f);
+        int[] hud = {0};
+        f.domain.quests.addProgressListener((id, assignments, catalog, ids, result) -> hud[0]++);
+        if (respawn) f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false));
+        else
+            f.producer.onJoin(
+                    new PlayerJoinEvent(a.player, net.kyori.adventure.text.Component.empty()));
+        f.tick = origin;
+        f.requestToggle(a, true, false, false);
+        check(
+                !a.sneak
+                        && f.progress(a, "guard") == 0
+                        && f.coins(a) == 0
+                        && hud[0] == 0
+                        && f.feedback.isEmpty(),
+                "unapplied uncancelled loading start expected progress=0, actual="
+                        + f.progress(a, "guard"));
+        f.tick = origin + 1;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0 && f.status(a, "guard") == QuestStatus.ACTIVE,
+                "false physical flag rejects original intent");
+        f.tick = origin + 2;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0 && hud[0] == 0,
+                "later tick/loading alone never recounts");
+        f.tick = origin + 3;
+        f.toggle(a, true, false);
+        check(
+                a.sneak && f.progress(a, "guard") == 0,
+                "real start remains provisional before confirmation");
+        f.tick = origin + 4;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1
+                        && f.status(a, "guard") == QuestStatus.COMPLETED
+                        && f.coins(a) == 7
+                        && hud[0] == 1
+                        && f.feedback.size() == 1,
+                "new real action confirms once through services/HUD boundary");
+        for (var task : List.copyOf(f.confirmations)) task.action.run();
+        f.domain.quests.retryPendingRewards(a.id);
+        check(f.coins(a) == 7 && hud[0] == 1, "old callback/retry cannot duplicate reward");
+    }
+
+    private static void confirmationCooldown(int origin, int elapsed) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "no pre-commit progress");
+        f.tick = origin + 1;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "physical start confirms at next tick");
+        f.tick = origin + elapsed - 1;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick = origin + elapsed;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == (elapsed >= 10 ? 2 : 1),
+                "credited cooldown uses original action tick, not confirmation tick: " + elapsed);
+    }
+
+    private static void confirmationOrder(int origin, String order) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        var start =
+                order.equals("supersede")
+                        ? f.requestToggle(a, true, false, false)
+                        : f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "start pending before competing action");
+        switch (order) {
+            case "end" -> f.toggle(a, false, false);
+            case "restart" -> {
+                f.toggle(a, false, false);
+                f.toggle(a, true, false);
+            }
+            case "duplicate" -> {
+                f.producer.onSneak(start);
+                f.producer.onSneak(start);
+            }
+            case "cancel-start" -> f.toggle(a, true, true);
+            case "cancel-end" -> f.toggle(a, false, true);
+            case "supersede" -> {
+                // The original request was never applied; a newer request owns the final flag.
+                f.tick++;
+                f.toggle(a, true, false);
+            }
+            default -> throw new AssertionError(order);
+        }
+        f.tick = origin + 1;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == (order.equals("end") ? 0 : 1),
+                "only the current unambiguous action may confirm: " + order);
+        f.confirm();
+        check(f.progress(a, "guard") <= 1, "batch is once-only");
+        if (order.equals("supersede")) {
+            f.tick = origin + 10;
+            f.toggle(a, false, false);
+            f.confirm();
+            f.toggle(a, true, false);
+            f.confirm();
+            check(
+                    f.progress(a, "guard") == 1,
+                    "new action owns cooldown; older request cannot backdate it");
+        }
+    }
+
+    private static void confirmationGuard(int origin) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        velocity(f, a, false);
+        f.tick = origin + 10;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(
+                a.sneak && f.progress(a, "guard") == 0,
+                "blocked committed start observes state without progress");
+        f.tick = origin + 19;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.tick = origin + 20;
+        f.producer.onSneak(new PlayerToggleSneakEvent(a.player, true));
+        f.confirm();
+        check(f.progress(a, "guard") == 0, "guard expiry cannot confirm an old blocked start");
+        f.tick = origin + 21;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick = origin + 22;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "new post-guard end/start is normally eligible");
+    }
+
+    private static void confirmationTargetTwo(int origin) {
+        Fixture f = confirmationFixture(2);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        f.tick = origin + 10;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick = origin + 11;
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 1, "second real start awaits confirmation");
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 2 && f.coins(a) == 7,
+                "08E.3 target-two contract survives deferred confirmation");
+    }
+
+    private static void confirmationGuardBoundary(int origin) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        velocity(f, a, false);
+        f.tick = origin + 19;
+        f.toggle(a, true, false);
+        f.tick = origin + 20;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0,
+                "excluded origin cannot earn when guard expires at confirmation");
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick++;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "fresh post-boundary start remains eligible");
+    }
+
+    private static void confirmationInvalidation(String kind) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "pending before invalidation");
+        switch (kind) {
+            case "assignment" -> f.assign(a, "guard", "walk");
+            case "catalog" -> f.domain.registry.replaceAll(f.domain.registry.snapshot());
+            case "rollback" -> {
+                var c = f.domain.registry.snapshot();
+                f.domain.registry.replaceAll(c);
+                f.domain.registry.replaceAll(c);
+            }
+            case "logout" -> {
+                f.producer.onQuit(
+                        new PlayerQuitEvent(a.player, net.kyori.adventure.text.Component.empty()));
+                f.actor(a.id);
+            }
+            case "respawn" -> f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false));
+            case "teleport" ->
+                    f.producer.onTeleport(
+                            new PlayerTeleportEvent(a.player, a.at, a.at.clone().add(10, 0, 0)));
+            case "flight" -> f.producer.onFlight(new PlayerToggleFlightEvent(a.player, true));
+            case "glide" -> f.producer.onGlide(new EntityToggleGlideEvent(a.player, true));
+            case "world" ->
+                    f.producer.onWorld(new PlayerChangedWorldEvent(a.player, a.at.getWorld()));
+            case "death" -> f.producer.onDeath(deathEvent(a));
+            case "build", "activity" -> {
+                a.context = false;
+                f.producer.afterStateChange(a.id);
+            }
+            case "velocity" -> velocity(f, a, false);
+            case "reject" -> guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+            case "runtime" -> {
+                f.running = false;
+                f.producer.clear();
+            }
+            case "unloaded" -> f.domain.players.unloadPlayer(a.id);
+            default -> throw new AssertionError(kind);
+        }
+        f.tick++;
+        f.confirm();
+        check(
+                f.domain.players.getPlayer(a.id).isEmpty() || f.progress(a, "guard") == 0,
+                "old intent cannot cross " + kind);
+    }
+
+    private static void confirmationFailure(String kind) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.refuseConfirmation = kind.equals("before");
+        f.failConfirmationAfterEffect = kind.equals("after");
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "scheduler cannot grant synchronously");
+        if (kind.equals("cancelled")) f.confirmations.getFirst().cancel();
+        if (kind.equals("unknown")) f.confirmations.getFirst().unknownStatus = true;
+        if (kind.equals("clear-retry")) {
+            f.confirmations.getFirst().refuseCancel = true;
+            try {
+                f.producer.clear();
+                throw new AssertionError("clear accepted refused cancellation");
+            } catch (IllegalStateException expected) {
+                check(f.progress(a, "guard") == 0, "failed clear revokes progress");
+            }
+            f.confirmations.getFirst().refuseCancel = false;
+            f.producer.clear();
+        }
+        f.tick += kind.equals("expired") ? 2 : 1;
+        f.confirm();
+        if (kind.equals("unknown")) {
+            f.confirmations.getFirst().unknownStatus = false;
+            f.producer.clear();
+        }
+        for (var task : List.copyOf(f.confirmations)) task.action.run();
+        check(
+                f.progress(a, "guard") == 0,
+                "missing/failed/cancelled/expired callback cannot grant: " + kind);
+    }
+
+    private static void confirmationBatch() {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f), b = reconcileActor(f);
+        for (int i = 0; i < 1000; i++) {
+            f.producer.onSneak(new PlayerToggleSneakEvent(a.player, true));
+            f.producer.onSneak(new PlayerToggleSneakEvent(b.player, true));
+        }
+        check(
+                f.confirmationSchedules == 1
+                        && f.progress(a, "guard") == 0
+                        && f.progress(b, "guard") == 0,
+                "burst/session candidates share exactly one bounded one-shot");
+        a.sneak = b.sneak = true;
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1 && f.progress(b, "guard") == 1,
+                "each session receives at most one confirmed credit");
+    }
+
+    private static void confirmationOldCallback() {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.failConfirmationAfterEffect = true;
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "failed scheduling cannot grant before a callback");
+        var old = f.confirmations.getFirst();
+        f.failConfirmationAfterEffect = false;
+        f.tick++;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        old.action.run();
+        check(
+                f.progress(a, "guard") == 0,
+                "failed old batch cannot drain a new provisional action");
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "new batch alone confirms current action once");
+    }
+
+    private static void confirmationLostTask() {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "lost-task candidate starts without provisional credit");
+        var lost = f.confirmations.getFirst();
+        f.tick += 2;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                lost.cancelled && f.progress(a, "guard") == 0,
+                "missed deadline cancels old task without late credit");
+        f.tick++;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        lost.action.run();
+        check(f.progress(a, "guard") == 0, "lost callback cannot drain recovery batch");
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "fresh action recovers after missed confirmation");
     }
 
     private static void check(boolean condition, String reason) {

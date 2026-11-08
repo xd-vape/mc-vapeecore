@@ -17,7 +17,9 @@ import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 import java.util.*;
 
-/** Real quest/reward/economy; only online players, movement input and server ticks are controlled. */
+/**
+ * Real quest/reward/economy; only online players, movement input and server ticks are controlled.
+ */
 final class QuestMovementTestSupport {
     private static final Map<String, World> WORLDS = new HashMap<>();
 
@@ -27,6 +29,9 @@ final class QuestMovementTestSupport {
         final List<Component> feedback = new ArrayList<>();
         int tick = 100, entity;
         boolean running = true;
+        boolean autoConfirm = true, refuseConfirmation, failConfirmationAfterEffect;
+        int confirmationSchedules;
+        final List<Confirmation> confirmations = new ArrayList<>();
         final QuestProgressReporter reporter =
                 new QuestProgressReporter(
                         domain.quests, (id, text) -> feedback.add(text), domain.logger);
@@ -39,6 +44,7 @@ final class QuestMovementTestSupport {
                         id -> online.containsKey(id) && online.get(id).context,
                         () -> tick,
                         () -> running,
+                        this::scheduleConfirmation,
                         domain.logger);
 
         Actor actor() {
@@ -106,12 +112,38 @@ final class QuestMovementTestSupport {
         }
 
         PlayerToggleSneakEvent toggle(Actor actor, boolean next, boolean cancelled) {
+            return requestToggle(actor, next, cancelled, true);
+        }
+
+        PlayerToggleSneakEvent requestToggle(
+                Actor actor, boolean next, boolean cancelled, boolean apply) {
             var event = new PlayerToggleSneakEvent(actor.player, next);
             event.setCancelled(cancelled);
             producer.onSneak(event);
             // Paper commits the new flag AFTER the callback, and only for accepted events.
-            if (!cancelled) actor.sneak = next;
+            if (!cancelled && apply) actor.sneak = next;
+            if (autoConfirm) confirm();
             return event;
+        }
+
+        org.bukkit.scheduler.BukkitTask scheduleConfirmation(Runnable action) {
+            confirmationSchedules++;
+            if (refuseConfirmation)
+                throw new IllegalStateException("confirmation refused before effect");
+            var task = new Confirmation(action);
+            confirmations.add(task);
+            if (failConfirmationAfterEffect)
+                throw new IllegalStateException("confirmation refused after effect");
+            return task;
+        }
+
+        void confirm() {
+            for (var task : List.copyOf(confirmations)) {
+                if (!task.cancelled && !task.ran) {
+                    task.ran = true;
+                    task.action.run();
+                }
+            }
         }
 
         void jump(Actor actor, boolean cancelled) {
@@ -131,6 +163,37 @@ final class QuestMovementTestSupport {
         void ground(Actor actor) {
             actor.ground = true;
             tick += 10;
+        }
+    }
+
+    static final class Confirmation implements org.bukkit.scheduler.BukkitTask {
+        final Runnable action;
+        boolean cancelled, ran, refuseCancel, unknownStatus;
+
+        Confirmation(Runnable action) {
+            this.action = action;
+        }
+
+        public int getTaskId() {
+            return System.identityHashCode(this);
+        }
+
+        public org.bukkit.plugin.Plugin getOwner() {
+            return null;
+        }
+
+        public boolean isSync() {
+            return true;
+        }
+
+        public boolean isCancelled() {
+            if (unknownStatus) throw new IllegalStateException("confirmation task status unknown");
+            return cancelled;
+        }
+
+        public void cancel() {
+            if (refuseCancel) throw new IllegalStateException("confirmation cancellation refused");
+            cancelled = true;
         }
     }
 

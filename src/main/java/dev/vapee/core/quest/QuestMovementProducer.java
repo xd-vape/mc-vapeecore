@@ -17,7 +17,9 @@ import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityToggleGlideEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.*;
+import org.bukkit.scheduler.BukkitTask;
 
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +62,13 @@ public final class QuestMovementProducer
     private final IntSupplier ticks;
     private final BooleanSupplier authorized;
     private final Logger logger;
+    private final Function<Runnable, BukkitTask> scheduleConfirmation;
     private final Map<UUID, Sample> samples = new HashMap<>();
+    private BukkitTask confirmationTask;
+    private long confirmationEpoch;
+    private int confirmationScheduledTick;
+    private boolean schedulingFailed;
+    private int failedScheduleTick;
 
     QuestMovementProducer(
             PlayerService players,
@@ -70,6 +78,7 @@ public final class QuestMovementProducer
             Predicate<UUID> context,
             IntSupplier ticks,
             BooleanSupplier authorized,
+            Function<Runnable, BukkitTask> scheduleConfirmation,
             Logger logger) {
         this.players = Objects.requireNonNull(players);
         this.definitions = Objects.requireNonNull(definitions);
@@ -78,6 +87,7 @@ public final class QuestMovementProducer
         this.context = Objects.requireNonNull(context);
         this.ticks = Objects.requireNonNull(ticks);
         this.authorized = Objects.requireNonNull(authorized);
+        this.scheduleConfirmation = Objects.requireNonNull(scheduleConfirmation);
         this.logger = Objects.requireNonNull(logger);
     }
 
@@ -298,28 +308,139 @@ public final class QuestMovementProducer
     public void onSneak(PlayerToggleSneakEvent event) {
         if (event.isCancelled()) return;
         Player player = event.getPlayer();
+        PendingSneak intent = null;
         try {
             Sample sample = sample(player, SNEAK_TOGGLE, true);
             boolean next = event.isSneaking();
-            // Both pre-state and accepted observations reject replay before native flag commit.
-            boolean transition =
-                    sample != null && player.isSneaking() != next && sample.sneaking != next;
-            // A confirmed boolean end is independent of a usable positional observation.
-            if (transition && !next) sample.sneaking = false;
+            if (sample != null) {
+                boolean before = player.isSneaking();
+                if (before != next) {
+                    // This is an intent, not proof that Paper will apply the flag.
+                    intent = new PendingSneak(player, sample, next, ticks.getAsInt());
+                    sample.pendingSneak = intent;
+                } else if (sample.pendingSneak == null || sample.pendingSneak.target != next) {
+                    sample.pendingSneak = null;
+                    sample.sneaking = before;
+                }
+            }
             if (!valid(player.getLocation())) {
                 reject(player, null);
                 return;
             }
-            if (!transition) return;
-            sample.sneaking = next;
-            if (next
-                    && current(player, sample)
-                    && sample.tick - sample.lastSneak >= SNEAK_COOLDOWN_TICKS) {
-                sample.lastSneak = sample.tick;
-                report(player, sample, SNEAK_TOGGLE, 1);
-            }
+            if (intent != null) intent.progressAllowed = next && current(player, sample);
         } catch (RuntimeException failure) {
             failed(player, failure);
+        } finally {
+            if (intent != null
+                    && intent.sample.pendingSneak == intent
+                    && samples.get(intent.id) == intent.sample) requestConfirmation(intent);
+        }
+    }
+
+    private void discardPendingSneaks() {
+        for (Sample sample : samples.values()) sample.pendingSneak = null;
+    }
+
+    private void confirmationFailure(RuntimeException failure) {
+        ++confirmationEpoch;
+        discardPendingSneaks();
+        schedulingFailed = true;
+        failedScheduleTick = ticks.getAsInt();
+        logger.log(
+                Level.WARNING,
+                "Sneak confirmation discarded; no provisional progress was granted.",
+                failure);
+    }
+
+    private void requestConfirmation(PendingSneak intent) {
+        try {
+            if (confirmationTask != null) {
+                if (!confirmationTask.isCancelled()) {
+                    int age = ticks.getAsInt() - confirmationScheduledTick;
+                    if (age >= 0 && age <= 1) {
+                        intent.batch = confirmationEpoch;
+                        return;
+                    }
+                    confirmationTask.cancel();
+                    if (!confirmationTask.isCancelled())
+                        throw new IllegalStateException(
+                                "Expired sneak task cancellation unconfirmed");
+                }
+                confirmationTask = null;
+                confirmationFailure(
+                        new IllegalStateException("Sneak confirmation task was cancelled"));
+                return;
+            }
+            if (schedulingFailed && failedScheduleTick == ticks.getAsInt()) {
+                discardPendingSneaks();
+                return;
+            }
+            long epoch = ++confirmationEpoch;
+            intent.batch = epoch;
+            confirmationScheduledTick = ticks.getAsInt();
+            confirmationTask =
+                    Objects.requireNonNull(scheduleConfirmation.apply(() -> confirmSneaks(epoch)));
+        } catch (RuntimeException failure) {
+            confirmationFailure(failure);
+        }
+    }
+
+    private void confirmSneaks(long epoch) {
+        if (epoch != confirmationEpoch || confirmationTask == null) return;
+        try {
+            if (confirmationTask.isCancelled()) {
+                confirmationTask = null;
+                confirmationFailure(
+                        new IllegalStateException("Cancelled sneak confirmation cannot grant"));
+                return;
+            }
+        } catch (RuntimeException failure) {
+            confirmationFailure(failure);
+            return;
+        }
+        confirmationTask = null;
+        ++confirmationEpoch; // A duplicate/late callback cannot drain a newer batch.
+        List<PendingSneak> batch =
+                samples.values().stream()
+                        .map(sample -> sample.pendingSneak)
+                        .filter(intent -> intent != null && intent.batch == epoch)
+                        .toList();
+        for (PendingSneak intent : batch) {
+            Sample sample = intent.sample;
+            if (samples.get(intent.id) != sample || sample.pendingSneak != intent) continue;
+            sample.pendingSneak = null;
+            Player player = null;
+            try {
+                player = online.apply(intent.id);
+                if (player == null
+                        || intent.player.get() != player
+                        || player.getEntityId() != sample.entity) {
+                    samples.remove(intent.id, sample);
+                    continue;
+                }
+                if (!authorized.getAsBoolean() || sample(player, SNEAK_TOGGLE, true) != sample)
+                    continue;
+                boolean actual = player.isSneaking();
+                sample.sneaking = actual; // Only the authoritative post-event flag is confirmed.
+                int age = ticks.getAsInt() - intent.tick;
+                if (actual == intent.target
+                        && intent.target
+                        && intent.progressAllowed
+                        && age >= 0
+                        && age <= 1
+                        && current(player, sample)
+                        && intent.tick - sample.lastSneak >= SNEAK_COOLDOWN_TICKS) {
+                    sample.lastSneak = intent.tick;
+                    report(player, sample, SNEAK_TOGGLE, 1);
+                }
+            } catch (RuntimeException failure) {
+                if (player != null) failed(player, failure);
+                else
+                    logger.log(
+                            Level.WARNING,
+                            "Sneak confirmation lookup failed for " + intent.id,
+                            failure);
+            }
         }
     }
 
@@ -508,6 +629,7 @@ public final class QuestMovementProducer
             samples.put(id, sample);
         }
         java.util.Arrays.fill(sample.fractions, 0);
+        if (sample.pendingSneak != null) sample.pendingSneak.progressAllowed = false;
         sample.turn = 0;
         sample.pendingJump = null;
         sample.last = endpoint;
@@ -518,7 +640,14 @@ public final class QuestMovementProducer
     }
 
     void clear() {
+        ++confirmationEpoch;
         samples.clear();
+        if (confirmationTask != null) {
+            if (!confirmationTask.isCancelled()) confirmationTask.cancel();
+            if (!confirmationTask.isCancelled())
+                throw new IllegalStateException("Sneak task cancellation unconfirmed");
+            confirmationTask = null;
+        }
     }
 
     int trackedPlayers() {
@@ -589,6 +718,7 @@ public final class QuestMovementProducer
         double distanceThisTick, yawThisTick, turn;
         Point last;
         Jump pendingJump;
+        PendingSneak pendingSneak;
 
         Sample(int entity, int tick) {
             this.entity = entity;
@@ -603,6 +733,25 @@ public final class QuestMovementProducer
 
         boolean blockedAt(int tick) {
             return blocked && tick - blockedUntil < 0;
+        }
+    }
+
+    /** One short-lived intent per sample; the weak identity never retains a disconnected Player. */
+    private static final class PendingSneak {
+        final UUID id;
+        final WeakReference<Player> player;
+        final Sample sample;
+        final boolean target;
+        final int tick;
+        long batch;
+        boolean progressAllowed;
+
+        PendingSneak(Player player, Sample sample, boolean target, int tick) {
+            this.id = player.getUniqueId();
+            this.player = new WeakReference<>(player);
+            this.sample = sample;
+            this.target = target;
+            this.tick = tick;
         }
     }
 }

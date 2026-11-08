@@ -345,7 +345,8 @@ public final class QuestModule implements CoreModule {
         resources.movementActivities = Objects.requireNonNull(activities);
         resources.movement = new QuestMovementProducer(resources.players, resources.registry, resources.reporter,
                 plugin.getServer()::getPlayer, id -> !lobby.isBuildMode(id) && !activities.isParticipating(id),
-                Bukkit::getCurrentTick, () -> owns(resources) && resources.movementReady, plugin.getLogger());
+                Bukkit::getCurrentTick, () -> owns(resources) && resources.movementReady,
+                action -> plugin.getServer().getScheduler().runTask(plugin, action), plugin.getLogger());
         try {
             resources.movementLobbyPending = true;
             lobby.addStateListener(resources.movement);
@@ -362,7 +363,9 @@ public final class QuestModule implements CoreModule {
     private void cleanupMovement(RuntimeResources resources, RuntimeException failure) {
         resources.movementReady = false;
         if (resources.movement == null) return;
-        resources.movement.clear();
+        boolean cleared = false;
+        try { resources.movement.clear(); cleared = true; }
+        catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
         boolean unregistered = unregister(resources.movement, failure);
         if (resources.movementLobbyPending) {
             try {
@@ -376,7 +379,7 @@ public final class QuestModule implements CoreModule {
                 resources.movementActivityPending = false;
             } catch (RuntimeException exception) { if (exception != failure) failure.addSuppressed(exception); }
         }
-        if (unregistered && !resources.movementLobbyPending && !resources.movementActivityPending) {
+        if (cleared && unregistered && !resources.movementLobbyPending && !resources.movementActivityPending) {
             resources.movement = null;
             resources.movementLobby = null;
             resources.movementActivities = null;

@@ -110,15 +110,16 @@ final class QuestLifecycleFixture implements AutoCloseable {
                 ModuleRuntimeFixture.proxy(
                         BukkitScheduler.class,
                         (name, args) -> {
-                            if (!name.equals("runTaskTimer") || !(args[1] instanceof Runnable))
+                            if (!(name.equals("runTaskTimer") || name.equals("runTask"))
+                                    || !(args[1] instanceof Runnable))
                                 throw new AssertionError(name);
                             if (refuseScheduling) throw schedulingFailure;
                             Task task =
                                     new Task(
                                             (Plugin) args[0],
                                             (Runnable) args[1],
-                                            (long) args[2],
-                                            (long) args[3]);
+                                            name.equals("runTask") ? 1 : (long) args[2],
+                                            name.equals("runTask") ? -1 : (long) args[3]);
                             tasks.add(task);
                             afterSchedule.run();
                             return task;
@@ -205,7 +206,7 @@ final class QuestLifecycleFixture implements AutoCloseable {
     }
 
     long activeTasks() {
-        return tasks.stream().filter(task -> !task.cancelled).count();
+        return tasks.stream().filter(task -> !task.cancelled && !task.completed).count();
     }
 
     long handlers() {
@@ -265,6 +266,7 @@ final class QuestLifecycleFixture implements AutoCloseable {
         final RuntimeException cancelFailure =
                 new IllegalStateException("controlled Quest cancel refusal");
         boolean cancelled;
+        boolean completed;
         boolean refuse;
         boolean afterEffect;
         boolean silent;
@@ -277,6 +279,14 @@ final class QuestLifecycleFixture implements AutoCloseable {
             this.action = action;
             this.delay = delay;
             this.period = period;
+        }
+
+        void runOnce() {
+            try {
+                if (!cancelled && !completed) action.run();
+            } finally {
+                if (period < 0) completed = true;
+            }
         }
 
         public int getTaskId() {
