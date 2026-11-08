@@ -13,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 
 import java.util.*;
 
@@ -104,6 +105,15 @@ final class QuestMovementTestSupport {
             return event;
         }
 
+        PlayerToggleSneakEvent toggle(Actor actor, boolean next, boolean cancelled) {
+            var event = new PlayerToggleSneakEvent(actor.player, next);
+            event.setCancelled(cancelled);
+            producer.onSneak(event);
+            // Paper commits the new flag AFTER the callback, and only for accepted events.
+            if (!cancelled) actor.sneak = next;
+            return event;
+        }
+
         void jump(Actor actor, boolean cancelled) {
             tick++;
             var from = actor.at.clone();
@@ -129,6 +139,7 @@ final class QuestMovementTestSupport {
         final Player player;
         Location at = new Location(world("first"), 0, 64, 0);
         boolean online = true, context = true, ground = true, input = true;
+        boolean backward, left, right, sprintInput;
         boolean sprint, sneak, vehicle, fly, glide, water, swimming, climbing, riptide, dead;
         boolean allowFlight;
         GameMode mode = GameMode.SURVIVAL;
@@ -142,8 +153,11 @@ final class QuestMovementTestSupport {
                             (name, args) ->
                                     switch (name) {
                                         case "isForward" -> input;
+                                        case "isBackward" -> backward;
+                                        case "isLeft" -> left;
+                                        case "isRight" -> right;
                                         case "isSneak" -> sneak;
-                                        case "isSprint" -> sprint;
+                                        case "isSprint" -> sprint || sprintInput;
                                         default -> DEFAULT;
                                     });
             player =

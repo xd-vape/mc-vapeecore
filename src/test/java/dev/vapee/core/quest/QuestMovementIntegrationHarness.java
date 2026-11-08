@@ -15,6 +15,9 @@ public final class QuestMovementIntegrationHarness {
         rewards();
         missing();
         assignmentIdentity();
+        configuredFinalKeys();
+        finalKeyRewards();
+        finalDailyLifecycle();
         System.out.println("QuestMovementIntegrationHarness passed " + checks + " checks.");
     }
 
@@ -231,6 +234,234 @@ public final class QuestMovementIntegrationHarness {
         check(
                 f.progress(a, "walk") == 2 && f.progress(a, "sprint") == 1,
                 "new concurrent key remains independently configurable");
+    }
+
+    private static void configuredFinalKeys() throws Exception {
+        var directory = Files.createTempDirectory("vapeecore-final-movement-yaml-");
+        var file = directory.resolve("daily-quests.yml");
+        String source =
+                """
+                config-version: 1
+                enabled: true
+                quests-per-day: 3
+                quests:
+                  back_50:
+                    name: {en: Backward Fifty, de: Fuenfzig rueckwaerts}
+                    description: Configurable
+                    progress-key: movement:backward
+                    target: 50
+                    reward-coins: 5
+                  back_100:
+                    name: Backward Hundred
+                    description: Configurable
+                    progress-key: movement:backward
+                    target: 100
+                    reward-coins: 10
+                  toggle_20:
+                    name: Sneak Activations
+                    description: Configurable
+                    progress-key: movement:sneak_toggle
+                    target: 20
+                    reward-coins: 20
+                """;
+        try {
+            Files.writeString(file, source);
+            Fixture f = new Fixture();
+            Actor a = f.actor();
+            var config = new DailyQuestConfig(file, f.domain.logger);
+            config.initialize();
+            f.domain.registry.replaceAll(config.getState().definitions());
+            f.assign(a, "back_50", "back_100", "toggle_20");
+            a.input = false;
+            a.backward = true;
+            for (int i = 0; i < 199; i++) f.move(a, 0, 0, -.25, 0);
+            check(
+                    f.progress(a, "back_50") == 49
+                            && f.progress(a, "back_100") == 49
+                            && f.coins(a) == 0,
+                    "both YAML backward targets share one measured signal without rounding early");
+            f.move(a, 0, 0, -.25, 0);
+            check(
+                    f.status(a, "back_50") == QuestStatus.COMPLETED
+                            && f.progress(a, "back_100") == 50
+                            && f.coins(a) == 5,
+                    "configured fifty-block target completes independently");
+            for (int i = 0; i < 50; i++) f.move(a, 0, 0, -1, 0);
+            check(
+                    f.status(a, "back_100") == QuestStatus.COMPLETED && f.coins(a) == 15,
+                    "same producer completes configured hundred-block target once");
+            for (int i = 1; i <= 20; i++) {
+                f.tick += 10;
+                f.toggle(a, true, false);
+                f.toggle(a, false, false);
+                check(
+                        f.progress(a, "toggle_20") == i,
+                        "each stationary activation advances YAML-owned toggle target");
+            }
+            check(
+                    f.status(a, "toggle_20") == QuestStatus.COMPLETED
+                            && f.coins(a) == 35
+                            && f.feedback.size() == 3,
+                    "all three reference shapes complete through existing reward and localized feedback");
+            f.tick += 10;
+            f.toggle(a, true, false);
+            f.move(a, 0, 0, -1, 0);
+            f.domain.quests.retryPendingRewards(a.id);
+            check(
+                    f.coins(a) == 35 && f.feedback.size() == 3 && f.producer.trackedPlayers() == 0,
+                    "completed final keys never reward twice or retain unused samples");
+            f.domain.quests.flushAllOrThrow();
+            var saved = f.domain.repository.persisted.get(a.id);
+            check(
+                    saved.get("back_100").progress() == 100
+                            && saved.get("toggle_20").progress() == 20,
+                    "existing whole-profile flush retains both new key results");
+            check(
+                    Files.readString(file).equals(source),
+                    "producer never rewrites configured quest definitions");
+        } finally {
+            Files.deleteIfExists(file);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    private static void finalKeyRewards() {
+        for (var key :
+                java.util.List.of(
+                        QuestMovementProducer.BACKWARD, QuestMovementProducer.SNEAK_TOGGLE)) {
+            Fixture f = new Fixture();
+            Actor a = f.actor();
+            a.input = false;
+            a.backward = true;
+            f.define("pending", key, 1, 7);
+            f.assign(a, "pending");
+            f.domain.economy.setCoins(a.id, Long.MAX_VALUE);
+            finalUnit(f, a, key);
+            check(
+                    f.progress(a, "pending") == 1
+                            && f.status(a, "pending") == QuestStatus.REWARD_PENDING
+                            && f.coins(a) == Long.MAX_VALUE,
+                    "new key delegates overflow to unchanged Pending Reward contract");
+            int feedback = f.feedback.size();
+            finalUnit(f, a, key);
+            check(
+                    f.status(a, "pending") == QuestStatus.REWARD_PENDING
+                            && f.feedback.size() == feedback,
+                    "failed retry does not duplicate completion feedback");
+            f.domain.economy.setCoins(a.id, 0);
+            finalUnit(f, a, key);
+            check(
+                    f.status(a, "pending") == QuestStatus.COMPLETED && f.coins(a) == 7,
+                    "later valid event delegates successful reward retry");
+            finalUnit(f, a, key);
+            f.domain.quests.retryPendingRewards(a.id);
+            check(
+                    f.coins(a) == 7 && f.feedback.size() == feedback + 1,
+                    "completed new-key payout is idempotent");
+            f.domain.repository.fail = true;
+            try {
+                f.domain.quests.flushAllOrThrow();
+                throw new AssertionError("flush accepted");
+            } catch (IllegalStateException expected) {
+                check(
+                        f.domain.quests.isDirty(a.id) && f.coins(a) == 7,
+                        "failed final-key save retains authoritative dirty state and one payout");
+            }
+            f.domain.repository.fail = false;
+            f.domain.quests.flushAllOrThrow();
+            check(
+                    f.domain.repository.persisted.get(a.id).get("pending").status()
+                            == QuestStatus.COMPLETED,
+                    "normal retry flush persists completed final key");
+            f.assign(a, "pending");
+            finalUnit(f, a, key);
+            check(
+                    f.coins(a) == 14,
+                    "fresh explicit assignment starts a fresh quest without duplicating old payout");
+        }
+    }
+
+    private static void finalDailyLifecycle() {
+        Fixture f = new Fixture();
+        Actor a = f.actor();
+        a.input = false;
+        a.backward = true;
+        f.define("back", QuestMovementProducer.BACKWARD, 100, 1);
+        f.define("toggle", QuestMovementProducer.SNEAK_TOGGLE, 100, 1);
+        var configuration =
+                new dev.vapee.core.quest.daily.DailyQuestConfig.State(
+                        true,
+                        2,
+                        java.time.LocalTime.MIDNIGHT,
+                        "UTC",
+                        java.time.ZoneId.of("UTC"),
+                        f.domain.registry.snapshot());
+        var daily =
+                new dev.vapee.core.quest.daily.DailyQuestService(
+                        f.domain.players,
+                        f.domain.quests,
+                        f.domain.registry,
+                        () -> configuration,
+                        f.domain.logger);
+        var today = java.time.Instant.parse("2026-11-08T12:00:00Z");
+        var tomorrow = today.plusSeconds(86400);
+        check(
+                daily.syncPlayer(a.id, today)
+                        == dev.vapee.core.quest.daily.DailyQuestSyncResult.INITIALIZED,
+                "actual DailyQuestService assigns both final keys");
+        f.move(a, 0, 0, -.6, 0);
+        f.toggle(a, true, false);
+        daily.syncPlayer(a.id, today);
+        f.move(a, 0, 0, -.4, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 1 && f.progress(a, "toggle") == 1,
+                "same-cycle Daily sync preserves valid fraction and duplicate guard");
+        f.move(a, 0, 0, -.6, 0);
+        check(
+                daily.forcePlayer(a.id, today)
+                        == dev.vapee.core.quest.daily.DailyQuestSyncResult.ROTATED,
+                "actual Force reconciles compatible final-key assignments");
+        f.move(a, 0, 0, -.4, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 1 && f.progress(a, "toggle") == 1,
+                "Force retains committed numeric progress but invalidates old observations");
+        var state = f.domain.players.getPlayer(a.id).orElseThrow();
+        var before = state.getQuestState().snapshot();
+        var cycle = state.getDailyQuestState().cycleId();
+        f.domain.repository.fail = true;
+        check(
+                daily.forcePlayer(a.id, tomorrow)
+                                == dev.vapee.core.quest.daily.DailyQuestSyncResult.ASSIGNMENT_FAILED
+                        && state.getQuestState().snapshot().equals(before)
+                        && state.getDailyQuestState().cycleId().equals(cycle),
+                "failed actual Force-save restores final-key state and previous cycle");
+        f.domain.repository.fail = false;
+        check(
+                daily.syncPlayer(a.id, tomorrow)
+                        == dev.vapee.core.quest.daily.DailyQuestSyncResult.ROTATED,
+                "next daily cycle resets both YAML-owned final keys");
+        f.move(a, 0, 0, -.6, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 0 && f.progress(a, "toggle") == 0,
+                "daily reset cannot carry fractional distance or recount already-active sneak");
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        f.move(a, 0, 0, -.4, 0);
+        check(
+                f.progress(a, "back") == 1 && f.progress(a, "toggle") == 1 && f.coins(a) == 0,
+                "fresh post-reset travel and transition work without premature payout");
+    }
+
+    private static void finalUnit(Fixture f, Actor a, QuestProgressKey key) {
+        if (key.equals(QuestMovementProducer.BACKWARD)) f.move(a, 0, 0, -1, 0);
+        else {
+            f.toggle(a, false, false);
+            f.tick += 10;
+            f.toggle(a, true, false);
+        }
     }
 
     private static void check(boolean condition, String reason) {

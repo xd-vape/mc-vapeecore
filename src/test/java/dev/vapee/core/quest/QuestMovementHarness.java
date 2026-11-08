@@ -23,6 +23,11 @@ public final class QuestMovementHarness {
         jumps();
         invalid();
         transitions();
+        backwardGeometry();
+        backwardRejections();
+        toggleTransitions();
+        toggleEligibility();
+        finalMovementLifecycle();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -375,6 +380,428 @@ public final class QuestMovementHarness {
         check(
                 f.progress(reconnect, "walk") == 1,
                 "stale former-session events cannot replace or erase the reconnect measurement");
+    }
+
+    private static Fixture finalFixture() {
+        Fixture f = fixture();
+        f.define("back", QuestMovementProducer.BACKWARD, 10000, 1);
+        f.define("toggle", QuestMovementProducer.SNEAK_TOGGLE, 10000, 1);
+        return f;
+    }
+
+    private static Actor finalActor(Fixture f) {
+        Actor a = f.actor();
+        a.input = false;
+        a.backward = true;
+        f.assign(a, "walk", "sprint", "sneak", "jump", "turn", "back", "toggle");
+        return a;
+    }
+
+    private static void backwardGeometry() {
+        Fixture f = finalFixture();
+        Actor a = finalActor(f);
+        for (int i = 1; i <= 10; i++) {
+            f.move(a, 0, 0, -1, 0);
+            check(
+                    f.progress(a, "back") == i && f.progress(a, "walk") == i,
+                    "each pure backward block credits BACKWARD and WALK exactly once");
+        }
+        for (int i = 0; i < 3; i++) f.move(a, 0, 0, -.25, 0);
+        check(f.progress(a, "back") == 10, "backward fractions do not credit early");
+        f.move(a, 0, 0, -.25, 0);
+        check(f.progress(a, "back") == 11, "backward has an independent fractional accumulator");
+        a.left = true;
+        for (int i = 0; i < 5; i++) f.move(a, .6, 0, -.8, 0);
+        check(
+                f.progress(a, "back") == 15 && f.progress(a, "walk") == 16,
+                "five diagonal blocks produce four backward blocks, not five");
+        a.left = false;
+        a.sneak = true;
+        f.move(a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "back") == 16
+                        && f.progress(a, "sneak") == 1
+                        && f.progress(a, "walk") == 17
+                        && f.progress(a, "toggle") == 0,
+                "sneaking backward is a distance subset; it cannot synthesize a toggle");
+        a.sneak = false;
+        f.rotate(a, 90);
+        check(f.progress(a, "back") == 16, "rotation alone is not backward distance");
+        f.move(a, 1, 0, 0, 90);
+        check(f.progress(a, "back") == 17, "positive yaw uses the correct backward X axis");
+
+        f = finalFixture();
+        a = finalActor(f);
+        f.move(a, Math.sqrt(.75), 0, -.5, 0);
+        f.move(a, Math.sqrt(.75), 0, -.5, 0);
+        check(f.progress(a, "back") == 1, "exact cosine .5 direction boundary is eligible");
+        for (int i = 0; i < 10; i++) f.move(a, Math.sqrt(1 - .49 * .49), 0, -.49, 0);
+        check(
+                f.progress(a, "back") == 1,
+                "mostly sideways movement below direction threshold is excluded");
+
+        f = finalFixture();
+        a = finalActor(f);
+        f.move(a, 0, 0, -1, 20);
+        check(
+                f.progress(a, "back") == 0,
+                "turning movement retains only conservative endpoint projection");
+        f.move(a, 0, 0, -.1, 20);
+        check(
+                f.progress(a, "back") == 1,
+                "small measured turns accumulate the supported backward fraction");
+        long before = f.progress(a, "back");
+        f.move(a, 0, 0, -1, 110);
+        check(
+                f.progress(a, "back") == before,
+                "large ambiguous mid-move turn cannot earn backward distance");
+        f = finalFixture();
+        a = finalActor(f);
+        a.at.setYaw(179);
+        f.move(a, 0, 0, 1, -179);
+        f.move(a, 0, 0, .01, -179);
+        check(f.progress(a, "back") == 1, "short yaw wraparound remains measurable");
+    }
+
+    private static void backwardRejections() {
+        List<Consumer<Actor>> inputs =
+                List.of(
+                        a -> a.backward = false,
+                        a -> a.input = true,
+                        a -> {
+                            a.left = true;
+                            a.right = true;
+                        },
+                        a -> a.sprint = true,
+                        a -> a.sprintInput = true);
+        for (var input : inputs) {
+            Fixture f = finalFixture();
+            Actor a = finalActor(f);
+            input.accept(a);
+            f.move(a, 0, 0, -1, 0);
+            check(
+                    f.progress(a, "back") == 0,
+                    "missing, opposed or sprint-contradictory backward input is excluded");
+        }
+        Fixture f = finalFixture();
+        Actor a = finalActor(f);
+        for (int i = 0; i < 5; i++) f.move(a, 1, 0, 0, 0);
+        check(
+                f.progress(a, "back") == 0 && f.progress(a, "walk") == 5,
+                "pure strafing never becomes backward credit");
+        f.move(a, 0, 0, 0, 0);
+        check(f.progress(a, "back") == 0, "held backward input without displacement is inert");
+        a.sprint = true;
+        a.sneak = true;
+        f.move(a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "back") == 0
+                        && f.progress(a, "sneak") == 1
+                        && f.progress(a, "sprint") == 0,
+                "contradictory sprint excludes backward but preserves existing Sneak precedence");
+        a.sprint = false;
+        a.sneak = false;
+        f.move(a, 0, 0, -.6, 0);
+        var cancelled = new PlayerMoveEvent(a.player, a.at.clone(), a.at.clone().add(0, 0, -.4));
+        cancelled.setCancelled(true);
+        f.producer.onMove(cancelled);
+        f.move(a, 0, 0, -.4, 0);
+        check(f.progress(a, "back") == 0, "cancelled move discards backward remainder");
+        var teleport =
+                new PlayerTeleportEvent(a.player, a.at.clone(), a.at.clone().add(0, 0, -100));
+        f.producer.onMove(teleport);
+        f.producer.onTeleport(teleport);
+        a.at = teleport.getTo();
+        f.move(a, 0, 0, -.6, 0);
+        check(f.progress(a, "back") == 0, "teleport cannot join backward fractions");
+        f.producer.onVelocity(new PlayerVelocityEvent(a.player, new Vector(0, .4, -.4)));
+        for (int i = 0; i < 19; i++) f.move(a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "back") == 0,
+                "nineteen velocity-excluded ticks produce no backward progress");
+        f.move(a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "back") == 1,
+                "exact twenty-tick velocity boundary allows a fresh sample");
+        var replay = f.move(a, 0, 0, -.5, 0);
+        f.producer.onMove(replay);
+        f.tick++;
+        f.producer.onMove(replay);
+        f.move(a, 0, 0, -.5, 0);
+        check(f.progress(a, "back") == 2, "replayed endpoints do not duplicate backward fractions");
+        f.tick++;
+        for (int i = 0; i < 30; i++) {
+            var from = a.at.clone();
+            a.at = a.at.clone().add(0, 0, -1);
+            f.producer.onMove(new PlayerMoveEvent(a.player, from, a.at));
+        }
+        check(
+                f.progress(a, "back") == 3,
+                "backward cannot bypass the shared one-block tick budget");
+        f.move(a, 0, 0, -100, 0);
+        var bad = a.at.clone();
+        bad.setZ(Double.NaN);
+        f.producer.onMove(new PlayerMoveEvent(a.player, a.at.clone(), bad));
+        f.move(a, 0, 0, -.5, 0);
+        check(
+                f.progress(a, "back") == 3,
+                "invalid coordinates and unchecked jumps do not earn distance");
+        a.ground = false;
+        f.move(a, 0, 0, -1, 0);
+        check(f.progress(a, "back") == 3, "airborne backward motion is excluded");
+    }
+
+    private static void toggleTransitions() {
+        Fixture f = finalFixture();
+        Actor a = finalActor(f);
+        var start = f.toggle(a, true, false);
+        check(
+                f.progress(a, "toggle") == 1
+                        && f.progress(a, "sneak") == 0
+                        && f.progress(a, "walk") == 0,
+                "stationary non-sneaking to sneaking activation credits only toggle");
+        f.producer.onSneak(start);
+        check(f.progress(a, "toggle") == 1, "duplicate already-committed start cannot count");
+        f.toggle(a, false, false);
+        f.tick += 9;
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 1, "activation at nine ticks is below cooldown");
+        f.toggle(a, false, false);
+        f.tick++;
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "toggle") == 2,
+                "exact ten-tick boundary counts; ignored start added no cooldown");
+        f.tick += 10;
+        f.toggle(a, false, true);
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 2 && a.sneak, "cancelled end does not prove a new start");
+        f.toggle(a, false, false);
+        f.toggle(a, true, true);
+        check(
+                f.progress(a, "toggle") == 2 && !a.sneak,
+                "cancelled start neither counts nor commits state");
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 3, "cancelled events add no cooldown");
+        f.toggle(a, false, false);
+        f.tick += 10;
+        var beforeCommit = new PlayerToggleSneakEvent(a.player, true);
+        f.producer.onSneak(beforeCommit);
+        f.producer.onSneak(beforeCommit);
+        check(
+                f.progress(a, "toggle") == 4,
+                "duplicate delivery before native flag commit counts only once");
+        f.tick += 10;
+        f.producer.onSneak(beforeCommit);
+        check(
+                f.progress(a, "toggle") == 4,
+                "duplicate signal cannot be rearmed by elapsed cooldown");
+        a.sneak = true;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 5, "a real end followed by a later start re-arms once");
+        f.move(a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "sneak") == 1 && f.progress(a, "toggle") == 5,
+                "sneak distance and toggle remain independent in the same sample");
+        check(a.writes == 0, "new keys never mutate player movement authority");
+
+        f = finalFixture();
+        a = finalActor(f);
+        a.sneak = true;
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 0, "initial already-sneaking state is not an activation");
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(f.progress(a, "toggle") == 1, "initial end proves the next transition");
+        a.ground = false;
+        f.tick += 10;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "toggle") == 2,
+                "normal airborne crouch is a state transition, not ground distance");
+    }
+
+    private static void toggleEligibility() {
+        List<Consumer<Actor>> modes =
+                List.of(
+                        a -> a.vehicle = true,
+                        a -> a.fly = true,
+                        a -> a.glide = true,
+                        a -> a.water = true,
+                        a -> a.swimming = true,
+                        a -> a.climbing = true,
+                        a -> a.riptide = true,
+                        a -> a.dead = true,
+                        a -> a.online = false,
+                        a -> a.mode = GameMode.CREATIVE,
+                        a -> a.mode = GameMode.SPECTATOR,
+                        a -> a.context = false);
+        for (var mode : modes) {
+            Fixture f = finalFixture();
+            Actor a = finalActor(f);
+            mode.accept(a);
+            f.toggle(a, true, false);
+            f.move(a, 0, 0, -1, 0);
+            check(
+                    f.progress(a, "toggle") == 0
+                            && f.progress(a, "back") == 0
+                            && f.producer.trackedPlayers() == 0,
+                    "both new keys share invalid-mode and lobby/activity eligibility");
+        }
+        Fixture f = finalFixture();
+        Actor a = f.actor();
+        f.toggle(a, true, false);
+        check(f.producer.trackedPlayers() == 0, "unassigned keys retain no sample");
+        f.assign(a, "toggle");
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "toggle") == 0,
+                "assignment while already sneaking cannot claim old start");
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        var loaded = f.domain.players.getPlayer(a.id).orElseThrow();
+        f.domain.players.unloadPlayer(a.id);
+        f.tick += 10;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                loaded.getQuestState().snapshot().get("toggle").progress() == 1
+                        && f.producer.trackedPlayers() == 0,
+                "unloaded profile receives no toggle");
+        f.domain.players.loadPlayer(a.id, "Walker");
+        f.assign(a, "toggle");
+        Actor reconnect = f.actor(a.id);
+        f.producer.onJoin(
+                new PlayerJoinEvent(reconnect.player, net.kyori.adventure.text.Component.empty()));
+        f.toggle(reconnect, true, false);
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                f.progress(reconnect, "toggle") == 1,
+                "stale former session cannot credit or erase reconnect state");
+        f.toggle(reconnect, true, false);
+        check(
+                f.progress(reconnect, "toggle") == 1,
+                "reconnect retains its own duplicate protection");
+        f.running = false;
+        f.producer.clear();
+        f.tick += 10;
+        f.toggle(reconnect, false, false);
+        f.toggle(reconnect, true, false);
+        check(
+                f.progress(reconnect, "toggle") == 1 && f.producer.trackedPlayers() == 0,
+                "retired owner is inert");
+        f.running = true;
+        f.toggle(reconnect, true, false);
+        check(
+                f.progress(reconnect, "toggle") == 1,
+                "re-enable does not inherit a fictitious non-sneaking state");
+        f.toggle(reconnect, false, false);
+        f.toggle(reconnect, true, false);
+        check(
+                f.progress(reconnect, "toggle") == 2,
+                "re-enabled owner accepts a new genuine activation");
+    }
+
+    private static void finalMovementLifecycle() {
+        Fixture unassignedToggle = fixture();
+        Actor walker = unassignedToggle.actor();
+        unassignedToggle.assign(walker, "walk");
+        unassignedToggle.step(walker, .6);
+        unassignedToggle.tick += 20;
+        unassignedToggle.toggle(walker, true, false);
+        unassignedToggle.tick += 20;
+        unassignedToggle.toggle(walker, false, false);
+        unassignedToggle.step(walker, .4);
+        check(
+                unassignedToggle.progress(walker, "walk") == 0,
+                "unassigned toggle events cannot keep an idle WALK distance measurement alive");
+        List<java.util.function.BiConsumer<Fixture, Actor>> resets =
+                List.of(
+                        (f, a) ->
+                                f.producer.onTeleport(
+                                        new PlayerTeleportEvent(a.player, a.at, a.at)),
+                        (f, a) ->
+                                f.producer.onWorld(
+                                        new PlayerChangedWorldEvent(a.player, a.at.getWorld())),
+                        (f, a) ->
+                                f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false)),
+                        (f, a) ->
+                                f.producer.onDeath(
+                                        new org.bukkit.event.entity.PlayerDeathEvent(
+                                                a.player,
+                                                QuestCompletionFixture.proxy(
+                                                        org.bukkit.damage.DamageSource.class,
+                                                        (name, args) ->
+                                                                QuestCompletionFixture.DEFAULT),
+                                                List.of(),
+                                                0,
+                                                (String) null)),
+                        (f, a) ->
+                                f.producer.onGameMode(
+                                        new PlayerGameModeChangeEvent(
+                                                a.player, GameMode.ADVENTURE)),
+                        (f, a) -> f.producer.onFlight(new PlayerToggleFlightEvent(a.player, true)),
+                        (f, a) -> f.producer.onGlide(new EntityToggleGlideEvent(a.player, true)),
+                        (f, a) -> f.producer.onMount(new EntityMountEvent(a.player, a.player)),
+                        (f, a) ->
+                                f.producer.onDismount(new EntityDismountEvent(a.player, a.player)),
+                        (f, a) -> {
+                            f.producer.beforeStateChange(a.player);
+                            f.producer.afterStateChange(a.id);
+                        },
+                        (f, a) -> {
+                            f.producer.beforeJoin(a.player);
+                            f.producer.membershipChanged(a.id);
+                        });
+        for (var reset : resets) {
+            Fixture f = finalFixture();
+            Actor a = finalActor(f);
+            f.move(a, 0, 0, -.6, 0);
+            f.toggle(a, true, false);
+            reset.accept(f, a);
+            check(f.producer.trackedPlayers() == 0, "lifecycle clears all new transient state");
+            f.move(a, 0, 0, -.4, 0);
+            f.toggle(a, true, false);
+            check(
+                    f.progress(a, "back") == 0 && f.progress(a, "toggle") == 1,
+                    "lifecycle cannot carry backward fraction or recount active sneak");
+            f.toggle(a, false, false);
+            f.toggle(a, true, false);
+            check(
+                    f.progress(a, "toggle") == 2,
+                    "lifecycle permits a fresh proven activation without old session cooldown");
+        }
+        Fixture f = finalFixture();
+        Actor a = finalActor(f);
+        f.move(a, 0, 0, -.6, 0);
+        f.toggle(a, true, false);
+        f.assign(a, "back", "toggle");
+        f.move(a, 0, 0, -.4, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 0 && f.progress(a, "toggle") == 0,
+                "assignment replacement discards old fraction and old sneak observation");
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        var catalog = f.domain.registry.snapshot();
+        f.domain.registry.replaceAll(catalog);
+        f.move(a, 0, 0, -.6, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 0 && f.progress(a, "toggle") == 1,
+                "catalog reload invalidates measurements without erasing committed progress");
+        f.domain.registry.replaceAll(catalog);
+        f.move(a, 0, 0, -.4, 0);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "back") == 0 && f.progress(a, "toggle") == 1,
+                "rollback generation also starts fresh, never recounting active sneak");
+        f.tick += 41;
+        f.move(a, 0, 0, -.6, 0);
+        check(f.progress(a, "back") == 0, "idle observation gap invalidates backward remainder");
     }
 
     private static void check(boolean condition, String reason) {

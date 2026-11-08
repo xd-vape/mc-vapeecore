@@ -27,7 +27,52 @@ public final class QuestProgressHudHarness {
         assignmentsAndReload();
         lifecycle();
         errors();
+        finalMovementKeys();
         System.out.println("QuestProgressHudHarness passed " + checks + " checks.");
+    }
+
+    private static void finalMovementKeys() {
+        for (String key : List.of("movement:backward", "movement:sneak_toggle"))
+            for (Locale locale : List.of(Locale.US, Locale.GERMANY))
+                try (var f = new Fixture()) {
+                    var a = f.actor();
+                    a.locale = locale;
+                    f.domain.registry.replaceAll(
+                            List.of(
+                                    new QuestDefinition(
+                                            "final_key",
+                                            LocalizedText.parse(
+                                                    Map.of(
+                                                            "en",
+                                                            "Final Movement",
+                                                            "de",
+                                                            "Letzte Bewegung")),
+                                            LocalizedText.literal("Test"),
+                                            QuestProgressKey.of(key),
+                                            4,
+                                            1)));
+                    f.assign(a, "final_key");
+                    f.report(a, key, 1);
+                    f.pump();
+                    check(
+                            a.bar()
+                                            .contains(
+                                                    locale.equals(Locale.GERMANY)
+                                                            ? "Letzte Bewegung"
+                                                            : "Final Movement")
+                                    && a.bar().contains("1/4")
+                                    && a.bar().contains("25"),
+                            "both final movement keys use existing localized numeric/percent HUD");
+                    check(
+                            a.xp.size() == 1 && a.clientExp == .25F && a.mutations == 0,
+                            "one existing HUD update without server XP mutation");
+                    f.advance(61);
+                    check(
+                            a.clientExp == a.realExp
+                                    && a.clientLevel == a.realLevel
+                                    && a.mutations == 0,
+                            "final movement HUD restores actual XP through original owner");
+                }
     }
 
     private static void formatting() {

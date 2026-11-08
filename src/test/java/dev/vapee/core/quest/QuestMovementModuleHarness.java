@@ -84,7 +84,7 @@ public final class QuestMovementModuleHarness {
             f.module.startMovement(c.lobby, c.activities);
             QuestMovementProducer old = producer(f);
             check(
-                    handlers(f) == 14 && f.handlers() == 2 && f.activeTasks() == 1,
+                    handlers(f) == 15 && f.handlers() == 2 && f.activeTasks() == 1,
                     "one movement listener, original playtime listeners and no extra scheduler");
             check(
                     c.lobbyListeners.size() == 1 && c.activityListeners.size() == 1,
@@ -94,7 +94,7 @@ public final class QuestMovementModuleHarness {
                 throw new AssertionError("duplicate accepted");
             } catch (IllegalStateException expected) {
                 check(
-                        handlers(f) == 14 && c.lobbyListeners.size() == 1,
+                        handlers(f) == 15 && c.lobbyListeners.size() == 1,
                         "duplicate binding cannot duplicate progress handlers");
             }
             var movement = new QuestMovementTestSupport.Fixture();
@@ -113,6 +113,26 @@ public final class QuestMovementModuleHarness {
                                             10,
                                             1)));
             f.module.getQuestService().assignQuest(actor.id, "walk");
+            var definitions = new ArrayList<>(f.module.getDefinitionRegistry().snapshot());
+            definitions.add(
+                    new QuestDefinition(
+                            "toggle",
+                            "Toggle",
+                            "Toggle",
+                            QuestMovementProducer.SNEAK_TOGGLE,
+                            100,
+                            1));
+            definitions.add(
+                    new QuestDefinition(
+                            "back",
+                            "Backward",
+                            "Backward",
+                            QuestMovementProducer.BACKWARD,
+                            100,
+                            1));
+            f.module.getDefinitionRegistry().replaceAll(definitions);
+            f.module.getQuestService().assignQuest(actor.id, "toggle");
+            f.module.getQuestService().assignQuest(actor.id, "back");
             var originalCalls = f.runtime.serverCalls;
             int[] tick = {100};
             f.runtime.serverCalls =
@@ -124,6 +144,18 @@ public final class QuestMovementModuleHarness {
             var to = from.clone().add(0.6, 0, 0);
             old.onMove(new org.bukkit.event.player.PlayerMoveEvent(actor.player, from, to));
             actor.at = to;
+            old.onSneak(new org.bukkit.event.player.PlayerToggleSneakEvent(actor.player, true));
+            actor.sneak = true;
+            check(
+                    f.players
+                                    .getPlayer(actor.id)
+                                    .orElseThrow()
+                                    .getQuestState()
+                                    .snapshot()
+                                    .get("toggle")
+                                    .progress()
+                            == 1,
+                    "production-bound movement listener observes a valid stationary sneak activation");
             check(
                     old.trackedPlayers() == 1,
                     "bound production producer retains only temporary measurement state");
@@ -157,13 +189,15 @@ public final class QuestMovementModuleHarness {
             old.onMove(
                     new org.bukkit.event.player.PlayerMoveEvent(
                             actor.player, to, to.clone().add(1, 0, 0)));
+            actor.sneak = false;
+            old.onSneak(new org.bukkit.event.player.PlayerToggleSneakEvent(actor.player, true));
             check(
                     old.trackedPlayers() == 0,
                     "retained old listener reference is inert after disable");
             f.module.enable();
             f.module.startMovement(c.lobby, c.activities);
             check(
-                    producer(f) != old && handlers(f) == 14 && f.activeTasks() == 1,
+                    producer(f) != old && handlers(f) == 15 && f.activeTasks() == 1,
                     "re-enable binds a new producer without leaking tasks or old listeners");
             f.module.disable();
         }
@@ -192,7 +226,7 @@ public final class QuestMovementModuleHarness {
                 f.refuseRegistrationBefore = false;
                 f.refuseRegistrationAfter = false;
                 f.module.startMovement(c.lobby, c.activities);
-                check(handlers(f) == 14, "explicit binding retry succeeds after confirmed cleanup");
+                check(handlers(f) == 15, "explicit binding retry succeeds after confirmed cleanup");
                 f.module.disable();
             }
         try (var f = new QuestLifecycleFixture()) {
