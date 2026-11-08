@@ -160,7 +160,9 @@ public final class QuestMovementModuleHarness {
                     old.trackedPlayers() == 1,
                     "bound production producer retains only temporary measurement state");
             c.lobbyListeners.iterator().next().beforeStateChange(actor.player);
-            check(old.trackedPlayers() == 0, "borrowed lobby observer reaches the real producer");
+            check(
+                    old.trackedPlayers() == 1,
+                    "before-lobby notification retains toggle history until actual transition");
             tick[0]++;
             old.onMove(
                     new org.bukkit.event.player.PlayerMoveEvent(
@@ -177,8 +179,8 @@ public final class QuestMovementModuleHarness {
                     "transition cannot join old and new fractions");
             c.activityListeners.iterator().next().beforeJoin(actor.player);
             check(
-                    old.trackedPlayers() == 0,
-                    "borrowed activity observer reaches the real producer");
+                    old.trackedPlayers() == 1,
+                    "before-activity attempt retains accepted toggle history");
             f.module.disable();
             check(
                     handlers(f) == 0

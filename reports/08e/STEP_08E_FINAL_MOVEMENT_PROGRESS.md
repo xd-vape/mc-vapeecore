@@ -133,3 +133,92 @@ Only these four existing files belong to the additional local fix commit:
 Pre-commit comparison passes for all 1511 original files across both existing worktrees; only the four intended existing paths differ. Both Run configurations and both Step-06B receipts retain their original SHA-256 values. The protected worktree and its pre-existing untracked report, Recovery/other feature branches, tags and remote configuration are unchanged. No unrelated LF/CRLF normalization occurred. Master and origin/master remain at `6136eb2eef794508011f4eaa656b4121ddb44dfc`. Final after-commit preservation results are recorded externally. Operator-owned live files may change externally and are not claimed byte-identical; this task neither uses nor modifies the operator server.
 
 Evidence, before hashes/references, unchanged-source red proof, same-test green proof, native probe and final verification receipts are outside the repository under `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e1-velocity-guard-20261108-032137/`. The new local fix SHA belongs to the final receipt/response. No amend, history rewrite, merge, push, PR, deployment, operator-server intervention or Step 08F. Real Minecraft-client acceptance remains open.
+
+## Post-Audit Correction 08E.2 – Cancellation & Lifecycle Guard Integrity
+
+### Scope, evidence and confirmed causes
+
+This correction stays on `codex/step08e-final-movement-progress`, directly after unchanged `b0eb08a44c57734849668bf0304d5e726c10765b`; original Step 08E `0b626cd41d9904956075a02e075ae22b2f77b3dd` and master/origin/master `6136eb2eef794508011f4eaa656b4121ddb44dfc` remain unchanged. Historical results in earlier sections describe their original commits. No operator server is used.
+
+The Flight handler removed its sample even when Paper cancelled the request and left the actual Flying flag false. The same unconditional cleanup pattern existed for cancelled Teleport (both entry points), GameMode, Glide, Mount, Dismount and Paper PlayerDeath events. Paper 1.21.11 PlayerDeathEvent inherits Cancellable: assuming death was always an irrevocable notification would leave another hole. Rejected lifecycle attempts could erase both the physical twenty-tick exclusion and accepted Sneak cooldown history. Accepted no-op Flight/GameMode/Glide requests also erased state despite an unchanged target state.
+
+The service audit found a separate instance of the same cause: LobbyPlayerStateService calls beforeStateChange before operations and afterStateChange in finally, including no-op synchronize, early returns and failed attempts. ActivityService calls beforeJoin before membership is established, and membershipChanged on failed handoff, duplicate membership, rollback and final reconciliation. These are not unconditional commit notifications. No foreign service contract is changed; the movement observer now reconciles its own state against current eligibility.
+
+A controlled API-read exception in onSneak also reproduced guard loss through failed(UUID). Error cleanup now retains a current owned guard and accepted Toggle history rather than treating a failed observation as evidence of lifecycle success. This is controlled error-path hardening, not a claim that a network player can force arbitrary Bukkit API exceptions.
+
+### Complete handler and callback audit matrix
+
+The matrix was checked against the actual API hierarchy, current source, service callback sites and compiled behavioral tests. Paper 1.21.11 build 132 bytecode confirms event-before-commit ordering for Flight, Glide, Mount and Dismount. Native/API acceptance is reported separately below.
+
+| Entry point | Cancellable / authority | Cancellation or ineffective observation | Accepted or confirmed transition / coverage |
+| --- | --- | --- | --- |
+| onMove | Yes | cancelled/invalid/discontinuous/over-budget -> reject; active deadline retained | valid guarded sampling, replay exclusion and all seven-key tests; Teleport delegates to onTeleport |
+| onJump | Yes | cancelled/invalid -> reject; no pending jump adopted | valid current unblocked intent, matching accepted Move required; old 290 cases retained |
+| onSneak | Yes | cancellation returns without state change; invalid location -> reject | actual pre-state plus accepted-observation state and ten-tick credited interval; API-read failure uses safe observation cleanup |
+| onVelocity | Yes | cancellation is a no-op in a current runtime; stale instance ignored | eligible loaded current player receives a fresh twenty ticks; ineligible context is released without retaining history |
+| onTeleport and Teleport via onMove | Yes, own Paper HandlerList | cancellation, invalid source/target or no positional change -> reject with no invented target | accepted finite positional/world change -> forget; fixtures test each entry and combined Move-then-Teleport calls, native tests real Teleport dispatch |
+| onGameMode | Yes | cancelled or unchanged target mode -> no-op | differing accepted target -> forget; actual native mode checked |
+| onFlight | Yes | cancelled or unchanged target flag -> no-op | differing accepted target -> forget; packet final Flying state checked; later actual Velocity still starts twenty ticks |
+| onGlide | Yes | cancelled or unchanged target flag -> no-op | differing accepted target -> forget; native start/stop methods validate final flag |
+| onMount | Yes | cancelled -> no-op | accepted native mount -> forget; native vehicle relation checked |
+| onDismount | Yes, unless forced non-cancellable | effective cancellation -> no-op | accepted/forced removal -> forget; cancellation cannot be set for a non-cancellable event |
+| onDeath | Yes in Paper | cancelled -> no-op | accepted death -> forget; successful fixture state and Paper cancellation API tested |
+| onWorld | No | not an attempt notification | actual world-change notification -> forget; existing world/reset coverage |
+| onJoin | No | new session notification | forget only owned identity; new session cannot inherit prior history |
+| onQuit | No | disconnect notification | owned identity removed, including lookup already absent; stale player cannot remove replacement |
+| onRespawn | No | respawn notification from death context | forget; original respawn/re-enable tests retained |
+| beforeStateChange / beforeJoin | synchronous pre-attempt service callback | reject existing owned observations only, retain live deadline and accepted Toggle state | actual resulting context is reconciled by after callback/native events; failed/no-op handoffs cannot unlock |
+| afterStateChange / membershipChanged | finally/reconciliation callback, not unconditional commit | eligible current loaded context retains guard via observation rejection | offline/ineligible/unloaded context releases its owned measurement; tests cover rollback and actual context changes |
+| failed | observation exception, not context proof | discard owned observations while retaining deadline/Toggle history; secondary cleanup error is logged/suppressed | no new progress or replacement session mutation; controlled getLocation failure regression |
+| forget(Player) / forget(UUID) / clear | internal ownership and lifecycle boundary | Player form checks current online identity plus entity identity | UUID cleanup is current-context reconciliation or loaded/assignment cleanup; clear belongs to retired runtime |
+
+### Every sample mutation and invariants
+
+There remains exactly one UUID sample map, seven technical key bits and four distance slots, without retained Player/World objects. Map insertion occurs only at valid sample initialization, owned rejection, or effective eligible velocity. Full removal occurs at confirmed lifecycle/context invalidation, unloaded/no-assignment cleanup or runtime clear. The Player-specific path rejects a different current online instance, even before comparing entity IDs.
+
+Only effective velocity assigns a new twenty-tick deadline. reject assigns tick+1 only when the existing interval has expired. blockedAt uses signed tick subtraction; active deadlines survive normal and wrapped ticks, repeated rejection and both Teleport entry points. sample clears blocked only after expiry, and then revalidates assignment/catalog identity. Fractions, turn, pending jump and endpoint are discarded on rejection without replenishing the tick budget. Cancelled boolean lifecycle requests leave valid observations untouched. Service pre/finally callbacks discard observations but retain accepted Sneak state and last credited tick. Discrete toggle still has no distance accumulator.
+
+Assignment/catalog generation changes remain lazy measurement invalidation and cannot release an active physical exclusion in the same valid session. Real World, mode, flight/glide, vehicle, death/respawn, join/quit, BUILD/Activity and runtime transitions retain safe cleanup. An impulse observed in an already ineligible context is not carried into a new eligible context. Existing current(), eligible(), reporter, reward, persistence, daily selection and HUD ownership remain central; no second cache, task, event bus, player field or module.
+
+### Confirmed hypotheses and limits of the findings
+
+Executable same-context cases confirm premature progress after cancelled Flight, Teleport/World-teleport, GameMode, Glide, Mount, cancelled Death, no-op target events, failed/no-op service notifications and observation exceptions. Cancelled Dismount also erased state in API dispatch. A real mounted player is already movement-ineligible, so that structural cleanup defect is not claimed as an independently demonstrated valid-context vehicle exploit; native mounted cancellation is tested as vehicle-state/eligibility behavior, while synthetic unmounted API dispatch covers defensive guard retention. Likewise, cancelled Flight/Glide end while actually flying/gliding remains ineligible; spurious end callbacks in a valid context are covered without claiming a vanilla packet can create every synthetic case.
+
+Forced non-cancellable Dismount is not a cancellation vulnerability: the API refuses cancellation and actual removal is a legitimate transition. World, Join, Quit and Respawn are not cancellable and retain their existing contracts. API callbacks accepted by Paper are observed at MONITOR before native commit; arbitrary foreign plugins directly modifying native state without normal events are not represented as Minecraft-client validation.
+
+### Actual red / green evidence
+
+The first new focused run against unchanged working production `b0eb08a44c57734849668bf0304d5e726c10765b` (producer SHA-256 `2C5615F6C0D3A78CEE674A2D4CA4479661E2BF7C74CE21C84D233D4996774F6F`) executed **621 scenario groups, 619 failures, exit 1**. After making the legacy success fixtures describe actual context changes, the final original producer was compiled into an isolated external class directory; no Git reset or production replacement was used. The exact final test sources again produced **621 groups / 619 failures / exit 1**. Logs explicitly show expected zero and actual one progress before the original deadline.
+
+The same final test-source hashes on the corrected producer pass **621/621 new groups, 2,482 checks, exit 0**. All **290 existing 08E.1 guard groups** still pass. QuestMovementHarness passes **3,942 checks**, Integration 77, Module 25, HUD 79 and Distinct 529; all 42 distinct pending-integrity scenarios pass. The only adjustments to existing tests strengthen their meaning: successful Teleport uses a changed destination, successful BUILD/Activity fixtures actually change context, and borrowed pre-attempt observer tests verify retained accepted Toggle history rather than asserting that an attempt deletes all state. No existing test or assertion group is removed or bypassed.
+
+Tests cover every key with sufficient valid post-cancellation events (including four tick-separated rotation segments), repeated rejection, t+19/t+20, positive/negative/wrapped ticks, real small-target quest grants and pending retry, no premature numeric HUD signal/chat, cooldown retention without velocity, stale sessions, actual successful transitions, and eligible versus ineligible impulse ownership. The new fixture error switch controls only a Bukkit location-read exception.
+
+Final canonical verification was freshly executed with `pwsh -NoProfile -File .\scripts\verify.ps1`: **245 discovered / 245 executed / 245 passed, 40,303 checks, Failed=0, Missing/Invalid=0, exit 0**. Maven clean package and Spotless both PASS. The result inventory matches all 245 previous harness classes exactly; the only check-count difference is QuestMovementHarness, 1,460 -> 3,942 (+2,482). This is a new verification of the correction, separate from the historical 37,821-check result. The final report-value update is followed by a focused repository-link check; no Java changes follow the canonical run.
+
+### Isolated native API / service acceptance
+
+The new disposable run passes **386 native assertions, zero failures**, on Paper **1.21.11 build 132**, LuckPerms **5.5.84** and Java 21. This includes the prior 114 assertions plus 272 lifecycle assertions. The owned process exits normally with code 0. The server runs only under the external evidence directory on loopback port 25671; no operator process is stopped or used.
+
+For Walk, Backward and Sneak-Toggle, real Flight input packets, cancelled positional/world Teleports, GameMode, native Glide and Mount operations preserve the guard at t+2/t+19 and permit one target-one completion with seven coins at t+20. Before expiry there are no progress, completion, coins, XP-bar or actionbar packets. The same checks exercise actual no-op Lobby synchronization, synthetic cancellable Death/Dismount dispatch, and actual accepted native transitions. Separate real mounted Dismount cancellation leaves the vehicle relation intact. Cancelled real Flight/Glide ends keep their actual ineligible flags. All seven keys, wrapped ticks and pending rewards receive the broader executable harness coverage above; these are not all seven-key native-client tests.
+
+The copied native plugin JAR and canonical build have identical SHA-256 `C55EB25F5EE7B59B6CB74468FFCE7E78B9198B657256AA1F96B7E466010EE0CB`. Producer, Sample, Point and Jump class bytes also match the canonical target classes individually. Native results, process exit, artifact hashes, class-identity receipt and logs are retained externally.
+
+The probe uses the existing disposable Paper 1.21.11 / LuckPerms setup with actual CraftPlayer, ServerPlayer, input/abilities packet handlers and registered production listeners. It checks final native state after cancellation, not just event flags. It also covers actual LobbyPlayerStateService synchronization, actual accepted lifecycle operations and the existing 114 assertions from 08E.1. Synthetic Dismount/Death API dispatch and real mounted Dismount behavior are explicitly distinguished. Controlled online registration and tick clocks remain test seams. This is not a real Minecraft network-client test or visual acceptance.
+
+### Exact correction paths and protection
+
+Only these six existing paths belong to the one additional local correction commit:
+
+- `src/main/java/dev/vapee/core/quest/QuestMovementProducer.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementHarness.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementTestSupport.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementModuleHarness.java`
+- `docs/DEVELOPER_GUIDE.md`
+- `reports/08e/STEP_08E_FINAL_MOVEMENT_PROGRESS.md`
+
+Pre-commit preservation passes for all **1,511 original files** across both existing worktrees (782 main, 729 protected); only the six intended existing paths differ. Both Run configurations and both protected Step-06B receipts retain their original SHA-256 values. The protected worktree retains its original HEAD, branch, status and pre-existing untracked report. Recovery/other feature branches, tags and remote configuration remain unchanged; master and origin/master remain at `6136eb2eef794508011f4eaa656b4121ddb44dfc`. No unrelated normalization or file-inventory changes occurred. The post-commit comparison is retained in the external delivery receipt. Live operator files may change independently and are not claimed byte-identical; this task does not use or modify them.
+
+Evidence, bytecode inspection, original-source red compilation, identical-source green results and disposable probe sources/scripts are outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e2-lifecycle-20261108-035750/`. No amend, rebase, reset, stash, clean, merge, push, PR, deployment, branch deletion, operator-server intervention or Step 08F. Real Minecraft-client acceptance remains open.
+
+API references for the additional audit: [Paper PlayerDeathEvent](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/entity/PlayerDeathEvent.html), [Paper EntityDismountEvent](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/entity/EntityDismountEvent.html).

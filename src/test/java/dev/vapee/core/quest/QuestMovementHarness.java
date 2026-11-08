@@ -23,6 +23,11 @@ public final class QuestMovementHarness {
             System.out.println("QuestMovementHarness passed " + checks + " checks.");
             return;
         }
+        if (args.length == 1 && args[0].equals("--lifecycle-guard")) {
+            lifecycleGuard();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         distances();
         turns();
         jumps();
@@ -34,6 +39,7 @@ public final class QuestMovementHarness {
         toggleEligibility();
         finalMovementLifecycle();
         velocityGuard();
+        lifecycleGuard();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -332,12 +338,18 @@ public final class QuestMovementHarness {
         f.step(a, 0.6);
         check(f.progress(a, "walk") == 0, "world transition resets measurement");
         f.producer.beforeStateChange(a.player);
+        a.context = false;
+        f.producer.afterStateChange(a.id);
+        a.context = true;
         f.producer.afterStateChange(a.id);
         f.step(a, 0.4);
         check(
                 f.progress(a, "walk") == 0,
                 "NORMAL/BUILD transition observer clears fractional travel");
         f.producer.beforeJoin(a.player);
+        a.context = false;
+        f.producer.membershipChanged(a.id);
+        a.context = true;
         f.producer.membershipChanged(a.id);
         f.step(a, 0.6);
         check(f.progress(a, "walk") == 0, "Activity enter/leave observer clears fractional travel");
@@ -726,9 +738,11 @@ public final class QuestMovementHarness {
                 "unassigned toggle events cannot keep an idle WALK distance measurement alive");
         List<java.util.function.BiConsumer<Fixture, Actor>> resets =
                 List.of(
-                        (f, a) ->
-                                f.producer.onTeleport(
-                                        new PlayerTeleportEvent(a.player, a.at, a.at)),
+                        (f, a) -> {
+                            var to = a.at.clone().add(100, 0, 0);
+                            f.producer.onTeleport(new PlayerTeleportEvent(a.player, a.at, to));
+                            a.at = to;
+                        },
                         (f, a) ->
                                 f.producer.onWorld(
                                         new PlayerChangedWorldEvent(a.player, a.at.getWorld())),
@@ -756,10 +770,16 @@ public final class QuestMovementHarness {
                                 f.producer.onDismount(new EntityDismountEvent(a.player, a.player)),
                         (f, a) -> {
                             f.producer.beforeStateChange(a.player);
+                            a.context = false;
+                            f.producer.afterStateChange(a.id);
+                            a.context = true;
                             f.producer.afterStateChange(a.id);
                         },
                         (f, a) -> {
                             f.producer.beforeJoin(a.player);
+                            a.context = false;
+                            f.producer.membershipChanged(a.id);
+                            a.context = true;
                             f.producer.membershipChanged(a.id);
                         });
         for (var reset : resets) {
@@ -1270,10 +1290,16 @@ public final class QuestMovementHarness {
                         },
                         (f, a) -> {
                             f.producer.beforeStateChange(a.player);
+                            a.context = false;
+                            f.producer.afterStateChange(a.id);
+                            a.context = true;
                             f.producer.afterStateChange(a.id);
                         },
                         (f, a) -> {
                             f.producer.beforeJoin(a.player);
+                            a.context = false;
+                            f.producer.membershipChanged(a.id);
+                            a.context = true;
                             f.producer.membershipChanged(a.id);
                         },
                         (f, a) -> {
@@ -1313,6 +1339,426 @@ public final class QuestMovementHarness {
         f.tick = 102;
         guardUnit(f, a, QuestMovementProducer.BACKWARD);
         check(f.progress(a, "guard") == 1, "reloaded profile has no stale blocked sample");
+    }
+
+    private enum LifecycleEvent {
+        FLIGHT_START,
+        FLIGHT_END,
+        TELEPORT_MOVE,
+        TELEPORT_DIRECT,
+        TELEPORT_BOTH,
+        TELEPORT_WORLD,
+        GAMEMODE_CREATIVE,
+        GAMEMODE_SPECTATOR,
+        GLIDE_START,
+        GLIDE_END,
+        MOUNT,
+        DISMOUNT,
+        DEATH,
+        LOBBY_BEFORE,
+        LOBBY_FINALLY,
+        ACTIVITY_BEFORE,
+        ACTIVITY_ROLLBACK,
+        FLIGHT_NO_CHANGE,
+        MODE_NO_CHANGE,
+        GLIDE_NO_CHANGE,
+        TELEPORT_NO_CHANGE,
+        LOCATION_FAILURE
+    }
+
+    private static void lifecycleGuard() {
+        int beforeCases = guardScenarios, beforeFailures = guardFailures;
+        var keys =
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.SPRINT,
+                        QuestMovementProducer.SNEAK,
+                        QuestMovementProducer.JUMP,
+                        QuestMovementProducer.ROTATION,
+                        QuestMovementProducer.BACKWARD,
+                        QuestMovementProducer.SNEAK_TOGGLE);
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 10, Integer.MIN_VALUE + 4})
+            for (var key : keys)
+                for (var event : LifecycleEvent.values())
+                    guardCase(
+                            "lifecycle " + key + " / " + event + " / " + origin,
+                            () -> cancelledLifecycle(key, event, origin));
+        for (var key :
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.BACKWARD,
+                        QuestMovementProducer.SNEAK_TOGGLE))
+            for (var event : LifecycleEvent.values()) {
+                guardCase(
+                        "lifecycle reward " + key + " / " + event,
+                        () -> lifecycleReward(key, event, false));
+                guardCase(
+                        "lifecycle pending " + key + " / " + event,
+                        () -> lifecycleReward(key, event, true));
+            }
+        for (var event : LifecycleEvent.values())
+            guardCase("toggle cooldown / " + event, () -> lifecycleCooldown(event));
+        guardCase(
+                "cancelled teleport actual endpoint",
+                QuestMovementHarness::cancelledTeleportEndpoint);
+        guardCase("cancelled flight then launch", QuestMovementHarness::flightThenVelocity);
+        guardCase("successful transitions", QuestMovementHarness::successfulLifecycle);
+        guardCase("stale lifecycle", QuestMovementHarness::staleLifecycle);
+        guardCase("ineligible impulse context", QuestMovementHarness::ineligibleVelocity);
+        int cases = guardScenarios - beforeCases, failed = guardFailures - beforeFailures;
+        System.out.println("Lifecycle cancellation scenarios: " + cases + ", failed: " + failed);
+        if (failed != 0)
+            throw new AssertionError("Lifecycle cancellation failed scenarios: " + failed);
+    }
+
+    private static org.bukkit.event.entity.PlayerDeathEvent deathEvent(Actor a) {
+        return new org.bukkit.event.entity.PlayerDeathEvent(
+                a.player,
+                QuestCompletionFixture.proxy(
+                        org.bukkit.damage.DamageSource.class,
+                        (name, args) -> QuestCompletionFixture.DEFAULT),
+                List.of(),
+                0,
+                (String) null);
+    }
+
+    private static void lifecycleEvent(Fixture f, Actor a, LifecycleEvent kind) {
+        switch (kind) {
+            case FLIGHT_START, FLIGHT_END -> {
+                var e = new PlayerToggleFlightEvent(a.player, kind == LifecycleEvent.FLIGHT_START);
+                e.setCancelled(true);
+                f.producer.onFlight(e);
+            }
+            case TELEPORT_MOVE, TELEPORT_DIRECT, TELEPORT_BOTH, TELEPORT_WORLD -> {
+                var to = a.at.clone().add(100, 0, 0);
+                if (kind == LifecycleEvent.TELEPORT_WORLD) to.setWorld(world("cancelled-target"));
+                var e = new PlayerTeleportEvent(a.player, a.at.clone(), to);
+                e.setCancelled(true);
+                if (kind != LifecycleEvent.TELEPORT_DIRECT) f.producer.onMove(e);
+                if (kind != LifecycleEvent.TELEPORT_MOVE) f.producer.onTeleport(e);
+            }
+            case GAMEMODE_CREATIVE, GAMEMODE_SPECTATOR -> {
+                var e =
+                        new PlayerGameModeChangeEvent(
+                                a.player,
+                                kind == LifecycleEvent.GAMEMODE_CREATIVE
+                                        ? GameMode.CREATIVE
+                                        : GameMode.SPECTATOR);
+                e.setCancelled(true);
+                f.producer.onGameMode(e);
+            }
+            case GLIDE_START, GLIDE_END -> {
+                var e = new EntityToggleGlideEvent(a.player, kind == LifecycleEvent.GLIDE_START);
+                e.setCancelled(true);
+                f.producer.onGlide(e);
+            }
+            case MOUNT -> {
+                var e = new EntityMountEvent(a.player, a.player);
+                e.setCancelled(true);
+                f.producer.onMount(e);
+            }
+            case DISMOUNT -> {
+                var e = new EntityDismountEvent(a.player, a.player);
+                e.setCancelled(true);
+                f.producer.onDismount(e);
+            }
+            case DEATH -> {
+                var e = deathEvent(a);
+                e.setCancelled(true);
+                f.producer.onDeath(e);
+            }
+            case LOBBY_BEFORE -> f.producer.beforeStateChange(a.player);
+            case LOBBY_FINALLY -> {
+                f.producer.beforeStateChange(a.player);
+                f.producer.afterStateChange(a.id);
+            }
+            case ACTIVITY_BEFORE -> f.producer.beforeJoin(a.player);
+            case ACTIVITY_ROLLBACK -> {
+                f.producer.beforeJoin(a.player);
+                f.producer.membershipChanged(a.id);
+            }
+            case FLIGHT_NO_CHANGE ->
+                    f.producer.onFlight(new PlayerToggleFlightEvent(a.player, a.fly));
+            case MODE_NO_CHANGE ->
+                    f.producer.onGameMode(new PlayerGameModeChangeEvent(a.player, a.mode));
+            case GLIDE_NO_CHANGE ->
+                    f.producer.onGlide(new EntityToggleGlideEvent(a.player, a.glide));
+            case TELEPORT_NO_CHANGE -> {
+                var e = new PlayerTeleportEvent(a.player, a.at.clone(), a.at.clone());
+                f.producer.onMove(e);
+                f.producer.onTeleport(e);
+            }
+            case LOCATION_FAILURE -> {
+                a.locationFailure = true;
+                try {
+                    f.producer.onSneak(new PlayerToggleSneakEvent(a.player, true));
+                } finally {
+                    a.locationFailure = false;
+                }
+            }
+        }
+    }
+
+    private static void cancelledLifecycle(QuestProgressKey key, LifecycleEvent kind, int origin) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        a.allowFlight = true;
+        f.tick = origin;
+        velocity(f, a, false);
+        var position = a.at.clone();
+        f.tick = origin + 1;
+        lifecycleEvent(f, a, kind);
+        check(
+                a.at.equals(position)
+                        && !a.fly
+                        && !a.glide
+                        && !a.vehicle
+                        && a.mode == GameMode.SURVIVAL,
+                "cancelled attempt leaves context unchanged");
+        f.tick = origin + 2;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 0,
+                "expected lifecycle-blocked progress=0 at t+2, actual=" + f.progress(a, "guard"));
+        f.tick = origin + 10;
+        lifecycleEvent(f, a, kind);
+        f.tick = origin + 19;
+        lifecycleEvent(f, a, kind);
+        observeGuardKey(f, a, key);
+        check(f.progress(a, "guard") == 0, "repeated cancellation cannot release before t+20");
+        f.tick = origin + 20;
+        guardUnit(f, a, key);
+        check(f.progress(a, "guard") == 1, "cancellation cannot postpone original deadline");
+    }
+
+    private static void lifecycleReward(
+            QuestProgressKey key, LifecycleEvent kind, boolean pending) {
+        Fixture f = guardFixture(key, 1);
+        Actor a = guardActor(f);
+        int[] hud = {0};
+        f.domain.quests.addProgressListener((id, assignment, catalog, ids, result) -> hud[0]++);
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        lifecycleEvent(f, a, kind);
+        f.tick = 102;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 0
+                        && f.status(a, "guard") == QuestStatus.ACTIVE
+                        && f.coins(a) == 0
+                        && hud[0] == 0
+                        && f.feedback.isEmpty(),
+                "no early progress, completion, coins, HUD or chat");
+        if (pending) f.domain.economy.setCoins(a.id, Long.MAX_VALUE);
+        f.tick = 120;
+        guardUnit(f, a, key);
+        if (pending) {
+            check(f.status(a, "guard") == QuestStatus.REWARD_PENDING, "overflow remains pending");
+            f.tick = 130;
+            velocity(f, a, false);
+            f.tick = 131;
+            lifecycleEvent(f, a, kind);
+            f.domain.economy.setCoins(a.id, 0);
+            f.tick = 142;
+            guardUnit(f, a, key);
+            check(
+                    f.status(a, "guard") == QuestStatus.REWARD_PENDING
+                            && f.coins(a) == 0
+                            && hud[0] == 1,
+                    "no early retry of reached pending target");
+            f.tick = 150;
+            guardUnit(f, a, key);
+        }
+        check(
+                f.status(a, "guard") == QuestStatus.COMPLETED && f.coins(a) == 7 && hud[0] == 1,
+                "normal once-only completion and numeric HUD signal");
+        f.tick += 10;
+        guardUnit(f, a, key);
+        f.domain.quests.retryPendingRewards(a.id);
+        check(f.coins(a) == 7 && hud[0] == 1, "later events remain idempotent");
+    }
+
+    private static void lifecycleCooldown(LifecycleEvent kind) {
+        Fixture f = guardFixture(QuestMovementProducer.SNEAK_TOGGLE, 100);
+        Actor a = guardActor(f);
+        f.tick = 100;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        f.toggle(a, false, false);
+        f.tick = 101;
+        lifecycleEvent(f, a, kind);
+        f.tick = 102;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(f.progress(a, "guard") == 1, "cancelled attempt cannot reset toggle cooldown");
+        f.tick = 110;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(f.progress(a, "guard") == 2, "cancelled attempt cannot extend toggle cooldown");
+    }
+
+    private static void cancelledTeleportEndpoint() {
+        Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+        Actor a = guardActor(f);
+        a.input = false;
+        a.backward = true;
+        f.tick = 100;
+        moveAtTick(f, a, 0, 0, -.6, 0);
+        var original = a.at.clone();
+        f.tick = 101;
+        lifecycleEvent(f, a, LifecycleEvent.TELEPORT_BOTH);
+        check(
+                a.at.equals(original) && f.progress(a, "guard") == 0,
+                "cancelled target is not actual travel");
+        f.tick = 102;
+        moveAtTick(f, a, 0, 0, -.4, 0);
+        check(f.progress(a, "guard") == 0, "cancelled teleport discards old partial observation");
+        f.tick = 103;
+        moveAtTick(f, a, 0, 0, -.6, 0);
+        check(f.progress(a, "guard") == 1, "new distance starts from actual source");
+    }
+
+    private static void flightThenVelocity() {
+        Fixture f = guardFixture(QuestMovementProducer.SNEAK_TOGGLE, 100);
+        Actor a = guardActor(f);
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        lifecycleEvent(f, a, LifecycleEvent.FLIGHT_START);
+        f.tick = 110;
+        velocity(f, a, false);
+        f.tick = 111;
+        lifecycleEvent(f, a, LifecycleEvent.FLIGHT_START);
+        f.tick = 120;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(f.progress(a, "guard") == 0, "cancelled flight preserves real launch guard");
+        f.tick = 129;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(f.progress(a, "guard") == 0, "renewed launch remains blocked at t+29");
+        f.tick = 130;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(f.progress(a, "guard") == 1, "real launch expires at t+30");
+    }
+
+    private static void successfulLifecycle() {
+        List<java.util.function.BiConsumer<Fixture, Actor>> transitions =
+                List.of(
+                        (f, a) -> {
+                            f.producer.onFlight(new PlayerToggleFlightEvent(a.player, true));
+                            a.fly = true;
+                        },
+                        (f, a) -> {
+                            a.fly = true;
+                            f.producer.onFlight(new PlayerToggleFlightEvent(a.player, false));
+                            a.fly = false;
+                        },
+                        (f, a) -> {
+                            f.producer.onGlide(new EntityToggleGlideEvent(a.player, true));
+                            a.glide = true;
+                        },
+                        (f, a) -> {
+                            a.glide = true;
+                            f.producer.onGlide(new EntityToggleGlideEvent(a.player, false));
+                            a.glide = false;
+                        },
+                        (f, a) -> {
+                            f.producer.onGameMode(
+                                    new PlayerGameModeChangeEvent(a.player, GameMode.CREATIVE));
+                            a.mode = GameMode.CREATIVE;
+                        },
+                        (f, a) -> {
+                            f.producer.onMount(new EntityMountEvent(a.player, a.player));
+                            a.vehicle = true;
+                        },
+                        (f, a) -> {
+                            a.vehicle = true;
+                            f.producer.onDismount(new EntityDismountEvent(a.player, a.player));
+                            a.vehicle = false;
+                        },
+                        (f, a) -> {
+                            f.producer.onDeath(deathEvent(a));
+                            a.dead = true;
+                        },
+                        (f, a) -> {
+                            var to = a.at.clone().add(100, 0, 0);
+                            var e = new PlayerTeleportEvent(a.player, a.at.clone(), to);
+                            f.producer.onMove(e);
+                            f.producer.onTeleport(e);
+                            a.at = to;
+                        },
+                        (f, a) -> {
+                            var to = a.at.clone();
+                            to.setWorld(world("successful-target"));
+                            f.producer.onTeleport(
+                                    new PlayerTeleportEvent(a.player, a.at.clone(), to));
+                            a.at = to;
+                        },
+                        (f, a) -> {
+                            f.producer.beforeStateChange(a.player);
+                            a.context = false;
+                            f.producer.afterStateChange(a.id);
+                        },
+                        (f, a) -> {
+                            f.producer.beforeJoin(a.player);
+                            a.context = false;
+                            f.producer.membershipChanged(a.id);
+                        });
+        for (var transition : transitions) {
+            Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+            Actor a = guardActor(f);
+            f.tick = 100;
+            velocity(f, a, false);
+            f.tick = 101;
+            transition.accept(f, a);
+            check(f.producer.trackedPlayers() == 0, "confirmed transition releases old sample");
+            a.fly = a.glide = a.vehicle = a.dead = false;
+            a.mode = GameMode.SURVIVAL;
+            a.context = true;
+            f.tick = 102;
+            guardUnit(f, a, QuestMovementProducer.BACKWARD);
+            check(f.progress(a, "guard") == 1, "new eligible context has no old guard");
+        }
+    }
+
+    private static void staleLifecycle() {
+        for (var kind : LifecycleEvent.values()) {
+            Fixture f = guardFixture(QuestMovementProducer.SNEAK_TOGGLE, 100);
+            Actor old = guardActor(f);
+            Actor current = f.actor(old.id);
+            f.tick = 100;
+            velocity(f, current, false);
+            f.tick = 101;
+            lifecycleEvent(f, old, kind);
+            f.tick = 102;
+            guardUnit(f, current, QuestMovementProducer.SNEAK_TOGGLE);
+            check(
+                    f.progress(current, "guard") == 0,
+                    "old attempt cannot release current session guard");
+        }
+    }
+
+    private static void ineligibleVelocity() {
+        for (var mode :
+                List.<Consumer<Actor>>of(
+                        a -> a.fly = true,
+                        a -> a.glide = true,
+                        a -> a.vehicle = true,
+                        a -> a.mode = GameMode.CREATIVE,
+                        a -> a.context = false)) {
+            Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+            Actor a = guardActor(f);
+            mode.accept(a);
+            f.tick = 100;
+            velocity(f, a, false);
+            check(
+                    f.producer.trackedPlayers() == 0,
+                    "ineligible context creates no physical history");
+            a.fly = a.glide = a.vehicle = false;
+            a.mode = GameMode.SURVIVAL;
+            a.context = true;
+            f.producer.afterStateChange(a.id);
+            f.tick = 101;
+            guardUnit(f, a, QuestMovementProducer.BACKWARD);
+            check(f.progress(a, "guard") == 1, "later valid context starts normally");
+        }
     }
 
     private static void check(boolean condition, String reason) {

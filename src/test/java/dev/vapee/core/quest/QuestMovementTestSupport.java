@@ -140,6 +140,7 @@ final class QuestMovementTestSupport {
         Location at = new Location(world("first"), 0, 64, 0);
         boolean online = true, context = true, ground = true, input = true;
         boolean backward, left, right, sprintInput;
+        boolean locationFailure;
         boolean sprint, sneak, vehicle, fly, glide, water, swimming, climbing, riptide, dead;
         boolean allowFlight;
         GameMode mode = GameMode.SURVIVAL;
@@ -168,7 +169,12 @@ final class QuestMovementTestSupport {
                                         case "getUniqueId" -> id;
                                         case "getEntityId" -> entity;
                                         case "getName" -> "Walker";
-                                        case "getLocation" -> at.clone();
+                                        case "getLocation" -> {
+                                            if (locationFailure)
+                                                throw new IllegalStateException(
+                                                        "controlled location read failure");
+                                            yield at.clone();
+                                        }
                                         case "getWorld" -> at.getWorld();
                                         case "getCurrentInput" -> keys;
                                         case "isOnline", "isValid" -> online;

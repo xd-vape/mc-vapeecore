@@ -161,9 +161,8 @@ public final class QuestMovementProducer
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        UUID id = player.getUniqueId();
-        if (event instanceof PlayerTeleportEvent) {
-            forget(player);
+        if (event instanceof PlayerTeleportEvent teleport) {
+            onTeleport(teleport);
             return;
         }
         if (event.isCancelled()) {
@@ -249,7 +248,7 @@ public final class QuestMovementProducer
                 report(player, sample, ROTATION, 1);
             }
         } catch (RuntimeException failure) {
-            failed(id, failure);
+            failed(player, failure);
         }
     }
 
@@ -273,7 +272,7 @@ public final class QuestMovementProducer
                 sample.jumpTick = sample.tick;
             }
         } catch (RuntimeException failure) {
-            failed(player.getUniqueId(), failure);
+            failed(player, failure);
         }
     }
 
@@ -299,7 +298,7 @@ public final class QuestMovementProducer
                 report(player, sample, SNEAK_TOGGLE, 1);
             }
         } catch (RuntimeException failure) {
-            failed(player.getUniqueId(), failure);
+            failed(player, failure);
         }
     }
 
@@ -354,6 +353,10 @@ public final class QuestMovementProducer
             return;
         }
         if (event.isCancelled()) return;
+        if (!eligible(event.getPlayer()) || players.getPlayer(id).isEmpty()) {
+            forget(event.getPlayer());
+            return;
+        }
         Sample blocked = new Sample(event.getPlayer().getEntityId(), ticks.getAsInt());
         blocked.blocked = true;
         blocked.blockedUntil = blocked.tick + 20;
@@ -362,7 +365,11 @@ public final class QuestMovementProducer
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onTeleport(PlayerTeleportEvent event) {
-        forget(event.getPlayer());
+        if (event.isCancelled()
+                || !valid(event.getFrom())
+                || !valid(event.getTo())
+                || samePosition(event.getFrom(), event.getTo())) reject(event.getPlayer(), null);
+        else forget(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -382,7 +389,7 @@ public final class QuestMovementProducer
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDeath(PlayerDeathEvent event) {
-        forget(event.getEntity());
+        if (!event.isCancelled()) forget(event.getEntity());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -392,47 +399,66 @@ public final class QuestMovementProducer
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onGameMode(PlayerGameModeChangeEvent event) {
-        forget(event.getPlayer());
+        if (!event.isCancelled() && event.getNewGameMode() != event.getPlayer().getGameMode())
+            forget(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onFlight(PlayerToggleFlightEvent event) {
-        forget(event.getPlayer());
+        if (!event.isCancelled() && event.isFlying() != event.getPlayer().isFlying())
+            forget(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onGlide(EntityToggleGlideEvent event) {
-        if (event.getEntity() instanceof Player player) forget(player);
+        if (!event.isCancelled()
+                && event.getEntity() instanceof Player player
+                && event.isGliding() != player.isGliding()) forget(player);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onMount(EntityMountEvent event) {
-        if (event.getEntity() instanceof Player player) forget(player);
+        if (!event.isCancelled() && event.getEntity() instanceof Player player) forget(player);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDismount(EntityDismountEvent event) {
-        if (event.getEntity() instanceof Player player) forget(player);
+        if (!event.isCancelled() && event.getEntity() instanceof Player player) forget(player);
     }
 
     @Override
     public void beforeJoin(Player player) {
-        forget(player);
+        discardObservations(player);
     }
 
     @Override
     public void membershipChanged(UUID id) {
-        forget(id);
+        contextChanged(id);
     }
 
     @Override
     public void beforeStateChange(Player player) {
-        forget(player);
+        discardObservations(player);
     }
 
     @Override
     public void afterStateChange(UUID id) {
-        forget(id);
+        contextChanged(id);
+    }
+
+    /** Service callbacks include attempts/finally notifications, not just committed changes. */
+    private void contextChanged(UUID id) {
+        Player player = online.apply(id);
+        if (player == null) forget(id);
+        else if (!eligible(player) || players.getPlayer(id).isEmpty()) forget(player);
+        else discardObservations(player);
+    }
+
+    private void discardObservations(Player player) {
+        Sample sample = samples.get(player.getUniqueId());
+        if (sample != null
+                && sample.entity == player.getEntityId()
+                && online.apply(player.getUniqueId()) == player) reject(player, null);
     }
 
     public void forget(UUID id) {
@@ -440,6 +466,8 @@ public final class QuestMovementProducer
     }
 
     private void forget(Player player) {
+        Player current = online.apply(player.getUniqueId());
+        if (current != null && current != player) return;
         Sample sample = samples.get(player.getUniqueId());
         if (sample != null && sample.entity == player.getEntityId())
             samples.remove(player.getUniqueId(), sample);
@@ -475,12 +503,17 @@ public final class QuestMovementProducer
         return samples.size();
     }
 
-    private void failed(UUID id, RuntimeException failure) {
-        forget(id);
+    private void failed(Player player, RuntimeException failure) {
+        // A failed observation is not evidence of an actual lifecycle transition.
+        try {
+            discardObservations(player);
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
         logger.log(
                 Level.WARNING,
                 "Movement quest sample rejected for "
-                        + id
+                        + player.getUniqueId()
                         + "; committed quest progress remains owned by QuestService.",
                 failure);
     }
