@@ -30,7 +30,10 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Synchronous, bounded observation only. Assignments, persistence and rewards remain with QuestService. */
+/**
+ * Synchronous, bounded observation only. Assignments, persistence and rewards remain with
+ * QuestService.
+ */
 public final class QuestMovementProducer
         implements Listener, ActivityMembershipListener, LobbyPlayerStateListener {
     public static final QuestProgressKey WALK = QuestProgressKey.of("movement:walk");
@@ -100,6 +103,10 @@ public final class QuestMovementProducer
     }
 
     private Sample sample(Player player, QuestProgressKey required) {
+        return sample(player, required, false);
+    }
+
+    private Sample sample(Player player, QuestProgressKey required, boolean observeBlocked) {
         UUID id = player.getUniqueId();
         if (!eligible(player)) {
             forget(player);
@@ -126,27 +133,37 @@ public final class QuestMovementProducer
         if (required != null && (wanted & (1 << KEYS.indexOf(required))) == 0) return null;
         int tick = ticks.getAsInt();
         Sample previous = samples.get(id);
-        if (previous != null && previous.entity == player.getEntityId() && previous.blockedAt(tick))
-            return null;
+        boolean blocked =
+                previous != null
+                        && previous.entity == player.getEntityId()
+                        && previous.blockedAt(tick);
+        if (blocked && !observeBlocked) return null;
         if (previous == null
                 || previous.entity != player.getEntityId()
                 || previous.assignments != quests.assignmentToken()
                 || previous.catalog != catalog
                 || tick - previous.tick < 0
                 || tick - previous.tick > 40) {
-            previous = new Sample(player.getEntityId(), tick);
+            Sample replacement = new Sample(player.getEntityId(), tick);
+            if (blocked) {
+                replacement.blocked = true;
+                replacement.blockedUntil = previous.blockedUntil;
+            }
+            previous = replacement;
             previous.sneaking = player.isSneaking();
             previous.assignments = quests.assignmentToken();
             previous.catalog = catalog;
             samples.put(id, previous);
         }
+        previous.wanted = wanted;
+        // Sneak observations may advance while progress stays excluded. Never renew a deadline.
+        if (blocked) return previous;
         if (previous.blocked) {
             previous.last = null;
             previous.pendingJump = null;
             previous.turn = 0;
         }
         previous.blocked = false;
-        previous.wanted = wanted;
         for (int index = 0; index < DISTANCE_KEYS.size(); index++)
             if (!previous.wants(DISTANCE_KEYS.get(index))) previous.fractions[index] = 0;
         if (!previous.wants(ROTATION)) previous.turn = 0;
@@ -282,18 +299,22 @@ public final class QuestMovementProducer
         if (event.isCancelled()) return;
         Player player = event.getPlayer();
         try {
+            Sample sample = sample(player, SNEAK_TOGGLE, true);
+            boolean next = event.isSneaking();
+            // Both pre-state and accepted observations reject replay before native flag commit.
+            boolean transition =
+                    sample != null && player.isSneaking() != next && sample.sneaking != next;
+            // A confirmed boolean end is independent of a usable positional observation.
+            if (transition && !next) sample.sneaking = false;
             if (!valid(player.getLocation())) {
                 reject(player, null);
                 return;
             }
-            Sample sample = sample(player, SNEAK_TOGGLE);
-            if (sample == null) return;
-            boolean next = event.isSneaking();
-            // Check both the real pre-event flag and accepted observations. The latter also
-            // rejects duplicate callbacks before Paper has committed the first transition.
-            if (player.isSneaking() == next || sample.sneaking == next) return;
+            if (!transition) return;
             sample.sneaking = next;
-            if (next && sample.tick - sample.lastSneak >= SNEAK_COOLDOWN_TICKS) {
+            if (next
+                    && current(player, sample)
+                    && sample.tick - sample.lastSneak >= SNEAK_COOLDOWN_TICKS) {
                 sample.lastSneak = sample.tick;
                 report(player, sample, SNEAK_TOGGLE, 1);
             }
@@ -338,6 +359,7 @@ public final class QuestMovementProducer
         var loaded = players.getPlayer(player.getUniqueId());
         return authorized.getAsBoolean()
                 && samples.get(player.getUniqueId()) == sample
+                && !sample.blockedAt(ticks.getAsInt())
                 && eligible(player)
                 && loaded.isPresent()
                 && loaded.get().getQuestState().assignmentToken() == sample.assignments

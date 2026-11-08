@@ -222,3 +222,62 @@ Pre-commit preservation passes for all **1,511 original files** across both exis
 Evidence, bytecode inspection, original-source red compilation, identical-source green results and disposable probe sources/scripts are outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e2-lifecycle-20261108-035750/`. No amend, rebase, reset, stash, clean, merge, push, PR, deployment, branch deletion, operator-server intervention or Step 08F. Real Minecraft-client acceptance remains open.
 
 API references for the additional audit: [Paper PlayerDeathEvent](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/entity/PlayerDeathEvent.html), [Paper EntityDismountEvent](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/entity/EntityDismountEvent.html).
+
+## Post-Audit Correction 08E.3 – Sneak State Reconciliation
+
+### Confirmed cause and required reproduction
+
+The read-only integration audit stopped at unchanged `d046b5608531d13a3128225c464e12079837718b`. In the same eligible session and assignment, Start at tick 100 credits one. Cancelled Move at 110 rejects that tick. An accepted End at 110 changes the actual player flag to false, but sample() returned null before onSneak could update its accepted state. Start at 111 therefore encountered stale `sample.sneaking=true` and was rejected as a duplicate: actual progress 1, expected 2. This is lost legitimate progress, not a demonstrated velocity bypass.
+
+The same state-loss mechanism was reproduced when an accepted End was followed by a controlled location-read exception or invalid coordinates: the old positional early return hid a reliable boolean transition. These are API/error-path regressions, not a claim that a network client can force arbitrary Bukkit API failures. A separate controlled synchronous progress-observer test also demonstrates why the shared current() gate must reject a newly blocked sample before the remaining reports of the same Move. This is service-boundary hardening, not a claimed player exploit.
+
+### Observation versus progress permission
+
+Only Sneak requests observation access to a blocked sample. Existing eligibility, actual online instance, runtime authority, loaded profile, assigned key and catalog/assignment identity still apply. When that identity requires a fresh sample, an active physical deadline is copied unchanged; the new boolean baseline comes from the actual pre-event player state. Old assignments, catalog generations and sessions cannot contribute their previous Toggle state.
+
+An uncancelled event must disagree with both the actual pre-event flag and the last accepted observation to be a new transition. A reliable End is recorded before a positional read can fail. Invalid positional observations still use reject; invalid Starts do not become confirmed state. A valid Start during a guard updates only observation. The shared current() predicate checks the active deadline before any report; only an actually credited Start changes lastSneak. End, cancelled events, blocked Starts, repeated rejection and observation errors neither reset nor prolong that credited-start cooldown.
+
+Twenty-tick Velocity and one-tick rejection deadlines retain signed tick subtraction and original expiry. Observation never renews them. At expiry an already active blocked Start is not replayed as progress. A fresh accepted End followed by Start is required, with the normal ten-tick credited-start interval. Duplicate callbacks before Paper commits its flag remain rejected. Cancellation remains an immediate no-op.
+
+### Other movement states and lifecycle review
+
+| State | Required treatment and evidence |
+| --- | --- |
+| WALK/SPRINT/SNEAK/BACKWARD fractions | Four independent distance slots; rejection/Velocity discard partial measurements. Blocked Sneak observations add no distance or per-tick budget. Only fresh post-guard displacement counts. |
+| Pending Jump | No new jump intent while blocked; rejection/Velocity discard old intent. Accepted matching Move remains necessary. |
+| Rotation | No blocked accumulation; rejected arc stays discarded, no deferred full-turn report. |
+| Backward input / Sneak and Sprint flags | Input and physical flags are read from each accepted Move, without a second input cache. Sneak boolean observation never synthesizes distance. |
+| Toggle state / credited-start time | Accepted state is reconciled independently of progress; lastSneak changes only on credited Start. Nine/ten/eleven-tick and wrapped-tick tests distinguish these responsibilities. |
+
+All seven keys have executable collateral checks with actual accepted Sneak events inside a physical guard and fresh post-expiry events. Assignment replacement, real DailyQuestService rotation, catalog reload/rollback, logout/rejoin with a new Player, stale events, actual-context BUILD/Activity boundaries, Flight/Glide and runtime clear are covered. Existing real QuestModule disable, failed-release retry and re-enable harnesses remain unchanged. No scheduler, persistent field, cache, module, configuration, command or permission is added. QuestService, RewardService, player persistence, Distinct Pending, HUD and Double Jump production code remain unchanged.
+
+### Executed red / green regressions
+
+Tests were written before the production correction. The first focused run on the unchanged producer (SHA-256 `B059237C2DCF15ADC36CB53B2608558AB2AFC267E49DAFFE7D1C2C58B1BCBF97`) ran 67 scenarios, **35 failures, exit 1**. After adding Daily/rollback/logout and the synchronous gate case, the final original source was compiled into an external class directory without Git reset or source replacement. The final tests ran **71 scenarios, 36 failures, exit 1**. Logs show the required target-two expected=2 / actual=1, including wrapped ticks.
+
+The identical final test source (SHA-256 `ACC29EB246553E3977CD06CE8C812C71882D3359C8DAFBD194AA3B3FB2002CC1`) passes **71/71 scenarios, 158 new checks, exit 0** on the fix. QuestMovementHarness now passes **4,100 checks**, including all **290 Velocity and 621 Lifecycle scenarios**. Integration 77, Module 25, HUD 79 and Distinct 529 checks pass; all 42 distinct pending scenarios remain green. No existing tests are deleted or weakened. During implementation the old invalid-Sneak controls detected a validation-order regression for unrelated keys; the production order was corrected, and the existing assertions were preserved.
+
+The target-two cases use real QuestService, RewardService, EconomyService and PlayerService. They verify two numeric progress/HUD-boundary signals, exactly one completion/pending message, seven configured coins once, replay idempotence, genuine overflow-induced REWARD_PENDING, failed retry and eventual successful retry without a new numeric HUD signal. Nine/ten/eleven-tick cases include accepted and cancelled ends; the 100/105/110/115/125/126/127 sequence proves no retroactive progress or cooldown shift. Wraparound uses the same executable operations, not source-string checks.
+
+Canonical verification freshly executed `pwsh -NoProfile -File .\scripts\verify.ps1`: **245 discovered / 245 executed / 245 passed, 40,461 checks, Failed=0, Missing/Invalid=0, exit 0; Maven clean package PASS, Spotless PASS**. All 245 baseline harness classes are retained. The sole count change is QuestMovementHarness, 3,942 -> 4,100 (+158); every other count remains unchanged. These are new correction results, separate from the historical 40,303-check baseline. Only final report values follow this run; final repository-link checks and preservation are recorded separately.
+
+### Isolated native Paper acceptance
+
+The new disposable **native-02** run passes **440 assertions, zero failures**, Paper 1.21.11 build 132, LuckPerms 5.5.84 and Java 21, normal own-process exit 0. This actually reruns the prior 386 assertions and adds 54 reconciliation assertions; historical checks are not merely carried forward as new results. The new server uses only the external evidence directory and loopback port 25673. The copied plugin and canonical JAR both have SHA-256 `9EFCD3FF7BC96C4251F1A82C8407796D827F4083B081F267DDE0D84E5F4E200D`; Producer, Sample, Point and Jump class bytes match the canonical target classes individually.
+
+The first native-01 attempt stopped at assertion 425, expecting a fresh End after a cancelled End without first changing native input back to Start. Bytecode inspection proved that Paper updates last-client-input even when the Toggle is cancelled and the physical flag stays true. Repeating identical End input therefore emitted no accepted End. The external probe was corrected to send Start input (which cannot recount the already active state), then verify a genuinely accepted End callback and final false flag. No production or repository test change was needed; the entire corrected suite was rerun in a fresh native-02 directory. The failed attempt and its original helper source are retained and are not counted as successful acceptance.
+
+The disposable probe extends the existing 386-check suite with real native input packets for accepted/cancelled Starts and Ends. MONITOR observes the old player flag; Paper commits the accepted flag afterwards. It checks the exact lost-End reproduction, original and wrapped ticks, physical Velocity guards, no retrospective credit, cooldown boundaries, actual HUD packets, actual server XP preservation and real completion/pending payouts. Controlled online registration and tick clocks remain explicit seams. Existing synthetic Death/Dismount checks retain their earlier scope. This is API/service acceptance, not connected or visual Minecraft-client acceptance.
+
+### Exact paths and preservation
+
+Only these four existing paths belong to the additional local correction commit:
+
+- `src/main/java/dev/vapee/core/quest/QuestMovementProducer.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementHarness.java`
+- `docs/DEVELOPER_GUIDE.md`
+- `reports/08e/STEP_08E_FINAL_MOVEMENT_PROGRESS.md`
+
+Pre-commit protection compares all **1,511 original files** across both existing worktrees and permits only these four intended existing paths to differ. Both Run configurations and both protected receipts retain their historical SHA-256 values. The foreign worktree, its pre-existing untracked report, Recovery/other feature branches, tags and remote configuration remain unchanged. No unrelated normalization or file-inventory change occurred. The operator deployment JAR is separately checked unchanged; the build artifact changes only through the authorized verifier. Live operator world/log/player files may change independently and are not claimed byte-identical. Final post-commit evidence is recorded externally.
+
+Original Step 08E, 08E.1 and 08E.2 commits remain unchanged; the new commit is directly after d046b560 on the existing feature branch. Master and origin/master remain `6136eb2eef794508011f4eaa656b4121ddb44dfc`. Evidence is outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e3-sneak-reconciliation-20261108-151458/`, including source hashes, original-source red compilation, final green logs and delivery/preservation receipts. No amend, rebase, reset, push, merge, PR, deployment, branch deletion, operator-server intervention or Step 08F. Real Minecraft-client acceptance remains open, especially blocked End/Start timing, cancellation/Double Jump interactions and visible HUD/reward feedback.

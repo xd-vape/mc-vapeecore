@@ -28,6 +28,11 @@ public final class QuestMovementHarness {
             System.out.println("QuestMovementHarness passed " + checks + " checks.");
             return;
         }
+        if (args.length == 1 && args[0].equals("--sneak-reconciliation")) {
+            sneakReconciliation();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         distances();
         turns();
         jumps();
@@ -40,6 +45,7 @@ public final class QuestMovementHarness {
         finalMovementLifecycle();
         velocityGuard();
         lifecycleGuard();
+        sneakReconciliation();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -113,7 +119,8 @@ public final class QuestMovementHarness {
         f.step(a, 1);
         check(
                 f.progress(a, "walk") == before + 1 && a.writes == 0,
-                "armed lobby double-jump allowFlight does not disable walking or mutate glide flags");
+                "armed lobby double-jump allowFlight does not disable walking or mutate glide"
+                    + " flags");
         f.move(a, 0.6, 0, 0.8, a.at.getYaw());
         check(
                 f.progress(a, "walk") == before + 2,
@@ -1199,7 +1206,8 @@ public final class QuestMovementHarness {
                 f.status(a, "guard") == QuestStatus.COMPLETED
                         && f.coins(a) == 7
                         && hudSignals[0] == 1,
-                "post-expiry ordinary completion/retry grants one reward and one numeric HUD signal");
+                "post-expiry ordinary completion/retry grants one reward and one numeric HUD"
+                    + " signal");
         f.tick += 10;
         guardUnit(f, a, key);
         f.domain.quests.retryPendingRewards(a.id);
@@ -1759,6 +1767,412 @@ public final class QuestMovementHarness {
             guardUnit(f, a, QuestMovementProducer.BACKWARD);
             check(f.progress(a, "guard") == 1, "later valid context starts normally");
         }
+    }
+
+    private static void sneakReconciliation() {
+        int beforeCases = guardScenarios, beforeFailures = guardFailures;
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 4, Integer.MIN_VALUE + 4}) {
+            for (boolean pending : new boolean[] {false, true})
+                guardCase(
+                        "reconcile target-two / " + origin + " / " + pending,
+                        () -> reconcileTargetTwo(origin, pending));
+            for (int elapsed : new int[] {9, 10, 11})
+                for (boolean cancelledEnd : new boolean[] {false, true})
+                    guardCase(
+                            "reconcile cooldown / "
+                                    + origin
+                                    + " / "
+                                    + elapsed
+                                    + " / "
+                                    + cancelledEnd,
+                            () -> reconcileCooldown(origin, elapsed, cancelledEnd));
+            for (var rejection :
+                    List.of(
+                            GuardEvent.CANCELLED_MOVE,
+                            GuardEvent.NONFINITE_MOVE,
+                            GuardEvent.WORLD_MISMATCH,
+                            GuardEvent.OVERSIZE,
+                            GuardEvent.CANCELLED_JUMP,
+                            GuardEvent.INVALID_JUMP,
+                            GuardEvent.INVALID_SNEAK))
+                guardCase(
+                        "reconcile accepted end / " + origin + " / " + rejection,
+                        () -> reconcileRejectedEnd(origin, rejection));
+            guardCase("reconcile velocity / " + origin, () -> reconcileVelocity(origin));
+        }
+        for (var key :
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.SPRINT,
+                        QuestMovementProducer.SNEAK,
+                        QuestMovementProducer.JUMP,
+                        QuestMovementProducer.ROTATION,
+                        QuestMovementProducer.BACKWARD,
+                        QuestMovementProducer.SNEAK_TOGGLE))
+            guardCase("reconcile shared gate / " + key, () -> reconcileOtherKey(key));
+        for (String reset :
+                List.of(
+                        "assignment",
+                        "catalog",
+                        "rollback",
+                        "daily",
+                        "rejoin",
+                        "logout",
+                        "teleport",
+                        "build",
+                        "activity",
+                        "flight",
+                        "glide",
+                        "runtime"))
+            guardCase("reconcile ownership / " + reset, () -> reconcileReset(reset));
+        guardCase("reconcile duplicates and ordering", QuestMovementHarness::reconcileDuplicates);
+        guardCase(
+                "reconcile reentrant progress gate", QuestMovementHarness::reconcileReentrantGate);
+        guardCase("reconcile accepted end with read failure", () -> reconcileInvalidEnd(true));
+        guardCase("reconcile accepted end with invalid position", () -> reconcileInvalidEnd(false));
+        int cases = guardScenarios - beforeCases, failed = guardFailures - beforeFailures;
+        System.out.println("Sneak reconciliation scenarios: " + cases + ", failed: " + failed);
+        if (failed != 0)
+            throw new AssertionError("Sneak reconciliation failed scenarios: " + failed);
+    }
+
+    private static Fixture reconcileFixture(long target) {
+        Fixture f = guardFixture(QuestMovementProducer.SNEAK_TOGGLE, target);
+        f.define("walk", QuestMovementProducer.WALK, 10000, 1);
+        return f;
+    }
+
+    private static Actor reconcileActor(Fixture f) {
+        Actor a = f.actor();
+        f.assign(a, "guard", "walk");
+        return a;
+    }
+
+    private static void reconcileTargetTwo(int origin, boolean pending) {
+        Fixture f = reconcileFixture(2);
+        Actor a = reconcileActor(f);
+        int[] hud = {0};
+        f.domain.quests.addProgressListener((id, assignment, catalog, ids, result) -> hud[0]++);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 1 && hud[0] == 1,
+                "first actual start reports progress one");
+        f.tick = origin + 10;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, false);
+        check(
+                !a.sneak && f.progress(a, "guard") == 1 && hud[0] == 1 && f.coins(a) == 0,
+                "accepted end during rejection grants nothing");
+        if (pending) f.domain.economy.setCoins(a.id, Long.MAX_VALUE);
+        f.tick = origin + 11;
+        var credited = f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 2,
+                "expected target-two progress=2 after accepted blocked end, actual="
+                        + f.progress(a, "guard"));
+        check(
+                hud[0] == 2 && f.feedback.size() == 1,
+                "exactly two numeric HUD signals and one completion/pending message");
+        check(
+                f.status(a, "guard")
+                        == (pending ? QuestStatus.REWARD_PENDING : QuestStatus.COMPLETED),
+                "real reward boundary chooses completed or pending");
+        f.tick += 10;
+        f.producer.onSneak(credited);
+        check(hud[0] == 2 && f.feedback.size() == 1, "replay never retries or credits");
+        if (pending) {
+            f.domain.quests.retryPendingRewards(a.id);
+            check(
+                    f.status(a, "guard") == QuestStatus.REWARD_PENDING
+                            && f.coins(a) == Long.MAX_VALUE,
+                    "failed grant retry preserves pending");
+            f.domain.economy.setCoins(a.id, 0);
+            f.domain.quests.retryPendingRewards(a.id);
+        }
+        check(
+                f.status(a, "guard") == QuestStatus.COMPLETED && f.coins(a) == 7 && hud[0] == 2,
+                "one configured payout; retry has no numeric HUD signal");
+        f.domain.quests.retryPendingRewards(a.id);
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(f.coins(a) == 7 && hud[0] == 2, "completed assignment stays idempotent");
+    }
+
+    private static void reconcileCooldown(int origin, int elapsed, boolean cancelledEnd) {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        f.tick = origin + elapsed - 1;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, cancelledEnd);
+        f.tick = origin + elapsed;
+        f.toggle(a, true, false);
+        long expected = !cancelledEnd && elapsed >= 10 ? 2 : 1;
+        check(
+                f.progress(a, "guard") == expected,
+                "cooldown/end cancellation expected="
+                        + expected
+                        + ", actual="
+                        + f.progress(a, "guard"));
+        f.toggle(a, false, false);
+        f.tick = origin + (expected == 2 ? elapsed + 10 : 10);
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == expected + 1, "only credited starts advance the cooldown");
+    }
+
+    private static void reconcileRejectedEnd(int origin, GuardEvent rejection) {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        f.tick = origin + 10;
+        guardEvent(f, a, rejection);
+        f.toggle(a, false, false);
+        f.tick = origin + 11;
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 2,
+                "rejected observation cannot hide an accepted end: "
+                        + rejection
+                        + ", actual="
+                        + f.progress(a, "guard"));
+    }
+
+    private static void reconcileVelocity(int origin) {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        f.tick = origin + 5;
+        velocity(f, a, false);
+        f.tick = origin + 10;
+        f.toggle(a, false, false);
+        f.tick = origin + 15;
+        var blockedStart = f.toggle(a, true, false);
+        f.tick = origin + 24;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, true);
+        check(
+                f.progress(a, "guard") == 1 && f.coins(a) == 0,
+                "no progress or reward during twenty-tick guard");
+        f.tick = origin + 25;
+        f.producer.onSneak(blockedStart);
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 1, "expiry never retroactively counts a blocked start");
+        f.tick = origin + 26;
+        f.toggle(a, false, false);
+        f.tick = origin + 27;
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 2, "fresh accepted start after expiry is eligible");
+        f.tick = origin + 36;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 2,
+                "nine ticks after credited post-guard start is too early");
+        f.tick = origin + 37;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 3, "exact ten ticks after credited start is eligible");
+    }
+
+    private static void reconcileOtherKey(QuestProgressKey key) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        if (!key.equals(QuestMovementProducer.SNEAK_TOGGLE)) {
+            f.define("observation", QuestMovementProducer.SNEAK_TOGGLE, 10000, 1);
+            f.assign(a, "guard", "observation");
+        }
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        f.toggle(a, true, false);
+        f.tick = 102;
+        f.toggle(a, false, false);
+        f.tick = 119;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, true, false);
+        observeGuardKey(f, a, key);
+        check(f.progress(a, "guard") == 0, "state observation never opens shared gate: " + key);
+        f.tick = 124;
+        f.toggle(a, false, false);
+        f.tick = 125;
+        guardUnit(f, a, key);
+        check(f.progress(a, "guard") == 1, "only fresh post-guard observations count: " + key);
+    }
+
+    private static void reconcileReset(String kind) {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = 100;
+        f.toggle(a, true, false);
+        f.tick = 110;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, false);
+        switch (kind) {
+            case "assignment" -> f.assign(a, "guard", "walk");
+            case "catalog" -> f.domain.registry.replaceAll(f.domain.registry.snapshot());
+            case "rollback" -> {
+                var catalog = f.domain.registry.snapshot();
+                f.domain.registry.replaceAll(catalog);
+                f.domain.registry.replaceAll(catalog);
+            }
+            case "daily" -> {
+                var day = java.time.Instant.parse("2026-11-01T12:00:00Z");
+                var zone = java.time.ZoneId.of("UTC");
+                var time = java.time.LocalTime.MIDNIGHT;
+                f.domain
+                        .players
+                        .getPlayer(a.id)
+                        .orElseThrow()
+                        .getDailyQuestState()
+                        .setCycleId(
+                                new dev.vapee.core.quest.daily.DailyQuestCycleResolver()
+                                        .resolve(day, zone, time));
+                var daily =
+                        new dev.vapee.core.quest.daily.DailyQuestService(
+                                f.domain.players,
+                                f.domain.quests,
+                                f.domain.registry,
+                                () ->
+                                        new dev.vapee.core.quest.daily.DailyQuestConfig.State(
+                                                true,
+                                                2,
+                                                time,
+                                                "UTC",
+                                                zone,
+                                                f.domain.registry.snapshot()),
+                                f.domain.logger);
+                check(
+                        daily.syncPlayer(a.id, day.plusSeconds(86400))
+                                == dev.vapee.core.quest.daily.DailyQuestSyncResult.ROTATED,
+                        "real daily reset replaces assignments");
+            }
+            case "rejoin", "logout" -> {
+                Actor old = a;
+                if (kind.equals("logout")) {
+                    f.producer.onQuit(
+                            new PlayerQuitEvent(
+                                    old.player, net.kyori.adventure.text.Component.empty()));
+                    old.online = false;
+                    f.online.remove(old.id);
+                }
+                a = f.actor(old.id);
+                f.producer.onJoin(
+                        new PlayerJoinEvent(a.player, net.kyori.adventure.text.Component.empty()));
+                f.toggle(old, true, false);
+                f.toggle(old, false, false);
+            }
+            case "teleport" ->
+                    f.producer.onTeleport(
+                            new PlayerTeleportEvent(a.player, a.at, a.at.clone().add(10, 0, 0)));
+            case "build", "activity" -> {
+                if (kind.equals("build")) f.producer.beforeStateChange(a.player);
+                else f.producer.beforeJoin(a.player);
+                a.context = false;
+                if (kind.equals("build")) f.producer.afterStateChange(a.id);
+                else f.producer.membershipChanged(a.id);
+                a.context = true;
+                if (kind.equals("build")) f.producer.afterStateChange(a.id);
+                else f.producer.membershipChanged(a.id);
+            }
+            case "flight" -> {
+                f.producer.onFlight(new PlayerToggleFlightEvent(a.player, true));
+                a.fly = true;
+                f.producer.onFlight(new PlayerToggleFlightEvent(a.player, false));
+                a.fly = false;
+            }
+            case "glide" -> {
+                f.producer.onGlide(new EntityToggleGlideEvent(a.player, true));
+                a.glide = true;
+                f.producer.onGlide(new EntityToggleGlideEvent(a.player, false));
+                a.glide = false;
+            }
+            case "runtime" -> {
+                f.running = false;
+                f.producer.clear();
+                f.running = true;
+            }
+            default -> throw new AssertionError(kind);
+        }
+        f.tick = 111;
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard")
+                        == (kind.equals("assignment") || kind.equals("daily") ? 1 : 2),
+                "no stale toggle observation after " + kind);
+    }
+
+    private static void reconcileDuplicates() {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        var start = f.toggle(a, true, false);
+        f.toggle(a, true, false);
+        f.toggle(a, false, false);
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 1,
+                "same-tick start/end/start and duplicates earn only once");
+        f.tick = 110;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.toggle(a, false, true);
+        f.tick = 111;
+        f.producer.onSneak(start);
+        check(f.progress(a, "guard") == 1, "cancelled end cannot authorize another start");
+        f.toggle(a, false, false);
+        f.toggle(a, true, true);
+        check(f.progress(a, "guard") == 1 && !a.sneak, "cancelled start cannot commit state");
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 2, "accepted start after actual end is counted once");
+    }
+
+    private static void reconcileInvalidEnd(boolean failure) {
+        Fixture f = reconcileFixture(100);
+        Actor a = reconcileActor(f);
+        f.toggle(a, true, false);
+        f.tick = 110;
+        var position = a.at.clone();
+        if (failure) a.locationFailure = true;
+        else a.at.setX(Double.NaN);
+        try {
+            f.toggle(a, false, false);
+        } finally {
+            a.locationFailure = false;
+            a.at = position;
+        }
+        f.tick = 111;
+        f.toggle(a, true, false);
+        check(
+                f.progress(a, "guard") == 2,
+                "accepted boolean end is retained despite unusable positional observation; actual="
+                        + f.progress(a, "guard"));
+    }
+
+    private static void reconcileReentrantGate() {
+        Fixture f = fixture();
+        Actor a = f.actor();
+        f.assign(a, "walk", "sprint");
+        a.sprint = true;
+        boolean[] once = {true};
+        f.domain.quests.addProgressListener(
+                (id, assignment, catalog, ids, result) -> {
+                    if (once[0] && ids.contains("walk")) {
+                        once[0] = false;
+                        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+                    }
+                });
+        moveAtTick(f, a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "walk") == 1 && f.progress(a, "sprint") == 0,
+                "a synchronous observer rejection closes remaining reports in the same move");
+        f.tick++;
+        moveAtTick(f, a, 0, 0, -1, 0);
+        check(
+                f.progress(a, "walk") == 2 && f.progress(a, "sprint") == 1,
+                "later fresh move resumes after the original one-tick exclusion");
     }
 
     private static void check(boolean condition, String reason) {
