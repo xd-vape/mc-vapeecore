@@ -29,7 +29,10 @@ final class QuestMovementTestSupport {
         final List<Component> feedback = new ArrayList<>();
         int tick = 100, entity;
         boolean running = true;
-        boolean autoConfirm = true, refuseConfirmation, failConfirmationAfterEffect;
+        boolean autoConfirm = true,
+                autoReady = true,
+                refuseConfirmation,
+                failConfirmationAfterEffect;
         int confirmationSchedules;
         final List<Confirmation> confirmations = new ArrayList<>();
         final QuestProgressReporter reporter =
@@ -54,7 +57,22 @@ final class QuestMovementTestSupport {
         Actor actor(UUID id) {
             Actor actor = new Actor(this, id, ++entity);
             online.put(id, actor);
+            if (autoReady) readyBeforeAction(actor);
             return actor;
+        }
+
+        void loaded(Actor actor, boolean timeout) {
+            dispatchLoaded(producer, actor.player, timeout);
+        }
+
+        void readyBeforeAction(Actor actor) {
+            int actionTick = tick;
+            tick--;
+            try {
+                loaded(actor, false);
+            } finally {
+                tick = actionTick;
+            }
         }
 
         void define(String id, QuestProgressKey key, long target, long coins) {
@@ -163,6 +181,24 @@ final class QuestMovementTestSupport {
         void ground(Actor actor) {
             actor.ground = true;
             tick += 10;
+        }
+    }
+
+    // Dispatch the actual annotated production handler, if present. The unchanged pre-fix
+    // producer has no loaded handler, so the identical new regression can run red without
+    // adapting or replacing its event/sampling bodies.
+    static void dispatchLoaded(QuestMovementProducer producer, Player player, boolean timeout) {
+        var event = new io.papermc.paper.event.player.PlayerClientLoadedWorldEvent(player, timeout);
+        for (var method : producer.getClass().getMethods()) {
+            if (method.isAnnotationPresent(org.bukkit.event.EventHandler.class)
+                    && method.getParameterCount() == 1
+                    && method.getParameterTypes()[0] == event.getClass()) {
+                try {
+                    method.invoke(producer, event);
+                } catch (ReflectiveOperationException failure) {
+                    throw new AssertionError(failure);
+                }
+            }
         }
     }
 

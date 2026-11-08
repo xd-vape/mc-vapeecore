@@ -829,6 +829,33 @@ Eine Startgutschrift verlangt sowohl die ursprüngliche Freigabe als auch bei Be
 
 Disable entzieht zuerst die Runtime-Autorität, verwirft alle Absichten und cancelt den eigenen One-Shot. Schlägt dessen Freigabe fehl, werden Listener und borrowed Observer trotzdem unabhängig freigegeben; der vorhandene Pending-Cleanup-Vertrag hält die ursprüngliche Ressource für einen expliziten Retry fest. Der alte Callback ist bereits inert. Neue Runtime, Respawn, Teleport, echter Kontextwechsel und neue Zuweisung können keine alte Gutschrift übernehmen. Die übrigen sechs Movement-Keys sowie QuestService, Rewards, HUD und Player-Persistenz besitzen weiterhin ihre bisherigen Zuständigkeiten.
 
+Step 08E.5 ergänzt für Sneak-Toggle eine ausdrücklich beobachtete Client-Bereitschaft.
+Paper kann einen ungecancelten Toggle während des Ladefensters ohne Flag-Commit
+lassen; ein späteres Entity-Interaktionspaket kann dasselbe Flag ohne neues Toggle
+setzen. Ein passender Endzustand allein darf deshalb keinen alten Start bestätigen.
+Der bestehende Movement-Listener beobachtet zusätzlich PlayerClientLoadedWorldEvent
+(einschließlich Papers tatsächlichem 60-Tick-Timeout). Erst im Folgetick kann diese
+Benachrichtigung eine neue Aktion freigeben, da Paper seinen internen Ladezustand
+erst nach Rückkehr aus dem Event veröffentlicht.
+
+Join und Respawn verwerfen die Readiness-Generation; jedes Loaded-Event ersetzt sie
+und widerruft bestehende Sneak-Intents. Ein Intent benötigt dieselbe aktuelle
+Readiness-Identität am ursprünglichen Aktionstick und bei Bestätigung. Guard,
+Streckenreste und letzter angerechneter Cooldown werden durch das Loaded-Event
+nicht zurückgesetzt. Kleine UUID-/Entity-/WeakReference-Metadaten bleiben unabhängig
+von verwerfbaren Messsamples für die Session erhalten; sie enthalten keinen
+Questfortschritt und werden bei Quit/Disable entfernt. Der gemeinsame One-Shot
+bleibt unverändert, ohne Poller, NMS oder neue Persistenz.
+
+Die öffentliche Paper-API bietet keine Abfrage bereits erfolgter Client-Bereitschaft.
+Eine neue Quest-Runtime nimmt sie für bereits online befindliche Spieler deshalb
+nicht an: Sneak-Toggle wartet auf ein neues echtes Loaded-Event, üblicherweise nach
+Reconnect oder Respawn. Bloßes Verstreichen von 60 Ticks ersetzt kein verpasstes
+Event. Die übrigen sechs Movement-Keys bleiben davon unabhängig. Papers echtes
+Timeout-Event ist eine Server-Freigabe, kein Nachweis eines verbundenen sichtbaren
+Minecraft-Clients; weiterhin muss jede neue Aktion tatsächlich übernommen und
+durch den bestehenden Callback bestätigt werden.
+
 ### Temporäres Quest-HUD (Step 08B)
 
 `QuestService.addProgress` meldet nach erfolgreicher Verarbeitung nur IDs mit tatsächlich erhöhtem numerischem ACTIVE-Fortschritt an einen schmalen internen `QuestProgressListener`. Statuswechsel/Reward-Retry allein erzeugen kein HUD-Signal. Der Domaincode kennt weder Adventure noch MessageService; Observer- und Diagnosefehler beeinflussen weder das Ergebnis noch Rewards. Direkte Service-Aufrufe, QuestProgressReporter und alle jetzigen/späteren Keys verwenden dieselbe Grenze. Bestehendes Completion-Chatfeedback bleibt unverändert.

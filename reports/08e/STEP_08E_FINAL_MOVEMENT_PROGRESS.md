@@ -346,3 +346,104 @@ Only these eight existing paths belong to the additional local correction commit
 Pre-commit comparison passes for all **1,511 original files** across both existing worktrees; only these eight intended existing paths differ. Both Run configurations and both protected receipts retain their historical raw SHA-256 values. Recovery/other branches, tags, remote configuration and the foreign worktree including its pre-existing untracked report are unchanged. The operator deployment JAR retains its starting SHA-256; the build artifact changes only through authorized Maven verification. No unrelated normalization or file-inventory change occurred. Live operator world/log/profile files may change independently and are not claimed byte-identical. Final post-commit comparisons and the new SHA are recorded in the external delivery receipt.
 
 All four earlier feature commits remain unchanged; the new local commit directly follows 0ee9bb11 on the existing feature branch. Master and origin/master remain `6136eb2eef794508011f4eaa656b4121ddb44dfc`. Sources, before hashes, pure-original red, constructor-bridge final red, green, native/verifier and delivery receipts are outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e4-confirmed-sneak-20261108-162921/`. No amend, rebase, reset, stash, clean, merge, push, PR, deployment, branch deletion, operator intervention or Step 08F. Real-client acceptance remains open for load/respawn packet timing, brief crouch sequences, confirmation latency and visible HUD/reward/XP restoration.
+
+## Post-Audit Correction 08E.5 – Sneak Intent Client Readiness
+
+### Cause and public Paper boundary
+
+This correction follows unchanged `5b4beca4f7d8aafd3558cdd6829472b58b5e0fdf` on the existing feature branch. All five earlier feature commits and master/origin/master `6136eb2eef794508011f4eaa656b4121ddb44dfc` remain unchanged. The comprehensive integration audit found a concrete second native writer: handleInteract sets the secondary-action Sneak flag without Toggle, before interaction-range validation. It could make a still-pending, previously unapplied loading-window intent look successful.
+
+The actual 1.21.11 API source and build-132 implementation were inspected. PlayerClientLoadedWorldEvent is emitted after a real loaded packet or Paper's sixtieth loading-timeout step. Its callback precedes publication of the internal loaded flag. There is no public Player/Connection readiness query. Production therefore uses this event and no NMS, reflection or guessed elapsed-time fallback.
+
+Readiness is owned by an exact current Player/Entity session with a weak Player identity. Join/Respawn create an unknown generation. Each Loaded notification replaces the generation and clears pending Sneak intents without changing physical Velocity deadlines or credited cooldowns. The new generation permits fresh intents only after the notification tick. Both the original action and the shared confirmation require the same ready generation. A later independent flag write cannot acquire an intent from before that boundary.
+
+Session metadata survives assignment/catalog/sample replacement, but Quit and clear release it. It is not another quest/progress cache or persistent state. The same owned movement listener now has sixteen handlers; the shared one-shot and the existing module cleanup remain unchanged. No new periodic task, module, command, permission, catalog or player-schema field.
+
+### Conservative re-enable contract
+
+A fresh runtime cannot reconstruct a missed Loaded notification for an already online player from Paper's public API. Sneak-Toggle remains unavailable until a new actual notification, normally after reconnect or respawn. Waiting sixty ticks alone is deliberately insufficient; an actual Paper timeout notification is accepted with the same next-tick boundary. Other six movement keys are unaffected. This visible limitation is documented rather than assuming readiness.
+
+### Executable regressions and verification
+
+The first new focused run on unchanged production executed 24 scenario groups, 18 failures, exit 1. The required independent-write case reports expected=0, actual=1. The corrected producer passes 24/24 groups and 91 new checks. Final identical-source Red/Green, canonical and native receipts are recorded below.
+
+All old 290 Velocity, 621 Lifecycle, 71 Sneak-State and 67 Confirmation groups remain active. Existing fixtures now explicitly publish readiness for their already-loaded positive cases. Their original assertions remain; the handler count intentionally changes from fifteen to sixteen. Real module re-enable tests add unknown-readiness, elapsed-time and event-publication checks. Initial focused legacy re-enable failures exposed missing fixture readiness prerequisites; those fixtures were corrected without relaxing production gating.
+
+Coverage includes Join/Respawn, both event timeout flags, original/wrapped ticks, no pre-ready pending authority, same-notification-tick exclusion, exact post-load independent flag writes, no progress/completion/coins/numeric-HUD, fresh valid action and once-only payout, stale sessions, two players, assignment/catalog and ready-generation changes, runtime clear, original cooldown and Velocity expiry.
+
+The final formatted scenario/fixture sources were compiled once and run against
+the pure original producer compiled externally, then against the correction:
+24 groups / 18 failures / exit 1 versus 24/24 / 91 checks / exit 0. No constructor
+bridge or original-source adaptation was needed. Final test SHA-256 is
+04205CDE49FAFBA92DD34954B1941385E0D576A491F45DCFD0B6E6A62235D335;
+fixture BFA26ECED816D1CA27AF072535A98D44F8DCF47625D4D8ACAC7F5D9AA887E9AE.
+The original producer retains SHA-256
+72CB1976EDE7E1629B10C1A31EBFE3FE168569F8FA9AE88642867C048536AAAC.
+No production replacement or Git reset was used.
+
+### Isolated native Paper / LuckPerms acceptance
+
+The fresh native-03 run passes 525 checks, zero failures, normal process exit 0:
+Paper 1.21.11 build 132, LuckPerms 5.5.84, JDK 21, loopback port 25678.
+It reruns the previous 480 assertions under the new readiness prerequisite and
+adds 45 checks. Real CraftPlayer/ServerPlayer, actual loaded-packet and native
+Entity-Interaction handling, real Quest/Reward/Player/HUD services and scheduled
+Bukkit confirmations are used. No Minecraft network client was connected.
+
+The exact regression runs for controlled Join/Respawn notifications and both
+loaded-packet/timeout paths. The timer tests invoke the real native timeout
+method 59 times, verify still-unloaded, and invoke the sixtieth step; they do not
+claim sixty elapsed wall-clock server ticks. An actual out-of-range non-self
+Entity-Interaction packet changes the flag without a Toggle; old unready input
+still yields zero progress, ACTIVE status, zero coins and no new progress HUD.
+A fresh actual ready transition then pays seven coins once. Real module
+re-enable also proves that an already loaded native player is not automatically
+trusted by a new runtime. Actual server XP remains unchanged.
+
+The older 440 assertions drain production callbacks after native packet return;
+the staged confirmation/readiness additions use actual Bukkit scheduling and
+server ticks. Controlled online registration, probe clocks and direct
+Join/Respawn producer notifications retain their explicit fixture scope.
+
+Native-01 failed at assertion 444: reset had already queued an End confirmation
+before the simulated Join invalidated its intent. Requiring a null task was an
+incorrect probe assumption. The corrected probe checks unchanged task identity
+and no PendingSneak, allowing the already owned inert one-shot. Native-02 had
+only an external-helper compilation failure (missing local variable); no server
+was launched. Both failed diagnostics and helper versions remain archived.
+No repository source correction followed these probe failures.
+
+Native-03 and canonical plugin JARs are byte-identical, SHA-256
+E0B94BEAC54038D3CA0C79EC4C465B702E8F27D59BE73678FD07B229CC21D7E3.
+All eight Producer/Module class entries also match canonical target classes.
+The own native-03 process PID 24992 exited normally with code 0. Only disposable
+external worlds/configs/profiles were created; no operator process was used.
+
+Final canonical verification freshly executed the complete command
+pwsh -NoProfile -File .\scripts\verify.ps1: 245 discovered / 245 executed /
+245 passed, 40,761 checks, Failed=0, Missing/Invalid=0, exit 0. Maven clean package
+and Spotless PASS. The original 245 harness inventory is identical. Only Movement
+changes 4,296 -> 4,387 (+91) and MovementModule 35 -> 38 (+3); all other counts
+remain unchanged. All seven keys and prior guard/reconciliation/confirmation,
+Reward/Pending/Distinct, HUD, Daily, persistence and lifecycle checks pass.
+No Java source changed after final Red/Green or the successful canonical build.
+
+### Scope and protection
+
+Pre-commit protection checks all 1,511 original files across both existing
+worktrees: exactly the six intended existing paths differ; zero unrelated changes.
+Both Run configurations and both protected receipts retain their historical raw
+SHA-256 values. The foreign worktree and its existing untracked report, all
+Recovery/other branches, tags, remote configuration and operator deployment
+artifacts remain unchanged. Final post-commit proof is retained externally.
+
+Only six existing paths belong to the additional local commit:
+
+- `src/main/java/dev/vapee/core/quest/QuestMovementProducer.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementHarness.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementTestSupport.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementModuleHarness.java`
+- `docs/DEVELOPER_GUIDE.md`
+- `reports/08e/STEP_08E_FINAL_MOVEMENT_PROGRESS.md`
+
+Evidence is outside the repository in `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e5-client-readiness-20261108-213710/`. Protected worktree/branches, both Run configurations, receipts and deployment artifacts remain excluded. Live operator worlds/logs/profiles may change externally; they are not claimed byte-identical. No merge, push, PR, deployment, operator-server intervention or Step 08F. Real-client acceptance remains open.

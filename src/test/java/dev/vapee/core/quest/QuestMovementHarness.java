@@ -18,6 +18,11 @@ public final class QuestMovementHarness {
     private static int checks;
 
     public static void main(String[] args) {
+        if (args.length == 1 && args[0].equals("--client-readiness")) {
+            clientReadiness();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         if (args.length == 1 && args[0].equals("--confirmed-sneak")) {
             confirmedSneak();
             System.out.println("QuestMovementHarness passed " + checks + " checks.");
@@ -52,6 +57,7 @@ public final class QuestMovementHarness {
         lifecycleGuard();
         sneakReconciliation();
         confirmedSneak();
+        clientReadiness();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -711,6 +717,7 @@ public final class QuestMovementHarness {
         Actor reconnect = f.actor(a.id);
         f.producer.onJoin(
                 new PlayerJoinEvent(reconnect.player, net.kyori.adventure.text.Component.empty()));
+        f.readyBeforeAction(reconnect);
         f.toggle(reconnect, true, false);
         f.toggle(a, false, false);
         f.toggle(a, true, false);
@@ -734,6 +741,7 @@ public final class QuestMovementHarness {
         check(
                 f.progress(reconnect, "toggle") == 1,
                 "re-enable does not inherit a fictitious non-sneaking state");
+        f.readyBeforeAction(reconnect);
         f.toggle(reconnect, false, false);
         f.toggle(reconnect, true, false);
         check(
@@ -764,8 +772,10 @@ public final class QuestMovementHarness {
                         (f, a) ->
                                 f.producer.onWorld(
                                         new PlayerChangedWorldEvent(a.player, a.at.getWorld())),
-                        (f, a) ->
-                                f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false)),
+                        (f, a) -> {
+                            f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false));
+                            f.readyBeforeAction(a);
+                        },
                         (f, a) ->
                                 f.producer.onDeath(
                                         new org.bukkit.event.entity.PlayerDeathEvent(
@@ -2073,6 +2083,7 @@ public final class QuestMovementHarness {
                 a = f.actor(old.id);
                 f.producer.onJoin(
                         new PlayerJoinEvent(a.player, net.kyori.adventure.text.Component.empty()));
+                f.readyBeforeAction(a);
                 f.toggle(old, true, false);
                 f.toggle(old, false, false);
             }
@@ -2105,6 +2116,7 @@ public final class QuestMovementHarness {
                 f.running = false;
                 f.producer.clear();
                 f.running = true;
+                f.readyBeforeAction(a);
             }
             default -> throw new AssertionError(kind);
         }
@@ -2283,6 +2295,7 @@ public final class QuestMovementHarness {
         check(
                 f.progress(a, "guard") == 0 && hud[0] == 0,
                 "later tick/loading alone never recounts");
+        f.loaded(a, false);
         f.tick = origin + 3;
         f.toggle(a, true, false);
         check(
@@ -2580,6 +2593,249 @@ public final class QuestMovementHarness {
         f.tick++;
         f.confirm();
         check(f.progress(a, "guard") == 1, "fresh action recovers after missed confirmation");
+    }
+
+    private static void clientReadiness() {
+        int cases = guardScenarios, failures = guardFailures;
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 4, Integer.MIN_VALUE + 4}) {
+            for (boolean respawn : List.of(false, true))
+                for (boolean timeout : List.of(false, true))
+                    guardCase(
+                            "readiness loading / " + origin + "/" + respawn + "/" + timeout,
+                            () -> readinessLoading(origin, respawn, timeout));
+            guardCase("readiness publication / " + origin, () -> readinessPublication(origin));
+            guardCase("readiness cooldown / " + origin, () -> readinessCooldown(origin));
+            guardCase("readiness guard / " + origin, () -> readinessGuard(origin));
+        }
+        guardCase("readiness unknown re-enable", QuestMovementHarness::readinessUnknown);
+        guardCase("readiness sessions and players", QuestMovementHarness::readinessSessions);
+        guardCase("readiness generations", QuestMovementHarness::readinessGeneration);
+        System.out.println(
+                "Client readiness scenarios: "
+                        + (guardScenarios - cases)
+                        + ", failed: "
+                        + (guardFailures - failures));
+        if (guardFailures != failures)
+            throw new AssertionError(
+                    "Client readiness failed scenarios: " + (guardFailures - failures));
+    }
+
+    private static void readinessLoading(int origin, boolean respawn, boolean timeout) {
+        Fixture f = confirmationFixture(1);
+        f.autoReady = false;
+        Actor a = reconcileActor(f);
+        int[] hud = {0};
+        f.domain.quests.addProgressListener((id, assignments, catalog, ids, result) -> hud[0]++);
+        f.tick = origin;
+        if (respawn) f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false));
+        else
+            f.producer.onJoin(
+                    new PlayerJoinEvent(a.player, net.kyori.adventure.text.Component.empty()));
+        f.requestToggle(a, true, false, false);
+        check(
+                !a.sneak && f.progress(a, "guard") == 0 && f.coins(a) == 0 && hud[0] == 0,
+                "unready event does not apply the flag or grant at the boundary");
+        f.loaded(a, timeout);
+        a.sneak = true; // Native handleInteract's independent write, without a Toggle event.
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0
+                        && f.status(a, "guard") == QuestStatus.ACTIVE
+                        && f.coins(a) == 0
+                        && hud[0] == 0
+                        && f.feedback.isEmpty(),
+                "independent post-load flag must not confirm old intent: expected=0 actual="
+                        + f.progress(a, "guard"));
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick++;
+        f.toggle(a, true, false);
+        check(f.progress(a, "guard") == 0, "new ready action remains provisional");
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1
+                        && f.status(a, "guard") == QuestStatus.COMPLETED
+                        && f.coins(a) == 7
+                        && hud[0] == 1,
+                "new physically applied ready action pays exactly once");
+        for (var task : List.copyOf(f.confirmations)) task.action.run();
+        f.domain.quests.retryPendingRewards(a.id);
+        check(f.coins(a) == 7 && hud[0] == 1, "old callbacks cannot duplicate ready payout");
+    }
+
+    private static void readinessPublication(int origin) {
+        Fixture f = confirmationFixture(100);
+        f.autoReady = false;
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.loaded(a, false); // Paper has not yet published its loaded flag inside this event.
+        f.requestToggle(a, true, false, false);
+        a.sneak = true;
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0,
+                "loaded-event tick is not yet a confirmed native ready boundary");
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick++;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "a later ready event/action confirms normally");
+    }
+
+    private static void readinessUnknown() {
+        Fixture f = confirmationFixture(100);
+        f.autoReady = false;
+        Actor a = reconcileActor(f);
+        for (int elapsed : new int[] {0, 59, 60, 61}) {
+            f.tick = 100 + elapsed;
+            f.toggle(a, false, false);
+            f.toggle(a, true, false);
+            f.tick++;
+            f.confirm();
+            check(
+                    f.progress(a, "guard") == 0,
+                    "unknown already-online client cannot be guessed ready after " + elapsed);
+        }
+        f.loaded(a, true); // An actual Paper timeout notification, not an elapsed-time guess.
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "actual timeout notification permits fresh action");
+        f.producer.clear();
+        f.tick += 10;
+        f.toggle(a, false, false);
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "clear discards all readiness proof");
+        f.loaded(a, false);
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 2, "fresh runtime requires fresh readiness proof");
+    }
+
+    private static void readinessSessions() {
+        Fixture f = confirmationFixture(100);
+        f.autoReady = false;
+        Actor old = reconcileActor(f);
+        f.loaded(old, false);
+        f.tick++;
+        f.toggle(old, true, false);
+        f.producer.onQuit(
+                new PlayerQuitEvent(old.player, net.kyori.adventure.text.Component.empty()));
+        Actor a = f.actor(old.id), b = reconcileActor(f);
+        f.loaded(old, false); // Old-session notification cannot bless the replacement.
+        f.tick++;
+        f.toggle(a, true, false);
+        f.toggle(b, true, false);
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 0 && f.progress(b, "guard") == 0,
+                "old session and another unready player have no authority");
+        f.loaded(a, false);
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.toggle(b, false, false);
+        f.toggle(b, true, false);
+        check(
+                f.confirmations.stream().filter(task -> !task.ran && !task.cancelled).count() == 1,
+                "only ready sessions create one outstanding shared confirmation");
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1 && f.progress(b, "guard") == 0,
+                "readiness is session-local, never shared between players");
+        f.loaded(b, true);
+        f.tick++;
+        f.toggle(b, false, false);
+        f.confirm();
+        f.toggle(b, true, false);
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1 && f.progress(b, "guard") == 1,
+                "second player can independently become ready");
+    }
+
+    private static void readinessGeneration() {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.toggle(a, true, false);
+        f.loaded(a, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 0, "new ready generation revokes pending old intent");
+        f.assign(a, "guard", "walk");
+        f.domain.registry.replaceAll(f.domain.registry.snapshot());
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(
+                f.progress(a, "guard") == 1,
+                "assignment/catalog changes do not lose current session readiness");
+    }
+
+    private static void readinessCooldown(int origin) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        f.tick = origin + 2;
+        f.loaded(a, false);
+        f.tick++;
+        f.toggle(a, false, false);
+        f.confirm();
+        f.tick = origin + 9;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "readiness does not reset ten-tick credited cooldown");
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 2, "original exact ten-tick action remains eligible");
+    }
+
+    private static void readinessGuard(int origin) {
+        Fixture f = confirmationFixture(100);
+        Actor a = reconcileActor(f);
+        f.tick = origin;
+        velocity(f, a, false);
+        f.tick = origin + 1;
+        f.loaded(a, true);
+        f.tick = origin + 19;
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 0, "readiness cannot release guard or grant at its expiry");
+        f.toggle(a, false, false);
+        f.confirm();
+        f.toggle(a, true, false);
+        f.tick++;
+        f.confirm();
+        check(f.progress(a, "guard") == 1, "readiness preserves exact original velocity deadline");
     }
 
     private static void check(boolean condition, String reason) {

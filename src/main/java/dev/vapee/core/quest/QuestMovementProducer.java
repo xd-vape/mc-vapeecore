@@ -6,6 +6,8 @@ import dev.vapee.core.activity.ActivityMembershipListener;
 import dev.vapee.core.lobby.player.LobbyPlayerStateListener;
 import dev.vapee.core.player.PlayerService;
 
+import io.papermc.paper.event.player.PlayerClientLoadedWorldEvent;
+
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -64,6 +66,8 @@ public final class QuestMovementProducer
     private final Logger logger;
     private final Function<Runnable, BukkitTask> scheduleConfirmation;
     private final Map<UUID, Sample> samples = new HashMap<>();
+    // Session metadata only: readiness must survive discarded measurement/assignment samples.
+    private final Map<UUID, ClientReadiness> clientReadiness = new HashMap<>();
     private BukkitTask confirmationTask;
     private long confirmationEpoch;
     private int confirmationScheduledTick;
@@ -314,9 +318,13 @@ public final class QuestMovementProducer
             boolean next = event.isSneaking();
             if (sample != null) {
                 boolean before = player.isSneaking();
-                if (before != next) {
+                ClientReadiness readiness = clientReadiness.get(player.getUniqueId());
+                if (!ready(player, readiness)) {
+                    sample.pendingSneak = null;
+                    sample.sneaking = before;
+                } else if (before != next) {
                     // This is an intent, not proof that Paper will apply the flag.
-                    intent = new PendingSneak(player, sample, next, ticks.getAsInt());
+                    intent = new PendingSneak(player, sample, readiness, next, ticks.getAsInt());
                     sample.pendingSneak = intent;
                 } else if (sample.pendingSneak == null || sample.pendingSneak.target != next) {
                     sample.pendingSneak = null;
@@ -420,6 +428,7 @@ public final class QuestMovementProducer
                 }
                 if (!authorized.getAsBoolean() || sample(player, SNEAK_TOGGLE, true) != sample)
                     continue;
+                if (!ready(player, intent.readiness)) continue;
                 boolean actual = player.isSneaking();
                 sample.sneaking = actual; // Only the authoritative post-event flag is confirmed.
                 int age = ticks.getAsInt() - intent.tick;
@@ -523,11 +532,15 @@ public final class QuestMovementProducer
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
         forget(event.getPlayer());
+        resetReadiness(event.getPlayer(), false);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onQuit(PlayerQuitEvent event) {
         forget(event.getPlayer());
+        ClientReadiness state = clientReadiness.get(event.getPlayer().getUniqueId());
+        if (state != null && state.matches(event.getPlayer()))
+            clientReadiness.remove(event.getPlayer().getUniqueId(), state);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -538,6 +551,31 @@ public final class QuestMovementProducer
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent event) {
         forget(event.getPlayer());
+        resetReadiness(event.getPlayer(), false);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onClientLoaded(PlayerClientLoadedWorldEvent event) {
+        resetReadiness(event.getPlayer(), true);
+    }
+
+    private void resetReadiness(Player player, boolean observedReady) {
+        UUID id = player.getUniqueId();
+        if (!authorized.getAsBoolean() || !player.isOnline() || online.apply(id) != player) return;
+        clientReadiness.put(id, new ClientReadiness(player, observedReady, ticks.getAsInt()));
+        Sample sample = samples.get(id);
+        if (sample != null && sample.entity == player.getEntityId()) sample.pendingSneak = null;
+        // A ready notification is not motion, a new action or permission to reset a guard/cooldown.
+    }
+
+    private boolean ready(Player player, ClientReadiness state) {
+        if (state == null
+                || clientReadiness.get(player.getUniqueId()) != state
+                || !state.matches(player)) return false;
+        // Paper publishes its internal loaded flag AFTER the notification returns.
+        if (!state.ready && state.observedReady && ticks.getAsInt() - state.observedTick > 0)
+            state.ready = true;
+        return state.ready;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -642,6 +680,7 @@ public final class QuestMovementProducer
     void clear() {
         ++confirmationEpoch;
         samples.clear();
+        clientReadiness.clear();
         if (confirmationTask != null) {
             if (!confirmationTask.isCancelled()) confirmationTask.cancel();
             if (!confirmationTask.isCancelled())
@@ -741,17 +780,38 @@ public final class QuestMovementProducer
         final UUID id;
         final WeakReference<Player> player;
         final Sample sample;
+        final ClientReadiness readiness;
         final boolean target;
         final int tick;
         long batch;
         boolean progressAllowed;
 
-        PendingSneak(Player player, Sample sample, boolean target, int tick) {
+        PendingSneak(
+                Player player, Sample sample, ClientReadiness readiness, boolean target, int tick) {
             this.id = player.getUniqueId();
             this.player = new WeakReference<>(player);
             this.sample = sample;
+            this.readiness = readiness;
             this.target = target;
             this.tick = tick;
+        }
+    }
+
+    private static final class ClientReadiness {
+        final WeakReference<Player> player;
+        final int entity, observedTick;
+        final boolean observedReady;
+        boolean ready;
+
+        ClientReadiness(Player player, boolean observedReady, int tick) {
+            this.player = new WeakReference<>(player);
+            entity = player.getEntityId();
+            observedTick = tick;
+            this.observedReady = observedReady;
+        }
+
+        boolean matches(Player actual) {
+            return player.get() == actual && entity == actual.getEntityId();
         }
     }
 }
