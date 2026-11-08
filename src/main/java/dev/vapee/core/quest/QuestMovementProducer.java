@@ -126,10 +126,8 @@ public final class QuestMovementProducer
         if (required != null && (wanted & (1 << KEYS.indexOf(required))) == 0) return null;
         int tick = ticks.getAsInt();
         Sample previous = samples.get(id);
-        if (previous != null
-                && previous.entity == player.getEntityId()
-                && previous.blocked
-                && tick - previous.blockedUntil < 0) return null;
+        if (previous != null && previous.entity == player.getEntityId() && previous.blockedAt(tick))
+            return null;
         if (previous == null
                 || previous.entity != player.getEntityId()
                 || previous.assignments != quests.assignmentToken()
@@ -259,14 +257,14 @@ public final class QuestMovementProducer
     public void onJump(PlayerJumpEvent event) {
         Player player = event.getPlayer();
         if (event.isCancelled()) {
-            forget(player);
+            reject(player, null);
             return;
         }
         try {
             if (!valid(event.getFrom())
                     || !valid(event.getTo())
                     || !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
-                forget(player);
+                reject(player, null);
                 return;
             }
             Sample sample = sample(player);
@@ -286,7 +284,7 @@ public final class QuestMovementProducer
         Player player = event.getPlayer();
         try {
             if (!valid(player.getLocation())) {
-                forget(player);
+                reject(player, null);
                 return;
             }
             Sample sample = sample(player, SNEAK_TOGGLE);
@@ -351,8 +349,11 @@ public final class QuestMovementProducer
     public void onVelocity(PlayerVelocityEvent event) {
         UUID id = event.getPlayer().getUniqueId();
         if (online.apply(id) != event.getPlayer()) return;
-        forget(id);
-        if (!authorized.getAsBoolean() || event.isCancelled()) return;
+        if (!authorized.getAsBoolean()) {
+            forget(event.getPlayer());
+            return;
+        }
+        if (event.isCancelled()) return;
         Sample blocked = new Sample(event.getPlayer().getEntityId(), ticks.getAsInt());
         blocked.blocked = true;
         blocked.blockedUntil = blocked.tick + 20;
@@ -460,9 +461,10 @@ public final class QuestMovementProducer
         sample.turn = 0;
         sample.pendingJump = null;
         sample.last = endpoint;
+        // A local rejection clears observations, but neither shortens nor extends a live
+        // exclusion. Compare elapsed ticks, not absolute deadlines (which may wrap).
+        if (!sample.blockedAt(tick)) sample.blockedUntil = tick + 1;
         sample.blocked = true;
-        sample.blockedUntil =
-                tick + 1; // Rejection must not replenish this tick's anti-burst budgets.
     }
 
     void clear() {
@@ -542,6 +544,10 @@ public final class QuestMovementProducer
 
         boolean wants(QuestProgressKey key) {
             return (wanted & (1 << KEYS.indexOf(key))) != 0;
+        }
+
+        boolean blockedAt(int tick) {
+            return blocked && tick - blockedUntil < 0;
         }
     }
 }

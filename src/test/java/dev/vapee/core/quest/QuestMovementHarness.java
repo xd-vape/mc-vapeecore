@@ -18,6 +18,11 @@ public final class QuestMovementHarness {
     private static int checks;
 
     public static void main(String[] args) {
+        if (args.length == 1 && args[0].equals("--velocity-guard")) {
+            velocityGuard();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         distances();
         turns();
         jumps();
@@ -28,6 +33,7 @@ public final class QuestMovementHarness {
         toggleTransitions();
         toggleEligibility();
         finalMovementLifecycle();
+        velocityGuard();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -802,6 +808,511 @@ public final class QuestMovementHarness {
         f.tick += 41;
         f.move(a, 0, 0, -.6, 0);
         check(f.progress(a, "back") == 0, "idle observation gap invalidates backward remainder");
+    }
+
+    private enum GuardEvent {
+        CANCELLED_MOVE,
+        NONFINITE_MOVE,
+        WORLD_MISMATCH,
+        POSITION_GAP,
+        OVERSIZE,
+        TICK_BURST,
+        CANCELLED_VELOCITY,
+        CANCELLED_JUMP,
+        INVALID_JUMP,
+        INVALID_SNEAK
+    }
+
+    private static int guardScenarios, guardFailures;
+
+    private static void velocityGuard() {
+        var keys =
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.SPRINT,
+                        QuestMovementProducer.SNEAK,
+                        QuestMovementProducer.JUMP,
+                        QuestMovementProducer.ROTATION,
+                        QuestMovementProducer.BACKWARD,
+                        QuestMovementProducer.SNEAK_TOGGLE);
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 10, Integer.MIN_VALUE + 4})
+            for (var key : keys) {
+                for (var event : GuardEvent.values())
+                    guardCase(
+                            key + " / " + event + " / " + origin,
+                            () -> guardSequence(key, event, origin));
+                guardCase(
+                        key + " / effective renewal / " + origin,
+                        () -> renewedVelocity(key, origin));
+            }
+        for (var key : keys)
+            for (var event :
+                    List.of(
+                            GuardEvent.CANCELLED_MOVE,
+                            GuardEvent.NONFINITE_MOVE,
+                            GuardEvent.CANCELLED_JUMP,
+                            GuardEvent.INVALID_JUMP,
+                            GuardEvent.INVALID_SNEAK))
+                guardCase(
+                        key + " / ordinary rejection / " + event,
+                        () -> ordinaryRejection(key, event));
+        for (var key :
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.SPRINT,
+                        QuestMovementProducer.SNEAK,
+                        QuestMovementProducer.BACKWARD))
+            for (var event : List.of(GuardEvent.CANCELLED_MOVE, GuardEvent.CANCELLED_VELOCITY))
+                guardCase(key + " / fraction reset / " + event, () -> guardFractions(key, event));
+        for (var key :
+                List.of(
+                        QuestMovementProducer.WALK,
+                        QuestMovementProducer.BACKWARD,
+                        QuestMovementProducer.SNEAK_TOGGLE))
+            for (var event : List.of(GuardEvent.CANCELLED_MOVE, GuardEvent.CANCELLED_VELOCITY)) {
+                guardCase(key + " / reward / " + event, () -> guardReward(key, event, false));
+                guardCase(key + " / pending retry / " + event, () -> guardReward(key, event, true));
+            }
+        guardCase(
+                "cancelled velocity without a block",
+                QuestMovementHarness::cancelledVelocityWithoutBlock);
+        guardCase("stale events and reconnect ownership", QuestMovementHarness::guardSessions);
+        guardCase("assignment and catalog changes", QuestMovementHarness::guardGenerations);
+        guardCase("legitimate lifecycle cleanup", QuestMovementHarness::guardLifecycle);
+        System.out.println(
+                "Velocity guard scenarios: " + guardScenarios + ", failed: " + guardFailures);
+        if (guardFailures != 0)
+            throw new AssertionError("Velocity guard failed scenarios: " + guardFailures);
+    }
+
+    private static void guardCase(String name, Runnable body) {
+        guardScenarios++;
+        try {
+            body.run();
+        } catch (AssertionError failure) {
+            guardFailures++;
+            System.out.println("GUARD FAIL " + name + ": " + failure.getMessage());
+        }
+    }
+
+    private static Fixture guardFixture(QuestProgressKey key, long target) {
+        Fixture f = new Fixture();
+        f.define("guard", key, target, 7);
+        return f;
+    }
+
+    private static Actor guardActor(Fixture f) {
+        Actor a = f.actor();
+        f.assign(a, "guard");
+        return a;
+    }
+
+    private static void velocity(Fixture f, Actor a, boolean cancelled) {
+        var event = new PlayerVelocityEvent(a.player, new Vector(0, .4, -.4));
+        event.setCancelled(cancelled);
+        f.producer.onVelocity(event);
+    }
+
+    private static void moveAtTick(Fixture f, Actor a, double x, double y, double z, float yaw) {
+        var from = a.at.clone();
+        var to = from.clone().add(x, y, z);
+        to.setYaw(yaw);
+        f.producer.onMove(new PlayerMoveEvent(a.player, from, to));
+        a.at = to;
+    }
+
+    private static void observeGuardKey(Fixture f, Actor a, QuestProgressKey key) {
+        if (key.equals(QuestMovementProducer.SNEAK_TOGGLE)) {
+            f.toggle(a, false, false);
+            f.toggle(a, true, false);
+        } else if (key.equals(QuestMovementProducer.ROTATION)) {
+            moveAtTick(f, a, 0, 0, 0, a.at.getYaw() + 90);
+        } else if (key.equals(QuestMovementProducer.JUMP)) {
+            var from = a.at.clone();
+            var to = from.clone().add(0, .42, 0);
+            f.producer.onJump(new PlayerJumpEvent(a.player, from, to));
+            a.ground = false;
+            f.producer.onMove(new PlayerMoveEvent(a.player, from, to));
+            a.at = to;
+            a.ground = true;
+        } else {
+            a.input = !key.equals(QuestMovementProducer.BACKWARD);
+            a.backward = !a.input;
+            a.sprint = key.equals(QuestMovementProducer.SPRINT);
+            a.sneak = key.equals(QuestMovementProducer.SNEAK);
+            moveAtTick(f, a, 0, 0, -1, 0);
+        }
+    }
+
+    private static void guardUnit(Fixture f, Actor a, QuestProgressKey key) {
+        int start = f.tick;
+        for (int i = 0; i < (key.equals(QuestMovementProducer.ROTATION) ? 4 : 1); i++) {
+            f.tick = start + i;
+            observeGuardKey(f, a, key);
+        }
+    }
+
+    private static void guardEvent(Fixture f, Actor a, GuardEvent kind) {
+        var from = a.at.clone();
+        var to = from.clone().add(0, 0, -.5);
+        switch (kind) {
+            case CANCELLED_MOVE -> {
+                var event = new PlayerMoveEvent(a.player, from, to);
+                event.setCancelled(true);
+                f.producer.onMove(event);
+            }
+            case NONFINITE_MOVE -> {
+                to.setX(Double.NaN);
+                f.producer.onMove(new PlayerMoveEvent(a.player, from, to));
+            }
+            case WORLD_MISMATCH -> {
+                to.setWorld(world("guard-other"));
+                f.producer.onMove(new PlayerMoveEvent(a.player, from, to));
+            }
+            case POSITION_GAP ->
+                    f.producer.onMove(
+                            new PlayerMoveEvent(
+                                    a.player,
+                                    from.clone().add(100, 0, 0),
+                                    to.clone().add(100, 0, 0)));
+            case OVERSIZE ->
+                    f.producer.onMove(
+                            new PlayerMoveEvent(a.player, from, from.clone().add(0, 0, -20)));
+            case TICK_BURST -> {
+                for (int i = 0; i < 4; i++) moveAtTick(f, a, 0, 0, -.6, a.at.getYaw());
+            }
+            case CANCELLED_VELOCITY -> velocity(f, a, true);
+            case CANCELLED_JUMP -> {
+                var event = new PlayerJumpEvent(a.player, from, to);
+                event.setCancelled(true);
+                f.producer.onJump(event);
+            }
+            case INVALID_JUMP -> {
+                to.setZ(Double.NaN);
+                f.producer.onJump(new PlayerJumpEvent(a.player, from, to));
+            }
+            case INVALID_SNEAK -> {
+                a.at.setX(Double.NaN);
+                try {
+                    f.producer.onSneak(new PlayerToggleSneakEvent(a.player, true));
+                } finally {
+                    a.at = from;
+                }
+            }
+        }
+    }
+
+    private static void guardSequence(QuestProgressKey key, GuardEvent kind, int origin) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        f.tick = origin;
+        velocity(f, a, false);
+        check(
+                f.producer.trackedPlayers() == 1,
+                "effective velocity owns exactly one blocked sample");
+        f.tick = origin + 1;
+        guardEvent(f, a, kind);
+        f.tick = origin + 2;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 0,
+                "expected progress=0 at t+2 after " + kind + ", actual=" + f.progress(a, "guard"));
+        f.tick = origin + 10;
+        guardEvent(f, a, kind);
+        f.tick = origin + 19;
+        guardEvent(f, a, kind);
+        observeGuardKey(f, a, key);
+        check(
+                f.progress(a, "guard") == 0,
+                "expected progress=0 at t+19, actual=" + f.progress(a, "guard"));
+        f.tick = origin + 20;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 1,
+                "original deadline releases exactly one normal unit; actual="
+                        + f.progress(a, "guard"));
+        check(a.writes == 0, "guard never mutates movement authority");
+    }
+
+    private static void renewedVelocity(QuestProgressKey key, int origin) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        f.tick = origin;
+        velocity(f, a, false);
+        f.tick = origin + 1;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.tick = origin + 10;
+        velocity(f, a, false);
+        f.tick = origin + 11;
+        velocity(f, a, true);
+        f.tick = origin + 19;
+        guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        f.tick = origin + 20;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 0,
+                "new effective velocity requires its own full twenty ticks");
+        f.tick = origin + 29;
+        observeGuardKey(f, a, key);
+        check(f.progress(a, "guard") == 0, "renewed velocity remains blocked at t+29");
+        f.tick = origin + 30;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 1,
+                "renewed guard expires at t+30 without cancelled-event extension");
+    }
+
+    private static void ordinaryRejection(QuestProgressKey key, GuardEvent kind) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        f.tick = 100;
+        guardEvent(f, a, kind);
+        observeGuardKey(f, a, key);
+        check(f.progress(a, "guard") == 0, "ordinary rejection blocks only its current tick");
+        f.tick = 101;
+        guardUnit(f, a, key);
+        check(f.progress(a, "guard") == 1, "ordinary rejection is not promoted to twenty ticks");
+    }
+
+    private static void guardFractions(QuestProgressKey key, GuardEvent kind) {
+        Fixture f = guardFixture(key, 100);
+        Actor a = guardActor(f);
+        a.input = !key.equals(QuestMovementProducer.BACKWARD);
+        a.backward = !a.input;
+        a.sprint = key.equals(QuestMovementProducer.SPRINT);
+        a.sneak = key.equals(QuestMovementProducer.SNEAK);
+        f.tick = 99;
+        moveAtTick(f, a, 0, 0, -.6, 0);
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        guardEvent(f, a, kind);
+        f.tick = 102;
+        moveAtTick(f, a, 0, 0, -1, 0);
+        check(f.progress(a, "guard") == 0, "velocity rejects fresh distance during the guard");
+        f.tick = 120;
+        moveAtTick(f, a, 0, 0, -.4, 0);
+        check(f.progress(a, "guard") == 0, "pre-impulse fractions are not resurrected at expiry");
+        f.tick = 121;
+        moveAtTick(f, a, 0, 0, -.6, 0);
+        check(f.progress(a, "guard") == 1, "only new post-expiry fractions combine");
+    }
+
+    private static void cancelledVelocityWithoutBlock() {
+        Fixture f = guardFixture(QuestMovementProducer.WALK, 100);
+        Actor a = guardActor(f);
+        velocity(f, a, true);
+        check(f.producer.trackedPlayers() == 0, "cancelled impulse creates no sample or exclusion");
+        f.tick = 101;
+        moveAtTick(f, a, 0, 0, -.6, 0);
+        f.tick = 102;
+        velocity(f, a, true);
+        moveAtTick(f, a, 0, 0, -.4, 0);
+        check(f.progress(a, "guard") == 1, "cancelled impulse preserves valid existing fractions");
+        f = guardFixture(QuestMovementProducer.SNEAK_TOGGLE, 100);
+        a = guardActor(f);
+        f.tick = 100;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        f.toggle(a, false, false);
+        f.tick = 101;
+        velocity(f, a, true);
+        f.tick = 102;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(
+                f.progress(a, "guard") == 1,
+                "cancelled impulse cannot reset the independent ten-tick toggle cooldown");
+        f.tick = 110;
+        guardUnit(f, a, QuestMovementProducer.SNEAK_TOGGLE);
+        check(
+                f.progress(a, "guard") == 2,
+                "cancelled impulse does not extend toggle cooldown either");
+    }
+
+    private static void guardReward(QuestProgressKey key, GuardEvent kind, boolean pending) {
+        Fixture f = guardFixture(key, 1);
+        Actor a = guardActor(f);
+        int[] hudSignals = {0};
+        f.domain.quests.addProgressListener(
+                (id, assignments, catalog, increased, result) -> hudSignals[0]++);
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        guardEvent(f, a, kind);
+        f.tick = 102;
+        guardUnit(f, a, key);
+        check(
+                f.progress(a, "guard") == 0
+                        && f.status(a, "guard") == QuestStatus.ACTIVE
+                        && f.coins(a) == 0
+                        && hudSignals[0] == 0
+                        && f.feedback.isEmpty(),
+                "no premature progress, completion, reward, HUD or chat");
+        if (pending) f.domain.economy.setCoins(a.id, Long.MAX_VALUE);
+        f.tick = 120;
+        guardUnit(f, a, key);
+        if (pending) {
+            check(
+                    f.status(a, "guard") == QuestStatus.REWARD_PENDING && hudSignals[0] == 1,
+                    "normal failed grant retains pending contract");
+            f.tick = 131;
+            guardUnit(f, a, key);
+            check(
+                    f.status(a, "guard") == QuestStatus.REWARD_PENDING
+                            && f.coins(a) == Long.MAX_VALUE,
+                    "legitimate later failed reward retry remains pending");
+            f.tick = 140;
+            velocity(f, a, false);
+            f.tick = 141;
+            guardEvent(f, a, kind);
+            f.domain.economy.setCoins(a.id, 0);
+            f.tick = 151;
+            guardUnit(f, a, key);
+            check(
+                    f.status(a, "guard") == QuestStatus.REWARD_PENDING
+                            && f.coins(a) == 0
+                            && hudSignals[0] == 1,
+                    "reached target cannot bypass guard to retry reward early");
+            f.tick = 160;
+            guardUnit(f, a, key);
+        }
+        check(
+                f.status(a, "guard") == QuestStatus.COMPLETED
+                        && f.coins(a) == 7
+                        && hudSignals[0] == 1,
+                "post-expiry ordinary completion/retry grants one reward and one numeric HUD signal");
+        f.tick += 10;
+        guardUnit(f, a, key);
+        f.domain.quests.retryPendingRewards(a.id);
+        check(f.coins(a) == 7 && hudSignals[0] == 1, "completed quest remains idempotent");
+    }
+
+    private static void guardSessions() {
+        Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+        Actor old = guardActor(f);
+        f.tick = 100;
+        velocity(f, old, false);
+        Actor current = f.actor(old.id);
+        f.tick = 101;
+        velocity(f, current, false);
+        f.tick = 102;
+        guardEvent(f, old, GuardEvent.CANCELLED_MOVE);
+        velocity(f, old, true);
+        guardEvent(f, old, GuardEvent.CANCELLED_JUMP);
+        f.toggle(old, true, false);
+        f.producer.onQuit(
+                new PlayerQuitEvent(old.player, (net.kyori.adventure.text.Component) null));
+        check(
+                f.producer.trackedPlayers() == 1,
+                "stale callbacks cannot release the current session's blocked sample");
+        guardUnit(f, current, QuestMovementProducer.BACKWARD);
+        check(
+                f.progress(current, "guard") == 0,
+                "stale player cannot grant current-session progress");
+        f.tick = 120;
+        guardUnit(f, current, QuestMovementProducer.BACKWARD);
+        check(f.progress(current, "guard") == 0, "reconnect owns its newer deadline");
+        f.tick = 121;
+        guardUnit(f, current, QuestMovementProducer.BACKWARD);
+        check(f.progress(current, "guard") == 1, "current session resumes at its own expiry");
+        f.tick = 130;
+        velocity(f, current, false);
+        f.producer.onQuit(
+                new PlayerQuitEvent(current.player, (net.kyori.adventure.text.Component) null));
+        Actor rejoin = f.actor(old.id);
+        f.producer.onJoin(
+                new PlayerJoinEvent(rejoin.player, net.kyori.adventure.text.Component.empty()));
+        f.tick = 131;
+        guardUnit(f, rejoin, QuestMovementProducer.BACKWARD);
+        check(
+                f.progress(rejoin, "guard") == 2,
+                "legitimate logout/rejoin does not inherit prior-session velocity history");
+    }
+
+    private static void guardGenerations() {
+        Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+        Actor a = guardActor(f);
+        f.tick = 100;
+        velocity(f, a, false);
+        f.tick = 101;
+        f.assign(a, "guard");
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        check(
+                f.progress(a, "guard") == 0,
+                "assignment change cannot bypass same-session impulse exclusion");
+        var catalog = f.domain.registry.snapshot();
+        f.domain.registry.replaceAll(catalog);
+        f.tick = 110;
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        f.domain.registry.replaceAll(catalog);
+        f.tick = 119;
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        check(
+                f.progress(a, "guard") == 0,
+                "reload and rollback keep live physical exclusion without old quest observations");
+        f.tick = 120;
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        check(
+                f.progress(a, "guard") == 1,
+                "new generation begins valid measurement after deadline");
+    }
+
+    private static void guardLifecycle() {
+        List<java.util.function.BiConsumer<Fixture, Actor>> transitions =
+                List.of(
+                        (f, a) ->
+                                f.producer.onTeleport(
+                                        new PlayerTeleportEvent(
+                                                a.player, a.at, a.at.clone().add(100, 0, 0))),
+                        (f, a) -> {
+                            f.producer.onWorld(
+                                    new PlayerChangedWorldEvent(a.player, a.at.getWorld()));
+                            a.at.setWorld(world("guard-next-world"));
+                        },
+                        (f, a) -> {
+                            f.producer.beforeStateChange(a.player);
+                            f.producer.afterStateChange(a.id);
+                        },
+                        (f, a) -> {
+                            f.producer.beforeJoin(a.player);
+                            f.producer.membershipChanged(a.id);
+                        },
+                        (f, a) -> {
+                            f.running = false;
+                            f.producer.clear();
+                            velocity(f, a, false);
+                            f.running = true;
+                        });
+        for (var transition : transitions) {
+            Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+            Actor a = guardActor(f);
+            f.tick = 100;
+            velocity(f, a, false);
+            f.tick = 101;
+            transition.accept(f, a);
+            check(
+                    f.producer.trackedPlayers() == 0,
+                    "legitimate lifecycle release removes transient exclusion");
+            f.tick = 102;
+            guardUnit(f, a, QuestMovementProducer.BACKWARD);
+            check(f.progress(a, "guard") == 1, "new eligible context/runtime starts fresh");
+        }
+        Fixture f = guardFixture(QuestMovementProducer.BACKWARD, 100);
+        Actor a = guardActor(f);
+        f.tick = 100;
+        velocity(f, a, false);
+        var unloaded = f.domain.players.getPlayer(a.id).orElseThrow();
+        f.domain.players.unloadPlayer(a.id);
+        f.tick = 101;
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        check(
+                f.producer.trackedPlayers() == 0
+                        && unloaded.getQuestState().snapshot().get("guard").progress() == 0,
+                "unloaded profile clears sample without credit");
+        f.domain.players.loadPlayer(a.id, "Walker");
+        f.assign(a, "guard");
+        f.tick = 102;
+        guardUnit(f, a, QuestMovementProducer.BACKWARD);
+        check(f.progress(a, "guard") == 1, "reloaded profile has no stale blocked sample");
     }
 
     private static void check(boolean condition, String reason) {

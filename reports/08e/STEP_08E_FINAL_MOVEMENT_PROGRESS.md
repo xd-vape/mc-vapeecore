@@ -74,3 +74,62 @@ Pre-commit comparison passed for all 1510 original files: only the seven intende
 Evidence and native helper sources/scripts are outside the repository under `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e-movement-20261108-012844/`. The one local feature commit SHA is recorded in the final delivery receipt/response. No amend, push, merge, PR, deployment, branch deletion or Step 08F.
 
 API references: [Paper Input](https://jd.papermc.io/paper/1.21.11/org/bukkit/Input.html), [Player current Input](https://jd.papermc.io/paper/1.21.11/org/bukkit/entity/Player.html#getCurrentInput()), [PlayerToggleSneakEvent](https://jd.papermc.io/paper/1.21.11/org/bukkit/event/player/PlayerToggleSneakEvent.html).
+
+## Post-Audit Correction – Velocity Guard Preservation
+
+### Confirmed defects and narrow correction
+
+Step 08E.1 continues on `codex/step08e-final-movement-progress`, without changing implementation commit `0b626cd41d9904956075a02e075ae22b2f77b3dd` or master/origin/master `6136eb2eef794508011f4eaa656b4121ddb44dfc`. The earlier implementation figures above are historical evidence for that original commit, not evidence that the newly discovered combinations were safe.
+
+Two independent executable reproductions confirm the shared guard defects. Effective velocity at tick 100 creates `blockedUntil=120`. A cancelled move at 101 calls `reject()`, which formerly overwrote it with 102. Separately, a cancelled velocity at 101 formerly ran `forget(id)` before cancellation validation, removing the guard completely. Both allowed progress at 102. This is inherited shared infrastructure, affecting all seven keys, including the new BACKWARD and SNEAK_TOGGLE paths.
+
+`Sample.blockedAt(tick)` now centralizes the existing signed elapsed-tick comparison. `reject()` still clears fractions, accumulated turn and jump intent and resets the endpoint according to the existing rejection path, but only creates a one-tick deadline if no exclusion is active. It preserves an active deadline exactly, without shortening OR extending it. Cancelled velocity is a no-op after current-instance/runtime checks. New effective velocity replaces the sample and starts twenty ticks from its own event. No numeric maximum of absolute deadlines is used: signed subtraction remains correct across integer tick wraparound for these short intervals.
+
+The audit of every sample mutation also found cancelled/invalid Jump events and invalid Sneak locations deleting the same guard. These rejected observations now use `reject()` too. Their regression cases were included in the same pre-fix red run. No second timer, map, cooldown manager, scheduler, history or persisted field is introduced.
+
+### Exact lifetime and ownership contract
+
+| Sequence | Required boundary |
+| --- | --- |
+| Velocity at 100; rejected moves at 101, 110 and 119 | Still blocked at 119; eligible from 120 |
+| Velocity at 100; cancelled velocity at 101, 110 and 119 | Same original deadline 120 |
+| Velocity at 100; another effective velocity at 110 | New deadline 130; blocked at 129 |
+| Ordinary rejection without an active exclusion | Current tick rejected, normal sampling from the next tick |
+| Cancelled velocity without an exclusion | No new block; valid fractions and toggle cooldown retained |
+
+While blocked, invalid endpoints/input observations do not become credited distance. Pre-impulse fractions are not resurrected at expiry. Repeated rejections neither re-arm the velocity interval nor consume a new twenty-tick window. A genuinely rejected event at an already expired deadline may still create the normal local one-tick rejection; this is a new rejection, not extension of a live velocity exclusion.
+
+Current online instance, entity identity and runtime authority retain ownership. Stale Move/Jump/Sneak/Velocity/Quit callbacks cannot remove the replacement session's guard. Assignment, catalog reload and rollback do not bypass a still-active physical exclusion of the same valid session; after expiry the current assignment/catalog starts fresh observations. Legitimate teleport/world/logout/rejoin/Lobby/Activity and module retirement cleanup remains unchanged, as do existing ineligible/unloaded/no-assignment/error cleanup paths. This fix does not persist velocity history across those lifecycle boundaries.
+
+The ten-tick credited Sneak activation interval remains separate. Cancelled velocity can no longer erase that cooldown or valid distance fractions. Genuine ends/starts during the velocity exclusion do not count. Backward cosine 0.5 / sixty-degree and forty-five-degree turn limits, original key-bit positions, distance slots, input gates, Jump confirmation, rotation, per-segment/per-tick budgets and reporter ownership are unchanged.
+
+### Actually executed red / green regression
+
+Before changing production, the new executable tests ran against unchanged commit `0b626cd41d9904956075a02e075ae22b2f77b3dd`; producer SHA-256 `B187A3B8C3D6E925A9E049175A335E3B1508B489119010EAA32F6EA2DD07C7C5`. **290 scenario groups ran, 207 failed, process exit 1.** The log explicitly reports expected progress 0 and actual progress 1 at t+2 for both cancelled-Move and cancelled-Velocity sequences. Those failures are diagnostic evidence, not passing verification.
+
+With the minimal correction, the identical test-source SHA-256 `3DCF8CFA877B6BC7034CC6EEAEC772DCBF690EC51D0A8E2473F1935FD0AFE1F9` passes **all 290 groups / 1,285 new checks, exit 0**. Full QuestMovementHarness including its original 175 checks passes **1,460 checks**. Additional focused runs retain Integration 77, Module 25, HUD 79 and Distinct 529 checks; all 42 Distinct pending-integrity scenarios pass.
+
+Coverage combines all seven keys with cancelled moves, invalid coordinates, mismatched worlds/endpoints, oversized motion, same-tick bursts, cancelled velocity, cancelled/invalid jumps and invalid Sneak locations. All guard/renewal combinations run at ordinary tick 100, immediately before positive integer overflow, and negative ticks. Tests assert no progress at t+2 and t+19, normal credit at t+20, and renewed boundaries t+29/t+30. Rotation uses four legitimate ninety-degree samples on separate ticks rather than violating its budget. Tests also cover one-tick-only normal rejection, fractions before/after impulse, stale/replacement sessions, assignment/catalog changes, profile unload/reload, legitimate lifecycle transitions, runtime retirement and re-enable.
+
+Real QuestService/RewardService integration uses target-one definitions for WALK, BACKWARD and SNEAK_TOGGLE across both original bypasses. Before expiry there is no progress, completion, coin grant, completion chat or numeric progress notification to the existing HUD boundary. At expiry the normal grant occurs exactly once. Overflow-induced Reward Pending, a real failed retry, a later guard around a reached target, eventual successful retry and completed idempotence retain their contracts. No changes to QuestService, rewards, HUD, player persistence, daily selection or the Step-08D.1 distinct-evidence fix.
+
+Final canonical verification: The new complete command `pwsh -NoProfile -File .\scripts\verify.ps1` passed **245/245 discovered/executed/passed harnesses, 37,821 checks, Failed=0, Missing/Invalid=0, Maven clean package PASS and Spotless PASS (existing pilot allowlist)**. The inventory is identical to the historical Step-08E baseline. Only QuestMovementHarness changes its count, from 175 to 1,460 (+1,285); all other harness counts remain unchanged. All seven movement keys, Community/Lobby producers, Daily Reset/Force, HUD, persistence, rewards and the Step-08D.1 Distinct guard retain their existing regression coverage. No production or test source changed after this final build; only the report received actual result values.
+
+### Additional isolated native acceptance
+
+The new isolated native-01 run passed **114 checks**, no failures, normal own-server exit 0: Paper 1.21.11 build 132 (`c5eb079`), LuckPerms 5.5.84, JDK 21, loopback-only port 25670. It actually reran the original 33 assertions and added 81 guard assertions. Both concrete bypasses are prevented for WALK, BACKWARD and SNEAK_TOGGLE; exact t+19/t+20 and renewed t+29/t+30 boundaries, repeated cancellations, integer wraparound, no early coins/HUD packets and normal post-expiry completion are verified. The native-tested artifact and canonical artifact have identical SHA-256 `3B3323E547D177946DE6709E949405B08DB1C458473C70AE2CE605B72F643CB9`.
+
+The additional probe reuses the original 33 native assertions and adds both cancellation sequences for WALK, BACKWARD and stationary SNEAK_TOGGLE, ordinary and wrapped ticks, repeated rejection, exact expiry, renewed effective impulse, no early rewards/HUD packets, and eventual once-only completion with unchanged real XP. Real CraftPlayer/ServerPlayer, native input-packet processing, registered production event handlers and real quest/economy/player/HUD services are used. Online UUID registration and tick clocks are controlled; events/inputs are synthetic. This is native/API acceptance, not a network or visual Minecraft-client test. The original historical 33 checks are counted as rerun only when included in the actual new successful run.
+
+### Exact correction paths and protection
+
+Only these four existing files belong to the additional local fix commit:
+
+- `src/main/java/dev/vapee/core/quest/QuestMovementProducer.java`
+- `src/test/java/dev/vapee/core/quest/QuestMovementHarness.java`
+- `docs/DEVELOPER_GUIDE.md`
+- `reports/08e/STEP_08E_FINAL_MOVEMENT_PROGRESS.md`
+
+Pre-commit comparison passes for all 1511 original files across both existing worktrees; only the four intended existing paths differ. Both Run configurations and both Step-06B receipts retain their original SHA-256 values. The protected worktree and its pre-existing untracked report, Recovery/other feature branches, tags and remote configuration are unchanged. No unrelated LF/CRLF normalization occurred. Master and origin/master remain at `6136eb2eef794508011f4eaa656b4121ddb44dfc`. Final after-commit preservation results are recorded externally. Operator-owned live files may change externally and are not claimed byte-identical; this task neither uses nor modifies the operator server.
+
+Evidence, before hashes/references, unchanged-source red proof, same-test green proof, native probe and final verification receipts are outside the repository under `C:/Users/vapee/.codex/visualizations/2026/10/25/01a17432-7597-7ff1-bc9d-34201a027523/step08e1-velocity-guard-20261108-032137/`. The new local fix SHA belongs to the final receipt/response. No amend, history rewrite, merge, push, PR, deployment, operator-server intervention or Step 08F. Real Minecraft-client acceptance remains open.
