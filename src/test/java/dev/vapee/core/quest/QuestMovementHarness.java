@@ -18,6 +18,11 @@ public final class QuestMovementHarness {
     private static int checks;
 
     public static void main(String[] args) {
+        if (args.length == 1 && args[0].equals("--gameplay")) {
+            gameplay();
+            System.out.println("QuestMovementHarness passed " + checks + " checks.");
+            return;
+        }
         if (args.length == 1 && args[0].equals("--client-readiness")) {
             clientReadiness();
             System.out.println("QuestMovementHarness passed " + checks + " checks.");
@@ -58,6 +63,7 @@ public final class QuestMovementHarness {
         sneakReconciliation();
         confirmedSneak();
         clientReadiness();
+        gameplay();
         System.out.println("QuestMovementHarness passed " + checks + " checks.");
     }
 
@@ -2836,6 +2842,355 @@ public final class QuestMovementHarness {
         f.tick++;
         f.confirm();
         check(f.progress(a, "guard") == 1, "readiness preserves exact original velocity deadline");
+    }
+
+    private static void gameplay() {
+        int before = guardScenarios, failures = guardFailures;
+        for (int origin : new int[] {100, Integer.MAX_VALUE - 4, Integer.MIN_VALUE + 4}) {
+            for (String mode : List.of("walk", "sprint", "both", "all"))
+                guardCase("jump distance " + mode + "/" + origin, () -> jumpDistance(origin, mode));
+            for (int sign : new int[] {-1, 1}) {
+                guardCase(
+                        "fast rotation " + sign + "/" + origin,
+                        () -> fastRotation(origin, sign, false));
+                guardCase(
+                        "same-tick rotation " + sign + "/" + origin,
+                        () -> fastRotation(origin, sign, true));
+            }
+        }
+        for (String invalid :
+                List.of(
+                        "no-event",
+                        "no-input",
+                        "not-grounded",
+                        "cancel-jump",
+                        "cancel-move",
+                        "mismatch",
+                        "expired",
+                        "oversize",
+                        "timeout",
+                        "height",
+                        "drop",
+                        "second-rise",
+                        "land-fall",
+                        "velocity",
+                        "burst"))
+            guardCase("jump exclusion " + invalid, () -> jumpExclusion(invalid));
+        for (String reset :
+                List.of(
+                        "assignment",
+                        "catalog",
+                        "rollback",
+                        "teleport",
+                        "world",
+                        "respawn",
+                        "flight",
+                        "glide",
+                        "mount",
+                        "build",
+                        "activity",
+                        "quit",
+                        "clear",
+                        "reject"))
+            guardCase("jump phase ownership " + reset, () -> jumpPhaseReset(reset));
+        guardCase("jump distance replay and subsets", QuestMovementHarness::jumpReplay);
+        guardCase("jump and rotation domain services", QuestMovementHarness::gameplayRewards);
+        guardCase(
+                "rotation ambiguous endpoints and replay",
+                QuestMovementHarness::fastRotationSafety);
+        guardCase("rotation tick flood", QuestMovementHarness::fastRotationFlood);
+        for (String invalid : List.of("cancel", "nonfinite", "oversize", "teleport"))
+            guardCase("fast rotation invalidation " + invalid, () -> rotationInvalidation(invalid));
+        int cases = guardScenarios - before, failed = guardFailures - failures;
+        System.out.println("Movement gameplay scenarios: " + cases + ", failed: " + failed);
+        if (failed != 0) throw new AssertionError("Movement gameplay failed scenarios: " + failed);
+    }
+
+    private static Actor gameplayActor(Fixture f, String... ids) {
+        Actor a = f.actor();
+        a.sprint = a.jumpInput = true;
+        f.assign(a, ids);
+        return a;
+    }
+
+    private static PlayerMoveEvent beginJump(
+            Fixture f, Actor a, boolean cancelJump, boolean cancelMove) {
+        var from = a.at.clone();
+        var to = from.clone().add(.4, .42, 0);
+        var event = new PlayerJumpEvent(a.player, from, to);
+        event.setCancelled(cancelJump);
+        f.producer.onJump(event); // Actual Paper jump callback still observes the grounded player.
+        a.ground = false; // Paper updates ground before its subsequent Move notification.
+        var move = new PlayerMoveEvent(a.player, from, to);
+        move.setCancelled(cancelJump || cancelMove);
+        f.producer.onMove(move);
+        if (!move.isCancelled()) a.at = to;
+        return move;
+    }
+
+    private static void jumpDistance(int origin, String mode) {
+        Fixture f = finalFixture();
+        String[] ids =
+                switch (mode) {
+                    case "walk" -> new String[] {"walk"};
+                    case "sprint" -> new String[] {"sprint"};
+                    case "all" ->
+                            new String[] {
+                                "walk", "sprint", "sneak", "jump", "turn", "back", "toggle"
+                            };
+                    default -> new String[] {"walk", "sprint"};
+                };
+        Actor a = gameplayActor(f, ids);
+        f.tick = origin;
+        beginJump(f, a, false, false);
+        for (double dy : new double[] {.33, .25, .2, -.15, -.25, -.35, -.45})
+            f.move(a, .4, dy, 0, 0);
+        if (!mode.equals("sprint"))
+            check(
+                    f.progress(a, "walk") == 3,
+                    "confirmed ordinary jump must include horizontal WALK: actual="
+                            + f.progress(a, "walk"));
+        if (!mode.equals("walk"))
+            check(
+                    f.progress(a, "sprint") == 3,
+                    "sprint jump must include horizontal SPRINT: actual="
+                            + f.progress(a, "sprint"));
+        if (mode.equals("all"))
+            check(
+                    f.progress(a, "jump") == 1
+                            && f.progress(a, "sneak") == 0
+                            && f.progress(a, "back") == 0
+                            && f.progress(a, "turn") == 0,
+                    "jump is discrete; other air subsets and rotation do not gain authority");
+        check(a.writes == 0, "jump measurement never mutates native movement");
+    }
+
+    private static void jumpExclusion(String invalid) {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "walk", "sprint");
+        if (invalid.equals("no-event")) {
+            a.ground = false;
+            f.move(a, .4, .42, 0, 0);
+        } else if (invalid.equals("mismatch")
+                || invalid.equals("expired")
+                || invalid.equals("oversize")) {
+            var from = a.at.clone();
+            var to = from.clone().add(.4, .42, 0);
+            f.producer.onJump(new PlayerJumpEvent(a.player, from, to));
+            a.ground = false;
+            if (invalid.equals("expired")) f.tick += 3;
+            if (invalid.equals("mismatch")) to.add(.1, 0, 0);
+            if (invalid.equals("oversize")) to.add(2, 0, 0);
+            f.producer.onMove(new PlayerMoveEvent(a.player, from, to));
+            a.at = to;
+        } else {
+            if (invalid.equals("no-input")) a.jumpInput = false;
+            if (invalid.equals("not-grounded")) a.ground = false;
+            beginJump(f, a, invalid.equals("cancel-jump"), invalid.equals("cancel-move"));
+        }
+        switch (invalid) {
+            case "timeout" -> f.tick += 21;
+            case "height" -> {
+                f.move(a, .4, .7, 0, 0);
+                f.move(a, .4, .7, 0, 0);
+            }
+            case "drop" -> {
+                f.move(a, .4, -.8, 0, 0);
+                f.move(a, .4, -.8, 0, 0);
+            }
+            case "second-rise" -> {
+                f.move(a, .4, -.1, 0, 0);
+                f.move(a, .4, .2, 0, 0);
+            }
+            case "land-fall" -> {
+                a.ground = true;
+                f.move(a, .4, 0, 0, 0);
+                a.ground = false;
+            }
+            case "velocity" -> {
+                velocity(f, a, false);
+                f.tick += 20;
+            }
+            case "burst" -> {
+                moveAtTick(f, a, .4, .1, 0, 0);
+                moveAtTick(f, a, .4, .1, 0, 0);
+            }
+            default -> {}
+        }
+        for (int i = 0; i < 3; i++) f.move(a, .4, -.05, 0, 0);
+        check(
+                f.progress(a, "walk") == 0 && f.progress(a, "sprint") == 0,
+                "unproven/retired jump phase cannot provide distance: " + invalid);
+    }
+
+    private static void jumpPhaseReset(String reset) {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "walk", "sprint");
+        beginJump(f, a, false, false);
+        switch (reset) {
+            case "assignment" -> f.assign(a, "walk", "sprint");
+            case "catalog" -> f.domain.registry.replaceAll(f.domain.registry.snapshot());
+            case "rollback" -> {
+                var catalog = f.domain.registry.snapshot();
+                f.domain.registry.replaceAll(catalog);
+                f.domain.registry.replaceAll(catalog);
+            }
+            case "teleport" ->
+                    f.producer.onTeleport(
+                            new PlayerTeleportEvent(a.player, a.at, a.at.clone().add(5, 0, 0)));
+            case "world" ->
+                    f.producer.onWorld(new PlayerChangedWorldEvent(a.player, a.at.getWorld()));
+            case "respawn" -> f.producer.onRespawn(new PlayerRespawnEvent(a.player, a.at, false));
+            case "flight" -> f.producer.onFlight(new PlayerToggleFlightEvent(a.player, true));
+            case "glide" -> f.producer.onGlide(new EntityToggleGlideEvent(a.player, true));
+            case "mount" -> f.producer.onMount(new EntityMountEvent(a.player, a.player));
+            case "build", "activity" -> {
+                f.producer.beforeStateChange(a.player);
+                a.context = false;
+                f.producer.afterStateChange(a.id);
+                a.context = true;
+                f.producer.afterStateChange(a.id);
+            }
+            case "quit" -> {
+                Actor old = a;
+                f.producer.onQuit(
+                        new PlayerQuitEvent(a.player, net.kyori.adventure.text.Component.empty()));
+                a = f.actor(old.id);
+                a.ground = false;
+                a.sprint = true;
+                f.producer.onMove(
+                        new PlayerMoveEvent(old.player, old.at, old.at.clone().add(.4, 0, 0)));
+            }
+            case "clear" -> f.producer.clear();
+            case "reject" -> guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+            default -> throw new AssertionError(reset);
+        }
+        for (int i = 0; i < 3; i++) f.move(a, .4, 0, 0, a.at.getYaw());
+        check(
+                f.progress(a, "walk") == 0 && f.progress(a, "sprint") == 0,
+                "jump authorization cannot cross " + reset);
+    }
+
+    private static void jumpReplay() {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "walk", "sprint", "sneak", "back");
+        var move = beginJump(f, a, false, false);
+        for (int i = 0; i < 50; i++) f.producer.onMove(move);
+        f.move(a, .6, .3, 0, 0);
+        check(
+                f.progress(a, "walk") == 1 && f.progress(a, "sprint") == 1,
+                "replayed launch endpoint cannot duplicate distance");
+        a.sprint = false;
+        a.sneak = true;
+        f.move(a, .6, .2, 0, 0);
+        f.move(a, .4, -.2, 0, 0);
+        check(
+                f.progress(a, "walk") == 2
+                        && f.progress(a, "sprint") == 1
+                        && f.progress(a, "sneak") == 0
+                        && f.progress(a, "back") == 0,
+                "air authorization extends WALK/SPRINT only and preserves Sneak precedence");
+    }
+
+    private static void fastRotation(int origin, int sign, boolean sameTick) {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "turn");
+        f.tick = origin;
+        a.at.setYaw(170);
+        for (int i = 0; i < 3; i++) {
+            if (!sameTick) f.tick++;
+            moveAtTick(f, a, 0, 0, 0, a.at.getYaw() + sign * 120);
+        }
+        check(
+                f.progress(a, "turn") == 1,
+                "three observed fast segments form one net turn: actual=" + f.progress(a, "turn"));
+        check(a.writes == 0, "rotation observation never changes movement");
+    }
+
+    private static void fastRotationSafety() {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "turn");
+        f.rotate(a, 120);
+        f.rotate(a, 180);
+        f.rotate(a, 120);
+        f.rotate(a, 120);
+        check(f.progress(a, "turn") == 0, "exact half-turn has no unambiguous direction");
+        f.producer.forget(a.id);
+        for (int i = 0; i < 3; i++) f.rotate(a, 270);
+        check(f.progress(a, "turn") == 0, "raw over-180 deltas never invent hidden turns");
+        f.rotate(a, 270);
+        check(f.progress(a, "turn") == 1, "only four shortest observed quarter arcs count");
+        long before = f.progress(a, "turn");
+        f.rotate(a, 1080);
+        check(f.progress(a, "turn") == before, "same normalized orientation reveals no full spins");
+        f.producer.forget(a.id);
+        var replay = f.rotate(a, 120);
+        for (int i = 0; i < 50; i++) f.producer.onMove(replay);
+        f.rotate(a, -120);
+        check(f.progress(a, "turn") == before, "replays and reversal cannot farm rotation");
+    }
+
+    private static void fastRotationFlood() {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "turn");
+        for (int i = 0; i < 200; i++) moveAtTick(f, a, 0, 0, 0, a.at.getYaw() + 120);
+        check(f.progress(a, "turn") == 1, "at most one observed full turn per server tick");
+        f.tick++;
+        for (int i = 0; i < 3; i++) moveAtTick(f, a, 0, 0, 0, a.at.getYaw() + 120);
+        check(f.progress(a, "turn") == 2, "fresh tick resumes a new complete measured arc");
+    }
+
+    private static void rotationInvalidation(String invalid) {
+        Fixture f = finalFixture();
+        Actor a = gameplayActor(f, "turn");
+        f.rotate(a, 120);
+        if (invalid.equals("cancel")) guardEvent(f, a, GuardEvent.CANCELLED_MOVE);
+        if (invalid.equals("nonfinite")) guardEvent(f, a, GuardEvent.NONFINITE_MOVE);
+        if (invalid.equals("oversize")) guardEvent(f, a, GuardEvent.OVERSIZE);
+        if (invalid.equals("teleport"))
+            f.producer.onTeleport(
+                    new PlayerTeleportEvent(a.player, a.at, a.at.clone().add(5, 0, 0)));
+        f.rotate(a, 120);
+        f.rotate(a, 120);
+        check(
+                f.progress(a, "turn") == 0,
+                "invalid observation cannot carry fast-rotation remainder");
+        f.rotate(a, 120);
+        check(f.progress(a, "turn") == 1, "only a fresh full arc after invalidation counts");
+    }
+
+    private static void gameplayRewards() {
+        Fixture f = finalFixture();
+        f.define("walk", QuestMovementProducer.WALK, 3, 7);
+        f.define("sprint", QuestMovementProducer.SPRINT, 3, 7);
+        Actor a = gameplayActor(f, "walk", "sprint");
+        int[] hud = {0};
+        f.domain.quests.addProgressListener((id, assignments, catalog, ids, result) -> hud[0]++);
+        beginJump(f, a, false, false);
+        for (double dy : new double[] {.33, .25, .2, -.15, -.25, -.35, -.45})
+            f.move(a, .4, dy, 0, 0);
+        check(
+                f.coins(a) == 14
+                        && f.status(a, "walk") == QuestStatus.COMPLETED
+                        && f.status(a, "sprint") == QuestStatus.COMPLETED
+                        && hud[0] == 6,
+                "jump distance uses actual Quest/Reward/numeric HUD boundary exactly once");
+        f.domain.quests.retryPendingRewards(a.id);
+        check(f.coins(a) == 14, "completed jump distance never pays twice");
+        f.define("turn", QuestMovementProducer.ROTATION, 1, 7);
+        f.assign(a, "turn");
+        a.ground = true;
+        f.domain.economy.setCoins(a.id, Long.MAX_VALUE);
+        for (int i = 0; i < 3; i++) f.rotate(a, 120);
+        check(
+                f.status(a, "turn") == QuestStatus.REWARD_PENDING && hud[0] == 7,
+                "fast rotation reaches existing overflow/pending and HUD semantics");
+        f.domain.economy.setCoins(a.id, 0);
+        f.domain.quests.retryPendingRewards(a.id);
+        f.domain.quests.retryPendingRewards(a.id);
+        check(
+                f.coins(a) == 7 && hud[0] == 7 && f.status(a, "turn") == QuestStatus.COMPLETED,
+                "pending retry pays once without another numeric HUD signal");
     }
 
     private static void check(boolean condition, String reason) {

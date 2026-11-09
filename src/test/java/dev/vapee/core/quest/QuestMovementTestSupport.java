@@ -238,7 +238,7 @@ final class QuestMovementTestSupport {
         final Player player;
         Location at = new Location(world("first"), 0, 64, 0);
         boolean online = true, context = true, ground = true, input = true;
-        boolean backward, left, right, sprintInput;
+        boolean backward, left, right, sprintInput, jumpInput;
         boolean locationFailure;
         boolean sprint, sneak, vehicle, fly, glide, water, swimming, climbing, riptide, dead;
         boolean allowFlight;
@@ -257,6 +257,7 @@ final class QuestMovementTestSupport {
                                         case "isLeft" -> left;
                                         case "isRight" -> right;
                                         case "isSneak" -> sneak;
+                                        case "isJump" -> jumpInput;
                                         case "isSprint" -> sprint || sprintInput;
                                         default -> DEFAULT;
                                     });

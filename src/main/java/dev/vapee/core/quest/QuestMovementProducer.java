@@ -175,6 +175,7 @@ public final class QuestMovementProducer
         if (previous.blocked) {
             previous.last = null;
             previous.pendingJump = null;
+            previous.airJump = null;
             previous.turn = 0;
         }
         previous.blocked = false;
@@ -228,18 +229,28 @@ public final class QuestMovementProducer
                 return;
             }
             sample.distanceThisTick += horizontal;
+            Jump pending = sample.pendingJump;
             boolean jump =
-                    sample.pendingJump != null
-                            && sample.pendingJump.matches(from, to)
+                    pending != null
+                            && pending.matches(from, to)
                             && sample.tick - sample.jumpTick >= 0
                             && sample.tick - sample.jumpTick <= 2;
             sample.pendingJump = null;
-            if (jump && sample.wants(JUMP) && sample.tick - sample.lastJump >= 5) {
+            boolean newAirJump = false;
+            if (jump && sample.tick - sample.lastJump >= 5) {
                 sample.lastJump = sample.tick;
-                report(player, sample, JUMP, 1);
+                if (pending.selfInitiated && (sample.wants(WALK) || sample.wants(SPRINT))) {
+                    sample.airJump = new AirJump(sample.tick, from.getY(), to.getY());
+                    newAirJump = true;
+                }
+                if (sample.wants(JUMP)) report(player, sample, JUMP, 1);
             }
             if (!current(player, sample)) return;
-            if (!player.isOnGround()) {
+            boolean ground = player.isOnGround();
+            if (ground && !newAirJump) sample.airJump = null;
+            if (sample.airJump != null && !sample.airJump.observe(sample.tick, to.getY()))
+                sample.airJump = null;
+            if (!ground && sample.airJump == null) {
                 sample.turn = 0;
                 return;
             }
@@ -252,10 +263,12 @@ public final class QuestMovementProducer
                             || input.isRight())) {
                 distance(player, sample, WALK, horizontal);
                 if (!current(player, sample)) return;
-                if (player.isSneaking()) distance(player, sample, SNEAK, horizontal);
-                else if (player.isSprinting()) distance(player, sample, SPRINT, horizontal);
+                if (player.isSneaking()) {
+                    if (ground) distance(player, sample, SNEAK, horizontal);
+                } else if (player.isSprinting()) distance(player, sample, SPRINT, horizontal);
                 if (!current(player, sample)) return;
-                if (sample.wants(BACKWARD)
+                if (ground
+                        && sample.wants(BACKWARD)
                         && input.isBackward()
                         && !input.isForward()
                         && !(input.isLeft() && input.isRight())
@@ -263,11 +276,18 @@ public final class QuestMovementProducer
                         && !player.isSprinting())
                     distance(player, sample, BACKWARD, backward(from, to, horizontal));
             }
+            if (!ground) {
+                sample.turn = 0;
+                return;
+            }
             if (!current(player, sample) || !sample.wants(ROTATION)) return;
             double yaw = ((double) to.getYaw() - from.getYaw()) % 360.0;
             if (yaw > 180) yaw -= 360;
             if (yaw < -180) yaw += 360;
-            if (Math.abs(yaw) > 90.0 || sample.yawThisTick + Math.abs(yaw) > 90.0 + EPSILON) {
+            // Exactly half a turn has no observable direction. Larger raw differences
+            // describe only their shortest arc, never unobserved additional revolutions.
+            if (Math.abs(yaw) >= 180.0 - EPSILON
+                    || sample.yawThisTick + Math.abs(yaw) > 360.0 + EPSILON) {
                 sample.turn = 0;
                 return;
             }
@@ -298,8 +318,18 @@ public final class QuestMovementProducer
                 return;
             }
             Sample sample = sample(player);
-            if (sample != null && sample.wants(JUMP)) {
-                sample.pendingJump = new Jump(Point.of(event.getFrom()), Point.of(event.getTo()));
+            if (sample != null
+                    && (sample.wants(JUMP) || sample.wants(WALK) || sample.wants(SPRINT))) {
+                var input = player.getCurrentInput();
+                // Paper invokes Jump while still grounded, then updates onGround before Move.
+                boolean selfInitiated =
+                        player.isOnGround()
+                                && input != null
+                                && input.isJump()
+                                && event.getTo().getY() - event.getFrom().getY() > EPSILON;
+                sample.airJump = null;
+                sample.pendingJump =
+                        new Jump(Point.of(event.getFrom()), Point.of(event.getTo()), selfInitiated);
                 sample.jumpTick = sample.tick;
             }
         } catch (RuntimeException failure) {
@@ -670,6 +700,7 @@ public final class QuestMovementProducer
         if (sample.pendingSneak != null) sample.pendingSneak.progressAllowed = false;
         sample.turn = 0;
         sample.pendingJump = null;
+        sample.airJump = null;
         sample.last = endpoint;
         // A local rejection clears observations, but neither shortens nor extends a live
         // exclusion. Compare elapsed ticks, not absolute deadlines (which may wrap).
@@ -742,9 +773,36 @@ public final class QuestMovementProducer
         }
     }
 
-    private record Jump(Point from, Point to) {
+    private record Jump(Point from, Point to, boolean selfInitiated) {
         boolean matches(Location a, Location b) {
             return from.position(Point.of(a)) && to.position(Point.of(b));
+        }
+    }
+
+    /** Bounded normal-jump observation, not a physics prediction or a general airborne allowance. */
+    private static final class AirJump {
+        final int tick;
+        final double originY;
+        double lastY;
+        boolean descending;
+
+        AirJump(int tick, double originY, double lastY) {
+            this.tick = tick;
+            this.originY = originY;
+            this.lastY = lastY;
+        }
+
+        boolean observe(int now, double y) {
+            int age = now - tick;
+            double dy = y - lastY;
+            if (age < 0
+                    || age > 20
+                    || y > originY + 1.5
+                    || y < originY - 1.0
+                    || (descending && dy > EPSILON)) return false;
+            if (dy < -EPSILON) descending = true;
+            lastY = y;
+            return true;
         }
     }
 
@@ -757,6 +815,7 @@ public final class QuestMovementProducer
         double distanceThisTick, yawThisTick, turn;
         Point last;
         Jump pendingJump;
+        AirJump airJump;
         PendingSneak pendingSneak;
 
         Sample(int entity, int tick) {
