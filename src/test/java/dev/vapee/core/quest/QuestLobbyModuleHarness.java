@@ -37,7 +37,7 @@ public final class QuestLobbyModuleHarness {
             Class<?> runtime=Arrays.stream(DailyQuestModule.class.getDeclaredClasses()).filter(c->c.getSimpleName().equals("RuntimeResources")).findFirst().orElseThrow();
             daily=ModuleRuntimeFixture.dependency(DailyQuestModule.class,Map.of("active",true,"runtime",ModuleRuntimeFixture.dependency(runtime,Map.of("menu",sources.daily))));
             var constructor=PluginCommand.class.getDeclaredConstructor(String.class,Plugin.class);constructor.setAccessible(true);
-            Map<String,TabExecutor> executors=Map.of("coins",sources.coins,"rank",sources.rank,"ping",sources.ping);
+            Map<String,TabExecutor> executors=Map.of("coins",sources.coins,"ping",sources.ping);
             Map<String,PluginCommand> commands=new HashMap<>();for(var e:executors.entrySet()){var c=constructor.newInstance(e.getKey(),f.runtime.plugin);c.setExecutor(e.getValue());commands.put(e.getKey(),c);}
             Server original=f.runtime.plugin.getServer();
             Server server=(Server)Proxy.newProxyInstance(Server.class.getClassLoader(),new Class<?>[]{Server.class},(p,m,a)->{

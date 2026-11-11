@@ -81,8 +81,9 @@ public final class DailyQuestService {
         warnedUnknownPending.remove(validatedPlayerId);
 
         List<String> selected = select(validatedPlayerId, currentCycle, config, List.of());
-        // Match the existing empty-catalog contract: no implicit erasure or cycle advance.
-        if (selected.isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
+        // Preserve the old cycle and let players open the menu to finish retained rank quests.
+        if (selected.isEmpty()) return retiredRankAssignments(player).isEmpty()
+                ? DailyQuestSyncResult.NO_DEFINITIONS : DailyQuestSyncResult.CURRENT;
         QuestAssignmentResult assignment;
         try {
             assignment = questService.replaceAssignments(validatedPlayerId, selected);
@@ -113,9 +114,7 @@ public final class DailyQuestService {
         if (hasPendingReward(player)) return DailyQuestSyncResult.BLOCKED_PENDING_REWARD;
         var current = cycleResolver.resolve(now, config.zone(), config.resetTime());
         var previousCycle = player.getDailyQuestState().cycleId();
-        var legacy = player.getQuestState().snapshot().keySet().stream()
-                .filter(questId -> registry.findById(questId).filter(DailyQuestSelector::retired).isPresent())
-                .toList();
+        var legacy = retiredRankAssignments(player);
         var retained = previousCycle.isEmpty() || previousCycle.get().equals(current) ? legacy : List.<String>of();
         var selected = select(id, current, config, retained);
         if (selected.isEmpty() && !legacy.isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
@@ -137,6 +136,12 @@ public final class DailyQuestService {
     private boolean hasPendingReward(CorePlayer player) {
         return player.getQuestState().snapshot().values().stream()
                 .anyMatch(progress -> progress.status() == QuestStatus.REWARD_PENDING);
+    }
+
+    private List<String> retiredRankAssignments(CorePlayer player) {
+        return player.getQuestState().snapshot().keySet().stream()
+                .filter(questId -> registry.findById(questId).filter(DailyQuestSelector::retired).isPresent())
+                .toList();
     }
 
     private List<String> select(UUID id, DailyQuestCycleId cycle, DailyQuestConfig.State config,

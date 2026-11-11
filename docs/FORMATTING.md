@@ -234,7 +234,7 @@ server:
   name: "<red>Vapee Community</red>"
 ```
 
-Alternativ sind Hex-Farben (`<#ff8800>Vapee Community`) und Gradients (`<gradient:red:yellow>Vapee Community</gradient>`) möglich. Explizite Farben im Namen bleiben auch innerhalb eines Aqua-Templates in `presentation.yml` erhalten. Ohne eigene Farbe übernimmt der Name weiterhin die Template-Farbe. `/rank` zeigt den formatierten Namen ebenfalls. Nach dem Ändern `/core reload` ausführen.
+Alternativ sind Hex-Farben (`<#ff8800>Vapee Community`) und Gradients (`<gradient:red:yellow>Vapee Community</gradient>`) möglich. Explizite Farben im Namen bleiben auch innerhalb eines Aqua-Templates in `presentation.yml` erhalten. Ohne eigene Farbe übernimmt der Name weiterhin die Template-Farbe. Nach dem Ändern `/core reload` ausführen.
 
 Auch `online-rewards.message.format` ist ein MiniMessage-Template. Es verwendet sichere numerische Placeholder; Details stehen im Abschnitt [Online-Reward-Nachricht](#online-reward-nachricht).
 

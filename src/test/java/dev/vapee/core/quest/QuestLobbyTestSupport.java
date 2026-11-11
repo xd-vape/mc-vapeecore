@@ -9,7 +9,6 @@ import dev.vapee.core.settings.SettingsMenu;
 import dev.vapee.core.settings.visibility.VisibilitySettingsMenu;
 import dev.vapee.core.friend.gui.FriendMenu;
 import dev.vapee.core.economy.command.CoinsCommand;
-import dev.vapee.core.rank.command.*;
 import dev.vapee.core.utility.command.PingCommand;
 import dev.vapee.core.visibility.VisibilityService;
 import org.bukkit.entity.Player;
@@ -55,12 +54,13 @@ final class QuestLobbyTestSupport implements AutoCloseable {
         final FriendMenu friends=source(FriendMenu.class,"successListeners");
         final VisibilitySettingsMenu visibilityMenu=source(VisibilitySettingsMenu.class,"successListeners");
         final CoinsCommand coins=source(CoinsCommand.class,"successListeners");
-        final RankCommand rank=source(RankCommand.class,"successListeners");
         final PingCommand ping=source(PingCommand.class,"successListeners");
         final VisibilityService visibility=source(VisibilityService.class,"refreshListeners");
         static <T>T source(Class<T>type,String field){return ModuleRuntimeFixture.dependency(type,Map.of(field,new LinkedHashSet<>()));}
-        void bind(QuestLobbyProducer p,BooleanSupplier available){p.bind(lobby,warps,navigator,daily,settings,friends,visibilityMenu,coins,rank,ping,visibility,available);}
-        void ownRank(Player player){for(var listener:listeners(rank,"successListeners",java.util.function.Consumer.class))listener.accept(player);}
+        void bind(QuestLobbyProducer p,BooleanSupplier available){p.bind(lobby,warps,navigator,daily,settings,friends,visibilityMenu,coins,ping,visibility,available);}
+        void questMenu(Player player,DailyQuestMenu.OpenSource source){
+            for(var listener:listeners(daily,"successListeners",BiConsumer.class))listener.accept(player,source);
+        }
         void warp(Player p,String id,boolean navigator){for(var listener:listeners(warps,"successListeners",WarpService.SuccessListener.class))listener.onSuccess(p,id,navigator);}
         static <T>List<T> listeners(Object source,String field,Class<T>type){return ((Collection<?>)ModuleRuntimeFixture.get(source,field)).stream().map(type::cast).toList();}
     }

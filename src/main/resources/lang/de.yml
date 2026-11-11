@@ -142,7 +142,6 @@ core:
     ping.description: "Zeigt die gemessene Latenz in Millisekunden."
     profile.description: "Zeigt das Profil eines bekannten Spielers."
     quests.description: "Zeigt deine täglichen Quests und automatischen Belohnungen."
-    rank.description: "Zeigt den Server-Rang eines Online-Spielers."
     reply:
       description: "Antwortet auf die letzte Unterhaltung."
       hint: "Alias: /r \\<message>"
@@ -494,26 +493,6 @@ profile:
   title: "Profil"
   usage: "Verwendung: /profile [player|uuid]"
 
-
-# ==================================================
-# RANKS
-# ==================================================
-
-rank:
-
-  # General
-  current: " • Du"
-  denied: "<red>Du darfst Ränge nicht ansehen.</red>"
-  description-label: "Beschreibung: "
-  group-label: "Gruppe: "
-  heading: " • Rang"
-  heading-suffix: " • Rang"
-  list-heading: " • Ränge"
-  offline: "<red>Dieser Spieler ist nicht online.</red>"
-  player-label: "Spieler: "
-  rank-label: "Rang: "
-  specify: "Gib einen Online-Spieler an:"
-  unavailable: "<yellow>Ranginformationen sind derzeit nicht verfügbar.</yellow>"
 
 # ==================================================
 # SOCIAL / IGNORE

@@ -90,7 +90,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager = new ModuleManager(getLogger());
 
         permissionModule = new PermissionModule(this, configService::getCommandVisibilityConfig);
-        rankModule = new RankModule(this, configService, permissionModule, messageService);
+        rankModule = new RankModule(this, configService, permissionModule);
         playerModule = new PlayerModule(this, configService, messageService);
         socialModule = new SocialModule(this, playerModule, messageService);
         economyModule = new EconomyModule(this, playerModule, rankModule, messageService, commandHelpRenderer);

@@ -246,7 +246,7 @@ public final class DailyQuestCompletionFeedbackHarness {
                     definition("open", MENU.value(), 5, 1));
             menus.daily.syncPlayer(viewer.id, menus.now);
             menus.menu.addSuccessListener(
-                    player -> menus.domain.quests.addProgress(player.getUniqueId(), MENU, 1));
+                    (player, source) -> menus.domain.quests.addProgress(player.getUniqueId(), MENU, 1));
             runtime.online.add(viewer.player);
             var scheduler =
                     proxy(

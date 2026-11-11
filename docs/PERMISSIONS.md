@@ -40,7 +40,6 @@ Console mit Adminzugang darf alle expliziten Target-Formen verwenden. Mutationen
 | `vapeecore.friend.use` | `true` | `/friend`, `/friends`, Friends-GUI | Eigene Freundschaften und Anfragen anzeigen und verwalten; GUI und alle Subcommands, ohne separate GUI-Permission. |
 | `vapeecore.clan.use` | `true` | `/clan`, `/clans`, Clan-GUI | Eigene Clans und Einladungen verwalten; Owner-Aktionen bleiben auf den tatsächlichen Clan-Owner beschränkt. Keine separate GUI- oder Staff-Permission. |
 | `vapeecore.visibility.staff` | `op` | Visibility-Klassifizierungsmarker | Markiert das Online-Target ausschließlich für den Staff-Visibility-Filter. Keine Command-Permission und keine Admin-Fähigkeit. |
-| `vapeecore.rank.view` | `true` | `/rank [player]` | Eigenen oder einen Online-Rank anzeigen. |
 | `vapeecore.profile.view` | `true` | `/profile [player\|uuid]` | Eigene, online oder bereits bekannte Profile anzeigen. |
 
 ## Moderation (Phase 26A)
@@ -145,7 +144,6 @@ VIP darf nicht über Builder/Moderator Staff-Fähigkeiten erben; Staff-Gruppen e
 - `vapeecore.social.ignore`
 - `vapeecore.friend.use`
 - `vapeecore.clan.use`
-- `vapeecore.rank.view`
 - `vapeecore.ranks.view`
 - `vapeecore.profile.view`
 
@@ -259,7 +257,7 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 38 Roots, 52 Nodes, 15 Child-K
 
 ## Permission-Children und Default-Audit (aktueller Phase-29-Vertrag)
 
-52 explizite Nodes umfassen 11 Player-Basisrechte mit `default: true`, 40 mit `default: op` und `vapeecore.staff.panel` mit `default: false`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass oder alleinige Staff-Identität. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin`, `vapeecore.visibility.staff`, `vapeecore.staff.panel` und `vapeecore.tpa.use` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
+51 explizite Nodes umfassen 10 Player-Basisrechte mit `default: true`, 40 mit `default: op` und `vapeecore.staff.panel` mit `default: false`. OP-Defaults gewähren Fähigkeiten, niemals einen Staff-Hierarchie-Bypass oder alleinige Staff-Identität. Die folgenden 15 positiven Child-Kanten sind vollständig; keine Rückrichtung, unbekannten Children oder Zyklen. `vapeecore.admin`, `vapeecore.visibility.staff`, `vapeecore.staff.panel` und `vapeecore.tpa.use` besitzen keine Children; die sieben Moderation-Nodes sind unabhängig. Es gibt keine Wildcard-Nodes und keine Wildcard-Empfehlung.
 
 | Parent (vapeecore.) | Child (vapeecore.) | Bedeutung |
 |---|---|---|
@@ -283,7 +281,7 @@ Kanonischer Audit: `docs/PERMISSIONS.md` (aktuell 38 Roots, 52 Nodes, 15 Child-K
 
 ## Vollständiger Command-/Descriptor-Audit (aktueller Phase-29-Vertrag)
 
-Alle 42 Root-Commands werden gegen Registrierung, Executor-Gates und den Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die Command-Harnesses prüfen das Verhalten. Phase 06A ergänzt fünf öffentliche TPA-Commands mit einem unabhängigen Default-true-Node; administrative Teleport-Rechte und Children bleiben unverändert. Beide Spieler brauchen `vapeecore.tpa.use`; es gibt keinen OP-/Staff-Bypass für Consent, Ignore, Sichtbarkeit, BUILD oder Activities.
+Alle 41 Root-Commands werden gegen Registrierung, Executor-Gates und den Descriptor-Vertrag geprüft. `PermissionDescriptorHarness` vergleicht Aliases, vollständige Usage, Nodes, Defaults und Child-Graph programmatisch; die Command-Harnesses prüfen das Verhalten. Phase 06A ergänzt fünf öffentliche TPA-Commands mit einem unabhängigen Default-true-Node; administrative Teleport-Rechte und Children bleiben unverändert. Beide Spieler brauchen `vapeecore.tpa.use`; es gibt keinen OP-/Staff-Bypass für Consent, Ignore, Sichtbarkeit, BUILD oder Activities.
 
 In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarkeit weggelassen. Die Empfehlung ist keine automatische Rangfreigabe. Gezielte Fähigkeiten und die unabhängige Target-Hierarchie gelten gleichzeitig.
 
@@ -329,4 +327,3 @@ In der Executor-Spalte ist der Präfix `vapeecore.` außer bei Core zur Lesbarke
 | /clear | — | vapeecore.utility.clear | utility.clear Self; utility.clear.others für fremde UUID | Admin/Owner | /clear [player] | Nein |
 | /invsee | — | vapeecore.utility.invsee | utility.invsee | Moderator optional / Admin | /invsee <player> | Nein |
 | /enderchest | — | vapeecore.utility.enderchest | utility.enderchest Self; utility.enderchest.others für fremde UUID | Admin/Owner | /enderchest [player] | Nein |
-| /rank | — | vapeecore.rank.view | rank.view | User/VIP | /rank [player] | Nein |

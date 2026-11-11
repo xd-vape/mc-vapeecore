@@ -280,7 +280,6 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Server rank source / rank assignment | LuckPerms, nicht VapeeCore |
 | Öffentlicher Rank-Track | Live: `plugins/VapeeCore/config.yml` → `ranks.track`, Default: `ranks` |
 | Rank integration | `dev.vapee.core.rank` |
-| `/rank` | `dev.vapee.core.rank.command.RankCommand` |
 | Rank display name / description / color / weight | `RankService` und `LuckPermsService` |
 | Rank- und Playtime-Placeholder | `RankInfo`, `PresentationRenderer` und `PlaytimeFormatter` |
 | Rank Prefix / Suffix / Badge | LuckPerms-Meta; Farbe separat über `vapeecore.rank.color` |
@@ -324,7 +323,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 
 1. **Localization** – gemeinsame immutable EN-/DE-Kataloge, Overrides, Reload und Client-Locale-Event.
 2. **Permission** – lesender LuckPerms-Zugriff.
-3. **Rank** – cachefreie Rank-Domain, LuckPerms-Track und der Lese-Command `/rank`.
+3. **Rank** – cachefreie Rank-Domain, LuckPerms-Track und Staff-Hierarchie.
 4. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
 5. **Social** – Ignore-State und Commands.
 6. **Economy** – Coin-Wallet und `/coins`.
@@ -920,8 +919,7 @@ Die ausführbaren `QuestCommunityChatHarness`, `QuestCommunitySocialHarness` und
 | `lobby:quests_open` | Successful `DailyQuestMenu.open`; internal `openPage`, refresh and countdown paths are silent. |
 | `lobby:settings_open`, `lobby:friends_open`, `lobby:visibility_open` | Successful owning root menu open, with permission/profile gates and exact current bound top inventory. Friend tabs/pages are internal opens. |
 | `lobby:coins_check` | `CoinsCommand.sendOwnBalance`, after actual loaded balance output for argument-free `/coins`. |
-| `lobby:rank_check` | Argument-free own Rank output with an available primary rank. |
-| `lobby:ranks_check` | Legacy assignments only. Successful argument-free `/rank` can finish an existing assignment. |
+| `lobby:rank_check`, `lobby:ranks_check` | Legacy assignments only. Successful root opening through `/quests` or the Quest NPC. |
 | `lobby:ping_self`, `lobby:ping_other` | Successful Ping output, actual UUID self classification and existing Others authorization. Explicit own name is self. |
 | `social:meet_unique` | First eligible nearby visible player UUID in the same lobby world, as defined below. |
 
@@ -1054,11 +1052,11 @@ Für Layout-/Katalogtests: `daily-quests.yml` speichern → `/core reload` → `
 
 Die Uhr zeigt die **geplante** Reset-Grenze. Tatsächliche Assignments rotieren weiterhin über den bestehenden Daily-Sync; `REWARD_PENDING` kann die Rotation verzögern. Der Countdown vergibt keine Belohnungen, erzwingt keine Rotation und ergänzt keinen Persistenz- oder NPC-Pfad.
 
-Seit Step 08F.4 schließt die Tagesauswahl den alten Key `lobby:ranks_check` aus. Ein erfolgreicher Selbstabruf mit `/rank` kann vorhandene Zuweisungen mit diesem Key weiterhin abschließen. Force innerhalb desselben Cycles übernimmt diese Einträge mit ihrem bestehenden Fortschritt und rechnet sie auf die Auswahlgrenzen an. Die reguläre Rotation nach erfolgreicher Auszahlung etwaiger Pending Rewards schließt den alten Key aus. Für `check_ranks` die bestehende Definition samt Key, Ziel und Belohnung für noch offene Zuweisungen behalten, `enabled: false` setzen und den Beschreibungstext für betroffene Spieler auf `/rank` aktualisieren.
+Die Tagesauswahl schließt `lobby:rank_check` und `lobby:ranks_check` aus. Ein erfolgreiches Öffnen über `/quests` oder den Quest-NPC schreibt vorhandene Altzuweisungen fort. Force innerhalb desselben Cycles übernimmt diese Einträge mit ihrem bestehenden Fortschritt und rechnet sie auf die Auswahlgrenzen an. Die reguläre Rotation nach erfolgreicher Auszahlung etwaiger Pending Rewards schließt beide Keys aus. Ohne auswählbaren Ersatz bleibt das Menü für vorhandene Altzuweisungen erreichbar. Die Definitionen von `check_rank` und `check_ranks` samt Key, Ziel und Belohnung behalten, bis auch offline gespeicherte Altzuweisungen aus der aktiven Auswahl rotiert und ausstehende Belohnungen ausgezahlt sind. Für noch betroffene Spieler kann der Betreiber die Beschreibungen auf `/quests` oder den Quest-NPC umstellen.
 
 ## Ranks & Server Identity
 
-LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms. `/rank` liest den Rang eines Online-Spielers.
+LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms.
 
 `PermissionModule` stellt die einzige LuckPerms-Provider-Verbindung her. `LuckPermsService` kapselt geladene User, Group Information und Track Groups, ohne LuckPerms-API-Typen in andere Features zu leaken. Eine Group-Auflösung liest Display Name, Description, rohe Color Meta und Weight gemeinsam. `RankService` bildet diese Werte auf das immutable `RankInfo(id, displayName, description, color, weight)` ab. Normale Rank-/Presentation-Abfragen verwenden ausschließlich `UserManager#getUser`, ohne `loadUser`, Blocking oder dauerhaften Rank-Cache. Die separate Phase-26A-Staff-Autorisierung darf über die neue read-only API `LuckPermsService#loadPrimaryGroup(UUID)` für ungecachete bekannte Moderations-Targets asynchron `UserManager#loadUser` verwenden; sie speichert oder verändert keine User. Ist der User nicht geladen, liefert `getPrimaryRank` `Optional.empty()`. Fehlt die Group unerwartet, bleibt die bekannte ID erhalten und Display Name, Description, Color und Weight fallen kontrolliert zurück.
 
@@ -1454,7 +1452,6 @@ Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/C
 | `/core quest npc <set\|skin\|name\|remove>` | Quest-NPC platzieren, gestalten oder entfernen | `CoreCommand` → `CoreQuestCommand` → `QuestNpcCommand` | `vapeecore.admin`, Platzierung nur im Spiel |
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
-| `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 | `/mute <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline; Chat und ausgehende PM sperren | `MuteCommand`, `ModerationMuteProjection`, `ModerationMuteChatListener` | `vapeecore.moderation.mute` |
 | `/unmute <player\|uuid> [reason...]` | Aktiven Mute widerrufen | `UnmuteCommand` | `vapeecore.moderation.unmute` |
@@ -1464,7 +1461,7 @@ Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/C
 | `/kick <player\|uuid> <reason...>` | Online-Kick nach Record-Save | `KickCommand` | `vapeecore.moderation.kick` |
 | `/history <player\|uuid> [page]` | Read-only Moderationshistorie | `HistoryCommand` | `vapeecore.moderation.history` |
 
-Öffentliche Rank-Presentation ist nicht in Java hardcodiert. LuckPerms vergibt gewöhnliche Capabilities, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; deren Capability-Prüfung benötigt keinen festen Gruppennamen. Administrative Target-Prüfungen verwenden zusätzlich die geschützte Staff-Hierarchie mit den expliziten sicheren Defaults aus StaffHierarchyConfig. `/rank` liegt im VapeeCore-Namespace und liest LuckPerms-Daten. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
+Öffentliche Rank-Presentation ist nicht in Java hardcodiert. LuckPerms vergibt gewöhnliche Capabilities, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; deren Capability-Prüfung benötigt keinen festen Gruppennamen. Administrative Target-Prüfungen verwenden zusätzlich die geschützte Staff-Hierarchie mit den expliziten sicheren Defaults aus StaffHierarchyConfig. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
 
 ## Command UX Standard
 
@@ -1480,7 +1477,7 @@ Tab Completion ist case-insensitive, stabil sortiert, permission-aware und mögl
 
 Die vollständige Vorab-Auditmatrix und die gemessene Verifikation stehen in `reports/23-core-commands-completion/COMMAND_AUDIT.md`. `CoreCommand` besitzt Status-/Versionsausgabe, die zentrale Übersicht und die Delegation an den unveränderten Reload-Koordinator. Package-private, funktionale Konstruktor-Seams ermöglichen echte Executor-Tests ohne laufenden Server; sie ersetzen weder einen Domain-Service noch führen sie einen generischen Command-Dispatcher ein. Jede Feature-Command-Klasse bleibt Owner ihrer Permission-, Arity-, Sender- und Target-Prüfungen. `plugin.yml` ist Registrierungs- und Fallbackschicht; die Executor-Prüfung ist zusätzliche Defense in Depth.
 
-`OnlinePlayerResolver` ist ausschließlich für vollständige, case-insensitive, eindeutige aktuell online befindliche Spielernamen zuständig. Utilities, `/msg`, `/ignore` und `/rank` verwenden keine Offline-/Mojang-Auflösung, UUID-Argumente oder Selector. Known Player/UUID bleiben auf bestehende Friend-, Clan-, Profile-, Economy-, Unignore- und Settings-Visibility-Domains begrenzt. `/unignore` sucht nur in der eigenen Ignore-Liste; doppelte bekannte Namen werden abgelehnt und als UUIDs vorgeschlagen. IgnoreList zeigt bekannte Namen sortiert vor unbekannten UUIDs.
+`OnlinePlayerResolver` ist ausschließlich für vollständige, case-insensitive, eindeutige aktuell online befindliche Spielernamen zuständig. Utilities, `/msg` und `/ignore` verwenden keine Offline-/Mojang-Auflösung, UUID-Argumente oder Selector. Known Player/UUID bleiben auf bestehende Friend-, Clan-, Profile-, Economy-, Unignore- und Settings-Visibility-Domains begrenzt. `/unignore` sucht nur in der eigenen Ignore-Liste; doppelte bekannte Namen werden abgelehnt und als UUIDs vorgeschlagen. IgnoreList zeigt bekannte Namen sortiert vor unbekannten UUIDs.
 
 Für Fly, Speed, Gamemode, Heal, Feed, Ping, Clear und Enderchest entscheidet die Ziel-UUID über Self/Other: ein expliziter eigener Name benötigt nur die Basispermission. Console verlangt bei Self/Other-Utilities ein explizites Target und die bestehende Others-Permission. Invsee/Enderchest brauchen immer einen Player als GUI-Viewer. `/tp` ist die absichtlich begrenzte Vanilla-Teilmenge aus Phase 18C: die explizite Source-Form verlangt weiterhin Others, auch wenn Source die eigene UUID ist. Koordinaten, lokale/relative Achsen, Worlds, Yaw/Pitch, Activity-Guards, Bypass und Cancellation bleiben unverändert; `/minecraft:tp` bleibt Vanilla. Invsee bleibt ein geschützter Read-only-Snapshot, `.modify` ist weiterhin inaktiv.
 

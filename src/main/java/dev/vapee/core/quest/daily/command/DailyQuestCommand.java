@@ -17,7 +17,7 @@ public final class DailyQuestCommand implements CommandExecutor, TabCompleter {
     private final MessageService messages;
     private final java.util.function.BooleanSupplier authorized;
     public DailyQuestCommand(DailyQuestMenu menu, MessageService messages) {
-        this(player -> menu.open(player, 0), messages, menu::isAvailable);
+        this(menu::openFromCommand, messages, menu::isAvailable);
         Objects.requireNonNull(menu, "menu");
     }
     DailyQuestCommand(Consumer<Player> open, MessageService messages) {

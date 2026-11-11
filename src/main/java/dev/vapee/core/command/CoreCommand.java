@@ -46,9 +46,7 @@ public final class CoreCommand implements TabExecutor {
                             new CommandHelpEntry("/core help", tr("core.help.core.help.description")),
                             new CommandHelpEntry("/core version", tr("core.help.core.version.description")),
                             new CommandHelpEntry("/profile [player|uuid]", tr("core.help.profile.description"),
-                                    "vapeecore.profile.view"),
-                            new CommandHelpEntry("/rank [player]", tr("core.help.rank.description"),
-                                    "vapeecore.rank.view")
+                                    "vapeecore.profile.view")
                     )),
                     new CommandHelpSection(tr("core.help.section.social"), List.of(
                             new CommandHelpEntry("/friend help", tr("core.help.friend.help.description"),

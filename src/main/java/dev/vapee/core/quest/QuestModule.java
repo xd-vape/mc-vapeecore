@@ -202,7 +202,6 @@ public final class QuestModule implements CoreModule {
         var visibilityMenu = settingsOwner.getVisibilitySettingsMenu(); var friends = friendOwner.getFriendMenu();
         var visibility = visibilityOwner.getVisibilityService();
         var coins = command("coins", dev.vapee.core.economy.command.CoinsCommand.class);
-        var rank = command("rank", dev.vapee.core.rank.command.RankCommand.class);
         var ping = command("ping", dev.vapee.core.utility.command.PingCommand.class);
         resources.lobby = new QuestLobbyProducer(resources.players, resources.registry, resources.service, resources.reporter,
                 plugin.getServer()::getPlayer,
@@ -216,14 +215,13 @@ public final class QuestModule implements CoreModule {
                 Bukkit::getCurrentTick, plugin.getLogger());
         try {
             var producer = resources.lobby;
-            producer.bind(lobby, warps, navigator, daily, settings, friends, visibilityMenu, coins, rank, ping, visibility,
+            producer.bind(lobby, warps, navigator, daily, settings, friends, visibilityMenu, coins, ping, visibility,
                     () -> lobbyOwner.getLobbyService() == lobby && lobbyOwner.getLobbyPlayerStateService() == states
                             && warpOwner.getWarpService() == warps && experienceOwner.getNavigatorMenu() == navigator
                             && dailyOwner.getMenu() == daily && settingsOwner.getSettingsMenu() == settings
                             && settingsOwner.getVisibilitySettingsMenu() == visibilityMenu && friendOwner.getFriendMenu() == friends
                             && visibilityOwner.getVisibilityService() == visibility
                             && command("coins", dev.vapee.core.economy.command.CoinsCommand.class) == coins
-                            && command("rank", dev.vapee.core.rank.command.RankCommand.class) == rank
                             && command("ping", dev.vapee.core.utility.command.PingCommand.class) == ping);
             producer.own(() -> states.addStateListener(producer), () -> states.removeStateListener(producer));
             producer.own(() -> activities.addMembershipListener(producer), () -> activities.removeMembershipListener(producer));

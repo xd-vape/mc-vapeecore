@@ -182,10 +182,6 @@ commands:
     description: Open an online player's ender chest
     usage: /enderchest [player]
     permission: vapeecore.utility.enderchest
-  rank:
-    description: Shows a player's server rank
-    usage: /rank [player]
-    permission: vapeecore.rank.view
 
 permissions:
   vapeecore.tpa.use:
@@ -370,6 +366,3 @@ permissions:
   vapeecore.navigator.admin:
     description: Edit Navigator menus, entries and optional player-count regions
     default: op
-  vapeecore.rank.view:
-    description: Allows viewing an online player's server rank
-    default: true

@@ -718,7 +718,7 @@ public final class ModerationCommandHarness {
     private static void descriptor() throws Exception {
         var yaml = (Map<?, ?>) new Yaml().load(Files.readString(Path.of("src/main/resources/plugin.yml")));
         var commands = (Map<?, ?>) yaml.get("commands"); var permissions = (Map<?, ?>) yaml.get("permissions");
-        check(commands.size() == 42 && commands.containsKey("staff")
+        check(commands.size() == 41 && commands.containsKey("staff")
                 && commands.keySet().containsAll(List.of("tpa", "tpahere", "tpaccept", "tpdeny", "tpcancel")),
                 "43 plugin root commands including independent player TPA commands");
         Map<String, String> syntax = Map.of("warn", "<player|uuid> <reason...>", "ban", "<player|uuid> <duration|permanent> <reason...>",

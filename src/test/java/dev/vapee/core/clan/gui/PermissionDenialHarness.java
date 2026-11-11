@@ -35,7 +35,6 @@ public final class PermissionDenialHarness {
                     "spawn.set-denied",
                     "spawn.use-denied",
                     "warp.denied",
-                    "rank.denied",
                     "social.denied",
                     "private-messages.error.denied",
                     "economy.denied",

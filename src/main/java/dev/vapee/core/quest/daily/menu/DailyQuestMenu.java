@@ -32,12 +32,14 @@ import java.util.logging.Logger;
 
 /** Read-only quest view with a scoped presentation-only reset clock. */
 public final class DailyQuestMenu {
-    private final java.util.Set<java.util.function.Consumer<org.bukkit.entity.Player>> successListeners = new java.util.LinkedHashSet<>();
-    public void addSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
-    public void removeSuccessListener(java.util.function.Consumer<org.bukkit.entity.Player> listener) { successListeners.remove(listener); }
-    private void succeeded(org.bukkit.entity.Player player) {
+    public enum OpenSource { COMMAND_OR_NPC, OTHER, SILENT }
+
+    private final java.util.Set<java.util.function.BiConsumer<Player, OpenSource>> successListeners = new java.util.LinkedHashSet<>();
+    public void addSuccessListener(java.util.function.BiConsumer<Player, OpenSource> listener) { successListeners.add(java.util.Objects.requireNonNull(listener)); }
+    public void removeSuccessListener(java.util.function.BiConsumer<Player, OpenSource> listener) { successListeners.remove(listener); }
+    private void succeeded(Player player, OpenSource source) {
         for (var listener : java.util.List.copyOf(successListeners)) {
-            try { listener.accept(player); }
+            try { listener.accept(player, source); }
             catch (RuntimeException failure) {
                 try { java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.WARNING,
                         "Success observer failed; completed action is retained.", failure); }
@@ -181,26 +183,30 @@ public final class DailyQuestMenu {
     }
 
     public void open(Player player, int requestedPage) {
-        renderOpen(player, requestedPage, true, () -> true);
+        renderOpen(player, requestedPage, OpenSource.OTHER, () -> true);
+    }
+
+    public void openFromCommand(Player player) {
+        renderOpen(player, 0, OpenSource.COMMAND_OR_NPC, () -> true);
     }
 
     public void openPage(Player player, int requestedPage) {
-        renderOpen(player, requestedPage, false, () -> true);
+        renderOpen(player, requestedPage, OpenSource.SILENT, () -> true);
     }
 
     public void openAutomatically(Player player, java.util.function.BooleanSupplier currentSession) {
         if (!canUse(player)) return;
-        renderOpen(player, 0, false, () -> currentSession.getAsBoolean() && hasNoContainer.test(player));
+        renderOpen(player, 0, OpenSource.SILENT, () -> currentSession.getAsBoolean() && hasNoContainer.test(player));
     }
 
     public void openFromNpc(Player player) {
         Inventory inventory = active.get(player.getUniqueId());
         if (inventory != null && inventory.getHolder() instanceof DailyQuestInventoryHolder holder
                 && isActive(player, inventory, holder)) return;
-        open(player, 0);
+        renderOpen(player, 0, OpenSource.COMMAND_OR_NPC, () -> true);
     }
 
-    private void renderOpen(Player player, int requestedPage, boolean rootOpen,
+    private void renderOpen(Player player, int requestedPage, OpenSource source,
                             java.util.function.BooleanSupplier mayOpen) {
         Objects.requireNonNull(player, "player");
         if (!isAvailable() || !mayOpen.getAsBoolean()) return;
@@ -277,7 +283,8 @@ public final class DailyQuestMenu {
                 && opening == activation && isAvailable()) {
             active.put(player.getUniqueId(), inventory);
             ensureCountdownTask();
-            if (rootOpen && rerenderInventory == null && isActive(player, inventory, holder)) succeeded(player);
+            if (source != OpenSource.SILENT && rerenderInventory == null && isActive(player, inventory, holder))
+                succeeded(player, source);
         }
         } finally { renderingFor = opening == activation && isAvailable() ? previousViewer : null; }
     }

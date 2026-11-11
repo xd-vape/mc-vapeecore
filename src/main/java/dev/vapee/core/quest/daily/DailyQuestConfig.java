@@ -103,7 +103,7 @@ public final class DailyQuestConfig {
                     .filter(definition -> selection.quest(definition.id()).enabled())
                     .map(QuestDefinition::id).toList();
             if (!retired.isEmpty()) logger.warning("Daily quests " + retired
-                    + " use the retired lobby:ranks_check key and are excluded from new assignments.");
+                    + " use retired rank-check keys and are excluded from new assignments.");
         }
         if (enabled && definitions.isEmpty()) {
             logger.warning("Daily quests are enabled in " + configFile

@@ -60,8 +60,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("ping", new Root("vapeecore.utility.ping", List.of(), "/ping [player]")),
             Map.entry("clear", new Root("vapeecore.utility.clear", List.of(), "/clear [player]")),
             Map.entry("invsee", new Root("vapeecore.utility.invsee", List.of(), "/invsee <player>")),
-            Map.entry("enderchest", new Root("vapeecore.utility.enderchest", List.of(), "/enderchest [player]")),
-            Map.entry("rank", new Root("vapeecore.rank.view", List.of(), "/rank [player]"))
+            Map.entry("enderchest", new Root("vapeecore.utility.enderchest", List.of(), "/enderchest [player]"))
     );
     private static final Map<String, Node> NODES = Map.ofEntries(
             Map.entry("vapeecore.tpa.use", new Node(PermissionDefault.TRUE, Set.of())),
@@ -114,8 +113,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.social.ignore", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.warp.admin", new Node(PermissionDefault.OP, Set.of())),
             Map.entry("vapeecore.navigator.builder", new Node(PermissionDefault.OP, Set.of())),
-            Map.entry("vapeecore.navigator.admin", new Node(PermissionDefault.OP, Set.of())),
-            Map.entry("vapeecore.rank.view", new Node(PermissionDefault.TRUE, Set.of()))
+            Map.entry("vapeecore.navigator.admin", new Node(PermissionDefault.OP, Set.of()))
     );
 
     public static void main(String[] args) throws Exception {
@@ -124,7 +122,7 @@ public final class PermissionDescriptorHarness {
             if (stream == null) throw new AssertionError("missing descriptor");
             descriptor = new PluginDescriptionFile(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
-        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 42, "exact 42 command roots, including rank but no ranks");
+        check(descriptor.getCommands().keySet().equals(ROOTS.keySet()) && ROOTS.size() == 41, "exact 41 command roots without rank or ranks");
         check(descriptor.getDepend().equals(List.of("LuckPerms")), "required LP dependency");
         Set<String> identifiers = new HashSet<>(ROOTS.keySet());
         for (var entry : ROOTS.entrySet()) {
@@ -140,7 +138,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 52, "all 52 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 51, "all 51 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");
@@ -150,7 +148,7 @@ public final class PermissionDescriptorHarness {
             check(!actual.getName().contains("*"), "no wildcard");
             walk(actual.getName(), permissions, new HashSet<>());
         }
-        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 11, "eleven player-base defaults including independent TPA capability");
+        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 10, "ten player-base defaults including independent TPA capability");
         check(NODES.values().stream().mapToInt(node -> node.children().size()).sum() == 15, "same fifteen child edges");
         for (String action : List.of("mute", "unmute", "warn", "ban", "unban", "kick", "history"))
             check(permissions.get("vapeecore.moderation." + action).getChildren().isEmpty(), "independent moderation " + action);

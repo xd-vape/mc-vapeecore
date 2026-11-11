@@ -142,7 +142,6 @@ core:
     ping.description: "Shows measured latency in milliseconds."
     profile.description: "Shows a known player's profile."
     quests.description: "Shows your daily quests and automatic rewards."
-    rank.description: "Shows an online player's server rank."
     reply:
       description: "Replies to the last conversation."
       hint: "Alias: /r \\<message>"
@@ -494,26 +493,6 @@ profile:
   title: "Profile"
   usage: "Use: /profile [player|uuid]"
 
-
-# ==================================================
-# RANKS
-# ==================================================
-
-rank:
-
-  # General
-  current: " • You"
-  denied: "<red>You do not have permission to view ranks.</red>"
-  description-label: "Description: "
-  group-label: "Group: "
-  heading: " • Rank"
-  heading-suffix: " • Rank"
-  list-heading: " • Ranks"
-  offline: "<red>That player is not online.</red>"
-  player-label: "Player: "
-  rank-label: "Rank: "
-  specify: "Specify an online player:"
-  unavailable: "<yellow>Rank information is currently unavailable.</yellow>"
 
 # ==================================================
 # SOCIAL / IGNORE

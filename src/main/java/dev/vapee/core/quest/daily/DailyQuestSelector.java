@@ -17,10 +17,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public final class DailyQuestSelector {
+    private static final QuestProgressKey RETIRED_RANK_CHECK = QuestProgressKey.of("lobby:rank_check");
     private static final QuestProgressKey RETIRED_RANKS_CHECK = QuestProgressKey.of("lobby:ranks_check");
 
     static boolean retired(QuestDefinition definition) {
-        return definition.progressKey().equals(RETIRED_RANKS_CHECK);
+        var key = definition.progressKey();
+        return key.equals(RETIRED_RANK_CHECK) || key.equals(RETIRED_RANKS_CHECK);
     }
 
     public List<String> select(UUID playerId, DailyQuestCycleId cycleId,

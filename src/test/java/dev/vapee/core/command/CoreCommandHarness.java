@@ -93,10 +93,10 @@ public final class CoreCommandHarness {
                 "vapeecore.rank.view", "vapeecore.ranks.view", "vapeecore.economy.coins"));
         run(command, player, "core", "Lobby & Settings", "help");
         for (String syntax : List.of("/profile [player|uuid]", "/friend help", "/clan help", "/reply <message>",
-                "/ignorelist", "/settings visibility", "/spawn", "/rank [player]", "/coins help")) {
+                "/ignorelist", "/settings visibility", "/spawn", "/coins help")) {
             check(player.text().contains(syntax), "overview contains permitted " + syntax);
         }
-        check(!player.text().contains("/ranks"), "obsolete permission cannot restore removed help entry");
+        check(!player.text().contains("/rank"), "obsolete permissions cannot restore rank or ranks help entries");
         run(command, console, "core", "Administration", "help");
         for (String syntax : List.of("/ping [player]", "/clear [player]", "/invsee <player>", "/enderchest [player]",
                 "/core reload", "/setspawn", "/warp help")) {

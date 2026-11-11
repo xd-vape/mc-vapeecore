@@ -380,10 +380,35 @@ public final class DailyQuestMenuLifecycleHarness {
 
     private static void successContract() throws Exception {
         var f=new QuestMenuFixture();var p=f.player();f.domain.define(QuestCompletionFixture.definition("fixture","lobby:quests_open",20,7));
-        int[] count={0};f.menu.addSuccessListener(player->count[0]++);
-        p.cancelNextOpen=true;f.menu.open(p.player,0);check(count[0]==0,"cancelled DailyQuest open has no signal");
-        f.menu.open(p.player,0);check(count[0]==1,"DailyQuest bound top signals once");
-        f.menu.openPage(p.player,0);f.menu.refreshActive(p.id);f.tick();check(count[0]==1,"DailyQuest page/refresh/countdown do not signal");f.menu.shutdown();
+        var sources = new ArrayList<DailyQuestMenu.OpenSource>();
+        f.menu.addSuccessListener((player, source) -> sources.add(source));
+        var command = new dev.vapee.core.quest.daily.command.DailyQuestCommand(f.menu, f.messages);
+        p.cancelNextOpen = true;
+        command.onCommand(p.player, null, "quests", new String[0]);
+        check(sources.isEmpty(), "cancelled command open has no signal");
+        p.permission = false;
+        command.onCommand(p.player, null, "quests", new String[0]);
+        f.menu.openFromNpc(p.player);
+        check(sources.isEmpty(), "denied command and NPC opens have no signal");
+        p.permission = true;
+        command.onCommand(p.player, null, "quests", new String[0]);
+        f.menu.openFromNpc(p.player);
+        check(sources.equals(List.of(DailyQuestMenu.OpenSource.COMMAND_OR_NPC)),
+                "command emits the source and a second NPC event on the same view is silent");
+        p.player.closeInventory();
+        f.menu.openFromNpc(p.player);
+        check(sources.equals(List.of(DailyQuestMenu.OpenSource.COMMAND_OR_NPC,
+                DailyQuestMenu.OpenSource.COMMAND_OR_NPC)), "NPC opening emits the same explicit source");
+        f.menu.open(p.player,0);
+        check(sources.size() == 3 && sources.getLast() == DailyQuestMenu.OpenSource.OTHER,
+                "ordinary menu entry keeps a distinct source");
+        f.menu.openPage(p.player,0);
+        f.menu.refreshActive(p.id);
+        f.tick();
+        p.player.closeInventory();
+        f.menu.openAutomatically(p.player, () -> true);
+        check(sources.size() == 3, "page, refresh, countdown and auto-open remain silent");
+        f.menu.shutdown();
     }
 
     private static void check(boolean ok, String message) {

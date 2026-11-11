@@ -125,8 +125,8 @@ public final class CommandHelpHarness {
                         && playerText.contains("/clan help") && playerText.contains("/settings visibility"),
                 "phase 23 overview contains current profile, friends, clans and settings domains");
         check(playerText.contains("/spawn") && playerText.contains("/coins")
-                        && playerText.contains("/rank [player]") && !playerText.contains("/ranks"),
-                "core help shows permitted rank command without the removed roster");
+                        && !playerText.contains("/rank"),
+                "core help shows permitted commands without either removed rank command");
         check(!playerText.contains("/setspawn") && !playerText.contains("/build")
                         && !playerText.contains("/fly") && !playerText.contains("/speed")
                         && !playerText.contains("/gamemode") && !playerText.contains("/tphere")
