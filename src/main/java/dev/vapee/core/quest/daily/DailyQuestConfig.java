@@ -70,7 +70,7 @@ public final class DailyQuestConfig {
         try {
             String source = Files.readString(configFile);
             yaml.loadFromString(source);
-            rejectSelectionNulls(source);
+            rejectExplicitNulls(source);
         } catch (IOException | InvalidConfigurationException exception) {
             throw new IllegalStateException("Could not load daily quest configuration at " + configFile, exception);
         }
@@ -98,6 +98,13 @@ public final class DailyQuestConfig {
                 ? ZoneId.systemDefault() : ZoneId.of(timezoneSetting);
         List<QuestDefinition> definitions = readDefinitions(yaml);
         DailyQuestSelection selection = readSelection(yaml, definitions);
+        if (enabled) {
+            var retired = definitions.stream().filter(DailyQuestSelector::retired)
+                    .filter(definition -> selection.quest(definition.id()).enabled())
+                    .map(QuestDefinition::id).toList();
+            if (!retired.isEmpty()) logger.warning("Daily quests " + retired
+                    + " use the retired lobby:ranks_check key and are excluded from new assignments.");
+        }
         if (enabled && definitions.isEmpty()) {
             logger.warning("Daily quests are enabled in " + configFile
                     + " but the catalog is empty; no assignments will be made.");
@@ -116,11 +123,15 @@ public final class DailyQuestConfig {
         Object sound = yaml.get("feedback.sound", defaults.sound());
         if (!(sound instanceof String key) || org.bukkit.NamespacedKey.fromString(key) == null)
             throw invalid("feedback.sound", "expected a namespaced sound key");
+        Object volume = yaml.get("feedback.sound-volume", defaults.soundVolume());
+        if (!(volume instanceof Number number) || !Double.isFinite(number.doubleValue())
+                || number.doubleValue() < 0.0 || number.doubleValue() > 1.0)
+            throw invalid("feedback.sound-volume", "expected a finite number from 0.0 through 1.0");
         Object delay = yaml.get("feedback.open-delay-ticks", defaults.delayTicks());
         if (!(delay instanceof Integer ticks) || ticks < 1 || ticks > 100)
             throw invalid("feedback.open-delay-ticks", "expected a whole number from 1 through 100");
         return new Feedback(feedbackFlag(yaml, "feedback.sound-enabled", defaults.soundEnabled()),
-                org.bukkit.NamespacedKey.fromString(key).toString(),
+                org.bukkit.NamespacedKey.fromString(key).toString(), number.floatValue(),
                 feedbackFlag(yaml, "feedback.open-menu", defaults.openMenu()), ticks);
     }
 
@@ -167,9 +178,10 @@ public final class DailyQuestConfig {
         throw invalid(path, "expected a positive whole number");
     }
 
-    private void rejectSelectionNulls(String source) {
+    private void rejectExplicitNulls(String source) {
         // Like ConfigService's strict settings: Bukkit erases explicit nulls, which are not missing legacy fields.
         var root = new org.yaml.snakeyaml.Yaml().compose(new java.io.StringReader(source));
+        rejectNull(child(child(root, "feedback"), "sound-volume"), "feedback.sound-volume");
         var selection = child(root, "selection");
         rejectNull(selection, "selection");
         for (String key : List.of("max-per-category", "max-per-group")) rejectNull(child(selection, key), "selection." + key);
@@ -191,7 +203,7 @@ public final class DailyQuestConfig {
 
     private void rejectNull(org.yaml.snakeyaml.nodes.Node node, String path) {
         if (node != null && node.getTag().equals(org.yaml.snakeyaml.nodes.Tag.NULL))
-            throw invalid(path, "explicit null is not a valid selection setting; omit the optional field instead");
+            throw invalid(path, "explicit null is invalid; omit the optional field instead");
     }
 
     private boolean readEnabled(YamlConfiguration yaml) {
@@ -313,8 +325,8 @@ public final class DailyQuestConfig {
         }
     }
 
-    public record Feedback(boolean soundEnabled, String sound, boolean openMenu, int delayTicks) {
-        static final Feedback DEFAULT = new Feedback(true, "minecraft:ui.toast.challenge_complete", false, 10);
+    public record Feedback(boolean soundEnabled, String sound, float soundVolume, boolean openMenu, int delayTicks) {
+        static final Feedback DEFAULT = new Feedback(true, "minecraft:ui.toast.challenge_complete", 0.6f, false, 10);
     }
 
     public record State(boolean enabled, int questsPerDay, LocalTime resetTime,

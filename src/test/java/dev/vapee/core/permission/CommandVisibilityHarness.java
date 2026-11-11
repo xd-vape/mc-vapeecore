@@ -59,10 +59,13 @@ public final class CommandVisibilityHarness {
                         "ignore",
                         "unignore",
                         "ignorelist",
-                        "rank",
-                        "ranks");
+                        "rank");
         var visible = f.filtered(user);
-        check(f.descriptor.getCommands().size() == 43, "all 43 actual descriptor roots are loaded");
+        check(f.descriptor.getCommands().size() == 42, "all 42 actual descriptor roots are loaded");
+        check(f.commands.containsKey("rank") && visible.contains("rank")
+                        && !f.commands.containsKey("ranks") && !f.commands.containsKey("vapeecore:ranks")
+                        && !visible.contains("ranks") && !visible.contains("vapeecore:ranks"),
+                "rank is registered and suggested while neither ranks root is present");
         for (String label : f.vapeeLabels)
             check(
                     visible.contains(label) == publicRoots.contains(label),

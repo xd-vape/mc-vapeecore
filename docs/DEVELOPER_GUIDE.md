@@ -281,7 +281,6 @@ Beispiel Friend: Executor im `friend/command`-Package, bestehende `FriendService
 | Öffentlicher Rank-Track | Live: `plugins/VapeeCore/config.yml` → `ranks.track`, Default: `ranks` |
 | Rank integration | `dev.vapee.core.rank` |
 | `/rank` | `dev.vapee.core.rank.command.RankCommand` |
-| `/ranks` | `dev.vapee.core.rank.command.RanksCommand` |
 | Rank display name / description / color / weight | `RankService` und `LuckPermsService` |
 | Rank- und Playtime-Placeholder | `RankInfo`, `PresentationRenderer` und `PlaytimeFormatter` |
 | Rank Prefix / Suffix / Badge | LuckPerms-Meta; Farbe separat über `vapeecore.rank.color` |
@@ -325,7 +324,7 @@ Die registrierte Reihenfolge ist eine Dependency-Reihenfolge und muss bei neuen 
 
 1. **Localization** – gemeinsame immutable EN-/DE-Kataloge, Overrides, Reload und Client-Locale-Event.
 2. **Permission** – lesender LuckPerms-Zugriff.
-3. **Rank** – cachefreie Rank-Domain, öffentlicher Track und `/rank`-/`/ranks`-Commands.
+3. **Rank** – cachefreie Rank-Domain, LuckPerms-Track und der Lese-Command `/rank`.
 4. **Player** – `CorePlayer`, Cache, YAML-Persistence, Settings und Player-Join-/Quit-Lifecycle.
 5. **Social** – Ignore-State und Commands.
 6. **Economy** – Coin-Wallet und `/coins`.
@@ -922,7 +921,7 @@ Die ausführbaren `QuestCommunityChatHarness`, `QuestCommunitySocialHarness` und
 | `lobby:settings_open`, `lobby:friends_open`, `lobby:visibility_open` | Successful owning root menu open, with permission/profile gates and exact current bound top inventory. Friend tabs/pages are internal opens. |
 | `lobby:coins_check` | `CoinsCommand.sendOwnBalance`, after actual loaded balance output for argument-free `/coins`. |
 | `lobby:rank_check` | Argument-free own Rank output with an available primary rank. |
-| `lobby:ranks_check` | Successful nonempty public rank-track output. |
+| `lobby:ranks_check` | Legacy assignments only. Successful argument-free `/rank` can finish an existing assignment. |
 | `lobby:ping_self`, `lobby:ping_other` | Successful Ping output, actual UUID self classification and existing Others authorization. Explicit own name is self. |
 | `social:meet_unique` | First eligible nearby visible player UUID in the same lobby world, as defined below. |
 
@@ -1021,7 +1020,7 @@ Eine Schema-/ConfigEvolution-Migration ist für diese rein optionalen Felder nic
 
 ### DailyQuest-Abschlussfeedback und Quest-NPC (Step 08F.2)
 
-QuestService meldet pro Ergebnis mit neu abgeschlossenen Quests genau einen Batch, auch nach erfolgreicher Auszahlung eines Pending Rewards. DailyQuest filtert auf IDs aus dem konfigurierten Daily-Katalog. `daily-quests.yml` steuert `feedback.sound-enabled` (Standard `true`), `feedback.sound` (Standard `minecraft:ui.toast.challenge_complete`), `feedback.open-menu` (Standard `false`) und `feedback.open-delay-ticks` (Standard 10, erlaubt 1 bis 100). Eine bereits wartende Öffnung derselben Session wird zusammengefasst. Der eigene Menü-Einstieg prüft unmittelbar vor dem Öffnen aktuelle Spieler- und Profilidentität, Berechtigung und freie Container-Ansicht. Er meldet kein `lobby:quests_open`. Das lokale Vanilla-Spielerinventar ohne Server-Container ist über Paper nicht separat erkennbar. Quit, Reload und Disable invalidieren wartende Öffnungen.
+QuestService meldet pro Ergebnis mit neu abgeschlossenen Quests genau einen Batch, auch nach erfolgreicher Auszahlung eines Pending Rewards. DailyQuest filtert auf IDs aus dem konfigurierten Daily-Katalog. `daily-quests.yml` steuert `feedback.sound-enabled` (Standard `true`), `feedback.sound` (Standard `minecraft:ui.toast.challenge_complete`), `feedback.sound-volume` (Standard 0.6, erlaubt 0.0 bis 1.0), `feedback.open-menu` (Standard `false`) und `feedback.open-delay-ticks` (Standard 10, erlaubt 1 bis 100). Der Pitch bleibt 1.0. Ungültige Lautstärkewerte verhindern die Übernahme der neuen Konfiguration beim Reload. Eine bereits wartende Öffnung derselben Session wird zusammengefasst. Der eigene Menü-Einstieg prüft unmittelbar vor dem Öffnen aktuelle Spieler- und Profilidentität, Berechtigung und freie Container-Ansicht. Er meldet kein `lobby:quests_open`. Das lokale Vanilla-Spielerinventar ohne Server-Container ist über Paper nicht separat erkennbar. Quit, Reload und Disable invalidieren wartende Öffnungen.
 
 Mit `vapeecore.admin` setzt `/core quest npc set` den NPC an die eigene Position im Spiel. `/core quest npc name <Anzeigename>`, `/core quest npc skin <Minecraft-Name>` und `/core quest npc remove` ändern Anzeigename, Skin oder Platzierung. `quest-npc.yml` enthält die gespeicherten Werte. Ein leerer Skin-Wert verwendet das Paper-Standardprofil. Eine nicht verfügbare Skin-Auflösung lässt das Standardprofil sichtbar. Profilauflösung läuft asynchron, die Entity-Änderung auf dem Hauptthread. Rechtsklick mit der Haupthand öffnet denselben DailyQuest-View wie `/quests`, mit dessen Profil- und Berechtigungsprüfung.
 
@@ -1055,13 +1054,15 @@ Für Layout-/Katalogtests: `daily-quests.yml` speichern → `/core reload` → `
 
 Die Uhr zeigt die **geplante** Reset-Grenze. Tatsächliche Assignments rotieren weiterhin über den bestehenden Daily-Sync; `REWARD_PENDING` kann die Rotation verzögern. Der Countdown vergibt keine Belohnungen, erzwingt keine Rotation und ergänzt keinen Persistenz- oder NPC-Pfad.
 
+Seit Step 08F.4 schließt die Tagesauswahl den alten Key `lobby:ranks_check` aus. Ein erfolgreicher Selbstabruf mit `/rank` kann vorhandene Zuweisungen mit diesem Key weiterhin abschließen. Force innerhalb desselben Cycles übernimmt diese Einträge mit ihrem bestehenden Fortschritt und rechnet sie auf die Auswahlgrenzen an. Die reguläre Rotation nach erfolgreicher Auszahlung etwaiger Pending Rewards schließt den alten Key aus. Für `check_ranks` die bestehende Definition samt Key, Ziel und Belohnung für noch offene Zuweisungen behalten, `enabled: false` setzen und den Beschreibungstext für betroffene Spieler auf `/rank` aktualisieren.
+
 ## Ranks & Server Identity
 
-LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms. `/rank` und `/ranks` sind reine Lese-Commands im VapeeCore-Namespace und besitzen bewusst keine Alias-Flut.
+LuckPerms besitzt Gruppen, Mitgliedschaften, Primary Group, Display Name, Prefix, Suffix, Weight, Tracks und Permissions vollständig. VapeeCore liest und präsentiert diese Informationen ausschließlich; es existieren weder `Player.rank`, eigene Rank-Mitgliedschaften, eine Rank-Datenbank noch Rank-Zuweisungen in `plugins/VapeeCore/players/`. Administratoren ändern Ränge weiterhin mit LuckPerms. `/rank` liest den Rang eines Online-Spielers.
 
 `PermissionModule` stellt die einzige LuckPerms-Provider-Verbindung her. `LuckPermsService` kapselt geladene User, Group Information und Track Groups, ohne LuckPerms-API-Typen in andere Features zu leaken. Eine Group-Auflösung liest Display Name, Description, rohe Color Meta und Weight gemeinsam. `RankService` bildet diese Werte auf das immutable `RankInfo(id, displayName, description, color, weight)` ab. Normale Rank-/Presentation-Abfragen verwenden ausschließlich `UserManager#getUser`, ohne `loadUser`, Blocking oder dauerhaften Rank-Cache. Die separate Phase-26A-Staff-Autorisierung darf über die neue read-only API `LuckPermsService#loadPrimaryGroup(UUID)` für ungecachete bekannte Moderations-Targets asynchron `UserManager#loadUser` verwenden; sie speichert oder verändert keine User. Ist der User nicht geladen, liefert `getPrimaryRank` `Optional.empty()`. Fehlt die Group unerwartet, bleibt die bekannte ID erhalten und Display Name, Description, Color und Weight fallen kontrolliert zurück.
 
-Der öffentliche Track steht unter `config.yml` → `ranks.track`; Default und Fallback sind `ranks`. Der Wert muss ein non-blank String sein, sonst warnt `ConfigService`, verwendet `ranks` und verändert die Datei nicht. Nur die in diesem LuckPerms-Track enthaltenen Gruppen erscheinen in `/ranks`; interne Gruppen bleiben unsichtbar. `Track#getGroups()` bestimmt die Reihenfolge, nicht Alphabet oder Weight. Da `RankService` den aktuellen Configwert bei jeder Listenabfrage liest, wirkt ein geänderter Track nach `/core reload` sofort, ohne zusätzlichen Reload-Teilnehmer (aktuell insgesamt sieben).
+Der LuckPerms-Track unter `config.yml` → `ranks.track` bleibt der Fallback für die TAB-Sortierung. Default und Fallback sind `ranks`. Der Wert muss ein non-blank String sein, sonst warnt `ConfigService`, verwendet `ranks` und verändert die Datei nicht. `RankService` liest den aktuellen Configwert bei jeder Track-Abfrage. Ein geänderter Track wirkt nach `/core reload` ohne zusätzlichen Reload-Teilnehmer.
 
 Jeder öffentliche Rank sollte in LuckPerms einen Group Display Name besitzen. Fehlt er, erzeugt VapeeCore ohne hartcodiertes Mapping einen neutralen Namen aus der Group-ID, zum Beispiel `senior_builder` → `Senior Builder`. Die optionale Beschreibung kommt aus `vapeecore.rank.description`; die Rank-Farbe kommt aus `vapeecore.rank.color`; Weight bleibt reine Metadateninformation. `RankService` akzeptiert Adventure Named Colors wie `gray`, `gold`, `aqua`, `green`, `red`, `dark_red` und `light_purple` sowie sechsstellige Hexwerte wie `#55ffaa`. Fehlende oder ungültige Werte bleiben `Optional.empty()` und werden bei der Ausgabe neutral weiß dargestellt. Prefix und Suffix bleiben unabhängig davon kompatibel und sind für Rank-Farbe nicht erforderlich.
 
@@ -1454,7 +1455,6 @@ Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/C
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |
-| `/ranks` | Öffentliche LuckPerms-Track-Reihenfolge anzeigen | `RanksCommand` | `vapeecore.ranks.view` (Default `true`) |
 | `/warp`, `/warp help`, `/warp …` | Strukturierte Hilfe und Verwaltung dynamischer Warps | `WarpCommand` | `vapeecore.warp.admin` |
 | `/mute <player\|uuid> <duration\|permanent> <reason...>` | Known online/offline; Chat und ausgehende PM sperren | `MuteCommand`, `ModerationMuteProjection`, `ModerationMuteChatListener` | `vapeecore.moderation.mute` |
 | `/unmute <player\|uuid> [reason...]` | Aktiven Mute widerrufen | `UnmuteCommand` | `vapeecore.moderation.unmute` |
@@ -1464,7 +1464,7 @@ Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/C
 | `/kick <player\|uuid> <reason...>` | Online-Kick nach Record-Save | `KickCommand` | `vapeecore.moderation.kick` |
 | `/history <player\|uuid> [page]` | Read-only Moderationshistorie | `HistoryCommand` | `vapeecore.moderation.history` |
 
-Öffentliche Rank-Presentation ist nicht in Java hardcodiert. LuckPerms vergibt gewöhnliche Capabilities, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; deren Capability-Prüfung benötigt keinen festen Gruppennamen. Administrative Target-Prüfungen verwenden zusätzlich die geschützte Staff-Hierarchie mit den expliziten sicheren Defaults aus StaffHierarchyConfig. `/rank` und `/ranks` liegen im VapeeCore-Namespace und mutieren LuckPerms nicht. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
+Öffentliche Rank-Presentation ist nicht in Java hardcodiert. LuckPerms vergibt gewöhnliche Capabilities, etwa `vapeecore.utility.build` an eine frei benannte Gruppe; deren Capability-Prüfung benötigt keinen festen Gruppennamen. Administrative Target-Prüfungen verwenden zusätzlich die geschützte Staff-Hierarchie mit den expliziten sicheren Defaults aus StaffHierarchyConfig. `/rank` liegt im VapeeCore-Namespace und liest LuckPerms-Daten. Die `.others`-Nodes der Self-/Others-Commands besitzen die jeweilige Basispermission als Child; die Basispermission gewährt niemals umgekehrt `.others`. `vapeecore.lobby.build` ist eine deprecated Compatibility-Permission in `plugin.yml`, deren Child die neue Permission gewährt. Die vollständige Matrix und das externe Bukkit-/Vanilla-Lockdown stehen in `docs/PERMISSIONS.md`.
 
 ## Command UX Standard
 

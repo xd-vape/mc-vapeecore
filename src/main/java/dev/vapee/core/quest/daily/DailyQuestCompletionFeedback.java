@@ -60,7 +60,7 @@ final class DailyQuestCompletionFeedback implements BiConsumer<UUID, QuestProgre
         var settings = state.feedback();
         if (settings.soundEnabled()) {
             try {
-                player.playSound(Sound.sound(Key.key(settings.sound()), Sound.Source.MASTER, 1, 1));
+                player.playSound(Sound.sound(Key.key(settings.sound()), Sound.Source.MASTER, settings.soundVolume(), 1));
             } catch (RuntimeException failure) {
                 plugin.getLogger()
                         .log(

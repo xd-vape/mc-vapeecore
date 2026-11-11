@@ -17,6 +17,7 @@ reset:
 feedback:
   sound-enabled: true
   sound: "minecraft:ui.toast.challenge_complete"
+  sound-volume: 0.6
   open-menu: false
   open-delay-ticks: 10
 

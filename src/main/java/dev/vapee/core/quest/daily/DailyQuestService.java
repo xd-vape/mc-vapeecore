@@ -80,7 +80,7 @@ public final class DailyQuestService {
         }
         warnedUnknownPending.remove(validatedPlayerId);
 
-        List<String> selected = select(validatedPlayerId, currentCycle, config);
+        List<String> selected = select(validatedPlayerId, currentCycle, config, List.of());
         // Match the existing empty-catalog contract: no implicit erasure or cycle advance.
         if (selected.isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
         QuestAssignmentResult assignment;
@@ -112,8 +112,13 @@ public final class DailyQuestService {
         CorePlayer player = loaded.get();
         if (hasPendingReward(player)) return DailyQuestSyncResult.BLOCKED_PENDING_REWARD;
         var current = cycleResolver.resolve(now, config.zone(), config.resetTime());
-        var selected = select(id, current, config);
         var previousCycle = player.getDailyQuestState().cycleId();
+        var legacy = player.getQuestState().snapshot().keySet().stream()
+                .filter(questId -> registry.findById(questId).filter(DailyQuestSelector::retired).isPresent())
+                .toList();
+        var retained = previousCycle.isEmpty() || previousCycle.get().equals(current) ? legacy : List.<String>of();
+        var selected = select(id, current, config, retained);
+        if (selected.isEmpty() && !legacy.isEmpty()) return DailyQuestSyncResult.NO_DEFINITIONS;
         // The full profile write below commits cycle and assignment snapshot together.
         player.getDailyQuestState().setCycleId(current);
         try {
@@ -134,8 +139,9 @@ public final class DailyQuestService {
                 .anyMatch(progress -> progress.status() == QuestStatus.REWARD_PENDING);
     }
 
-    private List<String> select(UUID id, DailyQuestCycleId cycle, DailyQuestConfig.State config) {
-        var selected = selector.select(id, cycle, config.definitions(), config.questsPerDay(), config.selection());
+    private List<String> select(UUID id, DailyQuestCycleId cycle, DailyQuestConfig.State config,
+                                List<String> retained) {
+        var selected = selector.select(id, cycle, config.definitions(), config.questsPerDay(), config.selection(), retained);
         if (selected.size() < config.questsPerDay() && config.selection().constrained() && warnedSelection != config) {
             warnedSelection = config;
             logger.warning("Daily quest selection filled " + selected.size() + " of " + config.questsPerDay()

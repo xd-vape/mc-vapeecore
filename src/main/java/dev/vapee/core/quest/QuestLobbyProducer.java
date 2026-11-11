@@ -11,7 +11,6 @@ import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.quest.daily.menu.DailyQuestMenu;
 import dev.vapee.core.rank.command.RankCommand;
-import dev.vapee.core.rank.command.RanksCommand;
 import dev.vapee.core.settings.SettingsMenu;
 import dev.vapee.core.settings.visibility.VisibilitySettingsMenu;
 import dev.vapee.core.utility.command.PingCommand;
@@ -75,7 +74,7 @@ public final class QuestLobbyProducer implements Listener, LobbyPlayerStateListe
 
     void bind(LobbyService lobby, WarpService warps, NavigatorMenu navigator, DailyQuestMenu daily,
             SettingsMenu settings, FriendMenu friends, VisibilitySettingsMenu visibilityMenu,
-            CoinsCommand coins, RankCommand rank, RanksCommand ranks, PingCommand ping,
+            CoinsCommand coins, RankCommand rank, PingCommand ping,
             VisibilityService visibility, BooleanSupplier available) {
         requireThread();
         if (open || !releases.isEmpty()) throw new IllegalStateException("Lobby producer already bound or awaiting cleanup");
@@ -88,8 +87,12 @@ public final class QuestLobbyProducer implements Listener, LobbyPlayerStateListe
         };
         Consumer<Player> nav = p -> action(p, "lobby:navigator_open"), questMenu = p -> action(p, "lobby:quests_open"),
                 setting = p -> action(p, "lobby:settings_open"), friend = p -> action(p, "lobby:friends_open"),
-                visibilityOpen = p -> action(p, "lobby:visibility_open"), balance = p -> action(p, "lobby:coins_check"),
-                ownRank = p -> action(p, "lobby:rank_check"), track = p -> action(p, "lobby:ranks_check");
+                visibilityOpen = p -> action(p, "lobby:visibility_open"), balance = p -> action(p, "lobby:coins_check");
+        Consumer<Player> ownRank = p -> {
+            action(p, "lobby:rank_check");
+            // A successful self lookup can also finish an assignment from before /ranks was removed.
+            action(p, "lobby:ranks_check");
+        };
         BiConsumer<Player, Player> latency = (p, target) -> {
             if (context(target) != null) action(p, p.getUniqueId().equals(target.getUniqueId()) ? "lobby:ping_self" : "lobby:ping_other");
         };
@@ -103,7 +106,6 @@ public final class QuestLobbyProducer implements Listener, LobbyPlayerStateListe
         own(() -> visibilityMenu.addSuccessListener(visibilityOpen), () -> visibilityMenu.removeSuccessListener(visibilityOpen));
         own(() -> coins.addSuccessListener(balance), () -> coins.removeSuccessListener(balance));
         own(() -> rank.addSuccessListener(ownRank), () -> rank.removeSuccessListener(ownRank));
-        own(() -> ranks.addSuccessListener(track), () -> ranks.removeSuccessListener(track));
         own(() -> ping.addSuccessListener(latency), () -> ping.removeSuccessListener(latency));
         own(() -> visibility.addRefreshListener(changed), () -> visibility.removeRefreshListener(changed));
         open = true;

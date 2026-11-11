@@ -19,9 +19,16 @@ public final class QuestLobbyHarness {
             f.owners.warp(a.player,"one",false);check(f.value(a,"warp_unique")==1&&f.value(a,"warp_visit")==0,"ordinary warp has unique only");
             f.owners.warp(a.player,"one",true);f.owners.warp(a.player,"two",true);f.owners.warp(a.player,"three",true);
             check(f.value(a,"warp_unique")==3&&f.value(a,"warp_visit")==3,"navigator success and distinct canonical identity");
-            for(String key:List.of("spawn_arrived","navigator_open","quests_open","settings_open","friends_open","visibility_open","coins_check","rank_check","ranks_check","ping_self","ping_other")){
+            for(String key:List.of("spawn_arrived","navigator_open","quests_open","settings_open","friends_open","visibility_open","coins_check","ping_self","ping_other")){
                 f.producer.action(a.player,"lobby:"+key);check(f.value(a,key)==1,"success key routed through central engine: "+key);
             }
+            f.owners.ownRank(a.player);
+            check(f.value(a,"rank_check")==1 && f.value(a,"ranks_check")==1,
+                    "successful self-rank lookup advances current rank quests and existing legacy assignments");
+            f.owners.ownRank(b.player);
+            check(f.hud.domain.quests.getActiveQuests(b.id).orElseThrow().isEmpty()
+                            && f.value(a,"ranks_check")==1,
+                    "rank lookup creates no assignment and cannot progress another player");
             f.hud.pump();check(!a.bars.isEmpty()&&a.clientExp>0,"lobby signals reach generic HUD");
             f.available=false;f.producer.action(a.player,"lobby:coins_check");f.available=true;check(f.value(a,"coins_check")==1,"retired domain owner has no authority");
             a.online=false;f.producer.action(a.player,"lobby:coins_check");a.online=true;check(f.value(a,"coins_check")==1,"offline sender rejected");

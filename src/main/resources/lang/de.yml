@@ -143,7 +143,6 @@ core:
     profile.description: "Zeigt das Profil eines bekannten Spielers."
     quests.description: "Zeigt deine täglichen Quests und automatischen Belohnungen."
     rank.description: "Zeigt den Server-Rang eines Online-Spielers."
-    ranks.description: "Zeigt die öffentliche Rangfolge des Servers."
     reply:
       description: "Antwortet auf die letzte Unterhaltung."
       hint: "Alias: /r \\<message>"
@@ -506,7 +505,6 @@ rank:
   current: " • Du"
   denied: "<red>Du darfst Ränge nicht ansehen.</red>"
   description-label: "Beschreibung: "
-  empty: "<yellow>Es sind noch keine öffentlichen Ränge konfiguriert.</yellow>"
   group-label: "Gruppe: "
   heading: " • Rang"
   heading-suffix: " • Rang"
@@ -515,15 +513,7 @@ rank:
   player-label: "Spieler: "
   rank-label: "Rang: "
   specify: "Gib einen Online-Spieler an:"
-  track-missing: "Die konfigurierte LuckPerms-Rangfolge '<track>' existiert nicht."
   unavailable: "<yellow>Ranginformationen sind derzeit nicht verfügbar.</yellow>"
-
-ranks:
-
-  # General
-  heading-suffix: " • Ränge"
-  self-suffix: " • Du"
-
 
 # ==================================================
 # SOCIAL / IGNORE

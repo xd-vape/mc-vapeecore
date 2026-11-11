@@ -40,6 +40,9 @@ public final class DailyQuestCompletionFeedbackHarness {
                                     .asString()
                                     .equals("minecraft:ui.toast.challenge_complete"),
                     "default once per batch sound");
+            check(f.viewer.sounds.getFirst().volume() == 0.6f
+                            && f.viewer.sounds.getFirst().pitch() == 1.0f,
+                    "default completion sound uses 0.6 volume and unchanged pitch");
             check(f.tasks.isEmpty() && f.viewer.opens == 0, "auto-open default is disabled");
             f.complete();
             f.menus.domain.quests.retryPendingRewards(f.viewer.id);
@@ -49,7 +52,7 @@ public final class DailyQuestCompletionFeedbackHarness {
         }
         var open =
                 new DailyQuestConfig.Feedback(
-                        true, "minecraft:ui.toast.challenge_complete", true, 3);
+                        true, "minecraft:ui.toast.challenge_complete", 0.4f, true, 3);
         try (Fixture f = new Fixture(open)) {
             f.menus.domain.economy.setCoins(f.viewer.id, Long.MAX_VALUE);
             check(
@@ -74,6 +77,9 @@ public final class DailyQuestCompletionFeedbackHarness {
                             && f.tasks.getFirst().delay == 3
                             && f.viewer.sounds.size() == 1,
                     "one delayed opening and one sound for retry batch");
+            check(f.viewer.sounds.getFirst().volume() == 0.4f
+                            && f.viewer.sounds.getFirst().pitch() == 1.0f,
+                    "pending reward retry uses configured volume and unchanged pitch");
             f.menus.domain.quests.retryPendingRewards(f.viewer.id);
             f.tasks.getFirst().callback.run();
             f.tasks.getFirst().callback.run();
@@ -134,7 +140,7 @@ public final class DailyQuestCompletionFeedbackHarness {
             }
         }
         try (Fixture f =
-                new Fixture(new DailyQuestConfig.Feedback(false, "minecraft:custom", true, 3))) {
+                new Fixture(new DailyQuestConfig.Feedback(false, "minecraft:custom", 0.6f, true, 3))) {
             f.complete();
             check(
                     f.viewer.sounds.isEmpty() && f.tasks.size() == 1,
@@ -163,8 +169,8 @@ public final class DailyQuestCompletionFeedbackHarness {
             check(
                     config.prepareReloadState()
                             .feedback()
-                            .equals(new DailyQuestConfig.Feedback(false, "test:done", true, 5)),
-                    "feedback values are parsed");
+                            .equals(new DailyQuestConfig.Feedback(false, "test:done", 0.6f, true, 5)),
+                    "legacy feedback without volume uses the new default");
             Files.writeString(file, "feedback:\n  open-delay-ticks: 0\n");
             try {
                 config.prepareReloadState();
@@ -173,6 +179,46 @@ public final class DailyQuestCompletionFeedbackHarness {
                 check(
                         config.getState().feedback().equals(DailyQuestConfig.Feedback.DEFAULT),
                         "invalid config leaves active state alone");
+            }
+            for (String invalid : List.of("-0.01", "1.00000001", "2", ".nan", ".inf", "'0.5'", "true", "null")) {
+                Files.writeString(file, "feedback:\n  sound-volume: " + invalid + "\n");
+                try {
+                    config.prepareReloadState();
+                    throw new AssertionError("invalid sound volume accepted: " + invalid);
+                } catch (IllegalArgumentException expected) {
+                    check(expected.getMessage().contains("feedback.sound-volume")
+                                    && config.getState().feedback().equals(DailyQuestConfig.Feedback.DEFAULT),
+                            "invalid volume rejected without changing active feedback: " + invalid);
+                }
+            }
+            for (float volume : List.of(0.0f, 1.0f)) {
+                try (Fixture f = new Fixture(DailyQuestConfig.Feedback.DEFAULT, file)) {
+                    var yaml = new org.bukkit.configuration.file.YamlConfiguration();
+                    yaml.set("enabled", true);
+                    yaml.set("quests-per-day", 3);
+                    yaml.set("feedback.sound-volume", (double) volume);
+                    for (var definition : f.menus.domain.registry.snapshot()) {
+                        String path = "quests." + definition.id();
+                        yaml.set(path + ".name", definition.id());
+                        yaml.set(path + ".description", "Fixture quest");
+                        yaml.set(path + ".progress-key", definition.progressKey().value());
+                        yaml.set(path + ".target", definition.target());
+                        yaml.set(path + ".reward-coins", definition.rewardCoins());
+                    }
+                    Files.writeString(file, yaml.saveToString());
+                    var reload = DailyQuestModule.prepareReloadPlan(f.config, f.menus.domain.registry);
+                    check(f.config.getState().feedback().soundVolume() == 0.6f,
+                            "reload preparation is read-only");
+                    reload.apply();
+                    f.complete();
+                    check(f.viewer.sounds.size() == 1
+                                    && f.viewer.sounds.getFirst().volume() == volume
+                                    && f.viewer.sounds.getFirst().pitch() == 1.0f,
+                            "completion uses reloaded boundary volume " + volume);
+                    reload.rollback();
+                    check(f.config.getState().feedback().soundVolume() == 0.6f,
+                            "reload rollback restores the prior volume");
+                }
             }
         } finally {
             Files.deleteIfExists(file);
@@ -185,10 +231,15 @@ public final class DailyQuestCompletionFeedbackHarness {
         final ModuleRuntimeFixture runtime = new ModuleRuntimeFixture("quests");
         final List<Task> tasks = new ArrayList<>();
         final DailyQuestCompletionFeedback feedback;
+        final DailyQuestConfig config;
         final DailyQuestMenuListener listener;
         boolean active = true;
 
         Fixture(DailyQuestConfig.Feedback settings) throws Exception {
+            this(settings, java.nio.file.Path.of("unused.yml"));
+        }
+
+        Fixture(DailyQuestConfig.Feedback settings, java.nio.file.Path file) throws Exception {
             menus.domain.define(
                     definition("first", PROGRESS.value(), 1, 5),
                     definition("second", PROGRESS.value(), 1, 7),
@@ -214,7 +265,7 @@ public final class DailyQuestCompletionFeedbackHarness {
                         if (method.equals("getScheduler")) return scheduler;
                         throw new AssertionError(method);
                     };
-            var config = new DailyQuestConfig(java.nio.file.Path.of("unused.yml"), runtime.logger);
+            config = new DailyQuestConfig(file, runtime.logger);
             config.applyState(
                     new DailyQuestConfig.State(
                             true,

@@ -47,6 +47,7 @@ public final class DailyQuestServiceHarness {
         testDisabledEmptyAndFewerDefinitions();
         testSelectionLifecycle();
         testDisabledPending();
+        testRetiredRankQuests();
         testEmptySelection();
         testSelectionPersistence();
         System.out.println("DailyQuestServiceHarness passed " + checks + " checks.");
@@ -325,6 +326,70 @@ public final class DailyQuestServiceHarness {
                 "explicit force may reconcile to an empty eligible selection and commit the current cycle");
         f.selection(new DailyQuestSelection(rules, 1L, null)); f.service.syncPlayer(fresh, TODAY);
         check(warnings.size() == 2, "a newly published constrained snapshot can issue one fresh diagnostic");
+    }
+
+    private static void testRetiredRankQuests() {
+        Fixture f = new Fixture(3, 3, true);
+        var retiredKey = QuestProgressKey.of("lobby:ranks_check");
+        var definitions = List.of(
+                new QuestDefinition("check_ranks", "Old ranks", "Fixture", retiredKey, 10, 5),
+                new QuestDefinition("another_rank_list", "Another old ranks", "Fixture", retiredKey, 2, 5),
+                new QuestDefinition("check_rank", "Current rank", "Fixture",
+                        QuestProgressKey.of("lobby:rank_check"), 1, 5),
+                f.definitions.getFirst());
+        var rules = new DailyQuestSelection(Map.of(
+                "check_ranks", new DailyQuestSelection.Quest(true, "lobby", "information"),
+                "check_rank", new DailyQuestSelection.Quest(true, "lobby", "information")), null, 1L);
+        f.registry.replaceAll(definitions);
+        f.config.set(new DailyQuestConfig.State(true, 3, LocalTime.MIDNIGHT, "UTC",
+                ZoneId.of("UTC"), definitions, rules));
+        var current = PlayerDailyQuestState.initialized(DailyQuestCycleId.parse("2026-09-22"));
+        UUID fresh = f.load(PlayerQuestState.empty(), PlayerDailyQuestState.uninitialized());
+        check(f.service.syncPlayer(fresh, TODAY) == DailyQuestSyncResult.INITIALIZED
+                        && f.state(fresh).snapshot().keySet().equals(java.util.Set.of("check_rank", "quest_0")),
+                "retired key is excluded from new assignments by key, independent of enabled and ID");
+        var active = new PlayerQuestProgress("check_ranks", 3, QuestStatus.ACTIVE);
+        var completed = new PlayerQuestProgress("another_rank_list", 2, QuestStatus.COMPLETED);
+        UUID existing = f.load(PlayerQuestState.of(List.of(active, completed)), current);
+        var previous = f.state(existing).snapshot();
+        check(f.service.syncPlayer(existing, TODAY) == DailyQuestSyncResult.CURRENT
+                        && f.state(existing).snapshot().equals(previous) && !f.quests.isDirty(existing),
+                "same-cycle sync keeps legacy active and completed entries with no save");
+        check(f.service.forcePlayer(existing, TODAY) == DailyQuestSyncResult.ROTATED
+                        && f.state(existing).snapshot().get("check_ranks").equals(active)
+                        && f.state(existing).snapshot().get("another_rank_list").equals(completed)
+                        && f.state(existing).snapshot().keySet().equals(java.util.Set.of(
+                                "check_ranks", "another_rank_list", "quest_0")) && f.granter.calls.isEmpty(),
+                "same-cycle force reserves retained legacy slots and group limit without touching rewards");
+        check(f.service.syncPlayer(existing, TOMORROW) == DailyQuestSyncResult.ROTATED
+                        && f.state(existing).snapshot().keySet().equals(java.util.Set.of("check_rank", "quest_0")),
+                "normal rotation fills slots with supported quests");
+        UUID pending = f.load(PlayerQuestState.of(List.of(
+                        new PlayerQuestProgress("check_ranks", 10, QuestStatus.REWARD_PENDING))),
+                PlayerDailyQuestState.initialized(DailyQuestCycleId.parse("2026-09-22")));
+        f.granter.outcomes.addLast(RewardStatus.BALANCE_OVERFLOW);
+        check(f.service.forcePlayer(pending, TOMORROW) == DailyQuestSyncResult.BLOCKED_PENDING_REWARD
+                        && f.granter.calls.isEmpty(),
+                "force cannot delete or pay a legacy pending reward");
+        check(f.service.syncPlayer(pending, TOMORROW) == DailyQuestSyncResult.BLOCKED_PENDING_REWARD
+                        && f.state(pending).snapshot().get("check_ranks").status() == QuestStatus.REWARD_PENDING,
+                "legacy definition remains available for a failed retry and protects rotation");
+        check(f.service.syncPlayer(pending, TOMORROW) == DailyQuestSyncResult.ROTATED
+                        && f.granter.calls.equals(List.of(pending, pending))
+                        && !f.state(pending).snapshot().containsKey("check_ranks"),
+                "successful pending payout unblocks rotation and legacy quest stays retired");
+        f.quests.retryPendingRewards(pending);
+        check(f.granter.calls.size() == 2, "legacy reward is not paid again");
+
+        f.config.set(new DailyQuestConfig.State(true, 3, LocalTime.MIDNIGHT, "UTC",
+                ZoneId.of("UTC"), List.of(definitions.getFirst())));
+        UUID remaining = f.load(PlayerQuestState.of(List.of(active)),
+                PlayerDailyQuestState.initialized(DailyQuestCycleId.parse("2026-09-22")));
+        check(f.service.syncPlayer(remaining, TOMORROW) == DailyQuestSyncResult.NO_DEFINITIONS
+                        && f.service.forcePlayer(remaining, TOMORROW) == DailyQuestSyncResult.NO_DEFINITIONS
+                        && f.state(remaining).snapshot().equals(Map.of("check_ranks", active))
+                        && f.cycle(remaining).equals("2026-09-22"),
+                "an exclusively retired catalog does not erase existing legacy progress");
     }
 
     private static void testSelectionPersistence() throws Exception {

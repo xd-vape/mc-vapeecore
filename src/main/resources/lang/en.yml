@@ -143,7 +143,6 @@ core:
     profile.description: "Shows a known player's profile."
     quests.description: "Shows your daily quests and automatic rewards."
     rank.description: "Shows an online player's server rank."
-    ranks.description: "Shows the public server rank progression."
     reply:
       description: "Replies to the last conversation."
       hint: "Alias: /r \\<message>"
@@ -506,7 +505,6 @@ rank:
   current: " • You"
   denied: "<red>You do not have permission to view ranks.</red>"
   description-label: "Description: "
-  empty: "<yellow>No public ranks are configured yet.</yellow>"
   group-label: "Group: "
   heading: " • Rank"
   heading-suffix: " • Rank"
@@ -515,15 +513,7 @@ rank:
   player-label: "Player: "
   rank-label: "Rank: "
   specify: "Specify an online player:"
-  track-missing: "The configured LuckPerms rank track '<track>' does not exist."
   unavailable: "<yellow>Rank information is currently unavailable.</yellow>"
-
-ranks:
-
-  # General
-  heading-suffix: " • Ranks"
-  self-suffix: " • You"
-
 
 # ==================================================
 # SOCIAL / IGNORE
