@@ -7,10 +7,18 @@ import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public final class DailyQuestMenuListener implements Listener {
     private final DailyQuestMenu menu;
-    public DailyQuestMenuListener(DailyQuestMenu menu) { this.menu = Objects.requireNonNull(menu, "menu"); }
+    private final Consumer<Player> cancelPendingOpen;
+
+    public DailyQuestMenuListener(DailyQuestMenu menu) { this(menu, player -> {}); }
+
+    public DailyQuestMenuListener(DailyQuestMenu menu, Consumer<Player> cancelPendingOpen) {
+        this.menu = Objects.requireNonNull(menu, "menu");
+        this.cancelPendingOpen = Objects.requireNonNull(cancelPendingOpen, "cancelPendingOpen");
+    }
 
     @EventHandler public void onInventoryClick(InventoryClickEvent event) {
         var top = event.getView().getTopInventory();
@@ -42,5 +50,9 @@ public final class DailyQuestMenuListener implements Listener {
         var top = event.getView().getTopInventory();
         if (top.getHolder() instanceof DailyQuestInventoryHolder holder) menu.forgetIfActive(holder.owner(), top);
     }
-    @EventHandler public void onPlayerQuit(PlayerQuitEvent event) { menu.forget(event.getPlayer().getUniqueId()); }
+    @EventHandler public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        try { cancelPendingOpen.accept(player); }
+        finally { menu.forget(player.getUniqueId()); }
+    }
 }

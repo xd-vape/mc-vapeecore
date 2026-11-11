@@ -12,6 +12,7 @@ import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.quest.QuestDefinition;
 import dev.vapee.core.quest.QuestDefinitionRegistry;
 import dev.vapee.core.quest.QuestModule;
+import dev.vapee.core.quest.QuestService;
 import dev.vapee.core.reload.ReloadParticipant;
 import dev.vapee.core.reload.ReloadPlan;
 import org.bukkit.event.HandlerList;
@@ -58,17 +59,23 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
         RuntimeResources acquired = new RuntimeResources();
         try {
             acquired.players = playerModule.getPlayerService();
-            var quests = questModule.getQuestService();
+            var quests = acquired.quests = questModule.getQuestService();
             acquired.registry = questModule.getDefinitionRegistry();
             acquired.config = new DailyQuestConfig(plugin);
             acquired.config.initialize();
             acquired.previousDefinitions = acquired.registry.snapshotById();
             acquired.service = new DailyQuestService(acquired.players, quests, acquired.registry,
                     acquired.config::getState, plugin.getLogger());
-            acquired.listener = new DailyQuestListener(acquired.service, () -> owns(acquired));
             acquired.menu = new DailyQuestMenu(plugin, acquired.service, quests, acquired.players, messages,
                     () -> owns(acquired));
-            acquired.menuListener = new DailyQuestMenuListener(acquired.menu);
+            var available = (java.util.function.BooleanSupplier) () -> owns(acquired) && !acquired.reloading;
+            acquired.feedback = new DailyQuestCompletionFeedback(plugin, acquired.players, acquired.config,
+                    acquired.menu, available);
+            acquired.npc = new QuestNpc(plugin, available);
+            var npcSettings = acquired.npc.readConfig();
+            acquired.listener = new DailyQuestListener(acquired.service, available, acquired.feedback,
+                    acquired.npc, acquired.menu);
+            acquired.menuListener = new DailyQuestMenuListener(acquired.menu, acquired.feedback::forget);
             acquired.registry.replaceAll(acquired.config.getState().definitions());
             acquired.installedDefinitions = acquired.registry.snapshotById();
             acquired.restoreCatalog = true;
@@ -79,6 +86,8 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
             acquired.command.setExecutor(acquired.executor);
             acquired.command.setTabCompleter(acquired.executor);
             acquired.menu.startUpdates();
+            quests.addCompletionListener(acquired.feedback);
+            acquired.npc.apply(npcSettings);
             acquired.task = plugin.getServer().getScheduler().runTaskTimer(plugin,
                     () -> { if (owns(acquired)) syncOnlineSafely(acquired); },
                     SYNC_INTERVAL_TICKS, SYNC_INTERVAL_TICKS);
@@ -120,6 +129,17 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
 
     private void cleanup(RuntimeResources resources, RuntimeException failure) {
         if (resources.task != null && cancelTask(resources.task, failure)) resources.task = null;
+        if (resources.feedback != null) {
+            int errors = failure.getSuppressed().length;
+            attempt(failure, "DailyQuest completion observer release",
+                    () -> resources.quests.removeCompletionListener(resources.feedback));
+            attempt(failure, "DailyQuest completion feedback shutdown", resources.feedback::invalidate);
+            if (failure.getSuppressed().length == errors) resources.feedback = null;
+        }
+        if (resources.npc != null) attempt(failure, "Quest NPC shutdown", () -> {
+            resources.npc.shutdown();
+            resources.npc = null;
+        });
         // Keep the inventory close listener installed while the menu detaches its views.
         if (resources.menu != null) {
             attempt(failure, "DailyQuest menu shutdown", resources.menu::shutdown);
@@ -190,13 +210,27 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     @Override public ReloadPlan prepareReload() {
         RuntimeResources current = requireRuntime();
         ReloadPlan plan = prepareReloadPlan(current.config, current.registry);
+        var previousNpc = current.npc.state();
+        var nextNpc = current.npc.readConfig();
         return ReloadPlan.of(() -> {
             if (!owns(current)) throw new IllegalStateException("DailyQuest reload runtime retired");
-            plan.apply();
-            current.menu.closeOpenInventories();
+            current.reloading = true;
+            try {
+                current.feedback.invalidate();
+                plan.apply();
+                current.npc.apply(nextNpc);
+                current.menu.closeOpenInventories();
+            } finally { current.reloading = false; }
         }, () -> {
             if (!owns(current)) throw new IllegalStateException("DailyQuest reload runtime retired");
-            plan.rollback();
+            current.reloading = true;
+            try {
+                var failure = new IllegalStateException("DailyQuest rollback incomplete");
+                attempt(failure, "DailyQuest feedback invalidation", current.feedback::invalidate);
+                attempt(failure, "DailyQuest catalog rollback", plan::rollback);
+                attempt(failure, "Quest NPC rollback", () -> current.npc.apply(previousNpc));
+                if (failure.getSuppressed().length != 0) throw failure;
+            } finally { current.reloading = false; }
         });
     }
 
@@ -223,6 +257,10 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
 
     public DailyQuestService getDailyQuestService() { return requireRuntime().service; }
 
+    public org.bukkit.command.TabExecutor npcCommand() {
+        return new QuestNpcCommand(() -> requireRuntime().npc, messages, plugin.getLogger());
+    }
+
     private void syncOnlineSafely(RuntimeResources current) {
         Instant now = Instant.now();
         for (CorePlayer player : current.players.getLoadedPlayers()) {
@@ -241,6 +279,7 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
     // Exact retired resources only; borrowed services and their dirty profiles remain with their owners.
     private static final class RuntimeResources {
         private PlayerService players;
+        private QuestService quests;
         private QuestDefinitionRegistry registry;
         private DailyQuestConfig config;
         private DailyQuestService service;
@@ -250,13 +289,16 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
         private PluginCommand command;
         private DailyQuestCommand executor;
         private BukkitTask task;
+        private DailyQuestCompletionFeedback feedback;
+        private QuestNpc npc;
+        private boolean reloading;
         private Map<String, QuestDefinition> previousDefinitions;
         private Map<String, QuestDefinition> installedDefinitions;
         private boolean restoreCatalog;
         private RuntimeException failure;
         private boolean released() {
             return task == null && menu == null && menuListener == null && listener == null
-                    && command == null && !restoreCatalog;
+                    && command == null && feedback == null && npc == null && !restoreCatalog;
         }
     }
 }

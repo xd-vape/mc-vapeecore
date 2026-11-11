@@ -105,7 +105,29 @@ public final class DailyQuestConfig {
             logger.warning("Daily quest catalog in " + configFile + " has " + definitions.size()
                     + " definition(s) for " + questsPerDay + " daily slots; fewer quests may be assigned.");
         }
-        return new State(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, selection);
+        return new State(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, selection,
+                readFeedback(yaml));
+    }
+
+    private Feedback readFeedback(YamlConfiguration yaml) {
+        if (yaml.contains("feedback") && !yaml.isConfigurationSection("feedback"))
+            throw invalid("feedback", "expected a YAML section");
+        var defaults = Feedback.DEFAULT;
+        Object sound = yaml.get("feedback.sound", defaults.sound());
+        if (!(sound instanceof String key) || org.bukkit.NamespacedKey.fromString(key) == null)
+            throw invalid("feedback.sound", "expected a namespaced sound key");
+        Object delay = yaml.get("feedback.open-delay-ticks", defaults.delayTicks());
+        if (!(delay instanceof Integer ticks) || ticks < 1 || ticks > 100)
+            throw invalid("feedback.open-delay-ticks", "expected a whole number from 1 through 100");
+        return new Feedback(feedbackFlag(yaml, "feedback.sound-enabled", defaults.soundEnabled()),
+                org.bukkit.NamespacedKey.fromString(key).toString(),
+                feedbackFlag(yaml, "feedback.open-menu", defaults.openMenu()), ticks);
+    }
+
+    private boolean feedbackFlag(YamlConfiguration yaml, String path, boolean fallback) {
+        Object value = yaml.get(path, fallback);
+        if (!(value instanceof Boolean flag)) throw invalid(path, "expected a boolean");
+        return flag;
     }
 
     private DailyQuestSelection readSelection(YamlConfiguration yaml, List<QuestDefinition> definitions) {
@@ -291,13 +313,22 @@ public final class DailyQuestConfig {
         }
     }
 
+    public record Feedback(boolean soundEnabled, String sound, boolean openMenu, int delayTicks) {
+        static final Feedback DEFAULT = new Feedback(true, "minecraft:ui.toast.challenge_complete", false, 10);
+    }
+
     public record State(boolean enabled, int questsPerDay, LocalTime resetTime,
                         String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions,
-                        DailyQuestSelection selection) {
+                        DailyQuestSelection selection, Feedback feedback) {
 
         public State(boolean enabled, int questsPerDay, LocalTime resetTime,
                      String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions) {
             this(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, DailyQuestSelection.unrestricted());
+        }
+
+        public State(boolean enabled, int questsPerDay, LocalTime resetTime,
+                     String timezoneSetting, ZoneId zone, List<QuestDefinition> definitions, DailyQuestSelection selection) {
+            this(enabled, questsPerDay, resetTime, timezoneSetting, zone, definitions, selection, Feedback.DEFAULT);
         }
 
         public State {
@@ -307,6 +338,7 @@ public final class DailyQuestConfig {
             Objects.requireNonNull(zone, "zone");
             definitions = List.copyOf(Objects.requireNonNull(definitions, "definitions"));
             Objects.requireNonNull(selection, "selection");
+            Objects.requireNonNull(feedback, "feedback");
         }
 
         public static State defaults() {

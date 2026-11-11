@@ -23,16 +23,26 @@ public final class CoreQuestCommand implements TabExecutor {
     private final Supplier<? extends Collection<? extends Player>> online;
     private final Supplier<Instant> now;
     private final OnlineStaffTargetGuard targets;
+    private final TabExecutor npc;
 
     public CoreQuestCommand(DailyQuestService daily, PlayerService players, MessageService messages,
                             Supplier<? extends Collection<? extends Player>> online, Supplier<Instant> now,
                             OnlineStaffTargetGuard targets) {
+        this(daily, players, messages, online, now, targets, null);
+    }
+
+    public CoreQuestCommand(DailyQuestService daily, PlayerService players, MessageService messages,
+                            Supplier<? extends Collection<? extends Player>> online, Supplier<Instant> now,
+                            OnlineStaffTargetGuard targets, TabExecutor npc) {
         this.daily=Objects.requireNonNull(daily); this.players=Objects.requireNonNull(players);
         this.messages=Objects.requireNonNull(messages); this.online=Objects.requireNonNull(online);
         this.now=Objects.requireNonNull(now); this.targets=Objects.requireNonNull(targets);
+        this.npc=npc;
     }
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission(PERMISSION)) { messages.send(sender,messages.commandDenied(sender, "core.quest.denied")); return true; }
+        if (npc != null && args.length > 0 && args[0].equalsIgnoreCase("npc"))
+            return npc.onCommand(sender, command, label, Arrays.copyOfRange(args, 1, args.length));
         if (args.length<1 || args.length>2 || !args[0].equalsIgnoreCase("force")) {
             messages.send(sender, messages.usage(sender, "core.quest.usage", "/core quest force", "[player]")); return true;
         }
@@ -61,7 +71,13 @@ public final class CoreQuestCommand implements TabExecutor {
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         if (!sender.hasPermission(PERMISSION)) return List.of();
-        if(args.length==1) return "force".startsWith(args[0].toLowerCase(Locale.ROOT))?List.of("force"):List.of();
+        if (args.length == 1) {
+            String prefix = args[0].toLowerCase(Locale.ROOT);
+            return (npc == null ? List.of("force") : List.of("force", "npc")).stream()
+                    .filter(action -> action.startsWith(prefix)).toList();
+        }
+        if (npc != null && args.length > 1 && args[0].equalsIgnoreCase("npc"))
+            return npc.onTabComplete(sender, command, alias, Arrays.copyOfRange(args, 1, args.length));
         if(args.length==2 && args[0].equalsIgnoreCase("force"))
             return new OnlinePlayerResolver(()->targets.suggestiblePlayers(sender,online.get())).suggest(args[1],null);
         return List.of();

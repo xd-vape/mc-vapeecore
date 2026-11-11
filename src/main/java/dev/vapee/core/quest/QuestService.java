@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 public final class QuestService {
     private final java.util.Set<QuestChangeListener> changeListeners = new java.util.LinkedHashSet<>();
     private final Set<QuestProgressListener> progressListeners = new LinkedHashSet<>();
+    private final Set<java.util.function.BiConsumer<UUID, QuestProgressResult>> completionListeners = new LinkedHashSet<>();
     private final Set<java.util.function.Consumer<UUID>> assignmentListeners = new LinkedHashSet<>();
 
 
@@ -342,7 +343,7 @@ public final class QuestService {
                 }
             }
         }
-        return result;
+        return notifyCompletion(validatedPlayerId, result);
     }
 
     void addProgressListener(QuestProgressListener listener) { progressListeners.add(Objects.requireNonNull(listener)); }
@@ -397,11 +398,32 @@ public final class QuestService {
         if (!attempted) {
             return QuestProgressResult.noChange();
         }
-        return QuestProgressResult.processed(
+        return notifyCompletion(validatedPlayerId, QuestProgressResult.processed(
                 updatedQuests,
                 completedQuestIds,
                 rewardPendingQuestIds
-        );
+        ));
+    }
+
+    /** Main-thread batch notification for newly delivered rewards, including successful retries. */
+    public void addCompletionListener(java.util.function.BiConsumer<UUID, QuestProgressResult> listener) {
+        completionListeners.add(Objects.requireNonNull(listener));
+    }
+
+    public void removeCompletionListener(java.util.function.BiConsumer<UUID, QuestProgressResult> listener) {
+        completionListeners.remove(listener);
+    }
+
+    private QuestProgressResult notifyCompletion(UUID owner, QuestProgressResult result) {
+        if (result.completedQuestIds().isEmpty()) return result;
+        for (var listener : List.copyOf(completionListeners)) {
+            try { listener.accept(owner, result); }
+            catch (RuntimeException failure) {
+                try { logger.log(Level.WARNING, "Quest completion observer failed; delivered rewards are retained.", failure); }
+                catch (RuntimeException diagnostic) { if (diagnostic != failure) failure.addSuppressed(diagnostic); }
+            }
+        }
+        return result;
     }
 
     /** Only compatible, fully earned distinct evidence can authorize a pending reward.

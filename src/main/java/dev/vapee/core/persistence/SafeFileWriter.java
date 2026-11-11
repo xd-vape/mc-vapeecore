@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/** Technical commit boundary for lobby and player YAML only; callers own all schema rules. */
+/** Technical commit boundary for owned YAML writes; callers own all schema rules. */
 public final class SafeFileWriter {
     private final Logger logger;
     private final FileAccess files;

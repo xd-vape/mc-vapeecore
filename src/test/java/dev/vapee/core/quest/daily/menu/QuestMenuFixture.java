@@ -22,6 +22,7 @@ public final class QuestMenuFixture {
     public final DailyQuestMenuListener listener;
     public DailyQuestSyncResult forcedResult;
     public RuntimeException syncFailure;
+    public Runnable duringSync = () -> {};
     public int syncCalls;
     public int presentationCalls;
     public Instant now = Instant.parse("2026-10-03T12:00:00Z");
@@ -51,6 +52,7 @@ public final class QuestMenuFixture {
     public QuestMenuFixture(DailyQuestMenu.Layout layout) throws Exception {
         menu = new DailyQuestMenu(id -> {
             syncCalls++;
+            duringSync.run();
             if (syncFailure != null) throw syncFailure;
             return forcedResult != null ? forcedResult : daily.syncPlayer(id, now);
         }, domain.quests, domain.players, messages, id -> {
@@ -58,6 +60,9 @@ public final class QuestMenuFixture {
             return player != null && player.online ? player.player : null;
         }, (holder, size, title) -> { Inventory result = inventory(holder, size); titles.put(result, title); return result; }, SpecItem::new, domain.logger, layout, daily::nextReset, () -> now, update -> {
             Timer timer = new Timer(update); timers.add(timer); return () -> timer.cancelled = true;
+        }, player -> {
+            TestPlayer actor = online.get(player.getUniqueId());
+            return actor != null && actor.open == actor.bottom;
         });
         listener = new DailyQuestMenuListener(menu);
     }
@@ -108,6 +113,7 @@ public final class QuestMenuFixture {
         public final UUID id;
         public final Inventory bottom = inventory(null, 36);
         public final List<Component> output = new ArrayList<>();
+        public final List<net.kyori.adventure.sound.Sound> sounds = new ArrayList<>();
         public final Player player;
         public Inventory open = bottom;
         public int opens;
@@ -138,7 +144,12 @@ public final class QuestMenuFixture {
                     yield null;
                 }
                 case "sendMessage" -> { for (Object arg : args) if (arg instanceof Component c) output.add(c); yield null; }
-                case "playSound", "showTitle", "sendActionBar", "showBossBar" -> { presentationCalls++; yield null; }
+                case "playSound" -> {
+                    if (args[0] instanceof net.kyori.adventure.sound.Sound sound) sounds.add(sound);
+                    presentationCalls++;
+                    yield null;
+                }
+                case "showTitle", "sendActionBar", "showBossBar" -> { presentationCalls++; yield null; }
                 default -> DEFAULT;
             });
         }

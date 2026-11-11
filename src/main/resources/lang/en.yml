@@ -193,6 +193,15 @@ core:
     success: "<gray>Daily quests for <accent><player></accent> updated: <accent><count></accent>. Retained quests keep their progress.</gray>"
     pending: "<red>Pending quest rewards must be resolved before forcing a selection.</red>"
     failed: "<red>The quest selection could not be saved. The previous state was retained. Check the server log.</red>"
+    npc:
+      usage: "<vc_text>Use <accent>/core quest npc</accent> to configure the quest NPC.</vc_text>"
+      player-only: "<vc_error>Use this command in game to place the quest NPC at your position.</vc_error>"
+      invalid: "<vc_error>Enter a valid Minecraft username, display name or position.</vc_error>"
+      failed: "<vc_error>The quest NPC could not be updated. Check the server log.</vc_error>"
+      set-success: "<vc_success>Quest NPC location saved.</vc_success>"
+      skin-success: "<vc_success>Quest NPC skin setting saved.</vc_success>"
+      name-success: "<vc_success>Quest NPC display name saved.</vc_success>"
+      remove-success: "<vc_success>Quest NPC removed.</vc_success>"
 
   # Errors
   player-data-failed: "<red>Your player data could not be loaded. Please contact a server administrator.</red>"

@@ -193,6 +193,15 @@ core:
     success: "<gray>Tagesquests von <accent><player></accent> aktualisiert: <accent><count></accent>. Fortschritt enthaltener Quests bleibt erhalten.</gray>"
     pending: "<red>Ausstehende Quest-Belohnungen müssen vor einer erzwungenen Auswahl ausgezahlt werden.</red>"
     failed: "<red>Die Quest-Auswahl konnte nicht gespeichert werden. Der bisherige Stand bleibt erhalten. Prüfe das Serverlog.</red>"
+    npc:
+      usage: "<vc_text>Verwalte den Quest-NPC mit <accent>/core quest npc</accent>.</vc_text>"
+      player-only: "<vc_error>Platziere den Quest-NPC mit diesem Befehl im Spiel an deiner Position.</vc_error>"
+      invalid: "<vc_error>Gib einen gültigen Minecraft-Spielernamen, Anzeigenamen oder Standort an.</vc_error>"
+      failed: "<vc_error>Der Quest-NPC konnte nicht aktualisiert werden. Prüfe das Serverlog.</vc_error>"
+      set-success: "<vc_success>Standort des Quest-NPC gespeichert.</vc_success>"
+      skin-success: "<vc_success>Skin-Einstellung des Quest-NPC gespeichert.</vc_success>"
+      name-success: "<vc_success>Anzeigename des Quest-NPC gespeichert.</vc_success>"
+      remove-success: "<vc_success>Quest-NPC entfernt.</vc_success>"
 
   # Errors
   player-data-failed: "<red>Deine Spielerdaten konnten nicht geladen werden. Wende dich an einen Serveradministrator.</red>"

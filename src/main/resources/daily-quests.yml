@@ -13,6 +13,13 @@ reset:
   time: "00:00"
   timezone: "system"
 
+# One sound per batch of successfully delivered quest rewards.
+feedback:
+  sound-enabled: true
+  sound: "minecraft:ui.toast.challenge_complete"
+  open-menu: false
+  open-delay-ticks: 10
+
 # Optional selection limits (positive whole numbers); omitted limits are unrestricted:
 # selection:
 #   max-per-category: 3

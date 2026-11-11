@@ -1019,6 +1019,14 @@ Bei mindestens einem auswählbaren Kandidaten rotiert der nächste Cycle auf die
 
 Eine Schema-/ConfigEvolution-Migration ist für diese rein optionalen Felder nicht nötig: Version 1 und alle aktiven Resource-Defaults bleiben erhalten; keine 47 Quests werden installiert. Weitere Beispiele und Nachweise stehen im [Step-08A.1-Bericht](../reports/08a1/STEP_08A_1_DAILY_QUEST_SELECTION.md).
 
+### DailyQuest-Abschlussfeedback und Quest-NPC (Step 08F.2)
+
+QuestService meldet pro Ergebnis mit neu abgeschlossenen Quests genau einen Batch, auch nach erfolgreicher Auszahlung eines Pending Rewards. DailyQuest filtert auf IDs aus dem konfigurierten Daily-Katalog. `daily-quests.yml` steuert `feedback.sound-enabled` (Standard `true`), `feedback.sound` (Standard `minecraft:ui.toast.challenge_complete`), `feedback.open-menu` (Standard `false`) und `feedback.open-delay-ticks` (Standard 10, erlaubt 1 bis 100). Eine bereits wartende Öffnung derselben Session wird zusammengefasst. Der eigene Menü-Einstieg prüft unmittelbar vor dem Öffnen aktuelle Spieler- und Profilidentität, Berechtigung und freie Container-Ansicht. Er meldet kein `lobby:quests_open`. Das lokale Vanilla-Spielerinventar ohne Server-Container ist über Paper nicht separat erkennbar. Quit, Reload und Disable invalidieren wartende Öffnungen.
+
+Mit `vapeecore.admin` setzt `/core quest npc set` den NPC an die eigene Position im Spiel. `/core quest npc name <Anzeigename>`, `/core quest npc skin <Minecraft-Name>` und `/core quest npc remove` ändern Anzeigename, Skin oder Platzierung. `quest-npc.yml` enthält die gespeicherten Werte. Ein leerer Skin-Wert verwendet das Paper-Standardprofil. Eine nicht verfügbare Skin-Auflösung lässt das Standardprofil sichtbar. Profilauflösung läuft asynchron, die Entity-Änderung auf dem Hauptthread. Rechtsklick mit der Haupthand öffnet denselben DailyQuest-View wie `/quests`, mit dessen Profil- und Berechtigungsprüfung.
+
+Die DailyQuest-Runtime besitzt höchstens eine nicht persistente Paper-Mannequin-Instanz. Die Platzierung entsteht in einem bereits geladenen Chunk mit geladenen Entities. Nach Chunk-Load wird sie im nächsten Tick abgeglichen. Beim Neustart liefert die Konfiguration die Platzierung. Disable entfernt die eigene Instanz und entzieht alten Chunk- und Skin-Callbacks ihre Autorität. Reload liest beide Konfigurationen in Prepare und stellt bei einem Apply-Fehler den vorherigen Runtime-Stand wieder her. Der NPC blockiert native Interaktion, Schaden, Teleport, Reiten und Anleinen.
+
 ### DailyQuest-Reset-Uhr anpassen
 
 `DailyQuestMenu.DEFAULT_LAYOUT` bleibt die lokale Java-Editierstelle für Größe, Footer und die `Layout.adaptive(...)`-Anordnungen. Das aktuelle Default-Beispiel hat vier Reihen: `RESET_INFO` auf 34, `CLOSE` auf 35 sowie bedingte `PREVIOUS`/`PAGE_INFO`/`NEXT` auf 27/31/33. Die bestehenden 1–5-Quest-Anordnungen bleiben erhalten; weitere Quests verwenden Seiten mit fünf Einträgen und eine passend angeordnete Restseite. Größen und Positionen sind keine Domain-Verträge.
@@ -1436,6 +1444,7 @@ Das Ziel ist die aktuelle Position des Zielspielers: nur bereits geladene Welt/C
 | `/settings`, `/settings visibility [add|remove …]` | Settings-/Visibility-Menüs öffnen und Added Users verwalten | `SettingsCommand`, `VisibilitySettingsMenu`, `VisiblePlayersMenu` | `vapeecore.settings.use` |
 | `/quests` | Aktuelle Daily-Quests nach Sync read-only anzeigen | `DailyQuestCommand`, `DailyQuestMenu` | `vapeecore.quest.use` (Default true, keine Children) |
 | `/core quest force [player]` | Aktuelle Daily-Auswahl zum Testen übernehmen; Fortschritt enthaltener IDs erhalten | `CoreCommand` → `CoreQuestCommand` → `DailyQuestService` | `vapeecore.admin`, bestehender Online-Staff-Zielschutz |
+| `/core quest npc <set\|skin\|name\|remove>` | Quest-NPC platzieren, gestalten oder entfernen | `CoreCommand` → `CoreQuestCommand` → `QuestNpcCommand` | `vapeecore.admin`, Platzierung nur im Spiel |
 | `/friend`, `/friends` | Ohne Argumente Friends-GUI; mit Subcommands Freundschaften und Anfragen verwalten | `FriendCommand`, `FriendMenu` | `vapeecore.friend.use` (Default `true`) |
 | `/ignore`, `/unignore`, `/ignorelist` | Ignore-State verwalten | `IgnoreCommand`, `UnignoreCommand`, `IgnoreListCommand` | `vapeecore.social.ignore` |
 | `/rank [player]` | Eigenen oder den Rank eines Online-Spielers anzeigen | `RankCommand` | `vapeecore.rank.view` (Default `true`) |

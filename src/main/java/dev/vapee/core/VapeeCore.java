@@ -266,7 +266,8 @@ public final class VapeeCore extends JavaPlugin {
                 new dev.vapee.core.quest.daily.command.CoreQuestCommand(
                         dailyQuestModule.getDailyQuestService(), playerService, messageService,
                         () -> getServer().getOnlinePlayers(), java.time.Instant::now,
-                        new dev.vapee.core.command.OnlineStaffTargetGuard(rankModule.getStaffHierarchyService(), getLogger()))
+                        new dev.vapee.core.command.OnlineStaffTargetGuard(rankModule.getStaffHierarchyService(), getLogger()),
+                        dailyQuestModule.npcCommand())
         );
         coreCommand.setExecutor(executor);
         coreCommand.setTabCompleter(executor);

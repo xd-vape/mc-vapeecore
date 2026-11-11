@@ -114,6 +114,7 @@ public final class DailyQuestLifecycleFixture implements AutoCloseable {
                         (m, a) -> {
                             if (m.equals("getPluginManager")) return manager;
                             if (m.equals("getPlayer")) return original.getPlayer((UUID) a[0]);
+                            if (m.equals("getWorld") && a[0] instanceof String name) return original.getWorld(name);
                             try {
                                 var method =
                                         Arrays.stream(Server.class.getMethods())

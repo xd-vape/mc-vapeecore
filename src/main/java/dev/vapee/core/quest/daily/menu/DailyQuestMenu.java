@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -132,6 +133,7 @@ public final class DailyQuestMenu {
     private final Function<Instant, Instant> nextReset;
     private final Supplier<Instant> now;
     private final CountdownScheduler countdownScheduler;
+    private final Predicate<Player> hasNoContainer;
     private Runnable cancelCountdown;
 
     /** One task per menu, never one per viewer. The returned handle cancels that task. */
@@ -151,14 +153,15 @@ public final class DailyQuestMenu {
                 update -> {
                     var task = plugin.getServer().getScheduler().runTaskTimer(plugin, update, 20L, 20L);
                     return new TaskCancellation(task);
-                });
+                }, player -> player.getOpenInventory().getType() == org.bukkit.event.inventory.InventoryType.CRAFTING);
         this.authorized = Objects.requireNonNull(authorized, "authorized");
     }
 
     DailyQuestMenu(Function<UUID, DailyQuestSyncResult> sync, QuestService quests, PlayerService players,
                    MessageService messages, Function<UUID, Player> onlinePlayer,
                    InventoryFactory inventories, ItemRenderer items, Logger logger, Layout menuLayout,
-                   Function<Instant, Instant> nextReset, Supplier<Instant> now, CountdownScheduler countdownScheduler) {
+                   Function<Instant, Instant> nextReset, Supplier<Instant> now, CountdownScheduler countdownScheduler,
+                   Predicate<Player> hasNoContainer) {
         this.definition = Objects.requireNonNull(menuLayout, "layout");
         this.layout = menuLayout.menu().validateActions(java.util.Set.of());
         this.layout.requirePaged();
@@ -174,19 +177,33 @@ public final class DailyQuestMenu {
         this.nextReset = Objects.requireNonNull(nextReset, "nextReset");
         this.now = Objects.requireNonNull(now, "now");
         this.countdownScheduler = Objects.requireNonNull(countdownScheduler, "countdownScheduler");
+        this.hasNoContainer = Objects.requireNonNull(hasNoContainer, "hasNoContainer");
     }
 
     public void open(Player player, int requestedPage) {
-        renderOpen(player, requestedPage, true);
+        renderOpen(player, requestedPage, true, () -> true);
     }
 
     public void openPage(Player player, int requestedPage) {
-        renderOpen(player, requestedPage, false);
+        renderOpen(player, requestedPage, false, () -> true);
     }
 
-    private void renderOpen(Player player, int requestedPage, boolean rootOpen) {
+    public void openAutomatically(Player player, java.util.function.BooleanSupplier currentSession) {
+        if (!canUse(player)) return;
+        renderOpen(player, 0, false, () -> currentSession.getAsBoolean() && hasNoContainer.test(player));
+    }
+
+    public void openFromNpc(Player player) {
+        Inventory inventory = active.get(player.getUniqueId());
+        if (inventory != null && inventory.getHolder() instanceof DailyQuestInventoryHolder holder
+                && isActive(player, inventory, holder)) return;
+        open(player, 0);
+    }
+
+    private void renderOpen(Player player, int requestedPage, boolean rootOpen,
+                            java.util.function.BooleanSupplier mayOpen) {
         Objects.requireNonNull(player, "player");
-        if (!isAvailable()) return;
+        if (!isAvailable() || !mayOpen.getAsBoolean()) return;
         Object opening = activation;
         if (!player.hasPermission(PERMISSION)) {
             deny(player, tr("daily-quests.denied"));
@@ -217,7 +234,7 @@ public final class DailyQuestMenu {
                     tr("daily-quests.previous-pending").color(NamedTextColor.YELLOW));
             case CURRENT, INITIALIZED, ROTATED -> { }
         }
-        if (opening != activation || !isAvailable() || !canUse(player)) return;
+        if (opening != activation || !isAvailable() || !canUse(player) || !mayOpen.getAsBoolean()) return;
         Player previousViewer = renderingFor; renderingFor = player;
         try {
         List<QuestView> views = quests.getActiveQuests(player.getUniqueId()).orElse(List.of());
@@ -253,7 +270,7 @@ public final class DailyQuestMenu {
         DailyQuestInventoryHolder renderedHolder = holder;
         layout.actionSlot(Action.RESET_INFO).ifPresent(slot -> renderedHolder.recordAction(slot, Action.RESET_INFO));
         holder.finishRender();
-        if (opening != activation || !isAvailable()) return;
+        if (opening != activation || !isAvailable() || !mayOpen.getAsBoolean()) return;
         var opened = inventory == rerenderInventory ? player.getOpenInventory() : player.openInventory(inventory);
         if (opened != null && opened.getTopInventory() == inventory
                 && player.getOpenInventory().getTopInventory() == inventory && canUse(player)
