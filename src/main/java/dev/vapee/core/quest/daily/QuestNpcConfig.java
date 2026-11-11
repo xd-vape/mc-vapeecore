@@ -1,6 +1,10 @@
 package dev.vapee.core.quest.daily;
 
+import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.persistence.SafeFileWriter;
+
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
@@ -97,7 +101,38 @@ final class QuestNpcConfig {
         return new State(
                 string(yaml, "name", DEFAULT.name()),
                 string(yaml, "skin", DEFAULT.skin()),
-                position);
+                position,
+                hologram(yaml));
+    }
+
+    private static Hologram hologram(YamlConfiguration yaml) {
+        var section = yaml.getConfigurationSection("hologram");
+        if (section == null) {
+            if (yaml.contains("hologram"))
+                throw new IllegalArgumentException("Expected a hologram section");
+            return Hologram.DEFAULT;
+        }
+        if (!(section.get("enabled", true) instanceof Boolean enabled)
+                || !(section.get("height-offset", 2.45) instanceof Number offset))
+            throw new IllegalArgumentException("Invalid hologram enabled or height-offset value");
+        return new Hologram(
+                enabled,
+                offset.doubleValue(),
+                section.contains("title") ? string(section, "title", "") : null,
+                section.contains("progress-format") ? string(section, "progress-format", "") : null,
+                color(section, "title-color", Hologram.DEFAULT.titleColor()),
+                color(section, "progress-color", Hologram.DEFAULT.progressColor()));
+    }
+
+    private static TextColor color(ConfigurationSection section, String key, TextColor fallback) {
+        if (!section.contains(key)) return fallback;
+        String value = string(section, key, "");
+        TextColor color =
+                value.matches("#[0-9a-fA-F]{6}")
+                        ? TextColor.fromHexString(value)
+                        : NamedTextColor.NAMES.value(value);
+        if (color == null) throw new IllegalArgumentException("Invalid hologram color " + key);
+        return color;
     }
 
     private static String string(ConfigurationSection section, String key, String fallback) {
@@ -110,7 +145,11 @@ final class QuestNpcConfig {
         throw new IllegalArgumentException("Expected a coordinate for " + key);
     }
 
-    record State(String name, String skin, Position position) {
+    record State(String name, String skin, Position position, Hologram hologram) {
+        State(String name, String skin, Position position) {
+            this(name, skin, position, Hologram.DEFAULT);
+        }
+
         State {
             if (name.isBlank()
                     || name.length() > 64
@@ -118,6 +157,47 @@ final class QuestNpcConfig {
                 throw new IllegalArgumentException("Invalid quest NPC name");
             if (!skin.isEmpty() && !skin.matches("[A-Za-z0-9_]{1,16}"))
                 throw new IllegalArgumentException("Invalid Minecraft username");
+        }
+
+        boolean sameMannequin(State other) {
+            return other != null
+                    && name.equals(other.name)
+                    && skin.equals(other.skin)
+                    && java.util.Objects.equals(position, other.position);
+        }
+    }
+
+    record Hologram(
+            boolean enabled,
+            double heightOffset,
+            String title,
+            String progressFormat,
+            TextColor titleColor,
+            TextColor progressColor) {
+        static final Hologram DEFAULT =
+                new Hologram(true, 2.45, null, null, NamedTextColor.GOLD, MessageStyle.TEXT);
+
+        Hologram {
+            if (!Double.isFinite(heightOffset) || heightOffset < 0 || heightOffset > 16)
+                throw new IllegalArgumentException(
+                        "Hologram height-offset must be between 0 and 16");
+            checkLine(title);
+            checkLine(progressFormat);
+            if (progressFormat != null
+                    && (!progressFormat.contains("<completed>")
+                            || !progressFormat.contains("<total>")))
+                throw new IllegalArgumentException(
+                        "Hologram progress-format needs completed and total placeholders");
+        }
+
+        private static void checkLine(String value) {
+            if (value != null
+                    && (value.isBlank()
+                            || value.length() > 128
+                            || value.codePoints().anyMatch(c -> Character.isISOControl(c)
+                                    || c == 0x2028 || c == 0x2029)))
+                throw new IllegalArgumentException(
+                        "Expected one non-empty hologram line of at most 128 characters");
         }
     }
 

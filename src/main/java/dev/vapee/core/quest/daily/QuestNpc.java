@@ -1,5 +1,8 @@
 package dev.vapee.core.quest.daily;
 
+import dev.vapee.core.i18n.LocalizationService;
+import dev.vapee.core.quest.QuestService;
+
 import io.papermc.paper.datacomponent.item.ResolvableProfile;
 
 import net.kyori.adventure.text.Component;
@@ -13,6 +16,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -29,6 +33,7 @@ final class QuestNpc {
     private BukkitTask spawnTask;
     private Object spawnTicket;
     private SkinLookup skin;
+    private QuestNpcHolograms holograms;
     private boolean spawning;
     private boolean retired;
 
@@ -75,11 +80,42 @@ final class QuestNpc {
         return state;
     }
 
+    void attachHolograms(
+            QuestService quests, LocalizationService localization, BooleanSupplier dailyEnabled) {
+        holograms =
+                new QuestNpcHolograms(
+                        plugin,
+                        quests,
+                        localization,
+                        authorized,
+                        dailyEnabled,
+                        () -> entity,
+                        () -> state.hologram());
+    }
+
+    void refreshHolograms() {
+        if (holograms != null) holograms.refreshIfTracked();
+    }
+
+    void viewerChanged(UUID id) {
+        if (holograms != null) holograms.viewerChanged(id);
+    }
+
+    void trackingChanged(Entity candidate) {
+        if (holograms != null && owns(candidate)) holograms.request();
+    }
+
     void apply(QuestNpcConfig.State next) {
         if (retired || spawning) throw new IllegalStateException("Quest NPC is changing lifecycle");
         cancelSpawn();
         invalidateSkin();
-        if (!next.equals(state)) removeEntity();
+        if (holograms != null) holograms.reset();
+        boolean replace = !next.sameMannequin(state);
+        if (replace) removeEntity();
+        else if (entity != null
+                && entity.isValid()
+                && next.hologram().enabled() != state.hologram().enabled())
+            configureName(entity, next);
         state = next;
         reconcile();
     }
@@ -143,6 +179,7 @@ final class QuestNpc {
         if (position == null || spawning) return;
         if (entity != null && entity.isValid()) {
             requestSkin();
+            refreshHolograms();
             return;
         }
         var world = server.getWorld(position.world());
@@ -178,8 +215,7 @@ final class QuestNpc {
                                 candidate.setCollidable(false);
                                 candidate.setCanPickupItems(false);
                                 candidate.setSilent(true);
-                                candidate.customName(Component.text(state.name()));
-                                candidate.setCustomNameVisible(true);
+                                configureName(candidate, state);
                                 candidate.setDescription(Component.empty());
                                 if (skin != null && skin.profile != null)
                                     candidate.setProfile(skin.profile);
@@ -187,6 +223,7 @@ final class QuestNpc {
             if (retired || entity != spawned || !spawned.isValid())
                 throw new IllegalStateException("Quest NPC spawn was not accepted");
             requestSkin();
+            refreshHolograms();
         } catch (RuntimeException failure) {
             try {
                 removeEntity();
@@ -197,6 +234,12 @@ final class QuestNpc {
         } finally {
             spawning = false;
         }
+    }
+
+    private static void configureName(Mannequin mannequin, QuestNpcConfig.State state) {
+        boolean showName = !state.hologram().enabled();
+        mannequin.customName(showName ? Component.text(state.name()) : null);
+        mannequin.setCustomNameVisible(showName);
     }
 
     private void requestSkin() {
@@ -262,12 +305,26 @@ final class QuestNpc {
     void shutdown() {
         retired = true;
         invalidateSkin();
-        try {
-            cancelSpawn();
-        } finally {
-            if (spawning) throw new IllegalStateException("Quest NPC is still spawning");
-            removeEntity();
+        var failure = new IllegalStateException("Quest NPC cleanup incomplete");
+        if (holograms != null) {
+            try {
+                holograms.shutdown();
+                holograms = null;
+            } catch (RuntimeException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
         }
+        try {
+            try {
+                cancelSpawn();
+            } finally {
+                if (spawning) throw new IllegalStateException("Quest NPC is still spawning");
+                removeEntity();
+            }
+        } catch (RuntimeException cleanup) {
+            failure.addSuppressed(cleanup);
+        }
+        if (failure.getSuppressed().length > 0) throw failure;
     }
 
     private void log(String message, Throwable failure) {

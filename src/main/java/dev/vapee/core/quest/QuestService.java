@@ -166,8 +166,9 @@ public final class QuestService {
     }
 
     // Runtime invalidation only; no persistence, presentation refresh or second assignment authority.
-    void addAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.add(Objects.requireNonNull(listener)); }
-    void removeAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.remove(listener); }
+    /** Assignment invalidation observer; defer reads until the originating operation returns. */
+    public void addAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.add(Objects.requireNonNull(listener)); }
+    public void removeAssignmentListener(java.util.function.Consumer<UUID> listener) { assignmentListeners.remove(listener); }
     private void assignmentsChanged(UUID id) {
         for (var listener : List.copyOf(assignmentListeners)) {
             try { listener.accept(id); }

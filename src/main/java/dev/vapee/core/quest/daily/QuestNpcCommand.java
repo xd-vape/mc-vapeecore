@@ -65,17 +65,23 @@ final class QuestNpcCommand implements TabExecutor {
                                         current.name(),
                                         current.skin(),
                                         new QuestNpcConfig.Position(
-                                                ((Player) sender).getLocation()));
+                                                ((Player) sender).getLocation()),
+                                        current.hologram());
                         case "skin" ->
                                 new QuestNpcConfig.State(
-                                        current.name(), args[1], current.position());
+                                        current.name(),
+                                        args[1],
+                                        current.position(),
+                                        current.hologram());
                         case "name" ->
                                 new QuestNpcConfig.State(
                                         String.join(" ", Arrays.copyOfRange(args, 1, args.length)),
                                         current.skin(),
-                                        current.position());
+                                        current.position(),
+                                        current.hologram());
                         case "remove" ->
-                                new QuestNpcConfig.State(current.name(), current.skin(), null);
+                                new QuestNpcConfig.State(
+                                        current.name(), current.skin(), null, current.hologram());
                         default -> throw new IllegalStateException("Unknown quest NPC action");
                     };
             npc.save(next);

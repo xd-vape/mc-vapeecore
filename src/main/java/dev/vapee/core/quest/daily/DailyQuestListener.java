@@ -1,17 +1,22 @@
 package dev.vapee.core.quest.daily;
 
 import dev.vapee.core.quest.daily.menu.DailyQuestMenu;
+import io.papermc.paper.event.player.PlayerTrackEntityEvent;
+import io.papermc.paper.event.player.PlayerUntrackEntityEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityPortalEvent;
+import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.entity.EntityTeleportEvent;
 import org.bukkit.event.entity.PlayerLeashEntityEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLocaleChangeEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -47,6 +52,32 @@ public final class DailyQuestListener implements Listener {
         if (feedback != null) feedback.joined(event.getPlayer());
         var id = event.getPlayer().getUniqueId();
         if (authorized.getAsBoolean()) service.syncPlayer(id, Instant.now());
+        if (npc != null) npc.viewerChanged(id);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onNpcTrack(PlayerTrackEntityEvent event) {
+        if (npc != null) npc.trackingChanged(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onNpcUntrack(PlayerUntrackEntityEvent event) {
+        if (npc != null) npc.trackingChanged(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onNpcRemoved(EntityRemoveEvent event) {
+        if (npc != null) npc.trackingChanged(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onViewerWorldChange(PlayerChangedWorldEvent event) {
+        if (npc != null) npc.viewerChanged(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onViewerLocaleChange(PlayerLocaleChangeEvent event) {
+        if (npc != null) npc.viewerChanged(event.getPlayer().getUniqueId());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

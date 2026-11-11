@@ -72,10 +72,15 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
             acquired.feedback = new DailyQuestCompletionFeedback(plugin, acquired.players, acquired.config,
                     acquired.menu, available);
             acquired.npc = new QuestNpc(plugin, available);
+            acquired.npc.attachHolograms(quests, messages.localization(),
+                    () -> acquired.config.getState().enabled());
             var npcSettings = acquired.npc.readConfig();
             acquired.listener = new DailyQuestListener(acquired.service, available, acquired.feedback,
                     acquired.npc, acquired.menu);
-            acquired.menuListener = new DailyQuestMenuListener(acquired.menu, acquired.feedback::forget);
+            acquired.menuListener = new DailyQuestMenuListener(acquired.menu, player -> {
+                acquired.feedback.forget(player);
+                acquired.npc.viewerChanged(player.getUniqueId());
+            });
             acquired.registry.replaceAll(acquired.config.getState().definitions());
             acquired.installedDefinitions = acquired.registry.snapshotById();
             acquired.restoreCatalog = true;
@@ -97,6 +102,7 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
             acquired.restoreCatalog = false; // Successful shutdown deliberately keeps the borrowed catalog.
             runtime = acquired;
             active = true;
+            acquired.npc.refreshHolograms();
         } catch (RuntimeException exception) {
             active = false;
             runtime = null;
@@ -220,7 +226,10 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
                 plan.apply();
                 current.npc.apply(nextNpc);
                 current.menu.closeOpenInventories();
-            } finally { current.reloading = false; }
+            } finally {
+                current.reloading = false;
+                current.npc.refreshHolograms();
+            }
         }, () -> {
             if (!owns(current)) throw new IllegalStateException("DailyQuest reload runtime retired");
             current.reloading = true;
@@ -230,7 +239,10 @@ public final class DailyQuestModule implements CoreModule, ReloadParticipant {
                 attempt(failure, "DailyQuest catalog rollback", plan::rollback);
                 attempt(failure, "Quest NPC rollback", () -> current.npc.apply(previousNpc));
                 if (failure.getSuppressed().length != 0) throw failure;
-            } finally { current.reloading = false; }
+            } finally {
+                current.reloading = false;
+                current.npc.refreshHolograms();
+            }
         });
     }
 

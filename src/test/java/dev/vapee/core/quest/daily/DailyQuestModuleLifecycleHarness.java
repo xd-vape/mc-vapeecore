@@ -81,7 +81,7 @@ public final class DailyQuestModuleLifecycleHarness {
             var service = module.getDailyQuestService();
             check(service != null, "successful runtime published");
             check(
-                    f.runtime.handlerCount() == 14 && f.runtime.registered.size() == 2,
+                    f.runtime.handlerCount() == 19 && f.runtime.registered.size() == 2,
                     "two listeners own five actual handlers");
             check(
                     f.running() == 1

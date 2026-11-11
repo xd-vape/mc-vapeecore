@@ -879,6 +879,9 @@ rewards:
 # ==================================================
 
 daily-quests:
+  hologram:
+    title: "Daily Quests"
+    progress: "<completed>/<total> Completed"
 
   # General and Commands
   title: "Daily Quests"
