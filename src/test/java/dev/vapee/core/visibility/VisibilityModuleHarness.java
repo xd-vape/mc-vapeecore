@@ -81,9 +81,8 @@ public final class VisibilityModuleHarness {
                         && itemListener.contains("visibilityService.applyViewerPreference(player)")
                         && itemListener.contains("lobbyItemService.refreshVisibilityItem(player)"),
                 "hotbar master toggle persists and refreshes visibility plus item immediately");
-        check(itemListener.contains("VISIBILITY_TOGGLE_COOLDOWN_TICKS = 10L")
-                        && itemListener.contains("feedback.accept(player)"),
-                "hotbar cooldown and sound feedback remain in place");
+        check(itemListener.contains("feedback.accept(player)"),
+                "hotbar sound feedback remains in place");
 
         String itemDefaults = Files.readString(Path.of(
                 "src/main/java/dev/vapee/core/lobby/item/LobbyItemRegistrations.java"));

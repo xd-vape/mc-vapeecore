@@ -46,11 +46,21 @@ public final class LobbyItemRegistrations {
         var friend = appearance(Material.PLAYER_HEAD, "<i18n:lobby.friends.name>",
                 List.of("<i18n:lobby.friends.lore>", "", "<i18n:lobby.friends.open>"), true);
 
-        registry.register("player-menu", new LobbyItemDefinition(true, 0, playerHead, playerHead), (viewer, click) -> {
-            var menu = playerMenu.get();
-            return (click == org.bukkit.event.block.Action.RIGHT_CLICK_AIR || click == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK)
-                    && menu != null && menu.open(viewer);
-        });
+        registry.register("player-menu", new LobbyItemDefinition(true, 0, playerHead, playerHead),
+                new LobbyItemAction() {
+                    @Override public boolean supports(org.bukkit.event.block.Action click) {
+                        return click == org.bukkit.event.block.Action.LEFT_CLICK_AIR || LobbyItemAction.super.supports(click);
+                    }
+                    @Override public boolean handleClick(org.bukkit.entity.Player viewer, org.bukkit.event.block.Action click) {
+                        var menu = playerMenu.get();
+                        if (menu == null) return false;
+                        if (click == org.bukkit.event.block.Action.LEFT_CLICK_AIR) {
+                            menu.showSelectionHint(viewer);
+                            return false;
+                        }
+                        return menu.openFromHotbar(viewer);
+                    }
+                });
         registry.register("navigator", new LobbyItemDefinition(true, 8, nav, nav), new NavigatorLobbyItemAction(navigator));
         registry.register("visibility", new LobbyItemDefinition(true, 1, visible, filtered, java.util.Map.of("hidden", hidden)),
                 new LobbyItemAction() {

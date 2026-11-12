@@ -5,17 +5,20 @@ import dev.vapee.core.lobby.item.*;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.*;
 import dev.vapee.core.settings.command.SettingsCommand;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.inventory.EquipmentSlot;
 import java.util.*;
 import java.util.function.*;
 import java.util.logging.*;
 
-/** A deliberate entity-use gesture; never hooks, uncancels or causes attack damage. */
+/** Routes the managed player head before an attack can deal damage. */
 public final class PlayerSelectionListener implements Listener {
     private final LobbyItemRegistry registry;
     private final LobbyItemService items;
@@ -35,12 +38,26 @@ public final class PlayerSelectionListener implements Listener {
     }
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInteract(PlayerInteractEntityEvent event) {
-        if (event.isCancelled() || event.getHand() != EquipmentSlot.HAND || !(event.getRightClicked() instanceof Player target)) return;
+        if (event.isCancelled() || event.getHand() != EquipmentSlot.HAND
+                || !(event.getRightClicked() instanceof Player)) return;
         Player viewer = event.getPlayer();
-        if (!registry.isActive() || !items.isEnabled("player-menu")
-                || !items.getItemId(viewer.getInventory().getItemInMainHand()).filter("player-menu"::equals).isPresent()) return;
+        if (!holdsPlayerMenu(viewer)) return;
         event.setCancelled(true);
-        if (!viewer.hasPermission(SettingsCommand.PERMISSION) || !eligible.test(viewer) || !eligible.test(target)
+        registry.handleClick("player-menu", viewer, Action.RIGHT_CLICK_AIR);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onInteractAt(PlayerInteractAtEntityEvent event) {
+        onInteract(event);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onAttack(PrePlayerAttackEntityEvent event) {
+        if (event.isCancelled() || !(event.getAttacked() instanceof Player target)) return;
+        Player viewer = event.getPlayer();
+        if (!holdsPlayerMenu(viewer)) return;
+        event.setCancelled(true);
+        if (!viewer.hasPermission(SettingsCommand.PERMISSION) || !eligible.test(target)
                 || !viewer.getWorld().equals(target.getWorld()) || viewer.getUniqueId().equals(target.getUniqueId())) return;
         var selected = settings.isLobbyAddedVisiblePlayer(viewer.getUniqueId(), target.getUniqueId());
         if (selected.isEmpty()) return;
@@ -58,5 +75,10 @@ public final class PlayerSelectionListener implements Listener {
         catch (RuntimeException exception) { logger.log(Level.WARNING, "Could not apply committed lobby selection", exception); }
         messages.send(viewer, tr(selected.get() ? "player-menu.selection-removed" : "player-menu.selection-added",
                 Map.of("player", Component.text(target.getName(), NamedTextColor.AQUA))).color(NamedTextColor.GRAY));
+    }
+
+    private boolean holdsPlayerMenu(Player viewer) {
+        return registry.isActive() && items.isEnabled("player-menu") && eligible.test(viewer)
+                && items.getItemId(viewer.getInventory().getItemInMainHand()).filter("player-menu"::equals).isPresent();
     }
 }

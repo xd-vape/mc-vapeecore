@@ -62,6 +62,17 @@ public final class PlayerMenu {
         if (opened == null || opened.getTopInventory() != inventory) return false;
         active.put(player.getUniqueId(), inventory); return true;
     }
+    public boolean openFromHotbar(Player player) {
+        var inventory = active.get(player.getUniqueId());
+        if (inventory != null && inventory.getHolder() instanceof PlayerMenuHolder holder
+                && isActive(player, inventory, holder)) return false;
+        return open(player);
+    }
+
+    public void showSelectionHint(Player player) {
+        if (canAccess(player) && player.hasPermission(SettingsCommand.PERMISSION))
+            messages.send(player, tr("player-menu.selection-hint"));
+    }
     public boolean isActive(Player viewer, Inventory inventory, PlayerMenuHolder holder) {
         return viewer != null && inventory != null && holder != null && holder.owner().equals(viewer.getUniqueId())
                 && inventory.getHolder() == holder && holder.boundTo(inventory)

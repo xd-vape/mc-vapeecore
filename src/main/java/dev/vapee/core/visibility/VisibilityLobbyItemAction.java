@@ -9,7 +9,6 @@ import dev.vapee.core.lobby.item.LobbyItemDefinition;
 import dev.vapee.core.lobby.item.LobbyItemService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.settings.PlayerSettingsService;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,7 +24,7 @@ import java.util.logging.Logger;
 
 /** Persisted master toggle and dynamic presentation belong to visibility, including deferred block clicks. */
 public final class VisibilityLobbyItemAction implements LobbyItemAction {
-    private static final long VISIBILITY_TOGGLE_COOLDOWN_TICKS = 10L;
+    private static final long VISIBILITY_TOGGLE_COOLDOWN_TICKS = 3L;
     private final JavaPlugin plugin;
     private final LobbyService lobbyService;
     private final LobbyItemService lobbyItemService;
@@ -36,6 +35,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
     private final Consumer<Player> feedback;
     private final Predicate<Player> available;
     private final Set<UUID> visibilityToggleCooldowns = new HashSet<>();
+    private boolean closed;
 
     public VisibilityLobbyItemAction(JavaPlugin plugin, LobbyService lobbyService, LobbyItemService lobbyItemService,
                                      VisibilityService visibilityService, PlayerSettingsService playerSettingsService,
@@ -62,7 +62,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
 
     private void toggleVisibility(Player player) {
         UUID uniqueId = player.getUniqueId();
-        if (!beginVisibilityToggleCooldown(player, uniqueId)) {
+        if (!beginVisibilityToggleCooldown(uniqueId)) {
             return;
         }
 
@@ -91,7 +91,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
     }
 
     @Override public boolean handleClick(Player player, Action action) {
-        if (!available.test(player)) return false;
+        if (closed || !available.test(player)) return false;
         if (!supports(action)) return false;
         Runnable use = () -> toggleVisibility(player);
         if (action == Action.RIGHT_CLICK_AIR) {
@@ -100,7 +100,7 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
         }
 
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (!available.test(player) || !player.isOnline() || !lobbyService.isLobbyWorld(player.getWorld())) {
+            if (closed || !available.test(player) || !player.isOnline() || !lobbyService.isLobbyWorld(player.getWorld())) {
                 return;
             }
             use.run();
@@ -112,15 +112,17 @@ public final class VisibilityLobbyItemAction implements LobbyItemAction {
         return click == Action.RIGHT_CLICK_AIR || click == Action.RIGHT_CLICK_BLOCK;
     }
 
-    private boolean beginVisibilityToggleCooldown(Player player, UUID uniqueId) {
+    public void close() {
+        closed = true;
+        visibilityToggleCooldowns.clear();
+    }
+
+    private boolean beginVisibilityToggleCooldown(UUID uniqueId) {
         if (!visibilityToggleCooldowns.add(uniqueId)) {
             return false;
         }
 
         try {
-            player.setCooldown(Material.LIME_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
-            player.setCooldown(Material.GRAY_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
-            player.setCooldown(Material.RED_DYE, (int) VISIBILITY_TOGGLE_COOLDOWN_TICKS);
             plugin.getServer().getScheduler().runTaskLater(
                     plugin,
                     () -> visibilityToggleCooldowns.remove(uniqueId),

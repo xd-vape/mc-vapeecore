@@ -219,7 +219,7 @@ lobby:
   player-menu:
     name: "<aqua>Spielermenü</aqua>"
     open: "<gray>Rechtsklick: Dein Menü öffnen</gray>"
-    select: "<gray>Rechtsklick auf Spieler: Auswählen oder entfernen</gray>"
+    select: "<gray>Linksklick auf Spieler: Auswählen oder entfernen</gray>"
   visibility:
     filtered-lore: "<gray>Rechtsklick: Modus wechseln</gray>"
     filtered-name: "<aqua>Gefiltert</aqua>"
@@ -267,6 +267,7 @@ player-menu:
   # Player Selection
   selection-added: "<player> zu deiner Spielerauswahl hinzugefügt."
   selection-removed: "<player> aus deiner Spielerauswahl entfernt."
+  selection-hint: "<vc_text>Klicke mit dem Spielerkopf links auf einen Spieler, um ihn zur Sichtbarkeitsliste hinzuzufügen oder zu entfernen.</vc_text>"
 
 
 # ==================================================

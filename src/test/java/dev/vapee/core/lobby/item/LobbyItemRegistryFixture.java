@@ -39,6 +39,7 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
     public final LobbyItemListener listener;
     public boolean eligible = true;
     public int sounds;
+    public int visibleCooldowns;
     public int heldSlot;
     private final Path root = Files.createTempDirectory("vapeecore-registry-");
     private final AtomicReference<Map<String, LobbyItemDefinition>> definitions = new AtomicReference<>();
@@ -74,6 +75,7 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
                 case "getPlayerProfile" -> profile;
                 case "getUniqueId" -> delegate == null ? id : delegate.getUniqueId();
                 case "isOnline" -> delegate == null || delegate.isOnline();
+                case "setCooldown" -> { visibleCooldowns++; yield null; }
                 case "hashCode" -> System.identityHashCode(ignored);
                 case "equals" -> ignored == args[0];
                 case "toString" -> "LobbyTestPlayer";
@@ -90,10 +92,10 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
         var config = new YamlConfiguration(); config.loadFromString(yaml);
         var parsed = LobbyItemsConfig.read(config, logger, registry); definitions.set(parsed); return parsed;
     }
-    public void scheduler(java.util.function.Consumer<Runnable> immediate, java.util.function.Consumer<Runnable> later) throws Exception {
+    public void scheduler(java.util.function.Consumer<Runnable> immediate, java.util.function.ObjLongConsumer<Runnable> later) throws Exception {
         var scheduler = LobbyItemsConfigHarness.proxy(org.bukkit.scheduler.BukkitScheduler.class, (name,args) -> {
             if (name.equals("runTask")) immediate.accept((Runnable)args[1]);
-            if (name.equals("runTaskLater")) later.accept((Runnable)args[1]);
+            if (name.equals("runTaskLater")) later.accept((Runnable)args[1], (long)args[2]);
             return null;
         });
         var server = LobbyItemsConfigHarness.proxy(Server.class, (name,args) -> switch(name) {

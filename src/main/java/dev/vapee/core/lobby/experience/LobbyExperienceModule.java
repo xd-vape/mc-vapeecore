@@ -236,6 +236,7 @@ public final class LobbyExperienceModule implements CoreModule {
 
     private void cleanupRuntime(RuntimeException failure) {
         cleanupStep(failure, "item registry", () -> lobbyModule.getItemRegistry().deactivate());
+        if (visibilityAction != null) visibilityAction.close();
         cleanupStep(failure, "item refresh eligibility", () ->
                 lobbyModule.getLobbyPlayerStateService().setItemRefreshEligibility(player -> false));
         cleanupStep(failure, "visibility back callback", () -> settingsModule.setVisibilityBackOpener(Player::closeInventory));

@@ -23,8 +23,25 @@ public final class PlayerMenuHarness {
     public static void main(String[] args) throws Exception {
         var f = new Fixture(PlayerMenu.DEFAULT_LAYOUT);
         var owner = f.player("Owner"); var foreign = f.player("Foreign");
-        check(f.menu.open(owner.player), "root opens for a loaded eligible player");
+        var registry = new dev.vapee.core.lobby.item.LobbyItemRegistry();
+        dev.vapee.core.lobby.item.LobbyItemRegistrations.register(registry, () -> null,
+                () -> null, () -> null, () -> null, () -> f.menu);
+        registry.activate();
+        var left = org.bukkit.event.block.Action.LEFT_CLICK_AIR;
+        var right = org.bukkit.event.block.Action.RIGHT_CLICK_AIR;
+        registry.handleClick("player-menu", owner.player, left);
+        check(owner.chat.getLast().startsWith("Left-click") && owner.open == owner.bottom, "left in air gives English hint only");
+        foreign.locale = Locale.GERMANY;
+        registry.handleClick("player-menu", foreign.player, left);
+        check(foreign.chat.getLast().startsWith("Klicke"), "left in air gives localized German hint");
+        foreign.denied.add("vapeecore.settings.use");
+        registry.handleClick("player-menu", foreign.player, left);
+        check(foreign.chat.size() == 1, "selection hint respects settings permission");
+        foreign.denied.clear();
+        check(registry.handleClick("player-menu", owner.player, right), "right-click opens for a loaded eligible player");
         Inventory top = owner.open; var holder = (PlayerMenuHolder) top.getHolder();
+        check(!registry.handleClick("player-menu", owner.player, right) && owner.open == top,
+                "second right-click event keeps the already bound menu");
         check(top.getSize() == f.menu.layout().size() && f.menu.isActive(owner.player, top, holder), "exact native owner/binding registered");
         for (var action : PlayerMenu.Action.values()) check(top.getItem(f.menu.layout().slot(action)) != null, "supported destination rendered " + action);
         for (int slot = 0; slot < top.getSize(); slot++) check((top.getItem(slot) != null) == f.menu.layout().actionAt(slot).isPresent(), "no filler/dead entry " + slot);
@@ -130,9 +147,11 @@ public final class PlayerMenuHarness {
     static final class TestPlayer {
         final UUID id = UUID.randomUUID(); final Inventory bottom = inventory(null,36); Inventory open = bottom;
         Locale locale = Locale.US; final Set<String> denied = new HashSet<>(); final Player player;
+        final List<String> chat = new ArrayList<>();
         TestPlayer(Fixture f) { player = proxy(Player.class,(name,args) -> switch(name) {
             case "getUniqueId" -> id; case "isOnline" -> true; case "locale" -> locale; case "hasPermission" -> !denied.contains((String)args[0]);
             case "getOpenInventory" -> view(this,open);
+            case "sendMessage" -> { if (args[0] instanceof Component component) chat.add(plain(component)); yield null; }
             case "openInventory" -> { f.listener.onClose(new InventoryCloseEvent(view(this,open))); open = (Inventory)args[0]; yield view(this,open); }
             case "closeInventory" -> { var old = open; open = bottom; f.listener.onClose(new InventoryCloseEvent(view(this,old))); yield null; }
             default -> DEFAULT;
