@@ -64,7 +64,7 @@ public final class BlackjackRemovalHarness {
             "clanModule", "rewardModule", "onlineRewardModule", "questModule", "dailyQuestModule",
             "lobbyModule", "visibilityModule", "chatModule", "privateMessageModule", "presentationModule",
             "settingsModule", "activityModule", "utilityModule", "seatModule", "worldDisplayModule",
-            "warpModule", "lobbyExperienceModule");
+            "warpModule", "lobbyExperienceModule", "gadgetsModule");
 
     public static void main(String[] args) throws Exception {
         compositionAndArtifact();
@@ -81,7 +81,7 @@ public final class BlackjackRemovalHarness {
         var matcher = Pattern.compile("moduleManager\\.register\\((\\w+)\\)").matcher(root);
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));
-        check(actual.equals(MODULES) && actual.size() == 27, "exact remaining production registration order");
+        check(actual.equals(MODULES) && actual.size() == 28, "exact remaining production registration order");
         check(!root.contains("BlackjackModule") && !root.contains("blackjackModule"), "no root Blackjack wiring");
         List<String> expectedReload = List.of("configService", "localizationModule", "lobbyModule", "chatModule",
                 "privateMessageModule", "presentationModule", "dailyQuestModule");

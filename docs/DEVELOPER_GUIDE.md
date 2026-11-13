@@ -1240,10 +1240,15 @@ Beim regulären NORMAL-Eintritt besitzt die Lobby die Inventory-Präsentation vo
 - Player Visibility (`visibility`)
 - Settings (`settings`), optionaler Shortcut
 - Freunde (`friends`), optionaler Shortcut mit dem bestehenden FriendMenu-Open-/Authorization-Pfad
+- Gadgets (`gadgets`), goldene Kiste auf Slot 4 in neu angelegten Konfigurationen
 
 Die Live-Datei `plugins/VapeeCore/lobby.yml` ist unter `items.<id>` für Material, Slot, Name, Lore, enabled und head-owner maßgeblich. Positionen sind Presentation, kein Funktionsvertrag; die Java-Registry und PDC-ID bestimmen die Aktion. Der Reload-Item-Abgleich leert kein Inventar: Er entfernt ausschließlich eigene PDC-Items und nutzt sichere freie Storage-Slots für fremde Items an einem Zielplatz. Ohne freien Platz bleibt das fremde Item erhalten. Die Eligibility aus LobbyExperience verlangt geladene Playerdaten und keine Activity-Session; BUILD und fremde Welten werden zusätzlich im Lobby-State ausgeschlossen.
 
 Die PDC-ID liegt weiterhin unter dem Namespaced Key `lobby_item`. Die Ender Chest wird nicht angefasst. Zulässige Gamemodes sind die Bukkit-Werte, case-insensitive gelesen; Default und Fallback sind `ADVENTURE`. Ein ungültiger Wert wie `BANANA` erzeugt eine Warnung, startet trotzdem und verändert die Datei nicht.
+
+Das `GadgetsModule` startet nach LobbyExperience und verwendet denselben Lobby-Zugangscheck. Die Hotbar-Registrierung erfolgt vor dem Versiegeln der Registry und nach den bisherigen Einträgen. Bei Slotkonflikten haben diese Vorrang. Das 27-Slot-Menü zeigt sechs lokalisierte Kategorien als nicht verfügbar. Es nimmt keine Items an und hat keine Effektaktionen. Weltwechsel, Logout, Lobby-Reload und Modul-Disable schließen nur zugehörige Gadgets-Ansichten. Es gibt 28 Module und weiterhin sieben Reload-Teilnehmer.
+
+Bei einer bestehenden `lobby.yml` wird Gadgets über `items.gadgets.enabled: true` aktiviert. Fehlende Einträge, auch nach dem bestehenden Legacy-Schema-Upgrade, bleiben deaktiviert. Material, Slot, MiniMessage-Name und Lore folgen denselben Regeln wie die anderen Lobby-Items. Die Aktivierung kann über den bestehenden `/core reload` übernommen werden.
 
 ### BUILD
 

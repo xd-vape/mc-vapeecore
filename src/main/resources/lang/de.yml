@@ -213,6 +213,8 @@ core:
 lobby:
 
   # Hotbar Item Names and Lore
+  gadgets:
+    lore: "<vc_text>Rechtsklick, um die Gadgets anzusehen.</vc_text>"
   navigator:
     lore: "<gray>Rechtsklick, um den Warp-Navigator zu öffnen.</gray>"
     name: "<aqua>Warp-Navigator</aqua>"
@@ -234,6 +236,17 @@ lobby:
   settings:
     lore: "<gray>Rechtsklick, um deine Einstellungen zu öffnen.</gray>"
     name: "<yellow>Einstellungen</yellow>"
+
+gadgets:
+  title: "Gadgets"
+  unavailable: "Noch nicht verfügbar"
+  categories:
+    player-riding: "Auf Spielern reiten"
+    size-changer: "Größe ändern"
+    glow: "Leuchten"
+    trails: "Partikelspuren"
+    movement-extras: "Bewegungsextras"
+    fun-gadgets: "Spaß-Gadgets"
 
 spawn:
 

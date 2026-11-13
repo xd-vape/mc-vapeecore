@@ -47,7 +47,7 @@ public final class LobbyConfigUpgradeHarness {
             var freshEvolution=new ConfigEvolution(fresh,logger,name -> LobbyConfigUpgradeHarness.class.getResourceAsStream("/"+name));
             check(!freshEvolution.evolve("lobby.yml")&&backups(fresh).isEmpty()&&Arrays.equals(freshBytes,Files.readAllBytes(fresh.resolve("lobby.yml"))),"fresh bundled v2 gets no migration backup/rewrite");
             var freshYaml=(Map<?,?>)yaml.load(new String(freshBytes,java.nio.charset.StandardCharsets.UTF_8));
-            check(freshYaml.get("config-version").equals(2)&&((Map<?,?>)freshYaml.get("items")).keySet().equals(Set.of("player-menu", "visibility", "navigator")),"fresh actual resource is v2 with three primary items");
+            check(freshYaml.get("config-version").equals(2)&&((Map<?,?>)freshYaml.get("items")).keySet().equals(Set.of("player-menu", "visibility", "navigator", "gadgets")),"fresh resource is v2 with four primary items");
         }finally{try(var paths=Files.walk(root)){for(Path p:paths.sorted(Comparator.reverseOrder()).toList())Files.delete(p);}}
         System.out.println("LobbyConfigUpgradeHarness passed "+checks+" checks.");
     }

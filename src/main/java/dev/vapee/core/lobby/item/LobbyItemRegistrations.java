@@ -12,8 +12,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /** The single list of production lobby features. Add a feature adapter and one registration here;
@@ -80,10 +82,17 @@ public final class LobbyItemRegistrations {
         registry.register("friends", new LobbyItemDefinition(false, 6, friend, friend), new FriendsLobbyItemAction(friends));
     }
 
+    public static void registerGadgets(LobbyItemRegistry registry, Predicate<Player> openMenu) {
+        var chest = appearance(Material.CHEST, "<gold>Gadgets", List.of("<i18n:lobby.gadgets.lore>"), false);
+        registry.register("gadgets", new LobbyItemDefinition(false, 4, chest, chest),
+                (player, click) -> openMenu.test(player));
+    }
+
     /** Standalone config loaders have the same registrations but no enabled feature runtime. */
     public static LobbyItemRegistry inactive() {
         var registry = new LobbyItemRegistry();
         register(registry, () -> null, () -> null, () -> null, () -> null);
+        registerGadgets(registry, player -> false);
         return registry;
     }
 

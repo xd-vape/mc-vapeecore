@@ -1,5 +1,8 @@
 package dev.vapee.core;
 
+import dev.vapee.core.gadgets.GadgetsModule;
+import dev.vapee.core.lobby.item.LobbyItemRegistrations;
+
 import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.chat.ChatModule;
 import dev.vapee.core.clan.ClanModule;
@@ -162,6 +165,8 @@ public final class VapeeCore extends JavaPlugin {
                 utilityModule,
                 messageService
         );
+        GadgetsModule gadgetsModule = new GadgetsModule(this, lobbyModule, playerModule, activityModule, messageService);
+        LobbyItemRegistrations.registerGadgets(lobbyModule.getItemRegistry(), gadgetsModule::openMenu);
         moduleManager.register(localizationModule);
         moduleManager.register(permissionModule);
         moduleManager.register(rankModule);
@@ -189,6 +194,7 @@ public final class VapeeCore extends JavaPlugin {
         moduleManager.register(worldDisplayModule);
         moduleManager.register(warpModule);
         moduleManager.register(lobbyExperienceModule);
+        moduleManager.register(gadgetsModule);
         moduleManager.enableAll();
 
         questModule.startMovement(lobbyModule.getLobbyPlayerStateService(), activityModule.getActivityService());

@@ -119,6 +119,14 @@ public final class ConfigEvolution {
                 if (resource == null) throw new IOException("Missing default resource " + name);
                 defaults = mapping(yaml.compose(new StringReader(new String(resource.readAllBytes(), StandardCharsets.UTF_8))));
             }
+            // Gadgets defaults to enabled only when Lobby copies a new file. A legacy
+            // migration must not add the opt-in to an existing installation.
+            if (name.equals("lobby.yml")) {
+                NodeTuple items = entries(defaults).get("items");
+                if (items != null && items.getValueNode() instanceof MappingNode itemDefaults) {
+                    itemDefaults.getValue().remove(entries(itemDefaults).get("gadgets"));
+                }
+            }
             NodeTuple defaultVersion = entries(defaults).get(VERSION_KEY);
             if (defaultVersion == null || !Tag.INT.equals(defaultVersion.getValueNode().getTag())
                     || !Integer.toString(supported).equals(((ScalarNode) defaultVersion.getValueNode()).getValue())) {

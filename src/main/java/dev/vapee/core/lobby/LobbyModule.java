@@ -18,6 +18,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public final class LobbyModule implements CoreModule, ReloadParticipant {
@@ -27,6 +29,7 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
     private final MessageService messageService;
 
     private final LobbyItemRegistry itemRegistry = new LobbyItemRegistry();
+    private final List<Runnable> reloadListeners = new ArrayList<>();
     private LobbyConfig lobbyConfig;
     private LobbyService lobbyService;
     private LobbyItemService lobbyItemService;
@@ -152,6 +155,14 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
 
     public LobbyItemRegistry getItemRegistry() { return itemRegistry; }
 
+    public void addReloadListener(Runnable listener) {
+        reloadListeners.add(Objects.requireNonNull(listener));
+    }
+
+    public void removeReloadListener(Runnable listener) {
+        reloadListeners.remove(listener);
+    }
+
     public LobbyService getLobbyService() {
         return Objects.requireNonNull(lobbyService, "LobbyModule is not enabled");
     }
@@ -195,14 +206,20 @@ public final class LobbyModule implements CoreModule, ReloadParticipant {
                     activeService.applySpawn(preparedConfigState.spawn());
                     activePlayerStateService.refreshNormalGameModes();
                     activePlayerStateService.refreshLobbyItems();
+                    notifyReloadListeners();
                 },
                 () -> {
                     activeConfig.applyState(previousConfigState);
                     activeService.applySpawn(previousSpawn);
                     activePlayerStateService.refreshNormalGameModes();
                     activePlayerStateService.refreshLobbyItems();
+                    notifyReloadListeners();
                 }
         );
+    }
+
+    private void notifyReloadListeners() {
+        List.copyOf(reloadListeners).forEach(Runnable::run);
     }
 
     private PluginCommand requireCommand(String name) {

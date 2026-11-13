@@ -116,7 +116,7 @@ public final class ModerationLifecycleHarness {
                 "identityModule", "moderationModule", "friendModule", "presenceModule", "clanModule", "rewardModule", "onlineRewardModule",
                 "questModule", "dailyQuestModule", "lobbyModule", "visibilityModule", "chatModule", "privateMessageModule",
                 "presentationModule", "settingsModule", "activityModule", "utilityModule", "seatModule", "worldDisplayModule",
-                "warpModule", "lobbyExperienceModule");
+                "warpModule", "lobbyExperienceModule", "gadgetsModule");
         var matcher = Pattern.compile("moduleManager\\.register\\((\\w+)\\);").matcher(core);
         List<String> actual = new ArrayList<>();
         while (matcher.find()) actual.add(matcher.group(1));

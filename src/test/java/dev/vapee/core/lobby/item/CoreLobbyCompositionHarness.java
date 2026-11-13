@@ -16,7 +16,7 @@ public final class CoreLobbyCompositionHarness {
             String source = Files.readString(Path.of("src/main/resources/lobby.yml"));
             var configured = f.configure(source); registry.activate(); f.refresh();
             var enabled = configured.entrySet().stream().filter(e -> e.getValue().enabled()).map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
-            check(enabled.equals(Set.of("player-menu","visibility","navigator")) && f.ownedCount() == 3, "resource default places exactly three primary items");
+            check(enabled.equals(Set.of("player-menu","visibility","navigator","gadgets")) && f.ownedCount() == 4, "new resource places four primary items");
             check(registry.resolve("friends").isPresent() && registry.resolve("settings").isPresent(), "existing shortcuts remain explicit Java registrations");
             check(!configured.get("friends").enabled() && !configured.get("settings").enabled(), "omitted optional shortcuts stay disabled");
             for (var id : enabled) {
@@ -30,9 +30,10 @@ public final class CoreLobbyCompositionHarness {
             f.configure("items:\n  not-registered:\n    enabled: true\n    slot: 3\n    command: op someone\n"); f.refresh();
             check(f.ownedCount() == 0, "unknown composition never creates an action or resurrects disabled shortcuts");
             f.configure(source); f.refresh();
-            check(f.ownedCount() == 3, "reload returns to three without stale items or duplicate heads");
+            check(f.ownedCount() == 4, "reload returns to four without stale or duplicate items");
             var defaults = LobbyItemsConfig.defaults();
-            check(defaults.entrySet().stream().filter(e -> e.getValue().enabled()).map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet()).equals(enabled), "missing legacy item section uses the same three-item product defaults");
+            check(defaults.entrySet().stream().filter(e -> e.getValue().enabled()).map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet())
+                    .equals(Set.of("player-menu", "visibility", "navigator")), "missing legacy section retains the original three defaults");
         }
         System.out.println("CoreLobbyCompositionHarness passed " + checks + " checks.");
     }

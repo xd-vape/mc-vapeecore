@@ -40,7 +40,9 @@ public final class LobbyItemsConfigHarness {
         installRegistries();
         Logger logger = Logger.getAnonymousLogger(); logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() { public void publish(LogRecord r) { logs.add(r); } public void flush() { } public void close() { } });
-        check(LobbyItemsConfig.defaults().size() == 5, "five explicit production registrations including optional shortcuts");
+        check(LobbyItemsConfig.defaults().keySet().equals(Set.of(
+                "player-menu", "navigator", "visibility", "settings", "friends", "gadgets")),
+                "all six production lobby item IDs are explicitly registered");
         var defaults = read("", logger);
         check(defaults.get("navigator").slot() == 8 && defaults.get("visibility").slot() == 1
                 && defaults.get("player-menu").slot() == 0, "three primary default items use configured product geometry");

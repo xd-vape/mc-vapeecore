@@ -73,3 +73,10 @@ items:
     lore:
       - "<i18n:lobby.navigator.lore>"
     head-owner: none
+  gadgets:
+    enabled: true
+    slot: 4
+    material: CHEST
+    name: "<gold>Gadgets"
+    lore:
+      - "<i18n:lobby.gadgets.lore>"
