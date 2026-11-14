@@ -165,8 +165,11 @@ public final class VapeeCore extends JavaPlugin {
                 utilityModule,
                 messageService
         );
-        GadgetsModule gadgetsModule = new GadgetsModule(this, lobbyModule, playerModule, activityModule, messageService);
-        LobbyItemRegistrations.registerGadgets(lobbyModule.getItemRegistry(), gadgetsModule::openMenu);
+        GadgetsModule gadgetsModule = new GadgetsModule(this, lobbyModule, playerModule, activityModule, messageService,
+                visibilityModule::getVisibilityService, socialModule::getSocialService, utilityModule::getUtilityService,
+                lobbyExperienceModule::isLaunchingOrGliding);
+        LobbyItemRegistrations.registerGadgets(lobbyModule.getItemRegistry(), gadgetsModule::handleHotbar,
+                gadgetsModule::appearance, gadgetsModule::decorate);
         moduleManager.register(localizationModule);
         moduleManager.register(permissionModule);
         moduleManager.register(rankModule);

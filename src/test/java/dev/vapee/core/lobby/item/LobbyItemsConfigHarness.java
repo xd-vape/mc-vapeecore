@@ -264,6 +264,7 @@ public final class LobbyItemsConfigHarness {
             });
         }
         @Override public Material getType() { return material; }
+        @Override public int getAmount() { return 1; }
         @Override public ItemMeta getItemMeta() { return meta; }
         @Override public boolean setItemMeta(ItemMeta value) { meta = value; return true; }
     }

@@ -103,6 +103,9 @@ public final class LobbyExperienceModule implements CoreModule {
     }
 
     public NavigatorMenu getNavigatorMenu() { return Objects.requireNonNull(navigatorMenu, "LobbyExperienceModule is not enabled"); }
+    public boolean isLaunchingOrGliding(java.util.UUID id) {
+        return glideService != null && glideService.isLaunchingOrGliding(id);
+    }
 
     @Override
     public String getName() {

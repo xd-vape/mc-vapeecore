@@ -240,6 +240,22 @@ lobby:
 gadgets:
   title: "Gadgets"
   unavailable: "Noch nicht verfügbar"
+  riding:
+    active: "Aktiv"
+    inactive: "Inaktiv"
+    enable: "<accent>Linksklick</accent> zum Aktivieren."
+    disable: "<accent>Linksklick</accent> zum Deaktivieren."
+    pickup-help: "<accent>Rechtsklick</accent> auf einen schleichenden Spieler, um ihn zu tragen."
+    ride-help: "<accent>Linksklick</accent> auf einen schleichenden Spieler, um auf ihm zu reiten."
+    dismount-help: "<accent>Schleiche</accent>, um abzusteigen. Lass die Taste zuerst los, wenn du sie schon hältst."
+    launch-help: "<accent>Linksklick ins Leere</accent>, um den getragenen Spieler nach vorne zu schleudern."
+    open-menu: "<accent>Schleichen + Rechtsklick ins Leere</accent> öffnet Gadgets."
+    slot-unavailable: "<vc_warning>Dein Gadgets-Hotbar-Slot ist nicht verfügbar.</vc_warning>"
+    sneak-pickup: "<player> muss <accent>schleichen</accent>, damit du ihn tragen kannst."
+    sneak-ride: "<player> muss <accent>schleichen</accent>, damit du auf ihm reiten kannst."
+    carrying: "Du <accent>trägst</accent> jetzt <player>."
+    riding: "Du <accent>reitest</accent> jetzt auf <player>."
+    launched: "Du hast <player> nach vorne <accent>geschleudert</accent>."
   categories:
     player-riding: "Auf Spielern reiten"
     size-changer: "Größe ändern"

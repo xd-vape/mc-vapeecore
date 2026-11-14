@@ -64,6 +64,10 @@ public final class LobbyGlideService implements UtilityFlightListener, LobbyPlay
         deferEquipmentCleanup(player.getUniqueId());
     }
     public boolean isOwned(UUID id) { return states.containsKey(id); }
+    public boolean isLaunchingOrGliding(UUID id) {
+        var state = states.get(id);
+        return state != null && (state.phase == Phase.LAUNCHING || state.phase == Phase.GLIDING);
+    }
     boolean isActive(UUID id) { var state = states.get(id); return state != null && state.phase == Phase.GLIDING; }
     long generation(UUID id) { return states.get(id).generation; }
     int ownedCount() { return states.size(); }

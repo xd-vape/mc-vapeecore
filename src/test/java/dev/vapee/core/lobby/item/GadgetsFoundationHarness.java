@@ -31,11 +31,13 @@ import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDismountEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -43,6 +45,10 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInputEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -54,6 +60,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredListener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.util.Vector;
+import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 
 /** Production registry, menu, reload plan and module lifecycle with Paper event and inventory fixtures. */
 public final class GadgetsFoundationHarness {
@@ -83,7 +91,8 @@ public final class GadgetsFoundationHarness {
     private static void testRuntime(Path root, LobbyItemRegistryFixture fixture, Viewer viewer) throws Exception {
         World world = viewer.player.getWorld();
         var manager = proxy(PluginManager.class, (name, args) -> {
-            if (name.equals("registerEvents") && args[0].getClass().getSimpleName().equals("GadgetsMenu")) {
+            if (name.equals("registerEvents") && (args[0].getClass().getSimpleName().equals("GadgetsMenu")
+                    || args[0].getClass().getSimpleName().equals("PlayerRiding"))) {
                 registerMenuEvents((Listener) args[0], fixture.plugin);
                 if (viewer.failRegistration) throw new IllegalStateException("fixture registration failure");
             }
@@ -92,6 +101,7 @@ public final class GadgetsFoundationHarness {
         var server = proxy(Server.class, (name, args) -> switch (name) {
             case "getWorld" -> world;
             case "getPlayer" -> viewer.player;
+            case "getCurrentTick" -> viewer.tick;
             case "getPluginManager" -> manager;
             case "isPrimaryThread" -> true;
             case "getOnlinePlayers" -> List.of(viewer.player);
@@ -126,8 +136,14 @@ public final class GadgetsFoundationHarness {
         inject(LobbyModule.class, lobby, "lobbyPlayerStateService", state);
         var activities = new ActivityModule(fixture.plugin, players);
         activities.enable();
-        var gadgets = new GadgetsModule(fixture.plugin, lobby, players, activities, messages);
-        LobbyItemRegistrations.registerGadgets(fixture.registry, gadgets::openMenu);
+        var visibility = new dev.vapee.core.visibility.VisibilityService(fixture.plugin, fixture.lobby,
+                new dev.vapee.core.visibility.VisibilityPolicy(id -> dev.vapee.core.player.settings.PlayerVisibilitySettings.defaults(),
+                        (a, b) -> false, (a, b) -> false, (a, b) -> false));
+        var social = new dev.vapee.core.social.SocialService(playerService, fixture.logger);
+        var utility = new dev.vapee.core.utility.UtilityService(fixture.plugin);
+        var gadgets = new GadgetsModule(fixture.plugin, lobby, players, activities, messages,
+                () -> visibility, () -> social, () -> utility, id -> false);
+        LobbyItemRegistrations.registerGadgets(fixture.registry, gadgets::handleHotbar, gadgets::appearance, gadgets::decorate);
         fixture.registry.seal();
         fixture.registry.activate();
         var chest = reloadNewInstall(configPath, lobby, fixture);
@@ -158,8 +174,28 @@ public final class GadgetsFoundationHarness {
             check(top.getSize() == 27 && plain(viewer.title).equals("Gadgets") && top.getHolder().getInventory() == top,
                     "right-click opens bound 27-slot menu with title");
             check(!gadgets.openMenu(viewer.player) && viewer.open == top, "repeated opening keeps the same inventory");
-            int[] slots = {10, 11, 12, 14, 15, 16};
-            String[] labels = {"Player Riding", "Size Changer", "Glow", "Trails", "Movement Extras", "Fun Gadgets"};
+            var entry = top.getItem(10);
+            check(plain(entry.getItemMeta().displayName()).equals("Player Riding")
+                    && plain(entry.getItemMeta().lore().getFirst()).equals("Inactive"), "Riding starts inactive");
+            fixture.heldSlot = 4;
+            check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
+                    && fixture.storage[4].getType() == Material.SADDLE
+                    && plain(top.getItem(10).getItemMeta().lore().getFirst()).equals("Active"),
+                    "left-click activates a managed Saddle and updates menu status");
+            ItemStack saddle = fixture.storage[4];
+            viewer.close();
+            var target = exerciseRiding(fixture, viewer, playerService, world, saddle, social);
+            fixture.click(saddle, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+            check(viewer.open == viewer.bottom, "normal right-click with the saddle keeps the riding gesture free");
+            viewer.sneaking = true;
+            fixture.click(saddle, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+            viewer.sneaking = false;
+            check(viewer.open != viewer.bottom, "sneak and right-click the air opens Gadgets with the active saddle");
+            top = viewer.open;
+            check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
+                    && fixture.storage[4].getType() == Material.CHEST, "deactivating restores the chest in the same slot");
+            int[] slots = {11, 12, 14, 15, 16};
+            String[] labels = {"Size Changer", "Glow", "Trails", "Movement Extras", "Fun Gadgets"};
             for (int index = 0; index < slots.length; index++) {
                 int slot = slots[index];
                 ItemStack icon = top.getItem(slot);
@@ -189,7 +225,8 @@ public final class GadgetsFoundationHarness {
             viewer.locale = Locale.GERMANY;
             fixture.click(chest, Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND);
             check(plain(viewer.open.getItem(10).getItemMeta().displayName()).equals("Auf Spielern reiten")
-                            && plain(viewer.open.getItem(10).getItemMeta().lore().getFirst()).equals("Noch nicht verfügbar"),
+                            && plain(viewer.open.getItem(10).getItemMeta().lore().getFirst()).equals("Inaktiv")
+                            && plain(viewer.open.getItem(11).getItemMeta().lore().getFirst()).equals("Noch nicht verfügbar"),
                     "block right-click opens German category and status");
             items.refreshItem(viewer.player, "gadgets");
             check(plain(fixture.storage[4].getItemMeta().lore().getFirst()).startsWith("Rechtsklick"),
@@ -200,6 +237,12 @@ public final class GadgetsFoundationHarness {
             dispatch(new InventoryCloseEvent(viewer.view(top)));
             check(!gadgets.openMenu(viewer.player), "stale close event cannot forget current inventory");
 
+            click(viewer, viewer.open, 10, ClickType.LEFT);
+            ItemStack beforeReload = fixture.storage[4];
+            target.sneaking = true;
+            viewer.tick += 3;
+            dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+            check(target.vehicle == viewer.player && beforeReload.getType() == Material.SADDLE, "reload starts with an active mount");
             var edited = new org.bukkit.configuration.file.YamlConfiguration();
             edited.load(configPath.toFile());
             edited.set("items.gadgets.enabled", false);
@@ -207,7 +250,7 @@ public final class GadgetsFoundationHarness {
             var disable = lobby.prepareReload();
             disable.apply();
             fixture.configure(Files.readString(configPath));
-            check(viewer.open == viewer.bottom && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
+            check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
                     "reload closes owned view, removes disabled item and rejects access");
             fixture.click(chest, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
             check(viewer.open == viewer.bottom, "stale managed chest cannot open after disable");
@@ -227,6 +270,101 @@ public final class GadgetsFoundationHarness {
             activities.disable();
         }
         check(viewer.open == viewer.bottom && countMenuListeners() == 0, "shutdown closes owned menu and removes handlers");
+    }
+
+    private static Viewer exerciseRiding(LobbyItemRegistryFixture fixture, Viewer viewer, PlayerService players,
+                                         World world, ItemStack saddle, dev.vapee.core.social.SocialService social) {
+        var target = new Viewer();
+        target.player = target.delegate;
+        target.world = world;
+        viewer.peer = target;
+        target.peer = viewer;
+        players.loadPlayer(target.id, "OtherPlayer");
+        var forged = fixture.marked("vapeecore", "gadgets", Material.SADDLE);
+        fixture.storage[4] = forged;
+        var attempt = new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND);
+        dispatch(attempt);
+        check(!attempt.isCancelled() && target.vehicle == null, "managed marker alone grants no riding authority");
+        fixture.storage[4] = saddle;
+
+        dispatch(attempt);
+        dispatch(new PlayerInteractAtEntityEvent(viewer.player, target.player, new Vector(), EquipmentSlot.HAND));
+        check(attempt.isCancelled() && target.vehicle == null && viewer.chat.size() == 1
+                && viewer.chat.getFirst().contains("must be sneaking"), "no consent and duplicate event gives one localized denial");
+        target.sneaking = true;
+        viewer.tick += 3;
+        var pickup = new PlayerInteractAtEntityEvent(viewer.player, target.player, new Vector(), EquipmentSlot.HAND);
+        dispatch(pickup);
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(pickup.isCancelled() && target.vehicle == viewer.player && viewer.passengers.equals(List.of(target.player)),
+                "paired events create exactly one mount in the correct direction");
+        var foreignMount = new EntityMountEvent(viewer.player, target.player);
+        dispatch(foreignMount);
+        check(foreignMount.isCancelled(), "foreign mount cannot introduce a chain");
+        fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND);
+        check(target.vehicle == null && viewer.passengers.isEmpty() && target.velocity != null
+                        && target.velocity.distanceSquared(new Vector(0, 0.32, 0.75)) < 0.000001,
+                "air click detaches and launches the rider once");
+        Vector launched = target.velocity;
+        fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND);
+        check(target.velocity == launched, "air click without rider has no effect");
+
+        target.sneaking = true;
+        viewer.tick += 3;
+        var attack = new PrePlayerAttackEntityEvent(viewer.player, target.player, true);
+        dispatch(attack);
+        check(attack.isCancelled() && viewer.vehicle == target.player, "attack intercepted before damage and mounts actor");
+        dispatch(new PlayerInputEvent(viewer.player, proxy(org.bukkit.Input.class, (name, args) -> name.equals("isSneak"))));
+        check(viewer.vehicle == null && target.passengers.isEmpty(), "fresh sneak input dismounts immediately");
+
+        viewer.tick += 3;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.player, "a new ride starts after dismount");
+        var from = new org.bukkit.Location(world, 0, 64, 0);
+        dispatch(new PlayerTeleportEvent(target.player, from, from.clone().add(2, 0, 0)));
+        check(target.vehicle == null, "teleport of the passenger clears the owned relation");
+
+        target.sneaking = true;
+        target.canSee = false;
+        viewer.tick += 3;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == null, "mutual visibility is required");
+        target.canSee = true;
+        target.vehicle = viewer.delegate;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.delegate, "foreign mount remains untouched");
+        target.vehicle = null;
+        target.flying = true;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == null, "flight prevents mounting");
+        target.flying = false;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.player, "mount available again when eligible");
+        dispatch(new PlayerQuitEvent(target.player, Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
+        check(target.vehicle == null && viewer.passengers.isEmpty(), "passenger logout clears mount");
+        viewer.tick += 3;
+        target.sneaking = true;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.player, "mount available before world transition");
+        dispatch(new PlayerChangedWorldEvent(target.player, world));
+        check(target.vehicle == null, "world change clears mount");
+        viewer.tick += 3;
+        target.sneaking = true;
+        social.ignore(target.id, viewer.id);
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == null, "reverse ignore blocks interaction");
+        social.unignore(target.id, viewer.id);
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.player, "mount available again after ignore removal");
+        viewer.passengers.clear();
+        target.vehicle = null;
+        dispatch(new EntityDismountEvent(target.player, viewer.player));
+        viewer.tick += 3;
+        target.sneaking = true;
+        dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+        check(target.vehicle == viewer.player, "external dismount forgets both roles");
+        dispatch(new PlayerChangedWorldEvent(target.player, world));
+        return target;
     }
 
     private static ItemStack reloadNewInstall(Path path, LobbyModule lobby, LobbyItemRegistryFixture fixture) throws Exception {
@@ -304,19 +442,17 @@ public final class GadgetsFoundationHarness {
     }
 
     private static void registerMenuEvents(Listener listener, JavaPlugin plugin) {
-        for (var type : List.of(InventoryClickEvent.class, InventoryDragEvent.class, InventoryCloseEvent.class,
-                PlayerChangedWorldEvent.class, PlayerQuitEvent.class)) {
+        for (var method : listener.getClass().getDeclaredMethods()) {
+            var annotation = method.getAnnotation(org.bukkit.event.EventHandler.class);
+            if (annotation == null) continue;
             try {
-                var method = Arrays.stream(listener.getClass().getDeclaredMethods())
-                        .filter(candidate -> Arrays.equals(candidate.getParameterTypes(), new Class<?>[]{type}))
-                        .filter(candidate -> candidate.isAnnotationPresent(org.bukkit.event.EventHandler.class))
-                        .findFirst().orElseThrow();
+                var type = method.getParameterTypes()[0];
                 method.setAccessible(true);
                 var handlers = (org.bukkit.event.HandlerList) type.getMethod("getHandlerList").invoke(null);
                 handlers.register(new RegisteredListener(listener, (target, event) -> {
                     try { method.invoke(target, event); }
                     catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
-                }, EventPriority.NORMAL, plugin, false));
+                }, annotation.priority(), plugin, annotation.ignoreCancelled()));
             } catch (ReflectiveOperationException failure) {
                 throw new AssertionError(failure);
             }
@@ -376,10 +512,44 @@ public final class GadgetsFoundationHarness {
         private Locale locale = Locale.US;
         private Component title;
         private Player player;
+        private boolean sneaking;
+        private boolean flying;
+        private boolean canSee = true;
+        private World world;
+        private Entity vehicle;
+        private final java.util.ArrayList<Entity> passengers = new java.util.ArrayList<>();
+        private final java.util.ArrayList<String> chat = new java.util.ArrayList<>();
+        private Vector velocity;
+        private int tick;
+        private Viewer peer;
         private boolean failRegistration;
         private final Player delegate = proxy(Player.class, (name, args) -> switch (name) {
             case "getUniqueId" -> id;
+            case "getName" -> "RidingFixture";
             case "isOnline" -> true;
+            case "isSneaking" -> sneaking;
+            case "setSneaking" -> { sneaking = (boolean) args[0]; yield null; }
+            case "getWorld" -> world;
+            case "isFlying" -> flying;
+            case "canSee" -> canSee;
+            case "getVehicle" -> vehicle;
+            case "getPassengers" -> List.copyOf(passengers);
+            case "getCurrentInput" -> proxy(org.bukkit.Input.class, (method, params) -> false);
+            case "getYaw" -> 0F;
+            case "sendMessage" -> { if (args[0] instanceof Component component) chat.add(plain(component)); yield null; }
+            case "setVelocity" -> { velocity = (Vector) args[0]; yield null; }
+            case "addPassenger", "removePassenger" -> {
+                Entity passenger = (Entity) args[0];
+                if (passenger != peer.player) yield false;
+                if (name.equals("addPassenger")) {
+                    passengers.add(passenger);
+                    peer.vehicle = player;
+                } else {
+                    passengers.remove(passenger);
+                    peer.vehicle = null;
+                }
+                yield true;
+            }
             case "locale" -> locale;
             case "getOpenInventory" -> view(open);
             case "openInventory" -> { close(); open = (Inventory) args[0]; yield view(open); }

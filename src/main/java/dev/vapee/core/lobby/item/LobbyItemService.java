@@ -81,6 +81,18 @@ public final class LobbyItemService {
         return registry.resolve(id).isPresent() && definition != null && definition.enabled();
     }
 
+    public boolean isInConfiguredSlot(Player player, String id) {
+        var definition = definitions.get().get(id);
+        return definition != null && definition.enabled()
+                && getItemId(player.getInventory().getItem(definition.slot())).filter(id::equals).isPresent();
+    }
+
+    public boolean isHeldInConfiguredSlot(Player player, String id) {
+        var definition = definitions.get().get(id);
+        return definition != null && definition.slot() == player.getInventory().getHeldItemSlot()
+                && isInConfiguredSlot(player, id);
+    }
+
     public void removeManagedItems(Player player) {
         PlayerInventory inventory = Objects.requireNonNull(player, "player").getInventory();
         ItemStack[] contents = inventory.getContents();
@@ -156,6 +168,7 @@ public final class LobbyItemService {
                 PersistentDataType.STRING,
                 entry.id()
         );
+        entry.decorate().accept(player, meta);
         item.setItemMeta(meta);
         return item;
     }

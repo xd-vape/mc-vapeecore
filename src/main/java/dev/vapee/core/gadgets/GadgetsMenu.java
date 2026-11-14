@@ -12,10 +12,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.logging.Level;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -50,13 +53,15 @@ final class GadgetsMenu implements Listener {
     private final JavaPlugin plugin;
     private final MessageService messages;
     private final Predicate<Player> access;
+    private final PlayerRiding riding;
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
-    GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access) {
+    GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
+        this.riding = riding;
     }
 
     boolean open(Player player) {
@@ -71,6 +76,10 @@ final class GadgetsMenu implements Listener {
         var categories = Category.values();
         for (int index = 0; index < categories.length; index++) {
             var category = categories[index];
+            if (category == Category.PLAYER_RIDING) {
+                renderRiding(player, inventory);
+                continue;
+            }
             var item = UiItems.literal(category.icon, tr("gadgets.categories." + category.key),
                     MessageStyle.TEXT, List.of(tr("gadgets.unavailable").color(MessageStyle.MUTED)));
             inventory.setItem(LAYOUT.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
@@ -85,9 +94,28 @@ final class GadgetsMenu implements Listener {
         return true;
     }
 
-    @EventHandler
+    private void renderRiding(Player player, Inventory inventory) {
+        boolean active = riding.active(player);
+        var lore = List.of(MessageStyle.status(tr(active ? "gadgets.riding.active" : "gadgets.riding.inactive"), active),
+                Component.empty(), tr("gadgets.riding.pickup-help"), tr("gadgets.riding.ride-help"),
+                tr("gadgets.riding.dismount-help"), tr("gadgets.riding.launch-help"), tr("gadgets.riding.open-menu"),
+                Component.empty(), tr(active ? "gadgets.riding.disable" : "gadgets.riding.enable"));
+        var item = UiItems.literal(Material.SADDLE, tr("gadgets.categories.player-riding"), MessageStyle.TEXT, lore);
+        inventory.setItem(LAYOUT.contentSlot(0), UiItems.render(UiItems.localize(item, messages, player)));
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onClick(InventoryClickEvent event) {
-        if (event.getView().getTopInventory().getHolder() instanceof Holder) event.setCancelled(true);
+        var top = event.getView().getTopInventory();
+        if (!(top.getHolder() instanceof Holder holder)) return;
+        boolean wasCancelled = event.isCancelled();
+        event.setCancelled(true);
+        if (wasCancelled || !(event.getWhoClicked() instanceof Player player) || event.getClickedInventory() != top
+                || event.getClick() != ClickType.LEFT || event.getRawSlot() != LAYOUT.contentSlot(0)
+                || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
+                || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top
+                || !access.test(player)) return;
+        if (riding.toggle(player)) renderRiding(player, top);
     }
 
     @EventHandler

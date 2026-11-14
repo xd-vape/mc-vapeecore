@@ -23,6 +23,7 @@ public final class MessageStyle {
     public static final NamedTextColor FRIENDS_LABEL = NamedTextColor.GOLD;
     public static final NamedTextColor CLAN_LABEL = NamedTextColor.DARK_PURPLE;
     public static final NamedTextColor STAFF_LABEL = NamedTextColor.DARK_GRAY;
+    public static final NamedTextColor GADGETS_LABEL = NamedTextColor.GOLD;
     private static final String FORMATTED_PREFIX = "vapeecore.format.prefix";
     public static final NamedTextColor TEXT = NamedTextColor.GRAY;
     public static final NamedTextColor MUTED = NamedTextColor.DARK_GRAY;

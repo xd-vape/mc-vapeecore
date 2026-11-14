@@ -240,6 +240,22 @@ lobby:
 gadgets:
   title: "Gadgets"
   unavailable: "Not yet available"
+  riding:
+    active: "Active"
+    inactive: "Inactive"
+    enable: "<accent>Left-click</accent> to activate."
+    disable: "<accent>Left-click</accent> to deactivate."
+    pickup-help: "<accent>Right-click</accent> a sneaking player to pick them up."
+    ride-help: "<accent>Left-click</accent> a sneaking player to ride them."
+    dismount-help: "<accent>Sneak</accent> to dismount. Release Sneak first if it is already held."
+    launch-help: "<accent>Left-click the air</accent> while carrying someone to launch them."
+    open-menu: "<accent>Sneak + right-click the air</accent> to open Gadgets."
+    slot-unavailable: "<vc_warning>Your Gadgets hotbar slot is unavailable.</vc_warning>"
+    sneak-pickup: "<player> must be <accent>sneaking</accent> to be picked up."
+    sneak-ride: "<player> must be <accent>sneaking</accent> for you to ride them."
+    carrying: "You are now <accent>carrying</accent> <player>."
+    riding: "You are now <accent>riding</accent> <player>."
+    launched: "You <accent>launched</accent> <player>."
   categories:
     player-riding: "Player Riding"
     size-changer: "Size Changer"

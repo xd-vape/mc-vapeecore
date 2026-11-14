@@ -112,7 +112,10 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
         event.setCancelled(false); listener.onPlayerInteract(event); return event;
     }
     public ItemStack marked(String namespace, String id) {
-        ItemStack item = new LobbyItemsConfigHarness.TestItem(Material.DIAMOND);
+        return marked(namespace, id, Material.DIAMOND);
+    }
+    public ItemStack marked(String namespace, String id, Material material) {
+        ItemStack item = new LobbyItemsConfigHarness.TestItem(material);
         item.getItemMeta().getPersistentDataContainer().set(new NamespacedKey(namespace, "lobby_item"), PersistentDataType.STRING, id);
         return item;
     }
