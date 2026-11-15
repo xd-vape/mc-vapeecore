@@ -221,6 +221,7 @@ public final class LobbyItemsConfigHarness {
         var access = proxy(io.papermc.paper.registry.RegistryAccess.class, (name, args) -> {
             if (!name.equals("getRegistry")) return null;
             boolean items = args[0].toString().contains("item");
+            boolean attributes = args[0].equals(io.papermc.paper.registry.RegistryKey.ATTRIBUTE);
             return proxy(Registry.class, (operation, values) -> {
                 if (!(operation.equals("get") || operation.equals("getOrThrow"))) return null;
                 String key = values[0].toString();
@@ -229,6 +230,8 @@ public final class LobbyItemsConfigHarness {
                     case "getKey" -> NamespacedKey.fromString(key);
                     default -> null;
                 });
+                if (attributes) return proxy(org.bukkit.attribute.Attribute.class, (attributeMethod, attributeArgs) ->
+                        attributeMethod.equals("getKey") ? NamespacedKey.fromString(key) : null);
                 return proxy(org.bukkit.block.BlockType.class, (blockMethod, blockArgs) -> blockMethod.equals("isAir") && key.endsWith(":air"));
             });
         });

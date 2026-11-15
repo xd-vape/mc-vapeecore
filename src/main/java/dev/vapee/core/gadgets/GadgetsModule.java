@@ -30,8 +30,10 @@ public final class GadgetsModule implements CoreModule {
     private final Predicate<UUID> lobbyGlide;
     private GadgetsMenu menu;
     private PlayerRiding riding;
+    private SizeChanger sizeChanger;
     private final Runnable reload = () -> {
         if (menu != null) menu.closeAll();
+        if (sizeChanger != null) sizeChanger.reset();
         if (riding != null) riding.reset();
     };
 
@@ -71,13 +73,21 @@ public final class GadgetsModule implements CoreModule {
                 (first, second) -> visibilityService.canSee(first, second) && visibilityService.canSee(second, first)
                         && !socialService.isIgnoring(first.getUniqueId(), second.getUniqueId())
                         && !socialService.isIgnoring(second.getUniqueId(), first.getUniqueId()));
-        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment);
+        var candidateSize = new SizeChanger(plugin, eligible);
+        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment, candidateSize);
         var states = lobby.getLobbyPlayerStateService();
         var activity = activities.getActivityService();
-        java.util.function.Consumer<Player> refreshItems = candidateRiding::afterHotbarRefresh;
+        java.util.function.Consumer<Player> refreshItems = player -> {
+            candidateSize.reconcile(player);
+            candidateRiding.afterHotbarRefresh(player);
+        };
         Runnable unsubscribe = () -> {
             visibilityService.removeRefreshListener(visibilityChanged);
             states.removeStateListener(candidateRiding);
+            states.removeStateListener(candidateSize);
+            states.removeStateListener(candidate);
+            activity.removeMembershipListener(candidateSize);
+            activity.removeMembershipListener(candidate);
             activity.removeMembershipListener(candidateRiding);
             utilityService.removeFlightListener(candidateRiding);
             items.removeRefreshListener(refreshItems);
@@ -85,13 +95,20 @@ public final class GadgetsModule implements CoreModule {
         try {
             plugin.getServer().getPluginManager().registerEvents(candidate, plugin);
             plugin.getServer().getPluginManager().registerEvents(candidateRiding, plugin);
+            plugin.getServer().getPluginManager().registerEvents(candidateSize, plugin);
             states.addStateListener(candidateRiding);
+            states.addStateListener(candidateSize);
+            states.addStateListener(candidate);
+            activity.addMembershipListener(candidateSize);
+            activity.addMembershipListener(candidate);
             activity.addMembershipListener(candidateRiding);
             utilityService.addFlightListener(candidateRiding);
             visibilityService.addRefreshListener(visibilityChanged);
             items.addRefreshListener(refreshItems);
             lobby.addReloadListener(reload);
-            unsubscribeRiding = unsubscribe;
+            candidateSize.reset();
+            unsubscribeRuntime = unsubscribe;
+            sizeChanger = candidateSize;
             riding = candidateRiding;
             menu = candidate;
         } catch (RuntimeException failure) {
@@ -99,11 +116,12 @@ public final class GadgetsModule implements CoreModule {
             lobby.removeReloadListener(reload);
             HandlerList.unregisterAll(candidate);
             HandlerList.unregisterAll(candidateRiding);
+            HandlerList.unregisterAll(candidateSize);
             throw failure;
         }
     }
 
-    private Runnable unsubscribeRiding = () -> { };
+    private Runnable unsubscribeRuntime = () -> { };
     private final java.util.function.Consumer<UUID> visibilityChanged = id -> {
         if (riding != null) riding.reconcileVisibility(id);
     };
@@ -120,11 +138,20 @@ public final class GadgetsModule implements CoreModule {
     public void disable() {
         var previous = menu;
         var previousRiding = riding;
+        var previousSize = sizeChanger;
         menu = null;
         riding = null;
+        sizeChanger = null;
         lobby.removeReloadListener(reload);
-        unsubscribeRiding.run();
-        unsubscribeRiding = () -> { };
+        unsubscribeRuntime.run();
+        unsubscribeRuntime = () -> { };
+        if (previousSize != null) {
+            try {
+                previousSize.reset();
+            } finally {
+                HandlerList.unregisterAll(previousSize);
+            }
+        }
         if (previousRiding != null) {
             try {
                 previousRiding.shutdown();

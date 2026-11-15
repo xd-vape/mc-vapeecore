@@ -187,6 +187,9 @@ permissions:
   vapeecore.gadgets.use:
     description: Open the Gadgets menu and use gadgets
     default: true
+  vapeecore.gadgets.size-changer:
+    description: Open the Size Changer and change your lobby size
+    default: true
   vapeecore.gadgets.player-riding:
     description: Equip and use Player Riding
     default: true

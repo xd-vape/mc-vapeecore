@@ -2,6 +2,8 @@ package dev.vapee.core.gadgets;
 
 import static dev.vapee.core.i18n.Translations.tr;
 
+import dev.vapee.core.activity.ActivityMembershipListener;
+import dev.vapee.core.lobby.player.LobbyPlayerStateListener;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.ui.MenuLayout;
@@ -16,23 +18,32 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
-final class GadgetsMenu implements Listener {
+final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityMembershipListener {
     private static final MenuLayout<Category> LAYOUT = MenuLayout.builder(27, Category.class)
             .content(List.of(10, 11, 12, 14, 15, 16))
             .build();
+    private static final MenuLayout<SizeChanger.Size> SIZES = MenuLayout.builder(27, SizeChanger.Size.class)
+            .content(List.of(10, 11, 12, 13, 14))
+            .build();
     private static final int EQUIPMENT_STATUS_SLOT = 22;
+    private static final int BACK_SLOT = 22;
 
     private enum Type { ITEM, DIRECT_MENU }
 
@@ -60,28 +71,49 @@ final class GadgetsMenu implements Listener {
     private final Predicate<Player> access;
     private final PlayerRiding riding;
     private final GadgetEquipment equipment;
+    private final SizeChanger sizeChanger;
+    private final Map<UUID, BukkitTask> navigation = new HashMap<>();
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
     GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding,
-                GadgetEquipment equipment) {
+                GadgetEquipment equipment, SizeChanger sizeChanger) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
         this.riding = riding;
         this.equipment = equipment;
+        this.sizeChanger = sizeChanger;
     }
 
     boolean open(Player player) {
         riding.reconcile(player);
-        if (!canOpen(player)) return false;
-        UUID owner = player.getUniqueId();
-        if (openInventories.get(owner) == player.getOpenInventory().getTopInventory()) return false;
+        sizeChanger.reconcile(player);
+        if (!canOpen(player) || openInventories.get(player.getUniqueId()) == player.getOpenInventory().getTopInventory()) {
+            return false;
+        }
+        return open(player, false);
+    }
 
+    private boolean open(Player player, boolean sizes) {
         long openedGeneration = generation;
-        var holder = new Holder(owner);
-        var inventory = plugin.getServer().createInventory(holder, LAYOUT.size(), messages.localize(player, tr("gadgets.title")));
+        var holder = new Holder(player.getUniqueId(), sizes);
+        var inventory = plugin.getServer().createInventory(holder, sizes ? SIZES.size() : LAYOUT.size(),
+                messages.localize(player, tr(sizes ? "gadgets.categories.size-changer" : "gadgets.title")));
         holder.inventory = inventory;
+        if (sizes) renderSizes(player, inventory);
+        else renderMain(player, inventory);
+        var opened = player.openInventory(inventory);
+        if (opened == null || player.getOpenInventory().getTopInventory() != inventory) return false;
+        if (openedGeneration != generation || !canOpen(player) || (sizes && !sizeChanger.permitted(player))) {
+            closeOwned(player, inventory);
+            return false;
+        }
+        openInventories.put(holder.owner, inventory);
+        return true;
+    }
+
+    private void renderMain(Player player, Inventory inventory) {
         var categories = Category.values();
         for (int index = 0; index < categories.length; index++) {
             var category = categories[index];
@@ -89,20 +121,29 @@ final class GadgetsMenu implements Listener {
                 renderRiding(player, inventory);
                 continue;
             }
+            Component status = category == Category.SIZE_CHANGER
+                    ? sizeChanger.permitted(player) ? tr("gadgets.size.open") : MessageStyle.error(tr("gadgets.locked"))
+                    : tr("gadgets.unavailable").color(MessageStyle.MUTED);
             var item = UiItems.literal(category.icon, tr("gadgets.categories." + category.key),
-                    MessageStyle.TEXT, List.of(tr("gadgets.description." + category.key),
-                            tr("gadgets.unavailable").color(MessageStyle.MUTED)));
+                    MessageStyle.TEXT, List.of(tr("gadgets.description." + category.key), status));
             inventory.setItem(LAYOUT.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
         }
         renderCount(player, inventory);
-        var opened = player.openInventory(inventory);
-        if (opened == null || opened.getTopInventory() != inventory) return false;
-        if (openedGeneration != generation || !canOpen(player)) {
-            closeOwned(player, inventory);
-            return false;
+    }
+
+    private void renderSizes(Player player, Inventory inventory) {
+        var selected = sizeChanger.selected(player);
+        for (var size : SizeChanger.Size.values()) {
+            boolean active = size == selected;
+            var multiplier = Component.text(Double.toString(size.factor), MessageStyle.accent());
+            var lore = List.of(tr("gadgets.size.multiplier", Map.of("factor", multiplier)),
+                    active ? MessageStyle.success(tr("gadgets.size.selected")) : tr("gadgets.size.apply"));
+            var item = UiItems.literal(active ? Material.LIME_DYE : Material.GRAY_DYE,
+                    tr("gadgets.size." + size.key), MessageStyle.TEXT, lore);
+            inventory.setItem(SIZES.contentSlot(size.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
         }
-        openInventories.put(owner, inventory);
-        return true;
+        var back = UiItems.literal(Material.ARROW, tr("gadgets.size.back"), MessageStyle.TEXT, List.of());
+        inventory.setItem(BACK_SLOT, UiItems.render(UiItems.localize(back, messages, player)));
     }
 
     private boolean canOpen(Player player) {
@@ -137,12 +178,54 @@ final class GadgetsMenu implements Listener {
                 || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
                 || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top) return;
         riding.reconcile(player);
+        sizeChanger.reconcile(player);
         if (!canOpen(player)) return;
+        if (holder.sizes) {
+            if (event.getRawSlot() == BACK_SLOT) {
+                navigate(player, holder, false);
+                return;
+            }
+            int index = SIZES.contentSlots().indexOf(event.getRawSlot());
+            if (index < 0) return;
+            var result = sizeChanger.select(player, SizeChanger.Size.values()[index]);
+            switch (result) {
+                case DENIED -> messages.send(player, tr("gadgets.size.denied"));
+                case UNAVAILABLE -> messages.send(player, tr("gadgets.size.missing-scale"));
+                case INCOMPATIBLE -> messages.send(player, tr("gadgets.size.incompatible"));
+                case APPLIED -> { }
+            }
+            renderSizes(player, top);
+            return;
+        }
         int index = LAYOUT.contentSlots().indexOf(event.getRawSlot());
-        if (index < 0 || Category.values()[index].type != Type.ITEM) return;
-        riding.toggle(player);
-        renderRiding(player, top);
-        renderCount(player, top);
+        if (index < 0) return;
+        var category = Category.values()[index];
+        if (category == Category.SIZE_CHANGER) {
+            if (sizeChanger.permitted(player)) navigate(player, holder, true);
+            else {
+                messages.send(player, tr("gadgets.size.denied"));
+                renderMain(player, top);
+            }
+        } else if (category.type == Type.ITEM) {
+            riding.toggle(player);
+            renderRiding(player, top);
+            renderCount(player, top);
+        }
+    }
+
+    private void navigate(Player player, Holder from, boolean sizes) {
+        // Bukkit forbids opening another inventory in the click callback.
+        navigation.computeIfAbsent(from.owner, owner -> plugin.getServer().getScheduler().runTask(plugin, () -> {
+            navigation.remove(owner);
+            if (openInventories.get(owner) != from.inventory || player.getOpenInventory().getTopInventory() != from.inventory
+                    || !canOpen(player) || (sizes && !sizeChanger.permitted(player))) return;
+            open(player, sizes);
+        }));
+    }
+
+    private void cancelNavigation(UUID owner) {
+        var task = navigation.remove(owner);
+        if (task != null) task.cancel();
     }
 
     @EventHandler
@@ -155,7 +238,7 @@ final class GadgetsMenu implements Listener {
         Inventory top = event.getView().getTopInventory();
         if (top.getHolder() instanceof Holder holder && holder.inventory == top
                 && holder.owner.equals(event.getPlayer().getUniqueId())) {
-            openInventories.remove(holder.owner, top);
+            if (openInventories.remove(holder.owner, top)) cancelNavigation(holder.owner);
         }
     }
 
@@ -169,12 +252,39 @@ final class GadgetsMenu implements Listener {
         closeFor(event.getPlayer());
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onKick(PlayerKickEvent event) { closeFor(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) { closeSizeMenu(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPortal(PlayerPortalEvent event) { closeSizeMenu(event.getPlayer()); }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDeath(PlayerDeathEvent event) { closeFor(event.getEntity()); }
+
+    @Override public void beforeStateChange(Player player) { closeFor(player); }
+    @Override public void afterStateChange(UUID id) { }
+    @Override public void beforeJoin(Player player) { closeFor(player); }
+    @Override public void membershipChanged(UUID id) { }
+
+    private void closeSizeMenu(Player player) {
+        var inventory = openInventories.get(player.getUniqueId());
+        if (inventory != null && inventory.getHolder() instanceof Holder holder
+                && (holder.sizes || navigation.containsKey(holder.owner))) closeFor(player);
+    }
+
     private void closeFor(Player player) {
-        closeOwned(player, openInventories.remove(player.getUniqueId()));
+        UUID owner = player.getUniqueId();
+        cancelNavigation(owner);
+        closeOwned(player, openInventories.remove(owner));
     }
 
     void closeAll() {
         generation++;
+        navigation.values().forEach(BukkitTask::cancel);
+        navigation.clear();
         var inventories = Map.copyOf(openInventories);
         openInventories.clear();
         inventories.forEach((owner, inventory) -> {
@@ -193,10 +303,12 @@ final class GadgetsMenu implements Listener {
 
     private static final class Holder implements InventoryHolder {
         private final UUID owner;
+        private final boolean sizes;
         private Inventory inventory;
 
-        private Holder(UUID owner) {
+        private Holder(UUID owner, boolean sizes) {
             this.owner = owner;
+            this.sizes = sizes;
         }
 
         @Override

@@ -69,7 +69,7 @@ Continue to use the established `MessageStyle`, `MessageService`, Adventure comp
 - The Gadgets entry item is a configurable **CHEST** named **Gadgets** in Minecraft gold/orange; its default hotbar slot is **4**. No gold ingot default.
 - Gadget menus should have **compact lore**: what the gadget does and the next available action, not an entire instruction manual. Put longer gesture instructions on the equipped item or in contextual feedback.
 - Distinguish item-based gadgets (need a real managed hotbar item) from direct/menu features (no hotbar item). Do not spend hotbar slots for a simple setting or toggle.
-- The Step 09B baseline still replaces the Gadgets chest with the Riding saddle. Separate slots for multiple equipped item gadgets and a permanently accessible chest are the scope of Step 09B.1. Treat those capabilities as pending on branches that do not include that step.
+- The Gadgets chest stays in its configured slot. Player Riding and other equipped item gadgets use separate free, unreserved hotbar slots.
 - Step 09B.1 sets the default to **3** equipped item gadgets, with a configurable limit of **1–3**. Allocate only genuinely free and unreserved slots. A smaller physical free-slot count takes precedence over the configured limit.
 - Keep gadget runtime state temporary and independently owned, with explicit item/session identity and permission checks. Do not persist arbitrary active mounts or temporary effect state to player profiles.
 - Gadgets are available to regular users by default unless an explicit permission/configuration denies them. Avoid automatic rank, currency or paywall dependencies.
