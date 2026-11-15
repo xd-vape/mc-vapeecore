@@ -246,8 +246,7 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     private void tell(Player player, String key, Player target) {
         var args = target == null ? Map.<String, Component>of()
                 : Map.<String, Component>of("player", Component.text(target.getName(), MessageStyle.accent()));
-        messages.send(player, MessageStyle.feature(tr("gadgets.categories.player-riding"),
-                MessageStyle.GADGETS_LABEL, tr("gadgets.riding." + key, args)));
+        messages.send(player, tr("gadgets.riding." + key, args));
     }
 
     @EventHandler

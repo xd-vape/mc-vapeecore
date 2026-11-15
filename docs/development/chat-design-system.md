@@ -22,9 +22,13 @@ VapeeCore verwendet die bestehende Adventure-/MiniMessage-Architektur. `MessageS
 
 `text(Component)` setzt eine neutrale Farbe nur bei fehlender eigener Farbe. `success`, `error`, `warning` färben Statuslabels; `status(label, boolean)` färbt Online-/Offline-Labels. Keine dieser Funktionen ist für das Umfärben ganzer Sätze mit Spielernamen bestimmt. Namen weiter über den vorhandenen UUID-/Rank-Formatter einsetzen. Die Farbwerte eines LuckPerms-Rangs und fachliche Clan-Namen/Tags bleiben eigenständig.
 
-## Prefix und Delivery
+## Präfixfreie Spielernachrichten und Delivery
 
-Neue Features verwenden `MessageStyle.feature(bareLocalizedLabel, labelColor, body)` beziehungsweise `prefix(label, labelColor)`. Die zentrale Komposition erzeugt drei getrennte Components: öffnende Klammer, Label und schließende Klammer. Beide Klammern sind explizit BRACKET; das Label erhält die unabhängig übergebene zentrale Feature-Farbe. Der Nachrichteninhalt wird separat neutral formatiert. Die bisherigen Overloads ohne Farbangabe bleiben erhalten und verwenden DEFAULT_LABEL. Keine manuellen `[Feature]`-Strings in Feature-Klassen zusammensetzen. Neue Feature-Farben werden erst mit dem tatsächlichen Feature als Konstante in MessageStyle ergänzt, nicht vorsorglich registriert.
+Neue und überarbeitete gewöhnliche Spielernachrichten beginnen standardmäßig mit ihrem Inhalt. Das gilt für Gadget-Feedback, Bedienhinweise und normale Erfolgs- oder Fehlermeldungen. Player Riding übergibt den lokalisierbaren Nachrichten-Component direkt an `MessageService.send`. So bleiben ein ausdrücklich gesetztes `messages.prefix`, Sprach-Overrides und die semantische Formatierung wirksam. Der gebündelte Wert für `messages.prefix` ist leer. Bei Ausgaben mit bewusst gewählter Raw-Delivery ergänzen `sendRaw` und `sendRawBlock` keinen globalen Wrapper.
+
+### Legacy-Präfixe
+
+`MessageStyle.feature(bareLocalizedLabel, labelColor, body)` und `prefix(label, labelColor)` bleiben für bestehende Präfixverträge verfügbar. Die API erzeugt die öffnende und schließende Klammer in BRACKET und das Label in seiner eigenen Farbe als getrennte Components. Die älteren Overloads ohne Farbangabe verwenden DEFAULT_LABEL. Bestehende Legacy-Ausgaben behalten ihren Vertrag. Gewöhnliche neue Nachrichten verwenden diese APIs nicht automatisch.
 
 `message(formattedPrefix, labelColor, body)` ist der kompatible Adapter für vollständige bereits eingeklammerte Prefixe. Übersetzbare Prefixe werden durch den vorhandenen LocalizationService aufgelöst, bevor nur ihre Klammerzeichen auf Component-Ebene formatiert werden. Der interne Format-Component ist kein neuer Übersetzungsschlüssel und wird nicht an den Client durchgereicht. Die Sprachkataloge und ihre bestehenden Platzhalter werden nicht geändert. Vollständige Operator-Overrides werden nicht nochmals eingeklammert; Wortlaut, Abstände, Dekorationen und Click-/HoverEvents bleiben erhalten. Explizite Operator-Label-Farben behalten ihren Vorrang, die Klammern erhalten die zentrale Farbe. Hover-Inhalte und Aktionen im Body werden nicht durch die Prefix-Formatierung bearbeitet.
 
@@ -166,7 +170,7 @@ Operator-Overrides, echte Config-Reload-/Rollback-Pfade und unveränderte Help-S
 
 ## Mehrzeilige Blöcke und Interaktionen
 
-`messages.sendRawBlock(recipient, lines...)` lokalisiert zuerst und verwendet danach `MessageStyle.block`. Ein Block ist ein einzelner ausgelieferter Component mit genau einer leeren Zeile davor/danach und zwei Leerzeichen Einrückung je Inhaltszeile. Auch Newlines innerhalb einer Übersetzung werden eingerückt. Bei einem Feature-Block den Prefix einmal am ersten Inhalt einsetzen. Die Methode ergänzt keinen globalen Operator-Wrapper.
+`messages.sendRawBlock(recipient, lines...)` lokalisiert zuerst und verwendet danach `MessageStyle.block`. Ein Block ist ein einzelner ausgelieferter Component mit genau einer leeren Zeile davor/danach und zwei Leerzeichen Einrückung je Inhaltszeile. Auch Newlines innerhalb einer Übersetzung werden eingerückt. Die Methode ergänzt keinen globalen Operator-Wrapper. Bestehende Blöcke mit einem ausdrücklich vorgesehenen Legacy-Präfix behalten es an der ersten Inhaltszeile.
 
 `MessageStyle.block` direkt nur mit bereits lokalisierten Components verwenden. Leere Blöcke werden zurückgewiesen. Die Formatierung ersetzt Text-Newlines auf Component-Ebene; sie serialisiert oder parst keine dynamischen Werte. Hover-Inhalte bleiben von der Einrückung ausgeschlossen. ClickEvents, HoverEvents und farbige Namen bleiben an ihren Components.
 
@@ -187,25 +191,21 @@ Nur ein Verwendungsbeispiel, kein implementiertes Party-System. Die betreffenden
 ```yaml
 # EN
 party:
-  label: "Party"
   created: "<vc_success>Created</vc_success> a party with <player>."
 # DE (im deutschen Katalog)
 party:
-  label: "Gruppe"
   created: "Gruppe mit <player> <vc_success>erstellt</vc_success>."
 ```
 
 ```java
 Component body = tr("party.created", Map.of("player", names.format(targetId, targetName)));
-messages.sendRaw(viewer, MessageStyle.feature(tr("party.label"), MessageStyle.DEFAULT_LABEL, body));
+messages.send(viewer, body);
 
 // Ein umfangreicherer Hinweis mit optionaler existierender Aktion:
-messages.sendRawBlock(viewer,
-        MessageStyle.feature(tr("party.label"), MessageStyle.DEFAULT_LABEL, body),
-        MessageStyle.text(actionComponent));
+messages.sendRawBlock(viewer, body, MessageStyle.text(actionComponent));
 ```
 
-Kein eigenes NamedTextColor für gemeinsam genutzte Systemfarben und keine zusätzliche Prefix-Implementierung notwendig. Die Delivery-Regel des Features bewusst wählen: normale `send` für den ausdrücklich gewünschten Operator-Wrapper, `sendRaw`/`sendRawBlock` für einen vollständig selbst besessenen Wrapper.
+Beide Beispiele verwenden die zentrale Palette und die lokalisierte Nachricht direkt. `send` berücksichtigt einen konfigurierten globalen Operator-Präfix. Der separate Raw-Block verwendet den durch seinen Delivery-Vertrag definierten Abstand.
 
 ## Privates Staff-Panel
 
@@ -213,7 +213,7 @@ Die öffentliche `/staff list`-Ausgabe und der ausschließlich dafür verwendete
 
 ## Regression und Architekturregel
 
-`PrefixStylingHarness` prüft getrennte Klammer-/Label-Components, beide Sprachen, identischen Override-Text mit unterschiedlichen Feature-Identitäten und Click-/Hover-Erhalt. `ChatDesignSystemHarness` prüft tatsächliche Prefix-/Farbspannen, ein neues Feature ohne Enum-Erweiterung, semantische Tags, Akzent-Reload/Rollback, EN/DE, Blockstruktur und interaktive Events. Bestehende Social-, Presence-, Staff-, TPA-, Moderations- und Config-Harnesses sichern die fachlichen Grenzen ab. Der Staff-Fixture erfasst zusätzlich Appearance-Schreibzugriffe.
+`PrefixStylingHarness` prüft die Legacy-Komposition mit getrennten Klammer-/Label-Components, beiden Sprachen, Override-Texten und Click-/Hover-Erhalt. `ChatDesignSystemHarness` deckt die Legacy-API, semantische Tags, Akzent-Reload/Rollback, EN/DE, Blockstruktur und interaktive Events ab. `GadgetsFoundationHarness` prüft präfixfreie Riding-Nachrichten in EN/DE, Akzentfarben und die Zustellung mit Operator-Präfix und Sprach-Override. Bestehende Social-, Presence-, Staff-, TPA-, Moderations- und Config-Harnesses sichern die fachlichen Grenzen ab. Der Staff-Fixture erfasst zusätzlich Appearance-Schreibzugriffe.
 
 Ein pauschaler repositoryweiter Regex-Verbotscheck für NamedTextColor ist ungeeignet: GUI-Items, Rangfarben und fachliche Farben bleiben legitim. Die schlanke Regel besteht deshalb aus den verbindlichen AGENTS-Anweisungen, dieser API und ausführbaren Verhaltenstests für alle vorhandenen SocialChannels. Neue Features müssen dieselben Tests um ihre beobachtbare Ausgabe erweitern. Es gibt keine Behauptung, dass ein Java-Typsystem beliebige zukünftige Direktformatierung automatisch verhindern könnte.
 

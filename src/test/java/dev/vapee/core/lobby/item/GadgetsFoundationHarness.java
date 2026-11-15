@@ -115,7 +115,7 @@ public final class GadgetsFoundationHarness {
         inject(JavaPlugin.class, fixture.plugin, "server", server);
         inject(org.bukkit.Bukkit.class, null, "server", server);
         inject(JavaPlugin.class, fixture.plugin, "dataFolder", root.toFile());
-        var messages = new MessageService(() -> "", LocalizationService.bundled(fixture.logger));
+        var messages = new MessageService(() -> viewer.messagePrefix, LocalizationService.bundled(fixture.logger));
         var players = new PlayerModule(fixture.plugin, new ConfigService(fixture.plugin), messages);
         var playerService = new PlayerService(new PlayerRepository() {
             public Optional<CorePlayer> findByUniqueId(UUID id) { return Optional.empty(); }
@@ -211,8 +211,8 @@ public final class GadgetsFoundationHarness {
             fixture.listener.onPlayerSwapHandItems(saddleSwap);
             check(saddleDrop.isCancelled() && saddleSwap.isCancelled(), "equipped saddle uses shared drop and swap protection");
             viewer.close();
-            var target = exerciseRiding(fixture, viewer, playerService, world, saddle, social);
-            saddle = fixture.storage[2];
+            var target = exerciseRiding(fixture, viewer, playerService, world, saddle, social, messages.localization(), root);
+            saddle = viewer.player.getInventory().getItemInMainHand();
             fixture.click(saddle, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
             check(viewer.open == viewer.bottom, "normal right-click with the saddle keeps the riding gesture free");
             fixture.heldSlot = 4;
@@ -355,7 +355,8 @@ public final class GadgetsFoundationHarness {
 
 
     private static Viewer exerciseRiding(LobbyItemRegistryFixture fixture, Viewer viewer, PlayerService players,
-                                         World world, ItemStack saddle, dev.vapee.core.social.SocialService social) {
+                                         World world, ItemStack saddle, dev.vapee.core.social.SocialService social,
+                                         LocalizationService localization, Path root) throws Exception {
         var target = new Viewer();
         target.player = target.delegate;
         target.world = world;
@@ -384,7 +385,8 @@ public final class GadgetsFoundationHarness {
         dispatch(attempt);
         dispatch(new PlayerInteractAtEntityEvent(viewer.player, target.player, new Vector(), EquipmentSlot.HAND));
         check(attempt.isCancelled() && target.vehicle == null && viewer.chat.size() == 1
-                && viewer.chat.getFirst().contains("must be sneaking"), "no consent and duplicate event gives one localized denial");
+                && viewer.chat.getFirst().equals("RidingFixture must be sneaking to be picked up."),
+                "duplicate events give one English denial without a feature prefix");
         target.sneaking = true;
         viewer.tick += 3;
         var pickup = new PlayerInteractAtEntityEvent(viewer.player, target.player, new Vector(), EquipmentSlot.HAND);
@@ -392,6 +394,12 @@ public final class GadgetsFoundationHarness {
         dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
         check(pickup.isCancelled() && target.vehicle == viewer.player && viewer.passengers.equals(List.of(target.player)),
                 "paired events create exactly one mount in the correct direction");
+        check(viewer.chat.getLast().equals("You are now carrying RidingFixture."),
+                "pickup feedback starts with the English message body");
+        var accent = dev.vapee.core.message.MessageStyle.accent();
+        check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(viewer.lastChat, "carrying", accent)
+                        && dev.vapee.core.message.MessageColorAssertions.hasTextColor(viewer.lastChat, "RidingFixture", accent),
+                "prefix-free feedback retains accent on action and literal name");
         var foreignMount = new EntityMountEvent(viewer.player, target.player);
         dispatch(foreignMount);
         check(foreignMount.isCancelled(), "foreign mount cannot introduce a chain");
@@ -399,6 +407,7 @@ public final class GadgetsFoundationHarness {
         check(target.vehicle == null && viewer.passengers.isEmpty() && target.velocity != null
                         && target.velocity.distanceSquared(new Vector(0, 0.32, 0.75)) < 0.000001,
                 "air click detaches and launches the rider once");
+        check(viewer.chat.getLast().equals("You launched RidingFixture."), "launch feedback has no feature prefix");
         Vector launched = target.velocity;
         dispatch(fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND));
         check(target.velocity == launched, "air click without rider has no effect");
@@ -408,6 +417,7 @@ public final class GadgetsFoundationHarness {
         var attack = new PrePlayerAttackEntityEvent(viewer.player, target.player, true);
         dispatch(attack);
         check(attack.isCancelled() && viewer.vehicle == target.player, "attack intercepted before damage and mounts actor");
+        check(viewer.chat.getLast().equals("You are now riding RidingFixture."), "mount feedback has no feature prefix");
         dispatch(new PlayerInputEvent(viewer.player, proxy(org.bukkit.Input.class, (name, args) -> name.equals("isSneak"))));
         check(viewer.vehicle == null && target.passengers.isEmpty(), "fresh sneak input dismounts immediately");
 
@@ -448,15 +458,31 @@ public final class GadgetsFoundationHarness {
         dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
         check(target.vehicle == null, "reverse ignore blocks interaction");
         social.unignore(target.id, viewer.id);
+        viewer.locale = Locale.GERMANY;
         dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
         check(target.vehicle == viewer.player, "mount available again after ignore removal");
+        check(viewer.chat.getLast().equals("Du trägst jetzt RidingFixture."), "German feedback has no feature prefix");
         viewer.passengers.clear();
         target.vehicle = null;
         dispatch(new EntityDismountEvent(target.player, viewer.player));
         viewer.tick += 3;
         target.sneaking = true;
+        var originalCatalog = localization.snapshot();
+        Path overrides = Files.createDirectory(root.resolve("riding-language-overrides"));
+        Files.writeString(overrides.resolve("de.yml"), """
+                gadgets:
+                  riding:
+                    carrying: "Du hast <player> aufgenommen."
+                """);
+        localization.apply(localization.prepare(overrides));
+        viewer.messagePrefix = "<gray>[Lobby]</gray> ";
         dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
         check(target.vehicle == viewer.player, "external dismount forgets both roles");
+        check(viewer.chat.getLast().equals("[Lobby] Du hast RidingFixture aufgenommen."),
+                "configured prefix and operator translation survive without an extra feature prefix");
+        viewer.messagePrefix = "";
+        viewer.locale = Locale.US;
+        localization.apply(originalCatalog);
         dispatch(new PlayerChangedWorldEvent(target.player, world));
         return target;
     }
@@ -604,6 +630,8 @@ public final class GadgetsFoundationHarness {
         private final Inventory bottom = inventory(null, 36);
         private Inventory open = bottom;
         private Locale locale = Locale.US;
+        private String messagePrefix = "";
+        private Component lastChat;
         private Component title;
         private Player player;
         private boolean sneaking;
@@ -634,7 +662,13 @@ public final class GadgetsFoundationHarness {
             case "getPassengers" -> List.copyOf(passengers);
             case "getCurrentInput" -> proxy(org.bukkit.Input.class, (method, params) -> false);
             case "getYaw" -> 0F;
-            case "sendMessage" -> { if (args[0] instanceof Component component) chat.add(plain(component)); yield null; }
+            case "sendMessage" -> {
+                if (args[0] instanceof Component component) {
+                    lastChat = component;
+                    chat.add(plain(component));
+                }
+                yield null;
+            }
             case "setVelocity" -> { velocity = (Vector) args[0]; yield null; }
             case "addPassenger", "removePassenger" -> {
                 Entity passenger = (Entity) args[0];

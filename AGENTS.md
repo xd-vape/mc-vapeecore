@@ -1,156 +1,118 @@
 # VapeeCore – Codex Project Instructions
 
-## Project
+## Scope and Priorities
 
-VapeeCore is a modular Minecraft core plugin built with Java, Maven and the Paper API.
+VapeeCore is a modular Minecraft core plugin built with Java, Maven and Paper. Follow the versions and dependencies actually declared in the repository; do not silently upgrade or widen the supported version range.
 
-Preserve the existing architecture, conventions and behavior.
-Prefer small, maintainable changes over unnecessary abstractions.
+Priorities, in order:
+1. Correct gameplay, player safety and preservation of data.
+2. Compatibility with existing VapeeCore modules, operator configuration and live-server behavior.
+3. Clear, compact, consistent player-facing UX in English and German.
+4. Small, maintainable code and meaningful regression tests.
 
-## Development Rules
+Read relevant code and documentation before editing. Preserve existing architecture, permissions, public contracts and behavior unless the task explicitly changes them. Reuse established services instead of creating parallel implementations. Do not add speculative features or dependencies.
 
-- Inspect relevant existing code before implementing changes.
-- Reuse existing services, utilities and APIs where appropriate.
-- Follow the project's established Java and Maven conventions.
-- Avoid introducing new dependencies without a clear need.
-- Do not implement unrelated features or speculative extensions.
-- Preserve compatibility with the project's supported Paper versions.
-- Do not silently change permissions, commands or player data.
-- Support existing English and German localization conventions.
-- Avoid duplicated implementations of shared functionality.
+## Player-Facing Messages: No Automatic Feature Prefixes
 
-## Chat Design System
+**New or modified ordinary player-facing messages must be prefix-free by default.** Do not prepend `[Feature]`, `[Gadgets]`, `[Player Riding]`, the plugin name, or another feature label. A message should begin with its actual content.
 
-All player-facing system messages must follow VapeeCore's central chat design system.
+Examples:
+- Correct: `You are now carrying <player>.`
+- Correct: `<player> must be sneaking to be picked up.`
+- Incorrect: `[Player Riding] You are now carrying <player>.`
 
-### General Styling
+This applies to gadget feedback, interaction hints, menu actions, success/failure messages, and other new or revised gameplay feedback. Do not use `MessageStyle.feature(...)`, `MessageStyle.prefix(...)`, manually concatenated `[Feature]` text, or a social-channel wrapper solely to add a prefix to such messages.
 
-- Use the existing central message formatting API.
-- Do not introduce independent styling for new features.
-- Main message text uses the central neutral text color.
-- Secondary information uses the central muted text color.
-- Important values use the configured accent color.
-- Success, error, warning and status colors are semantic.
-- Online and offline states use the shared status colors.
-- Player names preserve their existing rank/name colors.
-- Interactive chat actions must preserve click and hover behavior.
-- Multi-line messages use consistent spacing and layout.
-- English and German messages use equivalent visual structure.
-- Do not hardcode shared colors inside feature implementations.
-- Preserve `messages.accent-color`, including reload and fallback.
+- Preserve intentionally interactive UI labels such as `[Accept]` and `[Deny]`: these are **actions**, not prefixes.
+- Preserve rank prefixes, player display names, clan tags, scoreboards, TAB and nametags. They are **identity presentation**, not system-message prefixes.
+- Existing Friends/Clan/Staff messages may still have legacy, tested wrappers. **Do not silently rewrite unrelated legacy output** as part of a gadget or local UX task. Remove or migrate those prefixes only in an explicitly scoped change, with tests and operator-override compatibility.
+- Do not forcibly suppress an operator's explicitly configured `messages.prefix` or customized language templates. The default is prefix-free; operator-owned overrides remain authoritative until explicitly changed.
+- Player Riding and future gadgets send gameplay feedback without a feature prefix. Use the existing delivery so configured global prefixes and language overrides still apply.
 
-### Command Usage
+## Central Chat Styling
 
-- New commands use `MessageStyle.usage(command, arguments)` for simple syntax feedback.
-- Pass executable root/subcommand tokens separately from literal argument syntax.
-- Usage commands use the current `MessageStyle.accent()`; required arguments stay TEXT and optional arguments MUTED.
-- Do not hardcode Aqua or Yellow for general usage formatting.
-- Localize the usage label through `common.usage`; keep command tokens language-independent.
-- Simple missing arguments produce compact feedback without redundant duplicate messages.
-- Preserve existing prefix rules, operator overrides and click/hover behavior; usage suggests editable commands and never executes them.
-- Keep full help pages, contextual choices, real errors and security confirmations distinct from simple usage.
+Continue to use the established `MessageStyle`, `MessageService`, Adventure components, MiniMessage tags and localization. **Removing prefixes does not remove semantic formatting.**
 
-### Permission Denials
+- Main explanation text: shared neutral text style.
+- Secondary instructions: shared muted style.
+- Important values, actions and commands: configured `MessageStyle.accent()` / `<accent>`.
+- Status words: semantic success, warning, error, online and offline colors.
+- Player names: retain their existing rank/name formatting where available. Do not flatten or recolor a formatted name just to highlight it.
+- `messages.accent-color` remains the central accent source, including reload and rollback behavior.
+- No arbitrary hardcoded palette inside feature classes; no competing chat formatting utility.
+- Keep feedback short and contextual. Avoid chat spam, redundant lines and repeating instructions on every valid interaction.
+- Dynamic player names, reasons and untrusted values must be passed as literal Adventure `Component`s; do not concatenate them into MiniMessage source.
+- Preserve hover/click interactions and their server-side authorization. No formatting operation may unintentionally execute a command.
+- Use localized, padded `MessageService.sendRawBlock` for messages that genuinely need multiple lines; do not wrap routine success feedback in a block.
+- Respect the existing `MessageService.send` versus `sendRaw` contracts. `send` may prepend a **configured operator prefix**. Select delivery intentionally; do not create double wrappers or bypass explicitly configured operator behavior by accident.
+- Match EN/DE structure, placeholder contracts and semantic colors. Keep operator-customized catalog values intact.
 
-- Ordinary command permission denials use `MessageService.commandDenied(recipient)` and `common.command-denied`, with the existing delivery and SocialChannel prefix.
-- Do not duplicate denial formatting or expose technical permission/group details to players.
-- Authorization stays at the existing execution boundary; specific self/others, target and security errors remain separate messages.
+`docs/development/chat-design-system.md` documents existing technical contracts, including historical prefix APIs. The no-automatic-feature-prefix rule above governs **new and modified gameplay feedback**. When changing shared styling, update that document to clearly distinguish legacy compatibility from the current UX standard, without deleting still-used legacy code as a side effect.
 
-### Command Visibility
+## Commands and Permissions
 
-- New roots declare correct base permissions in `plugin.yml`; deliberately public composite roots remain public.
-- Root suggestions follow effective permissions. Cosmetic hiding never replaces execution or target authorization.
-- Keep visibility remove-only, check actual command ownership, and preserve unknown/future foreign commands without a global whitelist.
-- Prefer the operator's `spigot.yml` `commands.send-namespaced: false` for namespace duplicates; never rewrite operator files for this.
-- Preserve subcommand completion, usage, chat actions and denial messages as separate contracts.
-- The private `/staff` root stays descriptor-ungated for localized executor denials; its suggestions require `vapeecore.staff.panel`, and execution also requires the current eligible primary staff group.
+- Register real command permission nodes in `plugin.yml` and document them in `docs/PERMISSIONS.md`.
+- Enforce permissions at execution and sensitive target/action boundaries; hiding commands or menu items is not authorization.
+- Use `MessageService.commandDenied(recipient)` for ordinary command denials and preserve explicit legacy override behavior. Do not expose technical permission or group names in player-facing denials.
+- Keep specialized target, player-only, security and staff-hierarchy failures distinct from generic permission errors.
+- Use `MessageStyle.usage(command, arguments)` for simple usage messages: executable tokens separated from argument syntax, mandatory arguments neutral, optional arguments muted. Preserve suggestions (not execution) and meaningful complex help.
+- Root command suggestions must follow actual effective permissions; preserve foreign/unknown commands rather than applying a global whitelist.
+- `/staff` remains a private panel. Keep its descriptor ungated for localized executor denials, require `vapeecore.staff.panel` for suggestions, and recheck the eligible primary staff group at execution. Do not resurrect `/staff list` or PUBLIC/HIDDEN roster controls.
+- Do not reintroduce removed `/rank` or `/ranks` commands. Preserve LuckPerms ranking and relevant existing quest compatibility.
+- New gadgets should have feature-specific permission checks at selection **and use**, with sensible defaults. Register only permissions belonging to implemented features; do not invent paid/VIP dependencies.
+- Do not introduce new public commands without explicit scope.
 
-### Feature Prefix Styling
+## Lobby, Inventories and Gadget UX
 
-All system prefixes must use the central MessageStyle API.
+- Keep the existing `LobbyItemRegistry`, `LobbyItemService`, PDC ownership, menu-holder identity and lobby/player-state lifecycle as the authority. No competing hotbar or inventory manager.
+- Preserve configured hotbar positions, enabled/disabled items, foreign items and explicit operator choices. Never overwrite foreign inventory content, duplicate managed items or resurrect disabled features.
+- The Gadgets entry item is a configurable **CHEST** named **Gadgets** in Minecraft gold/orange; its default hotbar slot is **4**. No gold ingot default.
+- Gadget menus should have **compact lore**: what the gadget does and the next available action, not an entire instruction manual. Put longer gesture instructions on the equipped item or in contextual feedback.
+- Distinguish item-based gadgets (need a real managed hotbar item) from direct/menu features (no hotbar item). Do not spend hotbar slots for a simple setting or toggle.
+- The Step 09B baseline still replaces the Gadgets chest with the Riding saddle. Separate slots for multiple equipped item gadgets and a permanently accessible chest are the scope of Step 09B.1. Treat those capabilities as pending on branches that do not include that step.
+- Step 09B.1 sets the default to **3** equipped item gadgets, with a configurable limit of **1–3**. Allocate only genuinely free and unreserved slots. A smaller physical free-slot count takes precedence over the configured limit.
+- Keep gadget runtime state temporary and independently owned, with explicit item/session identity and permission checks. Do not persist arbitrary active mounts or temporary effect state to player profiles.
+- Gadgets are available to regular users by default unless an explicit permission/configuration denies them. Avoid automatic rank, currency or paywall dependencies.
+- Keep existing player-head and visibility gestures intact. Incompatible flight, builds, activities, other mounts and ignore/visibility policy must remain authoritative for Player Riding.
+- Clean up only effects, items, passengers, attributes and state owned by VapeeCore. Respect foreign plugins and external entity ownership.
 
-- Prefixes follow the visual format `[Feature]`.
-- A prefix consists of an opening bracket, localized feature label and closing bracket.
-- Only the brackets `[` and `]` use the shared dark-gray bracket color.
-- The label inside the brackets uses a feature-specific color.
-- Bracket and label colors must be applied independently.
-- Never color the entire prefix dark gray by default.
-- Feature label colors must be centrally defined and reusable.
-- Preserve existing feature identity colors unless explicitly changed.
-- A feature label should remain visually distinguishable from its brackets.
-- English and German labels of the same feature must use identical colors.
-- Feature identity and color selection must not depend on translated label text.
-- New features must use the central prefix composition API.
-- Do not manually construct or color system prefixes inside feature classes.
-- New feature colors must be consistent with the existing visual palette.
-- Message body colors remain governed by the semantic palette.
-- Interactive actions such as `[Accept]` and `[Deny]` are not system prefixes.
-- Preserve existing exceptions where messages intentionally have no feature prefix.
+## Lifecycle and Safety
 
-When implementing new features, automatically apply the split-prefix styling without requiring additional instructions.
+- Handle enable, partial-enable failure, reload, rollback and disable without orphaned listeners, tasks or state.
+- Handle logout, kick, world changes, teleport, death, respawn, build/normal mode and activity transitions when relevant to the feature.
+- Do not mutate player state asynchronously if the Paper API requires the main thread.
+- Validate menu ownership, session identity, raw slot, click type and current permissions at execution time. Cancel unsafe inventory moves, drags and drops.
+- Respect Paper/Bukkit event cancellation and avoid duplicate processing or unintended damage. Do not uncancel external actions unless narrowly justified for state you own.
+- A feature must never silently overwrite or remove unrelated inventory items, vehicles, passengers, equipment or player data.
+- Preserve compatibility with operator-defined config and language files; document necessary manual changes for existing installations rather than rewriting them unprompted.
+- Avoid invasive fixes to the user's actual running server. Use isolated Paper/LuckPerms environments for integration tests.
 
-### Message Architecture
+## Testing and Evidence
 
-Use `docs/development/chat-design-system.md` as the detailed reference.
+- Test observable behavior, denial paths, lifecycle and regressions rather than merely implementation details.
+- Add focused harness tests for each new feature or changed behavior, including authorization, item identity, double events, inventory safety, reload and cleanup when applicable.
+- Test prefix-free output for newly added or modified gameplay messages **without changing unrelated legacy prefix contracts**.
+- Verify both English and German localization, placeholders, accent semantics, names and interactive Component events.
+- Run Maven, Spotless and the existing offline verifier as applicable to the change. Preserve existing harnesses rather than rewriting tests solely to make them pass.
+- Add native Paper/LuckPerms validation when Paper events, mounts, movement or client-sensitive behavior justify it.
+- Distinguish local harness checks, native Paper checks, and real Minecraft-client visual/gesture acceptance. Never claim client validation from synthetic events.
+- Report exact executed tests, results, failures, skipped checks and unresolved manual acceptance items. Never label historical test evidence as newly executed.
 
-- Extend the existing MessageStyle / MessageService / SocialChannel architecture where appropriate.
-- Do not introduce a second palette or competing formatting service.
-- Use the central MessageStyle feature/prefix composition API.
-- Ensure feature identity, localized label and label color are handled consistently.
-- Keep feature-specific colors centrally defined rather than scattered across feature implementations.
-- Do not rely on localized label strings to determine feature colors.
-- Use MessageService.sendRawBlock for localized, padded message blocks.
-- Supply feature headings explicitly and keep repeated status feedback compact.
-- Bundled MiniMessage system styling uses `<accent>` and the `vc_*` semantic tags.
-- Pass names and reasons as literal Components, never as MiniMessage source.
-- Preserve interactive Component click and hover events.
-- Keep the prefix-free TPA and friend Join Summary delivery contracts.
-- Preserve existing operator-defined message overrides unless explicitly instructed otherwise.
-- The private Staff panel must preserve external player visibility, chat ranks, names, nametags, scoreboards and tablist appearance; it has no public roster or PUBLIC/HIDDEN status.
+## Git and Operator Boundaries
 
-If the central message API is missing or insufficient, extend existing infrastructure conservatively rather than duplicating styling.
+- Inspect the branch, HEAD, working tree, status and relevant existing edits first.
+- Work on a focused local feature branch unless explicitly told otherwise.
+- Preserve unrelated changes, protected files, worktrees, run configurations, receipts, operator JARs, worlds and player profiles.
+- Do not discard uncommitted work or use destructive Git commands, reset/rebase, force-push or automatic cleanup without authorization.
+- Do not merge, push, deploy, restart or modify an operator server unless explicitly authorized for that action.
+- Create exactly one focused local feature commit for a completed feature step, unless the task specifies another commit strategy. Report its SHA and the actual working-tree status.
+- Integrate to `master` only in a separate, explicitly authorized integration step with fast-forward checks where required.
+- Avoid unexplained generated files, unrelated refactors and bulk formatting changes.
 
-### Future Features
+## Documentation and Reports
 
-When introducing a new feature that produces chat messages:
-
-- Reuse the existing central message system.
-- Apply the global bracket styling automatically.
-- Assign a centrally defined feature label color where a system prefix is required.
-- Follow existing message formatting and semantic color conventions.
-- Keep localization consistent between supported languages.
-- Reuse existing message block and interaction utilities.
-- Avoid introducing arbitrary colors or custom formatting implementations.
-- Extend relevant behavior tests to cover the new feature's chat output.
-- Update the chat design documentation when introducing new shared styling behavior.
-
-These rules apply automatically to future modules and features.
-
-## Quality Assurance
-
-- Test observable behavior rather than implementation details.
-- Add focused tests for new behavior and regressions.
-- Run applicable existing tests and Maven quality checks.
-- Use Spotless according to the repository configuration.
-- Report checks that could not be completed.
-- Never claim visual Minecraft validation without performing it.
-- Verify prefix brackets and feature labels separately in relevant chat tests.
-- Preserve existing name colors, message interactions and localization behavior.
-
-## Git and Safety
-
-- Inspect branch, working tree and existing changes first.
-- Never discard unrelated or uncommitted work.
-- Do not use destructive Git operations without approval.
-- Do not push, merge or deploy without explicit authorization.
-- Do not stop or modify an existing operator server.
-- Prefer isolated test environments.
-- Keep commits focused on the assigned task.
-
-## Documentation
-
-- Keep permanent technical documentation under docs/.
-- Keep phase reports and audit artifacts under reports/.
-- Use `reports/<phase>/` for phase-specific results.
-- Document important architectural decisions.
-- Keep documentation consistent with the actual implementation.
+- Permanent developer/operator documentation belongs in `docs/`.
+- Phase reports and audit artifacts belong in `reports/<phase>/`, **not** `docs/`.
+- Update relevant permission, configuration and UX documentation alongside behavioral changes.
+- Keep docs aligned with actual implemented behavior, and clearly mark future plans versus shipped functionality.
+- Preserve the original intent of historical reports; new reports should record their own evidence rather than rewriting old results.
