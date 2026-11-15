@@ -63,6 +63,8 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
             case "getItem" -> storage[(int) args[0]];
             case "getItemInMainHand" -> storage[heldSlot];
             case "getHeldItemSlot" -> heldSlot;
+            case "setHeldItemSlot" -> { heldSlot = (int) args[0]; yield null; }
+            case "clear" -> { Arrays.fill(storage, null); yield null; }
             case "setItem" -> { storage[(int) args[0]] = (ItemStack) args[1]; yield null; }
             default -> null;
         });

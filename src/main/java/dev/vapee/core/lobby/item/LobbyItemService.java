@@ -16,6 +16,9 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.function.Consumer;
 
 public final class LobbyItemService {
 
@@ -29,6 +32,7 @@ public final class LobbyItemService {
     private final LobbyItemRegistry registry;
     private final NamespacedKey lobbyItemKey;
     private final Supplier<Map<String, LobbyItemDefinition>> definitions;
+    private final Set<Consumer<Player>> refreshListeners = new LinkedHashSet<>();
 
     public LobbyItemService(JavaPlugin plugin, LobbyService lobbyService, LobbyItemRegistry registry,
                             Supplier<Map<String, LobbyItemDefinition>> definitions) {
@@ -52,14 +56,14 @@ public final class LobbyItemService {
 
         removeManagedItems(validatedPlayer);
         Map<String, LobbyItemDefinition> current = definitions.get();
-        Set<Integer> reserved = current.values().stream().filter(LobbyItemDefinition::enabled)
-                .map(LobbyItemDefinition::slot).collect(Collectors.toSet());
+        Set<Integer> reserved = reservedHotbarSlots();
         for (var entry : registry.entries().values()) {
             var definition = current.get(entry.id());
             if (definition != null && definition.enabled()) {
                 placeItem(validatedPlayer, definition.slot(), createItem(validatedPlayer, entry, definition), reserved);
             }
         }
+        List.copyOf(refreshListeners).forEach(listener -> listener.accept(validatedPlayer));
     }
 
     public void refreshVisibilityItem(Player player) { refreshItem(player, "visibility"); }
@@ -81,16 +85,28 @@ public final class LobbyItemService {
         return registry.resolve(id).isPresent() && definition != null && definition.enabled();
     }
 
-    public boolean isInConfiguredSlot(Player player, String id) {
-        var definition = definitions.get().get(id);
-        return definition != null && definition.enabled()
-                && getItemId(player.getInventory().getItem(definition.slot())).filter(id::equals).isPresent();
+    public Set<Integer> reservedHotbarSlots() {
+        return definitions.get().values().stream().filter(LobbyItemDefinition::enabled)
+                .map(LobbyItemDefinition::slot).collect(Collectors.toUnmodifiableSet());
     }
 
-    public boolean isHeldInConfiguredSlot(Player player, String id) {
-        var definition = definitions.get().get(id);
-        return definition != null && definition.slot() == player.getInventory().getHeldItemSlot()
-                && isInConfiguredSlot(player, id);
+    public void addRefreshListener(Consumer<Player> listener) {
+        refreshListeners.add(Objects.requireNonNull(listener));
+    }
+
+    public void removeRefreshListener(Consumer<Player> listener) {
+        refreshListeners.remove(listener);
+    }
+
+    /** Marks a temporary item for the shared Lobby inventory protections without adding a configured slot. */
+    public void markTemporaryItem(ItemMeta meta, String owner) {
+        if (registry.resolve(owner).isPresent()) throw new IllegalArgumentException("Reserved lobby item ID");
+        meta.getPersistentDataContainer().set(lobbyItemKey, PersistentDataType.STRING, owner);
+    }
+
+    public boolean hasManagedMarker(ItemStack item, String owner) {
+        return isManagedItem(item) && owner.equals(item.getItemMeta().getPersistentDataContainer()
+                .get(lobbyItemKey, PersistentDataType.STRING));
     }
 
     public void removeManagedItems(Player player) {
@@ -168,7 +184,6 @@ public final class LobbyItemService {
                 PersistentDataType.STRING,
                 entry.id()
         );
-        entry.decorate().accept(player, meta);
         item.setItemMeta(meta);
         return item;
     }

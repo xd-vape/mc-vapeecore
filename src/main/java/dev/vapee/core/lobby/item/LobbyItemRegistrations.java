@@ -12,13 +12,8 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
-import org.bukkit.entity.Player;
-import org.bukkit.event.block.Action;
-import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /** The single list of production lobby features. Add a feature adapter and one registration here;
@@ -85,26 +80,16 @@ public final class LobbyItemRegistrations {
         registry.register("friends", new LobbyItemDefinition(false, 6, friend, friend), new FriendsLobbyItemAction(friends));
     }
 
-    public static void registerGadgets(LobbyItemRegistry registry, LobbyItemAction click,
-                                       BiFunction<Player, LobbyItemDefinition, LobbyItemDefinition.Appearance> presentation,
-                                       BiConsumer<Player, ItemMeta> decorate) {
+    public static void registerGadgets(LobbyItemRegistry registry, LobbyItemAction click) {
         var chest = appearance(Material.CHEST, "<gold>Gadgets", List.of("<i18n:lobby.gadgets.lore>"), false);
-        registry.register("gadgets", new LobbyItemDefinition(false, 4, chest, chest), new LobbyItemAction() {
-            @Override public boolean supports(Action action) {
-                return action == Action.LEFT_CLICK_AIR || LobbyItemAction.super.supports(action);
-            }
-            @Override public boolean handleClick(Player player, Action action) {
-                return click.handleClick(player, action);
-            }
-        }, presentation, decorate);
+        registry.register("gadgets", new LobbyItemDefinition(false, 4, chest, chest), click);
     }
 
     /** Standalone config loaders have the same registrations but no enabled feature runtime. */
     public static LobbyItemRegistry inactive() {
         var registry = new LobbyItemRegistry();
         register(registry, () -> null, () -> null, () -> null, () -> null);
-        registerGadgets(registry, (player, click) -> false, (player, definition) -> definition.appearance(),
-                (player, meta) -> { });
+        registerGadgets(registry, (player, click) -> false);
         return registry;
     }
 

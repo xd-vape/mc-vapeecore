@@ -184,6 +184,12 @@ commands:
     permission: vapeecore.utility.enderchest
 
 permissions:
+  vapeecore.gadgets.use:
+    description: Open the Gadgets menu and use gadgets
+    default: true
+  vapeecore.gadgets.player-riding:
+    description: Equip and use Player Riding
+    default: true
   vapeecore.tpa.use:
     description: Send and answer consensual player teleport requests
     default: true

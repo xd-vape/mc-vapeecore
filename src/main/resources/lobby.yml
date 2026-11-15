@@ -34,6 +34,9 @@ messages:
 # head-owner: self uses the online player's cached profile with PLAYER_HEAD; none uses no owner.
 # No texture URL/profile lookup is performed; head-owner is ignored for other materials.
 # Optional registered friends/settings shortcuts can be added here with enabled: true.
+gadgets:
+  max-equipped-items: 3
+
 items:
   player-menu:
     enabled: true

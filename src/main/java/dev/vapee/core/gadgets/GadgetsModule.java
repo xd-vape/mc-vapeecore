@@ -3,7 +3,6 @@ package dev.vapee.core.gadgets;
 import dev.vapee.core.activity.ActivityModule;
 import dev.vapee.core.lobby.LobbyModule;
 import dev.vapee.core.lobby.experience.navigator.NavigatorAccessPolicy;
-import dev.vapee.core.lobby.item.LobbyItemDefinition;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.module.CoreModule;
 import dev.vapee.core.player.PlayerModule;
@@ -16,10 +15,10 @@ import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.HandlerList;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class GadgetsModule implements CoreModule {
+    public static final String USE_PERMISSION = "vapeecore.gadgets.use";
     private final JavaPlugin plugin;
     private final LobbyModule lobby;
     private final PlayerModule players;
@@ -66,19 +65,22 @@ public final class GadgetsModule implements CoreModule {
         var visibilityService = visibility.get();
         var socialService = social.get();
         var utilityService = utility.get();
-        var candidateRiding = new PlayerRiding(plugin, items, messages, eligible,
+        var equipment = new GadgetEquipment(plugin, items, messages, lobby.getLobbyConfig()::getGadgetItemLimit);
+        var candidateRiding = new PlayerRiding(plugin, equipment, messages, eligible,
                 id -> lobbyGlide.test(id) || utilityService.hasManagedFlight(id),
                 (first, second) -> visibilityService.canSee(first, second) && visibilityService.canSee(second, first)
                         && !socialService.isIgnoring(first.getUniqueId(), second.getUniqueId())
                         && !socialService.isIgnoring(second.getUniqueId(), first.getUniqueId()));
-        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding);
+        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment);
         var states = lobby.getLobbyPlayerStateService();
         var activity = activities.getActivityService();
+        java.util.function.Consumer<Player> refreshItems = candidateRiding::afterHotbarRefresh;
         Runnable unsubscribe = () -> {
             visibilityService.removeRefreshListener(visibilityChanged);
             states.removeStateListener(candidateRiding);
             activity.removeMembershipListener(candidateRiding);
             utilityService.removeFlightListener(candidateRiding);
+            items.removeRefreshListener(refreshItems);
         };
         try {
             plugin.getServer().getPluginManager().registerEvents(candidate, plugin);
@@ -87,6 +89,7 @@ public final class GadgetsModule implements CoreModule {
             activity.addMembershipListener(candidateRiding);
             utilityService.addFlightListener(candidateRiding);
             visibilityService.addRefreshListener(visibilityChanged);
+            items.addRefreshListener(refreshItems);
             lobby.addReloadListener(reload);
             unsubscribeRiding = unsubscribe;
             riding = candidateRiding;
@@ -110,15 +113,7 @@ public final class GadgetsModule implements CoreModule {
     }
 
     public boolean handleHotbar(Player player, Action action) {
-        return riding != null && riding.useHotbar(player, action, this::openMenu);
-    }
-
-    public LobbyItemDefinition.Appearance appearance(Player player, LobbyItemDefinition definition) {
-        return riding == null ? definition.appearance() : riding.appearance(player, definition);
-    }
-
-    public void decorate(Player player, ItemMeta meta) {
-        if (riding != null) riding.decorate(player, meta);
+        return action.isRightClick() && openMenu(player);
     }
 
     @Override

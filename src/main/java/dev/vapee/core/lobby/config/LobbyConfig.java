@@ -107,6 +107,10 @@ public final class LobbyConfig {
         return state.items();
     }
 
+    public int getGadgetItemLimit() {
+        return state.gadgetItemLimit();
+    }
+
     public void saveSpawn(LobbySpawn spawn) {
         LobbySpawn validatedSpawn = Objects.requireNonNull(spawn, "spawn");
         YamlConfiguration currentConfiguration = loadConfiguration();
@@ -206,8 +210,16 @@ public final class LobbyConfig {
                         "messages.quit",
                         DEFAULT_QUIT_MESSAGE_FORMAT
                 ),
-                LobbyItemsConfig.read(configuration, logger, itemRegistry)
+                LobbyItemsConfig.read(configuration, logger, itemRegistry),
+                readGadgetItemLimit(configuration)
         );
+    }
+
+    private int readGadgetItemLimit(YamlConfiguration configuration) {
+        Object value = configuration.get("gadgets.max-equipped-items");
+        if (value instanceof Integer limit && limit >= 1 && limit <= 3) return limit;
+        if (value != null) logger.warning("Invalid gadgets.max-equipped-items in lobby.yml; using 3 (expected 1..3).");
+        return 3;
     }
 
     private GameMode readPlayerGameMode(YamlConfiguration configuration) {
@@ -403,7 +415,8 @@ public final class LobbyConfig {
             boolean itemPickupProtection,
             MessageSettings joinMessage,
             MessageSettings quitMessage,
-            Map<String, LobbyItemDefinition> items
+            Map<String, LobbyItemDefinition> items,
+            int gadgetItemLimit
     ) {
 
         public State {
@@ -429,7 +442,8 @@ public final class LobbyConfig {
                     true,
                     new MessageSettings(true, DEFAULT_JOIN_MESSAGE_FORMAT),
                     new MessageSettings(true, DEFAULT_QUIT_MESSAGE_FORMAT),
-                    LobbyItemsConfig.defaults(itemRegistry)
+                    LobbyItemsConfig.defaults(itemRegistry),
+                    3
             );
         }
 
@@ -448,7 +462,8 @@ public final class LobbyConfig {
                     itemPickupProtection,
                     joinMessage,
                     quitMessage,
-                    items
+                    items,
+                    gadgetItemLimit
             );
         }
     }

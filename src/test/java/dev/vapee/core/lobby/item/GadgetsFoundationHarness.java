@@ -113,6 +113,7 @@ public final class GadgetsFoundationHarness {
             default -> null;
         });
         inject(JavaPlugin.class, fixture.plugin, "server", server);
+        inject(org.bukkit.Bukkit.class, null, "server", server);
         inject(JavaPlugin.class, fixture.plugin, "dataFolder", root.toFile());
         var messages = new MessageService(() -> "", LocalizationService.bundled(fixture.logger));
         var players = new PlayerModule(fixture.plugin, new ConfigService(fixture.plugin), messages);
@@ -143,7 +144,7 @@ public final class GadgetsFoundationHarness {
         var utility = new dev.vapee.core.utility.UtilityService(fixture.plugin);
         var gadgets = new GadgetsModule(fixture.plugin, lobby, players, activities, messages,
                 () -> visibility, () -> social, () -> utility, id -> false);
-        LobbyItemRegistrations.registerGadgets(fixture.registry, gadgets::handleHotbar, gadgets::appearance, gadgets::decorate);
+        LobbyItemRegistrations.registerGadgets(fixture.registry, gadgets::handleHotbar);
         fixture.registry.seal();
         fixture.registry.activate();
         var chest = reloadNewInstall(configPath, lobby, fixture);
@@ -176,31 +177,58 @@ public final class GadgetsFoundationHarness {
             check(!gadgets.openMenu(viewer.player) && viewer.open == top, "repeated opening keeps the same inventory");
             var entry = top.getItem(10);
             check(plain(entry.getItemMeta().displayName()).equals("Player Riding")
-                    && plain(entry.getItemMeta().lore().getFirst()).equals("Inactive"), "Riding starts inactive");
-            fixture.heldSlot = 4;
+                    && entry.getItemMeta().lore().size() == 2
+                    && plain(entry.getItemMeta().lore().getFirst()).equals("Carry or ride other players."),
+                    "Riding starts with compact unequipped English lore");
+            check(plain(top.getItem(22).getItemMeta().displayName()).equals("0/3 equipped"), "default capacity shown");
+            viewer.allowRiding = false;
+            click(viewer, top, 10, ClickType.LEFT);
+            check(fixture.storage[2] == null && plain(top.getItem(10).getItemMeta().lore().get(1)).equals("Locked")
+                    && viewer.chat.removeLast().contains("cannot equip"), "individual permission locks the entry with feedback");
+            viewer.allowRiding = true;
+            var blockedSlots = List.of(2, 3, 5, 6, 7);
+            var foreignItem = fixture.foreign();
+            blockedSlots.forEach(slot -> fixture.storage[slot] = foreignItem);
+            click(viewer, top, 10, ClickType.LEFT);
+            check(viewer.chat.removeLast().contains("No free hotbar slot")
+                    && blockedSlots.stream().allMatch(slot -> fixture.storage[slot] == foreignItem),
+                    "full hotbar gives localized feedback and preserves foreign items");
+            blockedSlots.forEach(slot -> fixture.storage[slot] = null);
+            ItemStack chestBefore = fixture.storage[4];
             check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
-                    && fixture.storage[4].getType() == Material.SADDLE
-                    && plain(top.getItem(10).getItemMeta().lore().getFirst()).equals("Active"),
-                    "left-click activates a managed Saddle and updates menu status");
-            ItemStack saddle = fixture.storage[4];
+                    && fixture.storage[2].getType() == Material.SADDLE && fixture.storage[4] == chestBefore
+                    && plain(top.getItem(10).getItemMeta().lore().getFirst()).equals("Equipped")
+                    && plain(top.getItem(22).getItemMeta().displayName()).equals("1/3 equipped"),
+                    "left-click equips a separate Saddle, retaining the chest and showing count");
+            items.applyLobbyItems(viewer.player);
+            check(fixture.storage[2].getType() == Material.SADDLE && fixture.storage[4].getType() == Material.CHEST
+                    && fixture.ownedCount() == 5, "shared hotbar refresh restores exactly one saddle");
+            ItemStack saddle = fixture.storage[2];
+            fixture.heldSlot = 2;
+            var saddleDrop = new PlayerDropItemEvent(viewer.player, proxy(Item.class, (name, args) -> fixture.storage[2]));
+            fixture.listener.onPlayerDropItem(saddleDrop);
+            var saddleSwap = new PlayerSwapHandItemsEvent(viewer.player, saddle, null);
+            fixture.listener.onPlayerSwapHandItems(saddleSwap);
+            check(saddleDrop.isCancelled() && saddleSwap.isCancelled(), "equipped saddle uses shared drop and swap protection");
             viewer.close();
             var target = exerciseRiding(fixture, viewer, playerService, world, saddle, social);
+            saddle = fixture.storage[2];
             fixture.click(saddle, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
             check(viewer.open == viewer.bottom, "normal right-click with the saddle keeps the riding gesture free");
-            viewer.sneaking = true;
-            fixture.click(saddle, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
-            viewer.sneaking = false;
-            check(viewer.open != viewer.bottom, "sneak and right-click the air opens Gadgets with the active saddle");
+            fixture.heldSlot = 4;
+            fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+            check(viewer.open != viewer.bottom && fixture.storage[2] == saddle, "chest opens Gadgets while saddle is equipped");
             top = viewer.open;
             check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
-                    && fixture.storage[4].getType() == Material.CHEST, "deactivating restores the chest in the same slot");
+                    && fixture.storage[2] == null && fixture.storage[4].getType() == Material.CHEST, "unequipping removes only the saddle");
             int[] slots = {11, 12, 14, 15, 16};
             String[] labels = {"Size Changer", "Glow", "Trails", "Movement Extras", "Fun Gadgets"};
             for (int index = 0; index < slots.length; index++) {
                 int slot = slots[index];
                 ItemStack icon = top.getItem(slot);
                 check(plain(icon.getItemMeta().displayName()).equals(labels[index])
-                                && plain(icon.getItemMeta().lore().getFirst()).equals("Not yet available"),
+                                && icon.getItemMeta().lore().size() == 2
+                                && plain(icon.getItemMeta().lore().get(1)).equals("Not yet available"),
                         "category is labeled unavailable: " + labels[index]);
                 check(click(viewer, top, slot, ClickType.LEFT).isCancelled() && viewer.open == top
                                 && top.getItem(slot) == icon,
@@ -225,8 +253,9 @@ public final class GadgetsFoundationHarness {
             viewer.locale = Locale.GERMANY;
             fixture.click(chest, Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND);
             check(plain(viewer.open.getItem(10).getItemMeta().displayName()).equals("Auf Spielern reiten")
-                            && plain(viewer.open.getItem(10).getItemMeta().lore().getFirst()).equals("Inaktiv")
-                            && plain(viewer.open.getItem(11).getItemMeta().lore().getFirst()).equals("Noch nicht verfügbar"),
+                            && viewer.open.getItem(10).getItemMeta().lore().size() == 2
+                            && plain(viewer.open.getItem(10).getItemMeta().lore().get(1)).equals("Linksklick zum Ausrüsten.")
+                            && plain(viewer.open.getItem(11).getItemMeta().lore().get(1)).equals("Noch nicht verfügbar"),
                     "block right-click opens German category and status");
             items.refreshItem(viewer.player, "gadgets");
             check(plain(fixture.storage[4].getItemMeta().lore().getFirst()).startsWith("Rechtsklick"),
@@ -238,7 +267,20 @@ public final class GadgetsFoundationHarness {
             check(!gadgets.openMenu(viewer.player), "stale close event cannot forget current inventory");
 
             click(viewer, viewer.open, 10, ClickType.LEFT);
-            ItemStack beforeReload = fixture.storage[4];
+            ItemStack beforeReload = fixture.storage[2];
+            fixture.heldSlot = 2;
+            target.sneaking = true;
+            viewer.tick += 3;
+            dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
+            check(target.vehicle == viewer.player, "permission loss starts with a live mount");
+            viewer.allowGadgets = false;
+            dispatch(new org.bukkit.event.player.PlayerItemHeldEvent(viewer.player, 2, 4));
+            check(target.vehicle == null && fixture.storage[2] == null && !gadgets.openMenu(viewer.player),
+                    "general permission revocation removes equipment, releases mount and blocks menu");
+            viewer.allowGadgets = true;
+            click(viewer, viewer.open, 10, ClickType.LEFT);
+            check(fixture.storage[2] != null && fixture.storage[2] != beforeReload, "new permission grant requires a new equipped item");
+            beforeReload = fixture.storage[2];
             target.sneaking = true;
             viewer.tick += 3;
             dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
@@ -246,17 +288,56 @@ public final class GadgetsFoundationHarness {
             var edited = new org.bukkit.configuration.file.YamlConfiguration();
             edited.load(configPath.toFile());
             edited.set("items.gadgets.enabled", false);
+            edited.set("gadgets.max-equipped-items", 1);
             edited.save(configPath.toFile());
             var disable = lobby.prepareReload();
             disable.apply();
+            check(config.getGadgetItemLimit() == 1, "reload applies configured gadget limit");
             fixture.configure(Files.readString(configPath));
-            check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
+            check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[2] == null
+                            && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
                     "reload closes owned view, removes disabled item and rejects access");
             fixture.click(chest, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
             check(viewer.open == viewer.bottom, "stale managed chest cannot open after disable");
             disable.rollback();
+            check(config.getGadgetItemLimit() == 3, "rollback restores prior gadget limit");
+            edited.set("gadgets.max-equipped-items", 2);
+            edited.save(configPath.toFile());
+            check(config.prepareReloadState().gadgetItemLimit() == 2, "configuration accepts limit 2");
+            edited.set("gadgets.max-equipped-items", 4);
+            edited.save(configPath.toFile());
+            check(config.prepareReloadState().gadgetItemLimit() == 3, "out-of-range limit safely defaults to 3");
             check(fixture.storage[4].getType() == Material.CHEST && gadgets.openMenu(viewer.player),
                     "rollback restores original item and menu access");
+            click(viewer, viewer.open, 10, ClickType.LEFT);
+            check(fixture.storage[2].getType() == Material.SADDLE, "saddle equipped before BUILD transition");
+            state.enterBuildMode(viewer.player);
+            check(state.isBuildMode(viewer.id) && fixture.storage[2] == null && !gadgets.openMenu(viewer.player),
+                    "BUILD clears equipment and blocks Gadgets");
+            state.exitBuildMode(viewer.player);
+            check(fixture.storage[2] == null && gadgets.openMenu(viewer.player), "leaving BUILD does not resurrect equipment");
+            click(viewer, viewer.open, 10, ClickType.LEFT);
+            var activity = activities.getActivityService();
+            var venue = new dev.vapee.core.activity.location.ActivityVenue("test_venue", "test",
+                    new dev.vapee.core.activity.location.ActivityArea(world.getName(), 0, 0, 0, 10, 10, 10),
+                    new dev.vapee.core.activity.location.ActivityPosition(world.getName(), 5, 5, 5, 0, 0));
+            activity.registerActivityType(new dev.vapee.core.activity.ActivityType() {
+                public String getKey() { return "test"; }
+                public int getMinParticipants() { return 1; }
+                public int getMaxParticipants() { return 2; }
+                public dev.vapee.core.activity.ActivitySession createSession(UUID id,
+                        dev.vapee.core.activity.location.ActivityVenue location) {
+                    return new dev.vapee.core.activity.ActivitySession(id, "test", location) { };
+                }
+            });
+            activity.registerVenue(venue);
+            var session = activity.createSession("test", "test_venue").session().orElseThrow();
+            check(activity.joinSession(viewer.player, session.getSessionId()) == dev.vapee.core.activity.ActivityResult.SUCCESS
+                    && fixture.storage[2] == null && !gadgets.openMenu(viewer.player), "Activity handoff clears equipment and blocks Gadgets");
+            activity.leaveCurrentSession(viewer.player, dev.vapee.core.activity.ActivityLeaveReason.VOLUNTARY);
+            check(fixture.storage[2] == null, "leaving Activity does not resurrect equipment");
+            viewer.close();
+            gadgets.openMenu(viewer.player);
             gadgetConfigOverrides(fixture);
             Inventory foreign = inventory(null, 27);
             viewer.open = foreign;
@@ -272,6 +353,7 @@ public final class GadgetsFoundationHarness {
         check(viewer.open == viewer.bottom && countMenuListeners() == 0, "shutdown closes owned menu and removes handlers");
     }
 
+
     private static Viewer exerciseRiding(LobbyItemRegistryFixture fixture, Viewer viewer, PlayerService players,
                                          World world, ItemStack saddle, dev.vapee.core.social.SocialService social) {
         var target = new Viewer();
@@ -281,11 +363,23 @@ public final class GadgetsFoundationHarness {
         target.peer = viewer;
         players.loadPlayer(target.id, "OtherPlayer");
         var forged = fixture.marked("vapeecore", "gadgets", Material.SADDLE);
-        fixture.storage[4] = forged;
+        fixture.storage[2] = forged;
         var attempt = new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND);
         dispatch(attempt);
         check(!attempt.isCancelled() && target.vehicle == null, "managed marker alone grants no riding authority");
-        fixture.storage[4] = saddle;
+        dispatch(new org.bukkit.event.player.PlayerItemHeldEvent(viewer.player, 2, 4));
+        fixture.storage[2] = saddle;
+        var stale = new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND);
+        dispatch(stale);
+        check(target.vehicle == null && viewer.chat.isEmpty(), "replaced item invalidates the session");
+        check(stale.isCancelled(), "stale saddle cannot pass through to vanilla");
+        fixture.storage[2] = null;
+        fixture.heldSlot = 4;
+        fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+        click(viewer, viewer.open, 10, ClickType.LEFT);
+        viewer.close();
+        fixture.heldSlot = 2;
+        saddle = fixture.storage[2];
 
         dispatch(attempt);
         dispatch(new PlayerInteractAtEntityEvent(viewer.player, target.player, new Vector(), EquipmentSlot.HAND));
@@ -301,12 +395,12 @@ public final class GadgetsFoundationHarness {
         var foreignMount = new EntityMountEvent(viewer.player, target.player);
         dispatch(foreignMount);
         check(foreignMount.isCancelled(), "foreign mount cannot introduce a chain");
-        fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND);
+        dispatch(fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND));
         check(target.vehicle == null && viewer.passengers.isEmpty() && target.velocity != null
                         && target.velocity.distanceSquared(new Vector(0, 0.32, 0.75)) < 0.000001,
                 "air click detaches and launches the rider once");
         Vector launched = target.velocity;
-        fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND);
+        dispatch(fixture.click(saddle, Action.LEFT_CLICK_AIR, EquipmentSlot.HAND));
         check(target.velocity == launched, "air click without rider has no effect");
 
         target.sneaking = true;
@@ -513,6 +607,8 @@ public final class GadgetsFoundationHarness {
         private Component title;
         private Player player;
         private boolean sneaking;
+        private boolean allowGadgets = true;
+        private boolean allowRiding = true;
         private boolean flying;
         private boolean canSee = true;
         private World world;
@@ -528,6 +624,8 @@ public final class GadgetsFoundationHarness {
             case "getName" -> "RidingFixture";
             case "isOnline" -> true;
             case "isSneaking" -> sneaking;
+            case "hasPermission" -> args[0].equals(GadgetsModule.USE_PERMISSION) ? allowGadgets
+                    : args[0].equals("vapeecore.gadgets.player-riding") && allowRiding;
             case "setSneaking" -> { sneaking = (boolean) args[0]; yield null; }
             case "getWorld" -> world;
             case "isFlying" -> flying;

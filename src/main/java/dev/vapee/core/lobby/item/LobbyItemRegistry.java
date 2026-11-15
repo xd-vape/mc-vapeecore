@@ -9,8 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
-import java.util.function.BiConsumer;
-import org.bukkit.inventory.meta.ItemMeta;
 
 /** Explicit Java registrations; YAML only supplies presentation for these stable IDs.
  * Register before configuration is loaded, seal at Lobby enable, activate only after dependent menus exist. */
@@ -25,18 +23,12 @@ public final class LobbyItemRegistry {
 
     public void register(String id, LobbyItemDefinition defaults, LobbyItemAction action,
                          BiFunction<Player, LobbyItemDefinition, LobbyItemDefinition.Appearance> presentation) {
-        register(id, defaults, action, presentation, (player, meta) -> { });
-    }
-
-    public void register(String id, LobbyItemDefinition defaults, LobbyItemAction action,
-                         BiFunction<Player, LobbyItemDefinition, LobbyItemDefinition.Appearance> presentation,
-                         BiConsumer<Player, ItemMeta> decorate) {
         if (sealed) throw new IllegalStateException("Lobby registrations are sealed");
         if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}")) {
             throw new IllegalArgumentException("Invalid stable lobby item id: " + id);
         }
         Entry entry = new Entry(id, Objects.requireNonNull(defaults), Objects.requireNonNull(action),
-                Objects.requireNonNull(presentation), Objects.requireNonNull(decorate));
+                Objects.requireNonNull(presentation));
         if (entries.putIfAbsent(id, entry) != null) throw new IllegalArgumentException("Duplicate lobby item: " + id);
     }
 
@@ -53,6 +45,5 @@ public final class LobbyItemRegistry {
     }
 
     public record Entry(String id, LobbyItemDefinition defaults, LobbyItemAction action,
-                        BiFunction<Player, LobbyItemDefinition, LobbyItemDefinition.Appearance> presentation,
-                        BiConsumer<Player, ItemMeta> decorate) { }
+                        BiFunction<Player, LobbyItemDefinition, LobbyItemDefinition.Appearance> presentation) { }
 }

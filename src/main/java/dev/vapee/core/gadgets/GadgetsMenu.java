@@ -32,21 +32,26 @@ final class GadgetsMenu implements Listener {
     private static final MenuLayout<Category> LAYOUT = MenuLayout.builder(27, Category.class)
             .content(List.of(10, 11, 12, 14, 15, 16))
             .build();
+    private static final int EQUIPMENT_STATUS_SLOT = 22;
+
+    private enum Type { ITEM, DIRECT_MENU }
 
     private enum Category {
-        PLAYER_RIDING("player-riding", Material.SADDLE),
-        SIZE_CHANGER("size-changer", Material.SLIME_BALL),
-        GLOW("glow", Material.GLOW_INK_SAC),
-        TRAILS("trails", Material.BLAZE_POWDER),
-        MOVEMENT_EXTRAS("movement-extras", Material.FEATHER),
-        FUN_GADGETS("fun-gadgets", Material.FIREWORK_ROCKET);
+        PLAYER_RIDING("player-riding", Material.SADDLE, Type.ITEM),
+        SIZE_CHANGER("size-changer", Material.SLIME_BALL, Type.DIRECT_MENU),
+        GLOW("glow", Material.GLOW_INK_SAC, Type.DIRECT_MENU),
+        TRAILS("trails", Material.BLAZE_POWDER, Type.DIRECT_MENU),
+        MOVEMENT_EXTRAS("movement-extras", Material.FEATHER, Type.DIRECT_MENU),
+        FUN_GADGETS("fun-gadgets", Material.FIREWORK_ROCKET, Type.DIRECT_MENU);
 
         private final String key;
         private final Material icon;
+        private final Type type;
 
-        Category(String key, Material icon) {
+        Category(String key, Material icon, Type type) {
             this.key = key;
             this.icon = icon;
+            this.type = type;
         }
     }
 
@@ -54,18 +59,22 @@ final class GadgetsMenu implements Listener {
     private final MessageService messages;
     private final Predicate<Player> access;
     private final PlayerRiding riding;
+    private final GadgetEquipment equipment;
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
-    GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding) {
+    GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding,
+                GadgetEquipment equipment) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
         this.riding = riding;
+        this.equipment = equipment;
     }
 
     boolean open(Player player) {
-        if (!access.test(player)) return false;
+        riding.reconcile(player);
+        if (!canOpen(player)) return false;
         UUID owner = player.getUniqueId();
         if (openInventories.get(owner) == player.getOpenInventory().getTopInventory()) return false;
 
@@ -81,12 +90,14 @@ final class GadgetsMenu implements Listener {
                 continue;
             }
             var item = UiItems.literal(category.icon, tr("gadgets.categories." + category.key),
-                    MessageStyle.TEXT, List.of(tr("gadgets.unavailable").color(MessageStyle.MUTED)));
+                    MessageStyle.TEXT, List.of(tr("gadgets.description." + category.key),
+                            tr("gadgets.unavailable").color(MessageStyle.MUTED)));
             inventory.setItem(LAYOUT.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
         }
+        renderCount(player, inventory);
         var opened = player.openInventory(inventory);
         if (opened == null || opened.getTopInventory() != inventory) return false;
-        if (openedGeneration != generation || !access.test(player)) {
+        if (openedGeneration != generation || !canOpen(player)) {
             closeOwned(player, inventory);
             return false;
         }
@@ -94,14 +105,25 @@ final class GadgetsMenu implements Listener {
         return true;
     }
 
+    private boolean canOpen(Player player) {
+        return access.test(player) && player.hasPermission(GadgetsModule.USE_PERMISSION);
+    }
+
     private void renderRiding(Player player, Inventory inventory) {
         boolean active = riding.active(player);
-        var lore = List.of(MessageStyle.status(tr(active ? "gadgets.riding.active" : "gadgets.riding.inactive"), active),
-                Component.empty(), tr("gadgets.riding.pickup-help"), tr("gadgets.riding.ride-help"),
-                tr("gadgets.riding.dismount-help"), tr("gadgets.riding.launch-help"), tr("gadgets.riding.open-menu"),
-                Component.empty(), tr(active ? "gadgets.riding.disable" : "gadgets.riding.enable"));
+        var lore = !riding.permitted(player) ? List.of(tr("gadgets.riding.description"), MessageStyle.error(tr("gadgets.locked")))
+                : active ? List.of(MessageStyle.success(tr("gadgets.riding.active")), tr("gadgets.riding.disable"))
+                : List.of(tr("gadgets.riding.description"), tr("gadgets.riding.enable"));
         var item = UiItems.literal(Material.SADDLE, tr("gadgets.categories.player-riding"), MessageStyle.TEXT, lore);
         inventory.setItem(LAYOUT.contentSlot(0), UiItems.render(UiItems.localize(item, messages, player)));
+    }
+
+    private void renderCount(Player player, Inventory inventory) {
+        var count = tr("gadgets.equipped-count", Map.of(
+                "count", Component.text(equipment.count(player)).color(MessageStyle.accent()),
+                "limit", Component.text(equipment.limit()).color(MessageStyle.accent())));
+        var item = UiItems.literal(Material.PAPER, count, MessageStyle.TEXT, List.of());
+        inventory.setItem(EQUIPMENT_STATUS_SLOT, UiItems.render(UiItems.localize(item, messages, player)));
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -111,11 +133,16 @@ final class GadgetsMenu implements Listener {
         boolean wasCancelled = event.isCancelled();
         event.setCancelled(true);
         if (wasCancelled || !(event.getWhoClicked() instanceof Player player) || event.getClickedInventory() != top
-                || event.getClick() != ClickType.LEFT || event.getRawSlot() != LAYOUT.contentSlot(0)
+                || event.getClick() != ClickType.LEFT
                 || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
-                || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top
-                || !access.test(player)) return;
-        if (riding.toggle(player)) renderRiding(player, top);
+                || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top) return;
+        riding.reconcile(player);
+        if (!canOpen(player)) return;
+        int index = LAYOUT.contentSlots().indexOf(event.getRawSlot());
+        if (index < 0 || Category.values()[index].type != Type.ITEM) return;
+        riding.toggle(player);
+        renderRiding(player, top);
+        renderCount(player, top);
     }
 
     @EventHandler

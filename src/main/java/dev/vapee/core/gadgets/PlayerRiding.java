@@ -3,12 +3,12 @@ package dev.vapee.core.gadgets;
 import static dev.vapee.core.i18n.Translations.tr;
 
 import dev.vapee.core.activity.ActivityMembershipListener;
-import dev.vapee.core.lobby.item.LobbyItemDefinition;
-import dev.vapee.core.lobby.item.LobbyItemService;
 import dev.vapee.core.lobby.player.LobbyPlayerStateListener;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.message.MessageStyle;
 import dev.vapee.core.utility.UtilityFlightListener;
+import dev.vapee.core.ui.UiItemSpec;
+import dev.vapee.core.ui.UiItems;
 import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +20,6 @@ import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -35,6 +34,9 @@ import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -43,33 +45,31 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 
 final class PlayerRiding implements Listener, LobbyPlayerStateListener, ActivityMembershipListener, UtilityFlightListener {
     static final String ITEM = "gadgets";
+    static final String PERMISSION = "vapeecore.gadgets.player-riding";
+    private static final String ID = "player-riding";
     private static final double FORWARD = 0.75;
     private static final double UPWARD = 0.32;
-    private static final LobbyItemDefinition.Appearance SADDLE = new LobbyItemDefinition.Appearance(
-            Material.SADDLE, tr("gadgets.categories.player-riding"), List.of(tr("gadgets.riding.open-menu")), false);
+    private static final UiItemSpec SADDLE = UiItems.literal(Material.SADDLE, tr("gadgets.categories.player-riding"),
+            MessageStyle.GADGETS_LABEL, List.of(tr("gadgets.riding.pickup-help"), tr("gadgets.riding.ride-help"),
+                    tr("gadgets.riding.dismount-help"), tr("gadgets.riding.launch-help")));
 
-    private record Ride(Player carrier, Player rider) {
+    private record Ride(Player carrier, Player rider, Player initiator) {
         boolean attached() {
             return carrier.equals(rider.getVehicle()) && carrier.getPassengers().contains(rider);
         }
     }
 
     private final JavaPlugin plugin;
-    private final LobbyItemService items;
+    private final GadgetEquipment equipment;
     private final MessageService messages;
     private final Predicate<Player> access;
     private final Predicate<UUID> incompatibleFlight;
     private final BiPredicate<Player, Player> compatiblePair;
-    private final NamespacedKey saddleKey;
-    private final Map<UUID, String> active = new HashMap<>();
     private final Map<UUID, Ride> rides = new HashMap<>();
     private final Map<UUID, Integer> lastInteraction = new HashMap<>();
     private Ride mounting;
@@ -77,56 +77,46 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     private boolean transitioning;
     private boolean stopping;
 
-    PlayerRiding(JavaPlugin plugin, LobbyItemService items, MessageService messages, Predicate<Player> access,
+    PlayerRiding(JavaPlugin plugin, GadgetEquipment equipment, MessageService messages, Predicate<Player> access,
                  Predicate<UUID> incompatibleFlight, BiPredicate<Player, Player> compatiblePair) {
         this.plugin = plugin;
-        this.items = items;
+        this.equipment = equipment;
         this.messages = messages;
         this.access = access;
         this.incompatibleFlight = incompatibleFlight;
         this.compatiblePair = compatiblePair;
-        saddleKey = new NamespacedKey(plugin, "riding_session");
     }
 
     boolean active(Player player) {
-        return active.containsKey(player.getUniqueId());
+        return equipment.equipped(player, ID);
     }
 
-    LobbyItemDefinition.Appearance appearance(Player player, LobbyItemDefinition definition) {
-        return active(player) ? SADDLE : definition.appearance();
+    boolean permitted(Player player) {
+        return player.hasPermission(GadgetsModule.USE_PERMISSION) && player.hasPermission(PERMISSION);
     }
 
-    void decorate(Player player, ItemMeta meta) {
-        var token = active.get(player.getUniqueId());
-        if (token != null) meta.getPersistentDataContainer().set(saddleKey, PersistentDataType.STRING, token);
-    }
-
-    boolean toggle(Player player) {
-        if (stopping || transitioning || !access.test(player)) return false;
+    void toggle(Player player) {
+        if (stopping || transitioning || !access.test(player)) return;
+        if (!permitted(player)) {
+            cleanupPlayer(player);
+            tell(player, "permission-denied", null);
+            return;
+        }
         if (active(player)) {
             deactivate(player);
-            return true;
+            return;
         }
-        if (!items.isInConfiguredSlot(player, ITEM)) {
-            tell(player, "slot-unavailable", null);
-            return false;
-        }
-        active.put(player.getUniqueId(), UUID.randomUUID().toString());
-        try {
-            items.refreshItem(player, ITEM);
-            return true;
-        } catch (RuntimeException failure) {
-            active.remove(player.getUniqueId());
-            throw failure;
+        switch (equipment.equip(player, ID, SADDLE)) {
+            case NO_SLOT -> tell(player, "slot-unavailable", null);
+            case AT_LIMIT -> tell(player, "limit-reached", null);
+            case EQUIPPED -> { }
         }
     }
 
     private void deactivate(Player player) {
-        UUID id = player.getUniqueId();
-        boolean wasActive = active.remove(id) != null;
-        lastInteraction.remove(id);
+        equipment.remove(player, ID);
+        lastInteraction.remove(player.getUniqueId());
         release(player);
-        if (wasActive) items.refreshItem(player, ITEM);
     }
 
     private void cleanupPlayer(Player player) {
@@ -134,36 +124,45 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     }
 
     boolean holdsSaddle(Player player) {
-        return !stopping && !transitioning && access.test(player) && items.isHeldInConfiguredSlot(player, ITEM)
-                && matchesSaddle(player, player.getInventory().getItemInMainHand());
+        reconcile(player);
+        return !stopping && !transitioning && access.test(player) && permitted(player) && equipment.holds(player, ID);
     }
 
-    private boolean matchesSaddle(Player player, ItemStack item) {
-        String token = active.get(player.getUniqueId());
-        return token != null && item != null && item.getType() == Material.SADDLE && item.getAmount() == 1
-                && items.getItemId(item).filter(ITEM::equals).isPresent()
-                && token.equals(item.getItemMeta().getPersistentDataContainer().get(saddleKey, PersistentDataType.STRING));
+    void reconcile(Player player) {
+        checkEquipment(player);
+        var ride = rides.get(player.getUniqueId());
+        if (ride != null && ride.initiator() != player) checkEquipment(ride.initiator());
     }
 
-    private boolean isSessionItem(ItemStack item) {
-        return item != null && item.getType() == Material.SADDLE && item.getItemMeta() != null
-                && items.getItemId(item).filter(ITEM::equals).isPresent()
-                && item.getItemMeta().getPersistentDataContainer().has(saddleKey, PersistentDataType.STRING);
+    private void checkEquipment(Player player) {
+        if (active(player) && (!permitted(player) || !access.test(player) || !equipment.present(player, ID)))
+            cleanupPlayer(player);
     }
 
-    boolean useHotbar(Player player, org.bukkit.event.block.Action click, Predicate<Player> openMenu) {
-        if (!active(player)) return click.isRightClick() && !isSessionItem(player.getInventory().getItemInMainHand())
-                && openMenu.test(player);
-        if (!holdsSaddle(player)) return false;
-        if (click == org.bukkit.event.block.Action.LEFT_CLICK_AIR) launch(player);
-        return click == org.bukkit.event.block.Action.RIGHT_CLICK_AIR && player.isSneaking() && openMenu.test(player);
+    void afterHotbarRefresh(Player player) {
+        if (active(player) && (!permitted(player) || !access.test(player) || !equipment.restoreAfterRefresh(player, ID)))
+            cleanupPlayer(player);
+    }
+
+    @EventHandler
+    public void onAirClick(PlayerInteractEvent event) {
+        if (event.getHand() == EquipmentSlot.HAND && event.getAction() == org.bukkit.event.block.Action.LEFT_CLICK_AIR
+                && equipment.isTemporary(event.getItem()) && holdsSaddle(event.getPlayer())) {
+            event.setCancelled(true);
+            launch(event.getPlayer());
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityClick(PlayerInteractEntityEvent event) {
-        if (event.isCancelled() || event.getHand() != EquipmentSlot.HAND || !holdsSaddle(event.getPlayer())) return;
+        if (event.isCancelled() || event.getHand() == null) return;
+        Player player = event.getPlayer();
+        var item = event.getHand() == EquipmentSlot.HAND ? player.getInventory().getItemInMainHand()
+                : player.getInventory().getItemInOffHand();
+        if (!equipment.isTemporary(item)) return;
         event.setCancelled(true);
-        if (event.getRightClicked() instanceof Player target) mount(event.getPlayer(), target, true);
+        if (event.getHand() == EquipmentSlot.HAND && event.getRightClicked() instanceof Player target && holdsSaddle(player))
+            mount(player, target, true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -173,9 +172,9 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onAttack(PrePlayerAttackEntityEvent event) {
-        if (event.isCancelled() || !holdsSaddle(event.getPlayer())) return;
+        if (event.isCancelled() || !equipment.isTemporary(event.getPlayer().getInventory().getItemInMainHand())) return;
         event.setCancelled(true);
-        if (event.getAttacked() instanceof Player target) mount(event.getPlayer(), target, false);
+        if (event.getAttacked() instanceof Player target && holdsSaddle(event.getPlayer())) mount(event.getPlayer(), target, false);
     }
 
     private boolean ready(Player player) {
@@ -207,13 +206,13 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
             return;
         }
 
-        Ride ride = pickUp ? new Ride(actor, target) : new Ride(target, actor);
+        Ride ride = pickUp ? new Ride(actor, target, actor) : new Ride(target, actor, actor);
         rides.put(ride.carrier().getUniqueId(), ride);
         rides.put(ride.rider().getUniqueId(), ride);
         mounting = ride;
         try {
             if (!ride.carrier().addPassenger(ride.rider()) || !ride.attached()) return;
-            if (rides.get(actor.getUniqueId()) != ride || !ready(actor) || !ready(target)
+            if (rides.get(actor.getUniqueId()) != ride || !ready(actor) || !ready(target) || !holdsSaddle(actor)
                     || !compatiblePair.test(actor, target)) {
                 detach(ride);
                 return;
@@ -236,7 +235,7 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
         }
         double yaw = Math.toRadians(carrier.getYaw());
         if (!Double.isFinite(yaw)) return;
-        if (detach(ride) && ready(carrier) && ready(ride.rider()) && ride.rider().getVehicle() == null
+        if (detach(ride) && ready(carrier) && ready(ride.rider()) && permitted(carrier) && ride.rider().getVehicle() == null
                 && carrier.getWorld().equals(ride.rider().getWorld()) && compatiblePair.test(carrier, ride.rider())) {
             ride.rider().setFallDistance(0);
             ride.rider().setVelocity(new Vector(-Math.sin(yaw) * FORWARD, UPWARD, Math.cos(yaw) * FORWARD));
@@ -328,8 +327,7 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     }
 
     private void clearSessions() {
-        var sessions = List.copyOf(active.keySet());
-        active.clear();
+        var sessions = equipment.owners();
         lastInteraction.clear();
         for (Ride ride : rides.values().stream().distinct().toList())
             cleanup(() -> {
@@ -337,7 +335,8 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
             });
         for (UUID id : sessions) cleanup(() -> {
             Player player = plugin.getServer().getPlayer(id);
-            if (player != null) items.refreshItem(player, ITEM);
+            if (player != null) equipment.clear(player);
+            else equipment.forget(id);
         });
     }
 
@@ -362,19 +361,17 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     @Override public void afterFlightChange(UUID id) { }
 
     @EventHandler public void onQuit(PlayerQuitEvent event) { cleanupPlayer(event.getPlayer()); }
+    @EventHandler public void onHeld(PlayerItemHeldEvent event) { reconcile(event.getPlayer()); }
+    @EventHandler public void onMove(PlayerMoveEvent event) { reconcile(event.getPlayer()); }
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        var inventory = event.getPlayer().getInventory();
-        ItemStack[] contents = inventory.getContents();
-        for (int slot = 0; slot < contents.length; slot++) {
-            if (isSessionItem(contents[slot])) inventory.setItem(slot, null);
-        }
+        equipment.clearOrphans(event.getPlayer());
     }
 
     @EventHandler
     public void onPickup(EntityPickupItemEvent event) {
         var item = event.getItem();
-        if (isSessionItem(item.getItemStack())) {
+        if (equipment.isTemporary(item.getItemStack())) {
             event.setCancelled(true);
             item.remove();
         }
@@ -387,8 +384,8 @@ final class PlayerRiding implements Listener, LobbyPlayerStateListener, Activity
     @EventHandler
     public void onDeath(PlayerDeathEvent event) {
         cleanupPlayer(event.getEntity());
-        event.getDrops().removeIf(this::isSessionItem);
-        event.getItemsToKeep().removeIf(this::isSessionItem);
+        event.getDrops().removeIf(equipment::isTemporary);
+        event.getItemsToKeep().removeIf(equipment::isTemporary);
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) { if (!event.isCancelled()) release(event.getPlayer()); }
