@@ -69,6 +69,9 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.gadgets.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.trails", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.glow", new Node(PermissionDefault.TRUE, Set.of())),
+            Map.entry("vapeecore.gadgets.size.vip", new Node(PermissionDefault.FALSE, Set.of())),
+            Map.entry("vapeecore.gadgets.team.use", new Node(PermissionDefault.FALSE, Set.of())),
+            Map.entry("vapeecore.gadgets.team.extreme-size", new Node(PermissionDefault.FALSE, Set.of())),
             Map.entry("vapeecore.gadgets.size-changer", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.player-riding", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.moderation.mute", new Node(PermissionDefault.OP, Set.of())),
@@ -143,7 +146,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 56, "all 56 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 59, "all 59 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");

@@ -284,11 +284,17 @@ public final class LobbyItemsConfigHarness {
                 default -> null;
             });
             Map<String, Object> values = new HashMap<>();
-            Class<? extends ItemMeta> metaType = material == Material.PLAYER_HEAD ? SkullMeta.class : ItemMeta.class;
+            Class<? extends ItemMeta> metaType = switch (material) {
+                case PLAYER_HEAD -> SkullMeta.class;
+                case LEATHER_BOOTS -> org.bukkit.inventory.meta.LeatherArmorMeta.class;
+                default -> ItemMeta.class;
+            };
             meta = proxy(metaType, (name, args) -> {
                 if (name.equals("getPersistentDataContainer")) return pdc;
                 if (name.equals("setPlayerProfile")) { values.put("profile", args[0]); return null; }
                 if (name.equals("getPlayerProfile")) return values.get("profile");
+                if (name.equals("setColor")) { values.put("color", args[0]); return null; }
+                if (name.equals("getColor")) return values.get("color");
                 if (name.equals("displayName") || name.equals("lore")) {
                     if (args.length == 0) return values.get(name);
                     values.put(name, args[0]); return null;

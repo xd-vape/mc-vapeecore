@@ -13,6 +13,9 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.gadgets.player-riding` | `true` | Player Riding | Erlaubt Ausrüsten und Nutzen des Sattels zusammen mit `vapeecore.gadgets.use`. |
 | `vapeecore.gadgets.trails` | `true` | Partikelspuren | Erlaubt Auswahl und Nutzung einer Lobby-Partikelspur zusammen mit `vapeecore.gadgets.use`. |
 | `vapeecore.gadgets.glow` | `true` | Glow | Erlaubt das Umschalten des eigenen Lobby-Leuchteffekts zusammen mit `vapeecore.gadgets.use`. |
+| `vapeecore.gadgets.size.vip` | `false` | Size Changer | Erlaubt Huge (2×) und Massive (3×) zusammen mit `vapeecore.gadgets.use` und `vapeecore.gadgets.size-changer`. |
+| `vapeecore.gadgets.team.use` | `false` | Team Gadgets | Zeigt und öffnet das Team-Menü zusammen mit `vapeecore.gadgets.use`. |
+| `vapeecore.gadgets.team.extreme-size` | `false` | Extreme Size | Erlaubt Colossal (5×) zusammen mit `vapeecore.gadgets.use`, `vapeecore.gadgets.size-changer` und `vapeecore.gadgets.team.use`. |
 | `vapeecore.gadgets.size-changer` | `true` | Size Changer | Erlaubt das Öffnen der Größenauswahl und das Ändern der eigenen Lobby-Größe zusammen mit `vapeecore.gadgets.use`. |
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |

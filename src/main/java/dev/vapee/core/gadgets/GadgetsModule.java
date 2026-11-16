@@ -72,12 +72,12 @@ public final class GadgetsModule implements CoreModule {
         var socialService = social.get();
         var utilityService = utility.get();
         var equipment = new GadgetEquipment(plugin, items, messages, lobby.getLobbyConfig()::getGadgetItemLimit);
-        var candidateRiding = new PlayerRiding(plugin, equipment, messages, eligible,
-                id -> lobbyGlide.test(id) || utilityService.hasManagedFlight(id),
+        Predicate<UUID> managedFlight = id -> lobbyGlide.test(id) || utilityService.hasManagedFlight(id);
+        var candidateRiding = new PlayerRiding(plugin, equipment, messages, eligible, managedFlight,
                 (first, second) -> visibilityService.canSee(first, second) && visibilityService.canSee(second, first)
                         && !socialService.isIgnoring(first.getUniqueId(), second.getUniqueId())
                         && !socialService.isIgnoring(second.getUniqueId(), first.getUniqueId()));
-        var candidateSize = new SizeChanger(plugin, eligible);
+        var candidateSize = new SizeChanger(plugin, eligible, managedFlight);
         var candidateGlow = new GlowGadget(plugin, messages, eligible);
         var candidateTrails = new ParticleTrails(plugin, eligible, visibilityService);
         var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment, candidateSize, candidateGlow, candidateTrails);

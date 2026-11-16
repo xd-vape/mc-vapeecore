@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -32,6 +33,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -39,19 +41,29 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private static final MenuLayout<Category> LAYOUT = MenuLayout.builder(27, Category.class)
             .content(List.of(10, 11, 12, 14, 15, 16))
             .build();
-    private static final MenuLayout<SizeChanger.Size> SIZES = MenuLayout.builder(27, SizeChanger.Size.class)
-            .content(List.of(10, 11, 12, 13, 14))
+    private static final MenuLayout<SizeChanger.Size> SIZES = MenuLayout.builder(18, SizeChanger.Size.class)
+            .content(List.of(1, 2, 4, 6, 7, 11, 15))
             .build();
+    private static final List<SizeChanger.Size> SIZE_CHOICES = List.of(SizeChanger.Size.TINY, SizeChanger.Size.SMALL,
+            SizeChanger.Size.NORMAL, SizeChanger.Size.TALL, SizeChanger.Size.GIANT, SizeChanger.Size.HUGE, SizeChanger.Size.MASSIVE);
+    private static final MenuLayout<SizeChanger.Size> EXTREME = MenuLayout.builder(27, SizeChanger.Size.class)
+            .content(List.of(11, 15))
+            .build();
+    private static final List<SizeChanger.Size> EXTREME_CHOICES = List.of(SizeChanger.Size.NORMAL, SizeChanger.Size.COLOSSAL);
     private static final MenuLayout<ParticleTrails.Trail> TRAILS = MenuLayout.builder(27, ParticleTrails.Trail.class)
             .content(List.of(10, 11, 12, 13, 14, 16))
             .build();
     private static final int EQUIPMENT_STATUS_SLOT = 22;
     private static final int BACK_SLOT = 22;
+    private static final int SIZE_BACK_SLOT = 17;
+    private static final int TEAM_SLOT = 24;
+    private static final int EXTREME_ENTRY_SLOT = 13;
 
     private enum Type { ITEM, DIRECT_MENU, DIRECT }
 
     private enum Page {
-        MAIN("gadgets.title"), SIZES("gadgets.categories.size-changer"), TRAILS("gadgets.categories.trails");
+        MAIN("gadgets.title"), SIZES("gadgets.categories.size-changer"), TRAILS("gadgets.categories.trails"),
+        TEAM("gadgets.team.title"), EXTREME("gadgets.team.extreme");
 
         private final String title;
         Page(String title) { this.title = title; }
@@ -118,13 +130,17 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             case MAIN -> LAYOUT.size();
             case SIZES -> SIZES.size();
             case TRAILS -> TRAILS.size();
+            case TEAM -> LAYOUT.size();
+            case EXTREME -> EXTREME.size();
         };
         var inventory = plugin.getServer().createInventory(holder, size, messages.localize(player, tr(page.title)));
         holder.inventory = inventory;
         switch (page) {
             case MAIN -> renderMain(player, inventory);
-            case SIZES -> renderSizes(player, inventory);
+            case SIZES -> renderSizes(player, inventory, Page.SIZES);
             case TRAILS -> renderTrails(player, inventory);
+            case TEAM -> renderTeam(player, inventory);
+            case EXTREME -> renderSizes(player, inventory, Page.EXTREME);
         }
         var opened = player.openInventory(inventory);
         if (opened == null || player.getOpenInventory().getTopInventory() != inventory) return false;
@@ -158,24 +174,45 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             inventory.setItem(LAYOUT.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
         }
         renderCount(player, inventory);
+        if (teamPermitted(player)) {
+            var item = UiItems.literal(Material.NETHER_STAR, tr("gadgets.team.title"), MessageStyle.TEXT,
+                    List.of(tr("gadgets.team.open")));
+            inventory.setItem(TEAM_SLOT, UiItems.render(UiItems.localize(item, messages, player)));
+        } else inventory.setItem(TEAM_SLOT, null);
     }
 
     private Component entryStatus(boolean permitted, String key) {
         return permitted ? tr(key) : MessageStyle.error(tr("gadgets.locked"));
     }
 
-    private void renderSizes(Player player, Inventory inventory) {
+    private void renderSizes(Player player, Inventory inventory, Page page) {
         var selected = sizeChanger.selected(player);
-        for (var size : SizeChanger.Size.values()) {
-            boolean active = size == selected;
+        var choices = page == Page.EXTREME ? EXTREME_CHOICES : SIZE_CHOICES;
+        var layout = page == Page.EXTREME ? EXTREME : SIZES;
+        for (int index = 0; index < choices.size(); index++) {
+            var size = choices.get(index);
+            boolean allowed = sizeChanger.permitted(player, size);
+            boolean active = allowed && size == selected;
             var multiplier = Component.text(Double.toString(size.factor), MessageStyle.accent());
-            var lore = List.of(tr("gadgets.size.multiplier", Map.of("factor", multiplier)),
-                    active ? MessageStyle.success(tr("gadgets.size.selected")) : tr("gadgets.size.apply"));
-            var item = UiItems.literal(active ? Material.LIME_DYE : Material.GRAY_DYE,
+            var status = active ? MessageStyle.success(tr("gadgets.size.selected")) : entryStatus(allowed, "gadgets.size.apply");
+            var lore = List.of(tr("gadgets.size.multiplier", Map.of("factor", multiplier)), status);
+            var item = UiItems.literal(active ? Material.LIME_DYE : allowed ? Material.GRAY_DYE : Material.GRAY_STAINED_GLASS_PANE,
                     tr("gadgets.size." + size.key), MessageStyle.TEXT, lore);
-            inventory.setItem(SIZES.contentSlot(size.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
+            inventory.setItem(layout.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
         }
-        renderBack(player, inventory, "gadgets.size.back");
+        renderBack(player, inventory, "gadgets.size.back", page == Page.SIZES ? SIZE_BACK_SLOT : BACK_SLOT);
+    }
+
+    private void renderTeam(Player player, Inventory inventory) {
+        var item = UiItems.literal(Material.LEATHER_BOOTS, tr("gadgets.team.extreme"), MessageStyle.TEXT,
+                List.of(entryStatus(sizeChanger.permitted(player, SizeChanger.Size.COLOSSAL), "gadgets.team.extreme-open")));
+        var rendered = UiItems.render(UiItems.localize(item, messages, player));
+        if (rendered.getItemMeta() instanceof LeatherArmorMeta leather) {
+            leather.setColor(Color.BLUE);
+            rendered.setItemMeta(leather);
+        }
+        inventory.setItem(EXTREME_ENTRY_SLOT, rendered);
+        renderBack(player, inventory, "gadgets.size.back", BACK_SLOT);
     }
 
     private void renderTrails(Player player, Inventory inventory) {
@@ -185,12 +222,12 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             var item = UiItems.literal(trail.icon, tr("gadgets.trails." + trail.key), MessageStyle.TEXT, List.of(status));
             inventory.setItem(TRAILS.contentSlot(trail.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
         }
-        renderBack(player, inventory, "gadgets.trails.back");
+        renderBack(player, inventory, "gadgets.trails.back", BACK_SLOT);
     }
 
-    private void renderBack(Player player, Inventory inventory, String label) {
+    private void renderBack(Player player, Inventory inventory, String label, int slot) {
         var back = UiItems.literal(Material.ARROW, tr(label), MessageStyle.TEXT, List.of());
-        inventory.setItem(BACK_SLOT, UiItems.render(UiItems.localize(back, messages, player)));
+        inventory.setItem(slot, UiItems.render(UiItems.localize(back, messages, player)));
     }
 
     private boolean canOpen(Player player, Page page) {
@@ -198,7 +235,13 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             case MAIN -> true;
             case SIZES -> sizeChanger.permitted(player);
             case TRAILS -> trails.permitted(player);
+            case TEAM -> teamPermitted(player);
+            case EXTREME -> sizeChanger.permitted(player, SizeChanger.Size.COLOSSAL);
         };
+    }
+
+    private boolean teamPermitted(Player player) {
+        return player.hasPermission(GadgetsModule.USE_PERMISSION) && player.hasPermission(SizeChanger.TEAM_PERMISSION);
     }
 
     private boolean canOpen(Player player) {
@@ -239,7 +282,7 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         event.setCancelled(true);
         if (wasCancelled || !(event.getWhoClicked() instanceof Player player) || event.getClickedInventory() != top
                 || event.getClick() != ClickType.LEFT
-                || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
+                || holder.invalidated || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
                 || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top) return;
         riding.reconcile(player);
         sizeChanger.reconcile(player);
@@ -250,26 +293,37 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             renderGlow(player, top);
             return;
         }
+        if (isTeamPage(holder.page) && !canOpen(player, holder.page)) {
+            invalidateTeamPage(player, holder);
+            return;
+        }
         if (!canOpen(player)) return;
-        if (holder.page != Page.MAIN && event.getRawSlot() == BACK_SLOT) {
-            navigate(player, holder, Page.MAIN);
+        int slot = event.getRawSlot();
+        if (holder.page != Page.MAIN && slot == (holder.page == Page.SIZES ? SIZE_BACK_SLOT : BACK_SLOT)) {
+            navigate(player, holder, holder.page == Page.EXTREME ? Page.TEAM : Page.MAIN);
+            return;
+        }
+        if (holder.page == Page.MAIN && slot == TEAM_SLOT) {
+            if (teamPermitted(player)) navigate(player, holder, Page.TEAM);
+            else renderMain(player, top);
+            return;
+        }
+        if (holder.page == Page.TEAM) {
+            if (slot == EXTREME_ENTRY_SLOT) {
+                if (canOpen(player, Page.EXTREME)) navigate(player, holder, Page.EXTREME);
+                else {
+                    messages.send(player, tr("gadgets.size.denied"));
+                    renderTeam(player, top);
+                }
+            }
             return;
         }
         if (holder.page == Page.TRAILS) {
             selectTrail(player, top, event.getRawSlot());
             return;
         }
-        if (holder.page == Page.SIZES) {
-            int index = SIZES.contentSlots().indexOf(event.getRawSlot());
-            if (index < 0) return;
-            var result = sizeChanger.select(player, SizeChanger.Size.values()[index]);
-            switch (result) {
-                case DENIED -> messages.send(player, tr("gadgets.size.denied"));
-                case UNAVAILABLE -> messages.send(player, tr("gadgets.size.missing-scale"));
-                case INCOMPATIBLE -> messages.send(player, tr("gadgets.size.incompatible"));
-                case APPLIED -> { }
-            }
-            renderSizes(player, top);
+        if (holder.page == Page.SIZES || holder.page == Page.EXTREME) {
+            selectSize(player, top, holder.page, slot);
             return;
         }
         int index = LAYOUT.contentSlots().indexOf(event.getRawSlot());
@@ -294,6 +348,22 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         }
     }
 
+    private void selectSize(Player player, Inventory inventory, Page page, int rawSlot) {
+        var layout = page == Page.EXTREME ? EXTREME : SIZES;
+        var choices = page == Page.EXTREME ? EXTREME_CHOICES : SIZE_CHOICES;
+        int index = layout.contentSlots().indexOf(rawSlot);
+        if (index < 0) return;
+        switch (sizeChanger.select(player, choices.get(index))) {
+            case DENIED -> messages.send(player, tr("gadgets.size.denied"));
+            case UNAVAILABLE -> messages.send(player, tr("gadgets.size.missing-scale"));
+            case INCOMPATIBLE -> messages.send(player, tr("gadgets.size.incompatible"));
+            case NO_SPACE -> messages.send(player, tr("gadgets.size.no-space"));
+            case SCALE_LIMIT -> messages.send(player, tr("gadgets.size.scale-limit"));
+            case APPLIED -> { }
+        }
+        renderSizes(player, inventory, page);
+    }
+
     private void selectTrail(Player player, Inventory inventory, int rawSlot) {
         int index = TRAILS.contentSlots().indexOf(rawSlot);
         if (index < 0) return;
@@ -311,11 +381,32 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
 
     private void navigate(Player player, Holder from, Page page) {
         // Bukkit forbids opening another inventory in the click callback.
+        long requestedGeneration = generation;
         navigation.computeIfAbsent(from.owner, owner -> plugin.getServer().getScheduler().runTask(plugin, () -> {
             navigation.remove(owner);
-            if (openInventories.get(owner) != from.inventory || player.getOpenInventory().getTopInventory() != from.inventory
-                    || !canOpen(player, page)) return;
-            open(player, page);
+            if (requestedGeneration != generation || from.invalidated || openInventories.get(owner) != from.inventory
+                    || player.getOpenInventory().getTopInventory() != from.inventory) return;
+            if (isTeamPage(from.page) && !canOpen(player, from.page)) {
+                closeFor(player);
+                return;
+            }
+            if (canOpen(player, page)) open(player, page);
+            else if (from.page == Page.MAIN) renderMain(player, from.inventory);
+            else if (from.page == Page.TEAM) renderTeam(player, from.inventory);
+        }));
+    }
+
+    private static boolean isTeamPage(Page page) {
+        return page == Page.TEAM || page == Page.EXTREME;
+    }
+
+    private void invalidateTeamPage(Player player, Holder holder) {
+        cancelNavigation(holder.owner);
+        holder.invalidated = true;
+        long invalidatedGeneration = generation;
+        navigation.put(holder.owner, plugin.getServer().getScheduler().runTask(plugin, () -> {
+            navigation.remove(holder.owner);
+            if (invalidatedGeneration == generation) closeOwned(player, holder.inventory);
         }));
     }
 
@@ -401,6 +492,7 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         private final UUID owner;
         private final Page page;
         private Inventory inventory;
+        private boolean invalidated;
 
         private Holder(UUID owner, Page page) {
             this.owner = owner;

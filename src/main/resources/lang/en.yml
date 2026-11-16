@@ -271,7 +271,17 @@ gadgets:
     external: "<vc_warning>Glow is already controlled by another source.</vc_warning>"
     denied: "<vc_error>You cannot use Glow.</vc_error>"
     unavailable: "<vc_warning>Glow could not be changed.</vc_warning>"
+  team:
+    title: "Team Gadgets"
+    open: "<accent>Left-click</accent> to open."
+    extreme: "Extreme Size"
+    extreme-open: "<accent>Left-click</accent> to choose a size."
   size:
+    huge: "Huge"
+    massive: "Massive"
+    colossal: "Colossal"
+    no-space: "<vc_warning>There isn't enough room for this size.</vc_warning>"
+    scale-limit: "<vc_warning>Your current scale cannot safely support this size.</vc_warning>"
     open: "<accent>Left-click</accent> to choose a size."
     multiplier: "Scale: <factor>×"
     selected: "Selected"

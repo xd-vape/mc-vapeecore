@@ -30,6 +30,7 @@ import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -72,9 +73,11 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredListener;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import io.papermc.paper.event.player.PrePlayerAttackEntityEvent;
 
@@ -272,6 +275,7 @@ public final class GadgetsFoundationHarness {
             exerciseGlow(viewer, top, fixture, world);
             exerciseTrails(viewer, fixture, playerService, social);
             exerciseSizes(viewer, viewer.open, fixture, world);
+            exerciseSizeTiers(viewer, fixture);
             top = viewer.open;
             enableGlow(viewer);
             armTrail(viewer);
@@ -296,14 +300,14 @@ public final class GadgetsFoundationHarness {
             check(viewer.chat.getLast().equals("Herzen-Partikelspur ausgewählt."), "German selection feedback is prefix-free");
             backToGadgets(viewer);
             var germanSizes = openSizes(viewer);
-            check(plain(viewer.title).equals("Größe ändern") && plain(germanSizes.getItem(14).getItemMeta().displayName()).equals("Riesig")
-                    && plain(germanSizes.getItem(22).getItemMeta().displayName()).equals("Zurück"), "German submenu");
+            check(plain(viewer.title).equals("Größe ändern") && plain(germanSizes.getItem(7).getItemMeta().displayName()).equals("Riesig")
+                    && plain(germanSizes.getItem(17).getItemMeta().displayName()).equals("Zurück"), "German submenu");
             viewer.scaleAvailable = false;
-            click(viewer, germanSizes, 14, ClickType.LEFT);
+            click(viewer, germanSizes, 7, ClickType.LEFT);
             check(viewer.chat.removeLast().equals("Deine Größe kann gerade nicht geändert werden."),
                     "German Size Changer warning is prefix-free");
             viewer.scaleAvailable = true;
-            click(viewer, germanSizes, 13, ClickType.LEFT);
+            click(viewer, germanSizes, 6, ClickType.LEFT);
             items.refreshItem(viewer.player, "gadgets");
             check(plain(fixture.storage[4].getItemMeta().lore().getFirst()).startsWith("Rechtsklick"),
                     "Gadgets hotbar lore uses German locale");
@@ -333,11 +337,11 @@ public final class GadgetsFoundationHarness {
             viewer.tick += 3;
             dispatch(new PlayerInteractEntityEvent(viewer.player, target.player, EquipmentSlot.HAND));
             check(target.vehicle == viewer.player && beforeReload.getType() == Material.SADDLE, "reload starts with an active mount");
-            click(viewer, openSizes(viewer), 14, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 7, ClickType.LEFT);
             check(!viewer.modifiers.containsKey(SIZE_KEY)
                     && viewer.chat.removeLast().equals("Du kannst deine Größe nur zu Fuß ändern."),
                     "mounted player cannot set a non-normal size");
-            click(viewer, viewer.open, 22, ClickType.LEFT);
+            click(viewer, viewer.open, 17, ClickType.LEFT);
             viewer.runNavigation();
             enableGlow(viewer);
             check(target.vehicle == viewer.player && viewer.potion != null, "Glow leaves a live Player Riding mount in place");
@@ -362,7 +366,7 @@ public final class GadgetsFoundationHarness {
             disable.rollback();
             check(config.getGadgetItemLimit() == 3, "rollback restores prior gadget limit");
             check(gadgets.openMenu(viewer.player), "can open after rollback");
-            click(viewer, openSizes(viewer), 10, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 1, ClickType.LEFT);
             edited.set("items.gadgets.enabled", true);
             edited.save(configPath.toFile());
             var reloadWithSize = lobby.prepareReload();
@@ -371,7 +375,7 @@ public final class GadgetsFoundationHarness {
             check(gadgets.openMenu(viewer.player), "menu can open in the reloaded configuration");
             enableGlow(viewer);
             armTrail(viewer);
-            click(viewer, openSizes(viewer), 13, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 6, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "new size established after reload");
             reloadWithSize.rollback();
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "rollback clears size, Glow and submenu");
@@ -388,7 +392,7 @@ public final class GadgetsFoundationHarness {
             check(fixture.storage[2].getType() == Material.SADDLE, "saddle equipped before BUILD transition");
             enableGlow(viewer);
             armTrail(viewer);
-            click(viewer, openSizes(viewer), 14, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 7, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion != null, "saddle, size and Glow coexist");
             stride(viewer, 4);
             check(viewer.emissions.getLast().particle() == Particle.HEART && viewer.potion != null
@@ -405,7 +409,7 @@ public final class GadgetsFoundationHarness {
             enableGlow(viewer);
             armTrail(viewer);
             click(viewer, viewer.open, 10, ClickType.LEFT);
-            click(viewer, openSizes(viewer), 10, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 1, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before entering activity");
             var activity = activities.getActivityService();
             var venue = new dev.vapee.core.activity.location.ActivityVenue("test_venue", "test",
@@ -433,7 +437,7 @@ public final class GadgetsFoundationHarness {
             gadgetConfigOverrides(fixture);
             enableGlow(viewer);
             armTrail(viewer);
-            click(viewer, openSizes(viewer), 14, ClickType.LEFT);
+            click(viewer, openSizes(viewer), 7, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before disable");
             Inventory foreign = inventory(null, 27);
             viewer.open = foreign;
@@ -742,7 +746,7 @@ public final class GadgetsFoundationHarness {
         check(click(viewer, main, 11, ClickType.LEFT).isCancelled() && viewer.open == main,
                 "navigation cancels inventory click and waits for next tick");
         viewer.runNavigation();
-        check(viewer.open != main && viewer.open.getSize() == 27, "opens a fresh Size Changer submenu");
+        check(viewer.open != main && viewer.open.getSize() == 18, "opens a fresh 18-slot Size Changer submenu");
         return viewer.open;
     }
 
@@ -768,7 +772,7 @@ public final class GadgetsFoundationHarness {
         viewer.allowSize = true;
         var hotbar = fixture.storage.clone();
         var submenu = openSizes(viewer);
-        check(plain(viewer.title).equals("Size Changer") && submenu.getItem(12).getType() == Material.LIME_DYE,
+        check(plain(viewer.title).equals("Size Changer") && submenu.getItem(4).getType() == Material.LIME_DYE,
                 "27-slot menu highlights Normal initially");
         var foreignKey = new NamespacedKey("fixture", "external_scale");
         var foreign = new AttributeModifier(foreignKey, 0.2, AttributeModifier.Operation.MULTIPLY_SCALAR_1);
@@ -776,8 +780,9 @@ public final class GadgetsFoundationHarness {
         viewer.modifiers.put(foreignKey, foreign);
         double[] factors = {0.5, 0.75, 1.0, 1.25, 1.5};
         String[] titles = {"Tiny", "Small", "Normal", "Tall", "Giant"};
+        int[] slots = {1, 2, 4, 6, 7};
         for (int i = 0; i < factors.length; i++) {
-            int slot = 10 + i;
+            int slot = slots[i];
             check(plain(submenu.getItem(slot).getItemMeta().displayName()).equals(titles[i]), "localized size " + titles[i]);
             check(click(viewer, submenu, slot, ClickType.LEFT).isCancelled(), "protected size slot " + slot);
             var effect = viewer.modifiers.get(SIZE_KEY);
@@ -789,12 +794,12 @@ public final class GadgetsFoundationHarness {
                     "selection updates highlight and preserves foreign scale");
         }
         int writes = viewer.scaleWrites;
-        click(viewer, submenu, 14, ClickType.DOUBLE_CLICK);
-        click(viewer, submenu, 14, ClickType.LEFT);
+        click(viewer, submenu, 7, ClickType.DOUBLE_CLICK);
+        click(viewer, submenu, 7, ClickType.LEFT);
         check(viewer.scaleWrites == writes, "duplicate clicks do not rewrite the modifier");
         check(click(viewer, main, 10, ClickType.LEFT).isCancelled()
                 && viewer.scaleWrites == writes && Arrays.equals(hotbar, fixture.storage), "a stale main menu cannot change inventory");
-        check(click(viewer.peer, submenu, 14, ClickType.LEFT).isCancelled() && viewer.peer.modifiers.isEmpty(),
+        check(click(viewer.peer, submenu, 7, ClickType.LEFT).isCancelled() && viewer.peer.modifiers.isEmpty(),
                 "foreign viewer cannot use another player's submenu");
 
         var attemptedMount = new org.bukkit.event.entity.EntityMountEvent(viewer.player, viewer.peer.player);
@@ -803,21 +808,21 @@ public final class GadgetsFoundationHarness {
         check(viewer.modifiers.containsKey(SIZE_KEY), "cancelled mount keeps the chosen scale");
         dispatch(new org.bukkit.event.entity.EntityMountEvent(viewer.player, viewer.peer.player));
         check(!viewer.modifiers.containsKey(SIZE_KEY), "accepted mount clears size");
-        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 1, ClickType.LEFT);
         viewer.allowSize = false;
-        click(viewer, submenu, 14, ClickType.LEFT);
+        click(viewer, submenu, 7, ClickType.LEFT);
         check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.chat.removeLast().equals("You cannot use Size Changer."),
                 "selection rechecks permission and clears the old effect");
         viewer.allowSize = true;
-        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 1, ClickType.LEFT);
         viewer.allowGadgets = false;
         var from = new org.bukkit.Location(world, 0, 65, 0);
         var to = from.clone().add(1, 0, 0);
         dispatch(new org.bukkit.event.player.PlayerMoveEvent(viewer.player, from, to));
-        click(viewer, submenu, 14, ClickType.LEFT);
+        click(viewer, submenu, 7, ClickType.LEFT);
         check(!viewer.modifiers.containsKey(SIZE_KEY), "movement reconciles a lost general permission");
         viewer.allowGadgets = true;
-        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 1, ClickType.LEFT);
         var teleport = new org.bukkit.event.player.PlayerTeleportEvent(viewer.player, from, to);
         teleport.setCancelled(true);
         dispatch(teleport);
@@ -827,7 +832,7 @@ public final class GadgetsFoundationHarness {
         check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "accepted teleport clears scale and submenu");
         fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
         submenu = openSizes(viewer);
-        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 1, ClickType.LEFT);
         var kick = new org.bukkit.event.player.PlayerKickEvent(viewer.player, Component.empty(), Component.empty(),
                 org.bukkit.event.player.PlayerKickEvent.Cause.PLUGIN);
         kick.setCancelled(true);
@@ -838,7 +843,7 @@ public final class GadgetsFoundationHarness {
         check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "accepted kick clears effect and menu");
         fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
         submenu = openSizes(viewer);
-        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 1, ClickType.LEFT);
         var death = new org.bukkit.event.entity.PlayerDeathEvent(viewer.player,
                 proxy(org.bukkit.damage.DamageSource.class, (name, args) -> null), new java.util.ArrayList<>(), 0, Component.empty(), false);
         dispatch(death);
@@ -854,13 +859,138 @@ public final class GadgetsFoundationHarness {
                 "join recovers stale owned scale and preserves foreign scale");
         fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
         submenu = openSizes(viewer);
-        click(viewer, submenu, 13, ClickType.LEFT);
-        click(viewer, submenu, 22, ClickType.LEFT);
+        click(viewer, submenu, 6, ClickType.LEFT);
+        click(viewer, submenu, 17, ClickType.LEFT);
         viewer.runNavigation();
         check(viewer.open != submenu && plain(viewer.title).equals("Gadgets") && viewer.modifiers.containsKey(SIZE_KEY)
                 && Arrays.equals(hotbar, fixture.storage)
                 && plain(viewer.open.getItem(22).getItemMeta().displayName()).equals("0/3 equipped"),
                 "Back preserves size and Size Changer spends no slot or equipment capacity");
+    }
+
+    private static void exerciseSizeTiers(Viewer viewer, LobbyItemRegistryFixture fixture) {
+        var main = viewer.open;
+        int[] categories = {10, 11, 12, 14, 15, 16};
+        var icons = List.of(Material.SADDLE, Material.SLIME_BALL, Material.GLOW_INK_SAC, Material.BLAZE_POWDER,
+                Material.FEATHER, Material.FIREWORK_ROCKET);
+        check(main.getSize() == 27 && main.getItem(24) == null && main.getItem(22).getType() == Material.PAPER
+                && java.util.stream.IntStream.range(0, categories.length)
+                        .allMatch(i -> main.getItem(categories[i]).getType() == icons.get(i)), "original main layout, with no Team entry for standard users");
+        click(viewer, main, 24, ClickType.LEFT);
+        check(viewer.tasks.isEmpty(), "hidden Team slot remains inert for artificial clicks");
+        var hotbar = fixture.storage.clone();
+        var external = new NamespacedKey("fixture", "external_scale");
+        var foreign = viewer.modifiers.get(external);
+        var sizes = openSizes(viewer);
+        click(viewer, sizes, 4, ClickType.LEFT);
+        check(plain(sizes.getItem(11).getItemMeta().lore().getLast()).equals("Locked")
+                && plain(sizes.getItem(15).getItemMeta().lore().getLast()).equals("Locked"), "VIP choices stay visible as locked");
+        click(viewer, sizes, 11, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.chat.removeLast().equals("You cannot use Size Changer."),
+                "a locked size cannot be activated through a direct click");
+        viewer.allowSizeVip = true;
+        click(viewer, sizes, 11, ClickType.LEFT);
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 1.0 && sizes.getItem(11).getType() == Material.LIME_DYE,
+                "Huge applies 2x and is marked as active");
+        viewer.collision = true;
+        click(viewer, sizes, 15, ClickType.LEFT);
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 1.0
+                && viewer.chat.removeLast().equals("There isn't enough room for this size."), "collision refusal preserves the current selection");
+        viewer.collision = false;
+        click(viewer, sizes, 15, ClickType.LEFT);
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 2.0 && sizes.getItem(15).getType() == Material.LIME_DYE,
+                "Massive replaces Huge with the same key at 3x");
+        viewer.allowSizeVip = false;
+        stride(viewer, 4);
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.modifiers.get(external) == foreign && viewer.baseScale == 1.2,
+                "VIP revocation removes only the owned modifier");
+        click(viewer, sizes, 4, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "normal reset stays available without the VIP grant");
+        click(viewer, sizes, 17, ClickType.LEFT);
+        viewer.runNavigation();
+        check(plain(viewer.title).equals("Gadgets"), "standard size back occupies slot 17");
+
+        viewer.allowTeam = true;
+        viewer.close();
+        fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+        check(plain(viewer.open.getItem(24).getItemMeta().displayName()).equals("Team Gadgets"), "Team grant exposes the category");
+        click(viewer, viewer.open, 24, ClickType.LEFT);
+        viewer.runNavigation();
+        var team = viewer.open;
+        var boots = team.getItem(13);
+        check(team.getSize() == 27 && boots.getType() == Material.LEATHER_BOOTS
+                && ((LeatherArmorMeta) boots.getItemMeta()).getColor().equals(Color.BLUE), "Team menu has blue leather boots");
+        click(viewer, team, 13, ClickType.SHIFT_LEFT);
+        click(viewer, team, 13, ClickType.LEFT);
+        check(viewer.tasks.isEmpty() && viewer.open == team && plain(boots.getItemMeta().lore().getLast()).equals("Locked"),
+                "Team alone cannot transfer the icon or open Extreme Size");
+        viewer.allowExtreme = true;
+        viewer.allowSize = false;
+        click(viewer, team, 13, ClickType.LEFT);
+        check(viewer.tasks.isEmpty(), "Extreme also requires the base Size Changer grant");
+        viewer.allowSize = true;
+        click(viewer, team, 13, ClickType.LEFT);
+        viewer.allowTeam = false;
+        viewer.runNavigation();
+        check(viewer.open == viewer.bottom, "queued navigation refuses a revoked source page");
+        viewer.allowTeam = true;
+        fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+        click(viewer, viewer.open, 24, ClickType.LEFT);
+        viewer.runNavigation();
+        click(viewer, viewer.open, 13, ClickType.LEFT);
+        viewer.runNavigation();
+        var extreme = viewer.open;
+        check(plain(viewer.title).equals("Extreme Size") && extreme.getItem(11).getType() == Material.LIME_DYE,
+                "Extreme opens with Normal selected");
+        viewer.loadedCollisionChunks = false;
+        click(viewer, extreme, 15, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "unchecked volume is rejected without loading chunks");
+        viewer.loadedCollisionChunks = true;
+        viewer.baseScale = 4.0;
+        click(viewer, extreme, 15, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.chat.removeLast().equals("Your current scale cannot safely support this size."),
+                "result outside SCALE bounds is refused");
+        viewer.baseScale = 1.2;
+        click(viewer.peer, extreme, 15, ClickType.LEFT);
+        click(viewer, extreme, 15, ClickType.DOUBLE_CLICK);
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "foreign and double clicks cannot select Colossal");
+        click(viewer, extreme, 15, ClickType.LEFT);
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 4.0 && viewer.modifiers.get(external) == foreign
+                && extreme.getItem(15).getType() == Material.LIME_DYE && Math.abs(viewer.checkedBox.getHeight() - 12.96) < 0.01,
+                "Colossal applies 5x, with a collision envelope including existing foreign SCALE");
+        click(viewer, extreme, 11, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.modifiers.get(external) == foreign, "Team Normal removes only the owned modifier");
+        click(viewer, extreme, 15, ClickType.LEFT);
+        viewer.allowExtreme = false;
+        click(viewer, extreme, 15, ClickType.LEFT);
+        viewer.allowExtreme = true;
+        click(viewer, extreme, 15, ClickType.LEFT);
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "revocation clears Colossal and invalidates that exact view even after regrant");
+        viewer.runNavigation();
+        check(viewer.open == viewer.bottom, "revoked view is closed outside the click callback");
+
+        viewer.locale = Locale.GERMANY;
+        fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+        click(viewer, viewer.open, 24, ClickType.LEFT);
+        viewer.runNavigation();
+        click(viewer, viewer.open, 13, ClickType.LEFT);
+        viewer.runNavigation();
+        check(plain(viewer.title).equals("Extremgröße") && plain(viewer.open.getItem(15).getItemMeta().displayName()).equals("Kolossal"),
+                "German Extreme choices are localized");
+        viewer.collision = true;
+        click(viewer, viewer.open, 15, ClickType.LEFT);
+        check(viewer.chat.removeLast().equals("Für diese Größe ist hier nicht genug Platz."), "German collision refusal is prefix-free");
+        viewer.collision = false;
+        click(viewer, viewer.open, 22, ClickType.LEFT);
+        viewer.runNavigation();
+        check(plain(viewer.title).equals("Team-Gadgets"), "Extreme Back returns to Team");
+        click(viewer, viewer.open, 22, ClickType.LEFT);
+        viewer.runNavigation();
+        check(plain(viewer.title).equals("Gadgets") && Arrays.equals(hotbar, fixture.storage)
+                && plain(viewer.open.getItem(22).getItemMeta().displayName()).equals("0/3 ausgerüstet"), "Team Back restores the main menu without consuming equipment");
+        viewer.allowTeam = false;
+        viewer.allowExtreme = false;
+        viewer.locale = Locale.US;
     }
 
     private static Viewer exerciseRiding(LobbyItemRegistryFixture fixture, Viewer viewer, PlayerService players,
@@ -1147,6 +1277,12 @@ public final class GadgetsFoundationHarness {
         private boolean allowGadgets = true;
         private boolean allowRiding = true;
         private boolean allowSize = true;
+        private boolean allowSizeVip;
+        private boolean allowTeam;
+        private boolean allowExtreme;
+        private boolean loadedCollisionChunks = true;
+        private boolean collision;
+        private BoundingBox checkedBox;
         private boolean allowGlow = true;
         private boolean allowTrails = true;
         private boolean failVisibility;
@@ -1165,6 +1301,13 @@ public final class GadgetsFoundationHarness {
         private final AttributeInstance scale = proxy(AttributeInstance.class, (name, args) -> switch (name) {
             case "getModifier" -> modifiers.get(args[0]);
             case "getBaseValue" -> baseScale;
+            case "getValue" -> {
+                double value = baseScale;
+                for (var modifier : modifiers.values()) {
+                    if (modifier.getOperation() == AttributeModifier.Operation.MULTIPLY_SCALAR_1) value *= 1.0 + modifier.getAmount();
+                }
+                yield Math.clamp(value, 0.0625, 16.0);
+            }
             case "addTransientModifier" -> {
                 var modifier = (AttributeModifier) args[0];
                 if (modifiers.putIfAbsent(modifier.getKey(), modifier) != null) throw new AssertionError("duplicate modifier");
@@ -1207,6 +1350,9 @@ public final class GadgetsFoundationHarness {
                 case GadgetsModule.USE_PERMISSION -> allowGadgets;
                 case "vapeecore.gadgets.player-riding" -> allowRiding;
                 case "vapeecore.gadgets.size-changer" -> allowSize;
+                case "vapeecore.gadgets.size.vip" -> allowSizeVip;
+                case "vapeecore.gadgets.team.use" -> allowTeam;
+                case "vapeecore.gadgets.team.extreme-size" -> allowExtreme;
                 case "vapeecore.gadgets.glow" -> allowGlow;
                 case "vapeecore.gadgets.trails" -> allowTrails;
                 default -> false;
@@ -1222,6 +1368,7 @@ public final class GadgetsFoundationHarness {
             case "getWorld" -> world;
             case "isFlying" -> flying;
             case "getLocation" -> new Location(world, positionX, 65, 0);
+            case "wouldCollideUsing" -> { checkedBox = ((BoundingBox) args[0]).clone(); yield collision; }
             case "canSee" -> {
                 if (failVisibility) throw new IllegalStateException("visibility lookup failed");
                 yield canSee;
@@ -1260,6 +1407,9 @@ public final class GadgetsFoundationHarness {
         private Object worldCall(String name, Object[] args) {
             return switch (name) {
                 case "getNearbyPlayers" -> nearby;
+                case "getMinHeight" -> -64;
+                case "getMaxHeight" -> 320;
+                case "isChunkLoaded" -> loadedCollisionChunks;
                 case "spawnParticle" -> {
                     if (args.length != 13 || !(args[1] instanceof List<?> recipients) || !(args[2] instanceof Player source)) {
                         throw new AssertionError("Trail must send with an explicit receiver list and source");

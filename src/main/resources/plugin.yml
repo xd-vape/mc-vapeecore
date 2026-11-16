@@ -193,6 +193,15 @@ permissions:
   vapeecore.gadgets.glow:
     description: Toggle the temporary lobby glow gadget
     default: true
+  vapeecore.gadgets.size.vip:
+    description: Select the Huge and Massive lobby sizes
+    default: false
+  vapeecore.gadgets.team.use:
+    description: Access the Team Gadgets menu
+    default: false
+  vapeecore.gadgets.team.extreme-size:
+    description: Select the Colossal lobby size
+    default: false
   vapeecore.gadgets.size-changer:
     description: Open the Size Changer and change your lobby size
     default: true
