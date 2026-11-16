@@ -45,12 +45,12 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private static final int EQUIPMENT_STATUS_SLOT = 22;
     private static final int BACK_SLOT = 22;
 
-    private enum Type { ITEM, DIRECT_MENU }
+    private enum Type { ITEM, DIRECT_MENU, DIRECT }
 
     private enum Category {
         PLAYER_RIDING("player-riding", Material.SADDLE, Type.ITEM),
         SIZE_CHANGER("size-changer", Material.SLIME_BALL, Type.DIRECT_MENU),
-        GLOW("glow", Material.GLOW_INK_SAC, Type.DIRECT_MENU),
+        GLOW("glow", Material.GLOW_INK_SAC, Type.DIRECT),
         TRAILS("trails", Material.BLAZE_POWDER, Type.DIRECT_MENU),
         MOVEMENT_EXTRAS("movement-extras", Material.FEATHER, Type.DIRECT_MENU),
         FUN_GADGETS("fun-gadgets", Material.FIREWORK_ROCKET, Type.DIRECT_MENU);
@@ -72,23 +72,26 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private final PlayerRiding riding;
     private final GadgetEquipment equipment;
     private final SizeChanger sizeChanger;
+    private final GlowGadget glow;
     private final Map<UUID, BukkitTask> navigation = new HashMap<>();
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
     GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding,
-                GadgetEquipment equipment, SizeChanger sizeChanger) {
+                GadgetEquipment equipment, SizeChanger sizeChanger, GlowGadget glow) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
         this.riding = riding;
         this.equipment = equipment;
         this.sizeChanger = sizeChanger;
+        this.glow = glow;
     }
 
     boolean open(Player player) {
         riding.reconcile(player);
         sizeChanger.reconcile(player);
+        glow.reconcile(player);
         if (!canOpen(player) || openInventories.get(player.getUniqueId()) == player.getOpenInventory().getTopInventory()) {
             return false;
         }
@@ -119,6 +122,10 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             var category = categories[index];
             if (category == Category.PLAYER_RIDING) {
                 renderRiding(player, inventory);
+                continue;
+            }
+            if (category == Category.GLOW) {
+                renderGlow(player, inventory);
                 continue;
             }
             Component status = category == Category.SIZE_CHANGER
@@ -159,6 +166,15 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         inventory.setItem(LAYOUT.contentSlot(0), UiItems.render(UiItems.localize(item, messages, player)));
     }
 
+    private void renderGlow(Player player, Inventory inventory) {
+        var description = tr("gadgets.description.glow");
+        var lore = !glow.permitted(player) ? List.of(description, MessageStyle.error(tr("gadgets.locked")))
+                : glow.active(player) ? List.of(MessageStyle.success(tr("gadgets.glow.active")), tr("gadgets.glow.disable"))
+                : List.of(description, tr("gadgets.glow.enable"));
+        var item = UiItems.literal(Category.GLOW.icon, tr("gadgets.categories.glow"), MessageStyle.TEXT, lore);
+        inventory.setItem(LAYOUT.contentSlot(Category.GLOW.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
+    }
+
     private void renderCount(Player player, Inventory inventory) {
         var count = tr("gadgets.equipped-count", Map.of(
                 "count", Component.text(equipment.count(player)).color(MessageStyle.accent()),
@@ -179,6 +195,12 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
                 || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top) return;
         riding.reconcile(player);
         sizeChanger.reconcile(player);
+        glow.reconcile(player);
+        if (!holder.sizes && event.getRawSlot() == LAYOUT.contentSlot(Category.GLOW.ordinal()) && access.test(player)) {
+            glow.toggle(player);
+            renderGlow(player, top);
+            return;
+        }
         if (!canOpen(player)) return;
         if (holder.sizes) {
             if (event.getRawSlot() == BACK_SLOT) {

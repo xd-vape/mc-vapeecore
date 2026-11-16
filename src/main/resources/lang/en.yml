@@ -244,10 +244,19 @@ gadgets:
   equipped-count: "<count>/<limit> equipped"
   description:
     size-changer: "Change your size."
-    glow: "Add a glowing outline."
+    glow: "Make your character glow."
     trails: "Leave a particle trail."
     movement-extras: "Try extra ways to move."
     fun-gadgets: "Browse playful extras."
+  glow:
+    active: "Enabled"
+    enable: "<accent>Left-click</accent> to enable."
+    disable: "<accent>Left-click</accent> to disable."
+    enabled: "<vc_success>Glow enabled.</vc_success>"
+    disabled: "Glow disabled."
+    external: "<vc_warning>Glow is already controlled by another source.</vc_warning>"
+    denied: "<vc_error>You cannot use Glow.</vc_error>"
+    unavailable: "<vc_warning>Glow could not be changed.</vc_warning>"
   size:
     open: "<accent>Left-click</accent> to choose a size."
     multiplier: "Scale: <factor>×"

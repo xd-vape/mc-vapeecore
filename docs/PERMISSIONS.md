@@ -11,6 +11,7 @@ Diese Datei ist die kanonische Übersicht der von VapeeCore registrierten Permis
 | `vapeecore.lobby.spawn` | `true` | `/spawn` | Teleport zum konfigurierten Lobby-Spawn. |
 | `vapeecore.gadgets.use` | `true` | Gadgets-Kiste | Öffnet das Gadgets-Menü und erlaubt die Nutzung von Gadgets. |
 | `vapeecore.gadgets.player-riding` | `true` | Player Riding | Erlaubt Ausrüsten und Nutzen des Sattels zusammen mit `vapeecore.gadgets.use`. |
+| `vapeecore.gadgets.glow` | `true` | Glow | Erlaubt das Umschalten des eigenen Lobby-Leuchteffekts zusammen mit `vapeecore.gadgets.use`. |
 | `vapeecore.gadgets.size-changer` | `true` | Size Changer | Erlaubt das Öffnen der Größenauswahl und das Ändern der eigenen Lobby-Größe zusammen mit `vapeecore.gadgets.use`. |
 | `vapeecore.lobby.setspawn` | `op` | `/setspawn` | Verändert den persistenten Lobby-Spawn. |
 | `vapeecore.lobby.build` | `op` | Deprecated Compatibility-Parent | Gewährt als Child `vapeecore.utility.build`; neuer Code prüft diesen alten Namen nicht direkt. |

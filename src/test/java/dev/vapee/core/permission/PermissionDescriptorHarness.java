@@ -67,6 +67,7 @@ public final class PermissionDescriptorHarness {
             Map.entry("vapeecore.staff.panel", new Node(PermissionDefault.FALSE, Set.of())),
             Map.entry("vapeecore.quest.use", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.use", new Node(PermissionDefault.TRUE, Set.of())),
+            Map.entry("vapeecore.gadgets.glow", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.size-changer", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.gadgets.player-riding", new Node(PermissionDefault.TRUE, Set.of())),
             Map.entry("vapeecore.moderation.mute", new Node(PermissionDefault.OP, Set.of())),
@@ -141,7 +142,7 @@ public final class PermissionDescriptorHarness {
         }
         Map<String, Permission> permissions = new HashMap<>();
         descriptor.getPermissions().forEach(permission -> permissions.put(permission.getName(), permission));
-        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 54, "all 54 nodes exactly inventoried");
+        check(permissions.keySet().equals(NODES.keySet()) && NODES.size() == 55, "all 55 nodes exactly inventoried");
         for (var entry : NODES.entrySet()) {
             Permission actual = permissions.get(entry.getKey());
             check(actual.getDefault() == entry.getValue().defaultValue(), entry.getKey() + " explicit default");
@@ -151,8 +152,8 @@ public final class PermissionDescriptorHarness {
             check(!actual.getName().contains("*"), "no wildcard");
             walk(actual.getName(), permissions, new HashSet<>());
         }
-        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 13,
-                "thirteen player-base defaults including independent Gadgets capabilities");
+        check(NODES.values().stream().filter(node -> node.defaultValue() == PermissionDefault.TRUE).count() == 14,
+                "fourteen player-base defaults including independent Gadgets capabilities");
         check(NODES.values().stream().mapToInt(node -> node.children().size()).sum() == 15, "same fifteen child edges");
         for (String action : List.of("mute", "unmute", "warn", "ban", "unban", "kick", "history"))
             check(permissions.get("vapeecore.moderation." + action).getChildren().isEmpty(), "independent moderation " + action);

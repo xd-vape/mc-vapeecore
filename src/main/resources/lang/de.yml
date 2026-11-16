@@ -244,10 +244,19 @@ gadgets:
   equipped-count: "<count>/<limit> ausgerüstet"
   description:
     size-changer: "Ändere deine Größe."
-    glow: "Leuchte mit einer Umrandung."
+    glow: "Umrandet deinen Charakter mit einem Leuchteffekt."
     trails: "Hinterlasse eine Partikelspur."
     movement-extras: "Probiere neue Bewegungen aus."
     fun-gadgets: "Entdecke Extras zum Ausprobieren."
+  glow:
+    active: "Aktiv"
+    enable: "<accent>Linksklick</accent> zum Aktivieren."
+    disable: "<accent>Linksklick</accent> zum Deaktivieren."
+    enabled: "<vc_success>Leuchten aktiviert.</vc_success>"
+    disabled: "Leuchten deaktiviert."
+    external: "<vc_warning>Dein Leuchten wird bereits von einer anderen Quelle gesteuert.</vc_warning>"
+    denied: "<vc_error>Du kannst Leuchten nicht verwenden.</vc_error>"
+    unavailable: "<vc_warning>Dein Leuchten konnte nicht geändert werden.</vc_warning>"
   size:
     open: "<accent>Linksklick</accent>, um eine Größe auszuwählen."
     multiplier: "Größe: <factor>×"

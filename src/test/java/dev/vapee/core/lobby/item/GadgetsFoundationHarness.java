@@ -28,6 +28,9 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.NamespacedKey;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -100,7 +103,8 @@ public final class GadgetsFoundationHarness {
         var manager = proxy(PluginManager.class, (name, args) -> {
             if (name.equals("registerEvents") && (args[0].getClass().getSimpleName().equals("GadgetsMenu")
                     || args[0].getClass().getSimpleName().equals("PlayerRiding")
-                    || args[0].getClass().getSimpleName().equals("SizeChanger"))) {
+                    || args[0].getClass().getSimpleName().equals("SizeChanger")
+                    || args[0].getClass().getSimpleName().equals("GlowGadget"))) {
                 registerMenuEvents((Listener) args[0], fixture.plugin);
                 if (viewer.failRegistration) throw new IllegalStateException("fixture registration failure");
             }
@@ -229,8 +233,8 @@ public final class GadgetsFoundationHarness {
             top = viewer.open;
             check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
                     && fixture.storage[2] == null && fixture.storage[4].getType() == Material.CHEST, "unequipping removes only the saddle");
-            int[] slots = {12, 14, 15, 16};
-            String[] labels = {"Glow", "Trails", "Movement Extras", "Fun Gadgets"};
+            int[] slots = {14, 15, 16};
+            String[] labels = {"Trails", "Movement Extras", "Fun Gadgets"};
             for (int index = 0; index < slots.length; index++) {
                 int slot = slots[index];
                 ItemStack icon = top.getItem(slot);
@@ -256,10 +260,12 @@ public final class GadgetsFoundationHarness {
             fixture.listener.onPlayerSwapHandItems(swap);
             check(drop.isCancelled() && swap.isCancelled(), "Gadgets hotbar item shares drop and swap protection");
 
-            exerciseSizes(viewer, top, fixture, world);
+            exerciseGlow(viewer, top, fixture, world);
+            exerciseSizes(viewer, viewer.open, fixture, world);
             top = viewer.open;
+            enableGlow(viewer);
             dispatch(new PlayerChangedWorldEvent(viewer.player, world));
-            check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY),
+            check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null,
                     "world change closes the menu and resets size");
             viewer.locale = Locale.GERMANY;
             fixture.click(chest, Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND);
@@ -268,6 +274,10 @@ public final class GadgetsFoundationHarness {
                             && plain(viewer.open.getItem(10).getItemMeta().lore().get(1)).equals("Linksklick zum Ausrüsten.")
                             && plain(viewer.open.getItem(11).getItemMeta().lore().get(1)).equals("Linksklick, um eine Größe auszuwählen."),
                     "block right-click opens German category and status");
+            enableGlow(viewer);
+            check(viewer.chat.getLast().equals("Leuchten aktiviert.")
+                    && plain(viewer.open.getItem(12).getItemMeta().lore().getFirst()).equals("Aktiv"),
+                    "German Glow status and prefix-free feedback");
             var germanSizes = openSizes(viewer);
             check(plain(viewer.title).equals("Größe ändern") && plain(germanSizes.getItem(14).getItemMeta().displayName()).equals("Riesig")
                     && plain(germanSizes.getItem(22).getItemMeta().displayName()).equals("Zurück"), "German submenu");
@@ -281,7 +291,7 @@ public final class GadgetsFoundationHarness {
             check(plain(fixture.storage[4].getItemMeta().lore().getFirst()).startsWith("Rechtsklick"),
                     "Gadgets hotbar lore uses German locale");
             dispatch(new PlayerQuitEvent(viewer.player, Component.empty()));
-            check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY), "logout releases the menu and size");
+            check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null, "logout releases menu, size and Glow");
             check(gadgets.openMenu(viewer.player), "new view opens after quit cleanup");
             dispatch(new InventoryCloseEvent(viewer.view(top)));
             check(!gadgets.openMenu(viewer.player), "stale close event cannot forget current inventory");
@@ -311,6 +321,8 @@ public final class GadgetsFoundationHarness {
                     "mounted player cannot set a non-normal size");
             click(viewer, viewer.open, 22, ClickType.LEFT);
             viewer.runNavigation();
+            enableGlow(viewer);
+            check(target.vehicle == viewer.player && viewer.potion != null, "Glow leaves a live Player Riding mount in place");
             var edited = new org.bukkit.configuration.file.YamlConfiguration();
             edited.load(configPath.toFile());
             edited.set("items.gadgets.enabled", false);
@@ -320,7 +332,7 @@ public final class GadgetsFoundationHarness {
             disable.apply();
             check(config.getGadgetItemLimit() == 1, "reload applies configured gadget limit");
             fixture.configure(Files.readString(configPath));
-            check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[2] == null
+            check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[2] == null && viewer.potion == null
                             && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
                     "reload closes owned view, removes disabled item and rejects access");
             fixture.click(chest, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
@@ -335,10 +347,11 @@ public final class GadgetsFoundationHarness {
             reloadWithSize.apply();
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "reload clears size and submenu");
             check(gadgets.openMenu(viewer.player), "menu can open in the reloaded configuration");
+            enableGlow(viewer);
             click(viewer, openSizes(viewer), 13, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "new size established after reload");
             reloadWithSize.rollback();
-            check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "rollback clears the new size and submenu");
+            check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "rollback clears size, Glow and submenu");
             edited.set("gadgets.max-equipped-items", 2);
             edited.save(configPath.toFile());
             check(config.prepareReloadState().gadgetItemLimit() == 2, "configuration accepts limit 2");
@@ -349,14 +362,16 @@ public final class GadgetsFoundationHarness {
                     "rollback restores original item and menu access");
             click(viewer, viewer.open, 10, ClickType.LEFT);
             check(fixture.storage[2].getType() == Material.SADDLE, "saddle equipped before BUILD transition");
+            enableGlow(viewer);
             click(viewer, openSizes(viewer), 14, ClickType.LEFT);
-            check(viewer.modifiers.containsKey(SIZE_KEY), "equipped saddle and direct size coexist");
+            check(viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion != null, "saddle, size and Glow coexist");
             state.enterBuildMode(viewer.player);
-            check(state.isBuildMode(viewer.id) && fixture.storage[2] == null && !viewer.modifiers.containsKey(SIZE_KEY)
+            check(state.isBuildMode(viewer.id) && fixture.storage[2] == null && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null
                             && viewer.open == viewer.bottom && !gadgets.openMenu(viewer.player),
                     "BUILD clears equipment and blocks Gadgets");
             state.exitBuildMode(viewer.player);
-            check(fixture.storage[2] == null && gadgets.openMenu(viewer.player), "leaving BUILD does not resurrect equipment");
+            check(fixture.storage[2] == null && viewer.potion == null && gadgets.openMenu(viewer.player), "leaving BUILD does not resurrect gadgets");
+            enableGlow(viewer);
             click(viewer, viewer.open, 10, ClickType.LEFT);
             click(viewer, openSizes(viewer), 10, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before entering activity");
@@ -377,19 +392,20 @@ public final class GadgetsFoundationHarness {
             var session = activity.createSession("test", "test_venue").session().orElseThrow();
             check(activity.joinSession(viewer.player, session.getSessionId()) == dev.vapee.core.activity.ActivityResult.SUCCESS
                     && fixture.storage[2] == null && !gadgets.openMenu(viewer.player), "Activity handoff clears equipment and blocks Gadgets");
-            check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "Activity clears size and submenu");
+            check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "Activity clears size, Glow and submenu");
             activity.leaveCurrentSession(viewer.player, dev.vapee.core.activity.ActivityLeaveReason.VOLUNTARY);
             check(fixture.storage[2] == null, "leaving Activity does not resurrect equipment");
             viewer.close();
             gadgets.openMenu(viewer.player);
             gadgetConfigOverrides(fixture);
+            enableGlow(viewer);
             click(viewer, openSizes(viewer), 14, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before disable");
             Inventory foreign = inventory(null, 27);
             viewer.open = foreign;
             gadgets.disable();
             check(viewer.open == foreign && countMenuListeners() == 0 && !viewer.modifiers.containsKey(SIZE_KEY)
-                    && !gadgets.openMenu(viewer.player),
+                    && viewer.potion == null && viewer.renewals.isEmpty() && !gadgets.openMenu(viewer.player),
                     "disable unregisters listeners without closing a foreign replacement");
             viewer.modifiers.put(SIZE_KEY, new AttributeModifier(SIZE_KEY, 0.5, AttributeModifier.Operation.MULTIPLY_SCALAR_1));
             gadgets.enable();
@@ -402,6 +418,109 @@ public final class GadgetsFoundationHarness {
         check(viewer.open == viewer.bottom && countMenuListeners() == 0, "shutdown closes owned menu and removes handlers");
     }
 
+
+    private static void enableGlow(Viewer viewer) {
+        check(click(viewer, viewer.open, 12, ClickType.LEFT).isCancelled() && viewer.potion != null,
+                "protected Glow entry enables own effect");
+    }
+
+    private static void exerciseGlow(Viewer viewer, Inventory top, LobbyItemRegistryFixture fixture, World world) {
+        var hotbar = fixture.storage.clone();
+        var off = top.getItem(12);
+        check(viewer.potion == null && off.getType() == Material.GLOW_INK_SAC
+                && plain(off.getItemMeta().displayName()).equals("Glow")
+                && plain(off.getItemMeta().lore().getFirst()).equals("Make your character glow.")
+                && plain(off.getItemMeta().lore().getLast()).equals("Left-click to enable."), "Glow starts off with compact lore");
+        viewer.allowGlow = false;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.potion == null && plain(top.getItem(12).getItemMeta().lore().getLast()).equals("Locked")
+                && viewer.chat.removeLast().equals("You cannot use Glow."), "Glow permission protects the menu action");
+        viewer.allowGlow = true;
+        enableGlow(viewer);
+        check(viewer.open == top && plain(top.getItem(12).getItemMeta().lore().getFirst()).equals("Enabled")
+                && plain(top.getItem(12).getItemMeta().lore().getLast()).equals("Left-click to disable.")
+                && viewer.chat.removeLast().equals("Glow enabled.") && viewer.renewals.size() == 1,
+                "Glow immediately updates the current menu and sends prefix-free feedback");
+        check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(top.getItem(12).getItemMeta().lore().getLast(),
+                "Left-click", dev.vapee.core.message.MessageStyle.accent()), "Glow uses the central accent in its actions");
+        click(viewer, top, 12, ClickType.DOUBLE_CLICK);
+        check(viewer.potion != null && viewer.renewals.size() == 1 && Arrays.equals(hotbar, fixture.storage)
+                && plain(top.getItem(22).getItemMeta().displayName()).equals("0/3 equipped"), "Glow uses no item or equipment slot");
+        viewer.potion = viewer.potion.withDuration(40);
+        viewer.renewals.removeFirst().run();
+        check(viewer.potion.getDuration() > 40 && viewer.renewals.size() == 1, "idle session renews once before expiring");
+        var staleRenewal = viewer.renewals.getFirst();
+        click(viewer, top, 12, ClickType.LEFT);
+        staleRenewal.run();
+        check(viewer.potion == null && viewer.renewals.isEmpty() && viewer.chat.removeLast().equals("Glow disabled."),
+                "manual deactivation clears effect and makes stale renewal inert");
+
+        viewer.vetoPotionWrite = true;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.potion == null && viewer.renewals.isEmpty()
+                && viewer.chat.removeLast().equals("Glow could not be changed."), "cancelled Paper add never establishes ownership");
+        viewer.vetoPotionWrite = false;
+
+        viewer.externalFlag = true;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.externalFlag && viewer.potion == null && viewer.chat.removeLast().equals("Glow is already controlled by another source."),
+                "external flag is left alone");
+        viewer.externalFlag = false;
+        var foreign = new PotionEffect(PotionEffectType.GLOWING, 600, 1, false, true, true);
+        viewer.potion = foreign;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.potion == foreign && viewer.renewals.isEmpty(), "external potion is never claimed");
+        viewer.potion = null;
+        enableGlow(viewer);
+        viewer.externalFlag = true;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.externalFlag && viewer.potion == null, "removing our potion preserves a concurrent global flag");
+        viewer.externalFlag = false;
+        enableGlow(viewer);
+        viewer.replaceOnRemoval = foreign;
+        click(viewer, top, 12, ClickType.LEFT);
+        check(viewer.potion == foreign && viewer.renewals.isEmpty(), "cleanup backs out when a listener installs a replacement");
+        viewer.potion = null;
+        enableGlow(viewer);
+        var identical = viewer.potion.withDuration(viewer.potion.getDuration());
+        dispatch(new EntityPotionEffectEvent(viewer.player, viewer.potion, identical, EntityPotionEffectEvent.Cause.PLUGIN,
+                EntityPotionEffectEvent.Action.CHANGED, true));
+        viewer.potion = identical;
+        var location = new org.bukkit.Location(world, 0, 65, 0);
+        var moved = location.clone().add(1, 0, 0);
+        dispatch(new org.bukkit.event.player.PlayerTeleportEvent(viewer.player, location, moved));
+        check(viewer.potion == identical && viewer.renewals.isEmpty(), "an observed identical replacement is spared by cleanup");
+        var loaded = identical.withDuration(20);
+        viewer.potion = loaded;
+        dispatch(new org.bukkit.event.player.PlayerJoinEvent(viewer.player, Component.empty()));
+        check(viewer.potion == loaded && viewer.renewals.isEmpty(), "join leaves non-owned saved effects alone and never renews them");
+        viewer.potion = null;
+
+        enableGlow(viewer);
+        viewer.allowGlow = false;
+        dispatch(new org.bukkit.event.player.PlayerMoveEvent(viewer.player, location, moved));
+        check(viewer.potion == null && viewer.renewals.isEmpty(), "movement reconciles Glow permission revocation");
+        viewer.allowGlow = true;
+        enableGlow(viewer);
+        viewer.allowGadgets = false;
+        viewer.renewals.removeFirst().run();
+        check(viewer.potion == null && viewer.renewals.isEmpty(), "idle renewal reconciles general permission revocation");
+        viewer.allowGadgets = true;
+
+        enableGlow(viewer);
+        var cancelledTeleport = new org.bukkit.event.player.PlayerTeleportEvent(viewer.player, location, moved);
+        cancelledTeleport.setCancelled(true);
+        dispatch(cancelledTeleport);
+        check(viewer.potion != null, "cancelled teleport leaves owned Glow active");
+        cancelledTeleport.setCancelled(false);
+        dispatch(cancelledTeleport);
+        check(viewer.potion == null && viewer.renewals.isEmpty(), "teleport clears only owned Glow and cancels renewal");
+        viewer.messagePrefix = "<gray>[Lobby]</gray> ";
+        enableGlow(viewer);
+        check(viewer.chat.removeLast().equals("[Lobby] Glow enabled."), "configured operator prefix still applies");
+        viewer.messagePrefix = "";
+        click(viewer, viewer.open, 12, ClickType.LEFT);
+    }
 
     private static Inventory openSizes(Viewer viewer) {
         var main = viewer.open;
@@ -813,6 +932,12 @@ public final class GadgetsFoundationHarness {
         private boolean allowGadgets = true;
         private boolean allowRiding = true;
         private boolean allowSize = true;
+        private boolean allowGlow = true;
+        private boolean externalFlag;
+        private boolean vetoPotionWrite;
+        private PotionEffect potion;
+        private PotionEffect replaceOnRemoval;
+        private final java.util.List<Runnable> renewals = new java.util.ArrayList<>();
         private boolean scaleAvailable = true;
         private double baseScale = 1.0;
         private int scaleWrites;
@@ -831,11 +956,15 @@ public final class GadgetsFoundationHarness {
         });
         private final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
         private final BukkitScheduler scheduler = proxy(BukkitScheduler.class, (name, args) -> {
-            if (!name.equals("runTask")) throw new AssertionError("unexpected scheduler operation " + name);
+            var queue = switch (name) {
+                case "runTask" -> tasks;
+                case "runTaskLater" -> renewals;
+                default -> throw new AssertionError("unexpected scheduler operation " + name);
+            };
             Runnable runnable = (Runnable) args[1];
-            tasks.add(runnable);
+            queue.add(runnable);
             return proxy(BukkitTask.class, (method, parameters) -> {
-                if (method.equals("cancel")) tasks.remove(runnable);
+                if (method.equals("cancel")) queue.remove(runnable);
                 return null;
             });
         });
@@ -858,8 +987,15 @@ public final class GadgetsFoundationHarness {
                 case GadgetsModule.USE_PERMISSION -> allowGadgets;
                 case "vapeecore.gadgets.player-riding" -> allowRiding;
                 case "vapeecore.gadgets.size-changer" -> allowSize;
+                case "vapeecore.gadgets.glow" -> allowGlow;
                 default -> false;
             };
+            case "isGlowing" -> externalFlag || potion != null;
+            case "getPotionEffect" -> args[0] == PotionEffectType.GLOWING ? potion : null;
+            case "addPotionEffect" -> changePotion((PotionEffect) args[0]);
+            case "removePotionEffect" -> { changePotion(null); yield null; }
+            case "setGlowing", "getScoreboard", "setScoreboard", "hidePlayer", "showPlayer" ->
+                    throw new AssertionError("Glow must not change shared flags, teams or visibility: " + name);
             case "getAttribute" -> scaleAvailable && args[0] == Attribute.SCALE ? scale : null;
             case "setSneaking" -> { sneaking = (boolean) args[0]; yield null; }
             case "getWorld" -> world;
@@ -895,6 +1031,22 @@ public final class GadgetsFoundationHarness {
             case "closeInventory" -> { close(); yield null; }
             default -> null;
         });
+
+        private boolean changePotion(PotionEffect next) {
+            var action = next == null ? EntityPotionEffectEvent.Action.REMOVED
+                    : potion == null ? EntityPotionEffectEvent.Action.ADDED : EntityPotionEffectEvent.Action.CHANGED;
+            var event = new EntityPotionEffectEvent(player, potion, next, EntityPotionEffectEvent.Cause.PLUGIN, action, true);
+            event.setCancelled(vetoPotionWrite);
+            if (next == null && replaceOnRemoval != null) {
+                var replacement = replaceOnRemoval;
+                replaceOnRemoval = null;
+                changePotion(replacement);
+            }
+            dispatch(event);
+            if (event.isCancelled()) return false;
+            potion = next;
+            return true;
+        }
 
         private void runNavigation() {
             var scheduled = List.copyOf(tasks);

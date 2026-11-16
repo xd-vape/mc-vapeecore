@@ -222,6 +222,7 @@ public final class LobbyItemsConfigHarness {
             if (!name.equals("getRegistry")) return null;
             boolean items = args[0].toString().contains("item");
             boolean attributes = args[0].equals(io.papermc.paper.registry.RegistryKey.ATTRIBUTE);
+            boolean effects = args[0].equals(io.papermc.paper.registry.RegistryKey.MOB_EFFECT);
             return proxy(Registry.class, (operation, values) -> {
                 if (!(operation.equals("get") || operation.equals("getOrThrow"))) return null;
                 String key = values[0].toString();
@@ -230,6 +231,7 @@ public final class LobbyItemsConfigHarness {
                     case "getKey" -> NamespacedKey.fromString(key);
                     default -> null;
                 });
+                if (effects) return new TestEffectType(NamespacedKey.fromString(key));
                 if (attributes) return proxy(org.bukkit.attribute.Attribute.class, (attributeMethod, attributeArgs) ->
                         attributeMethod.equals("getKey") ? NamespacedKey.fromString(key) : null);
                 return proxy(org.bukkit.block.BlockType.class, (blockMethod, blockArgs) -> blockMethod.equals("isAir") && key.endsWith(":air"));
@@ -241,6 +243,34 @@ public final class LobbyItemsConfigHarness {
         long offset = (long) type.getMethod("staticFieldOffset", java.lang.reflect.Field.class).invoke(unsafe, field);
         type.getMethod("putObject", Object.class, long.class, Object.class).invoke(unsafe, base, offset, Optional.of(access));
     }
+    private static final class TestEffectType extends org.bukkit.potion.PotionEffectType {
+        private final NamespacedKey key;
+        private TestEffectType(NamespacedKey key) { this.key = key; }
+        @Override public NamespacedKey getKey() { return key; }
+        @Override public String getTranslationKey() { return translationKey(); }
+        @Override public String translationKey() { return "effect." + key.getNamespace() + "." + key.getKey(); }
+        @Override public org.bukkit.potion.PotionEffect createEffect(int duration, int amplifier) {
+            return new org.bukkit.potion.PotionEffect(this, duration, amplifier);
+        }
+        @Override public boolean isInstant() { return false; }
+        @Override public org.bukkit.potion.PotionEffectTypeCategory getCategory() {
+            return org.bukkit.potion.PotionEffectTypeCategory.NEUTRAL;
+        }
+        @Override public org.bukkit.potion.PotionEffectType.Category getEffectCategory() {
+            return org.bukkit.potion.PotionEffectType.Category.NEUTRAL;
+        }
+        @Override public org.bukkit.Color getColor() { return org.bukkit.Color.WHITE; }
+        @Override public double getDurationModifier() { return 1.0; }
+        @Override public int getId() { return 0; }
+        @Override public String getName() { return key.getKey(); }
+        @Override public Map<org.bukkit.attribute.Attribute, org.bukkit.attribute.AttributeModifier> getEffectAttributes() {
+            return Map.of();
+        }
+        @Override public double getAttributeModifierAmount(org.bukkit.attribute.Attribute attribute, int amplifier) {
+            throw new IllegalArgumentException("No attribute modifiers");
+        }
+    }
+
     static final class TestItem extends ItemStack {
         private final Material material;
         private ItemMeta meta;
