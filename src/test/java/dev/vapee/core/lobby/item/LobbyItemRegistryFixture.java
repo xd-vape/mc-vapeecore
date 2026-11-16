@@ -45,11 +45,15 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
     private final AtomicReference<Map<String, LobbyItemDefinition>> definitions = new AtomicReference<>();
 
     public LobbyItemRegistryFixture(LobbyItemRegistry registry, Player delegate) throws Exception {
+        this(registry, delegate, (name, args) -> null);
+    }
+
+    LobbyItemRegistryFixture(LobbyItemRegistry registry, Player delegate, LobbyItemsConfigHarness.Call worldCalls) throws Exception {
         LobbyItemsConfigHarness.installRegistries();
         this.registry = registry;
         logger.setUseParentHandlers(false);
         logger.addHandler(new Handler() { public void publish(LogRecord r) { logs.add(r); } public void flush() { } public void close() { } });
-        World world = LobbyItemsConfigHarness.proxy(World.class, (name, args) -> name.equals("getName") ? "world" : null);
+        World world = LobbyItemsConfigHarness.proxy(World.class, (name, args) -> name.equals("getName") ? "world" : worldCalls.run(name, args));
         plugin = LobbyItemsConfigHarness.allocate(LobbyItemsConfigHarness.TestPlugin.class);
         var description = new PluginDescriptionFile("VapeeCore", "test", plugin.getClass().getName());
         for (var entry : Map.of("logger", logger, "description", description, "pluginMeta", description,

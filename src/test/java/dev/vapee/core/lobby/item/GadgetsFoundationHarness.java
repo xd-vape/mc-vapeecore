@@ -15,6 +15,9 @@ import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
 import dev.vapee.core.player.repository.PlayerRepository;
+import dev.vapee.core.player.settings.PlayerVisibilitySettings;
+import dev.vapee.core.player.settings.VisibilityMode;
+import dev.vapee.core.social.SocialService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -27,7 +30,9 @@ import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -57,6 +62,7 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInputEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -85,7 +91,7 @@ public final class GadgetsFoundationHarness {
             var registry = new LobbyItemRegistry();
             LobbyItemRegistrations.register(registry, () -> null, () -> null, () -> null, () -> null);
             var viewer = new Viewer();
-            try (var fixture = new LobbyItemRegistryFixture(registry, viewer.delegate)) {
+            try (var fixture = new LobbyItemRegistryFixture(registry, viewer.delegate, viewer::worldCall)) {
                 viewer.player = fixture.player;
                 testRuntime(root, fixture, viewer);
                 testLegacyMigration(root, fixture);
@@ -100,11 +106,13 @@ public final class GadgetsFoundationHarness {
 
     private static void testRuntime(Path root, LobbyItemRegistryFixture fixture, Viewer viewer) throws Exception {
         World world = viewer.player.getWorld();
+        viewer.world = world;
         var manager = proxy(PluginManager.class, (name, args) -> {
             if (name.equals("registerEvents") && (args[0].getClass().getSimpleName().equals("GadgetsMenu")
                     || args[0].getClass().getSimpleName().equals("PlayerRiding")
                     || args[0].getClass().getSimpleName().equals("SizeChanger")
-                    || args[0].getClass().getSimpleName().equals("GlowGadget"))) {
+                    || args[0].getClass().getSimpleName().equals("GlowGadget")
+                    || args[0].getClass().getSimpleName().equals("ParticleTrails"))) {
                 registerMenuEvents((Listener) args[0], fixture.plugin);
                 if (viewer.failRegistration) throw new IllegalStateException("fixture registration failure");
             }
@@ -149,10 +157,11 @@ public final class GadgetsFoundationHarness {
         inject(LobbyModule.class, lobby, "lobbyPlayerStateService", state);
         var activities = new ActivityModule(fixture.plugin, players);
         activities.enable();
+        var social = new SocialService(playerService, fixture.logger);
         var visibility = new dev.vapee.core.visibility.VisibilityService(fixture.plugin, fixture.lobby,
-                new dev.vapee.core.visibility.VisibilityPolicy(id -> dev.vapee.core.player.settings.PlayerVisibilitySettings.defaults(),
-                        (a, b) -> false, (a, b) -> false, (a, b) -> false));
-        var social = new dev.vapee.core.social.SocialService(playerService, fixture.logger);
+                new dev.vapee.core.visibility.VisibilityPolicy(id -> playerService.getPlayer(id)
+                        .map(player -> player.getSettings().getVisibility()).orElseGet(PlayerVisibilitySettings::defaults),
+                        social::isKnownIgnoring, (a, b) -> false, (a, b) -> false));
         var utility = new dev.vapee.core.utility.UtilityService(fixture.plugin);
         var gadgets = new GadgetsModule(fixture.plugin, lobby, players, activities, messages,
                 () -> visibility, () -> social, () -> utility, id -> false);
@@ -233,8 +242,8 @@ public final class GadgetsFoundationHarness {
             top = viewer.open;
             check(click(viewer, top, 10, ClickType.LEFT).isCancelled()
                     && fixture.storage[2] == null && fixture.storage[4].getType() == Material.CHEST, "unequipping removes only the saddle");
-            int[] slots = {14, 15, 16};
-            String[] labels = {"Trails", "Movement Extras", "Fun Gadgets"};
+            int[] slots = {15, 16};
+            String[] labels = {"Movement Extras", "Fun Gadgets"};
             for (int index = 0; index < slots.length; index++) {
                 int slot = slots[index];
                 ItemStack icon = top.getItem(slot);
@@ -261,12 +270,15 @@ public final class GadgetsFoundationHarness {
             check(drop.isCancelled() && swap.isCancelled(), "Gadgets hotbar item shares drop and swap protection");
 
             exerciseGlow(viewer, top, fixture, world);
+            exerciseTrails(viewer, fixture, playerService, social);
             exerciseSizes(viewer, viewer.open, fixture, world);
             top = viewer.open;
             enableGlow(viewer);
+            armTrail(viewer);
             dispatch(new PlayerChangedWorldEvent(viewer.player, world));
             check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null,
                     "world change closes the menu and resets size");
+            expectSilentStride(viewer, "world change clears trail selection");
             viewer.locale = Locale.GERMANY;
             fixture.click(chest, Action.RIGHT_CLICK_BLOCK, EquipmentSlot.HAND);
             check(plain(viewer.open.getItem(10).getItemMeta().displayName()).equals("Auf Spielern reiten")
@@ -278,6 +290,11 @@ public final class GadgetsFoundationHarness {
             check(viewer.chat.getLast().equals("Leuchten aktiviert.")
                     && plain(viewer.open.getItem(12).getItemMeta().lore().getFirst()).equals("Aktiv"),
                     "German Glow status and prefix-free feedback");
+            var germanTrails = openTrails(viewer);
+            check(plain(viewer.title).equals("Partikelspuren"), "German trails menu is localized");
+            click(viewer, germanTrails, 10, ClickType.LEFT);
+            check(viewer.chat.getLast().equals("Herzen-Partikelspur ausgewählt."), "German selection feedback is prefix-free");
+            backToGadgets(viewer);
             var germanSizes = openSizes(viewer);
             check(plain(viewer.title).equals("Größe ändern") && plain(germanSizes.getItem(14).getItemMeta().displayName()).equals("Riesig")
                     && plain(germanSizes.getItem(22).getItemMeta().displayName()).equals("Zurück"), "German submenu");
@@ -292,6 +309,7 @@ public final class GadgetsFoundationHarness {
                     "Gadgets hotbar lore uses German locale");
             dispatch(new PlayerQuitEvent(viewer.player, Component.empty()));
             check(viewer.open == viewer.bottom && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null, "logout releases menu, size and Glow");
+            expectSilentStride(viewer, "logout clears trail selection");
             check(gadgets.openMenu(viewer.player), "new view opens after quit cleanup");
             dispatch(new InventoryCloseEvent(viewer.view(top)));
             check(!gadgets.openMenu(viewer.player), "stale close event cannot forget current inventory");
@@ -323,6 +341,9 @@ public final class GadgetsFoundationHarness {
             viewer.runNavigation();
             enableGlow(viewer);
             check(target.vehicle == viewer.player && viewer.potion != null, "Glow leaves a live Player Riding mount in place");
+            armTrail(viewer);
+            expectSilentStride(viewer, "a carrier does not emit; mount and equipped Trail coexist");
+            check(target.vehicle == viewer.player, "Trail pause leaves the ride intact");
             var edited = new org.bukkit.configuration.file.YamlConfiguration();
             edited.load(configPath.toFile());
             edited.set("items.gadgets.enabled", false);
@@ -331,6 +352,7 @@ public final class GadgetsFoundationHarness {
             var disable = lobby.prepareReload();
             disable.apply();
             check(config.getGadgetItemLimit() == 1, "reload applies configured gadget limit");
+            expectSilentStride(viewer, "reload clears trail selection");
             fixture.configure(Files.readString(configPath));
             check(target.vehicle == null && viewer.open == viewer.bottom && fixture.storage[2] == null && viewer.potion == null
                             && fixture.storage[4] == null && !gadgets.openMenu(viewer.player),
@@ -348,10 +370,12 @@ public final class GadgetsFoundationHarness {
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom, "reload clears size and submenu");
             check(gadgets.openMenu(viewer.player), "menu can open in the reloaded configuration");
             enableGlow(viewer);
+            armTrail(viewer);
             click(viewer, openSizes(viewer), 13, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "new size established after reload");
             reloadWithSize.rollback();
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "rollback clears size, Glow and submenu");
+            expectSilentStride(viewer, "rollback clears trail selection");
             edited.set("gadgets.max-equipped-items", 2);
             edited.save(configPath.toFile());
             check(config.prepareReloadState().gadgetItemLimit() == 2, "configuration accepts limit 2");
@@ -363,15 +387,23 @@ public final class GadgetsFoundationHarness {
             click(viewer, viewer.open, 10, ClickType.LEFT);
             check(fixture.storage[2].getType() == Material.SADDLE, "saddle equipped before BUILD transition");
             enableGlow(viewer);
+            armTrail(viewer);
             click(viewer, openSizes(viewer), 14, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion != null, "saddle, size and Glow coexist");
+            stride(viewer, 4);
+            check(viewer.emissions.getLast().particle() == Particle.HEART && viewer.potion != null
+                            && viewer.modifiers.containsKey(SIZE_KEY) && fixture.storage[2].getType() == Material.SADDLE
+                            && fixture.storage[4].getType() == Material.CHEST,
+                    "trails emit alongside a live Size Modifier, Glow, Riding Saddle and Gadgets chest");
             state.enterBuildMode(viewer.player);
             check(state.isBuildMode(viewer.id) && fixture.storage[2] == null && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null
                             && viewer.open == viewer.bottom && !gadgets.openMenu(viewer.player),
                     "BUILD clears equipment and blocks Gadgets");
+            expectSilentStride(viewer, "BUILD clears trail selection");
             state.exitBuildMode(viewer.player);
             check(fixture.storage[2] == null && viewer.potion == null && gadgets.openMenu(viewer.player), "leaving BUILD does not resurrect gadgets");
             enableGlow(viewer);
+            armTrail(viewer);
             click(viewer, viewer.open, 10, ClickType.LEFT);
             click(viewer, openSizes(viewer), 10, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before entering activity");
@@ -393,12 +425,14 @@ public final class GadgetsFoundationHarness {
             check(activity.joinSession(viewer.player, session.getSessionId()) == dev.vapee.core.activity.ActivityResult.SUCCESS
                     && fixture.storage[2] == null && !gadgets.openMenu(viewer.player), "Activity handoff clears equipment and blocks Gadgets");
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "Activity clears size, Glow and submenu");
+            expectSilentStride(viewer, "Activity clears trail selection");
             activity.leaveCurrentSession(viewer.player, dev.vapee.core.activity.ActivityLeaveReason.VOLUNTARY);
             check(fixture.storage[2] == null, "leaving Activity does not resurrect equipment");
             viewer.close();
             gadgets.openMenu(viewer.player);
             gadgetConfigOverrides(fixture);
             enableGlow(viewer);
+            armTrail(viewer);
             click(viewer, openSizes(viewer), 14, ClickType.LEFT);
             check(viewer.modifiers.containsKey(SIZE_KEY), "temporary size established before disable");
             Inventory foreign = inventory(null, 27);
@@ -416,6 +450,7 @@ public final class GadgetsFoundationHarness {
             activities.disable();
         }
         check(viewer.open == viewer.bottom && countMenuListeners() == 0, "shutdown closes owned menu and removes handlers");
+        expectSilentStride(viewer, "disable leaves no trail session or emitter");
     }
 
 
@@ -520,6 +555,186 @@ public final class GadgetsFoundationHarness {
         check(viewer.chat.removeLast().equals("[Lobby] Glow enabled."), "configured operator prefix still applies");
         viewer.messagePrefix = "";
         click(viewer, viewer.open, 12, ClickType.LEFT);
+    }
+
+    private record Emission(Particle particle, List<?> viewers, Player source, double x, double y, int count, boolean force) { }
+
+    private static Inventory openTrails(Viewer viewer) {
+        var main = viewer.open;
+        check(click(viewer, main, 14, ClickType.LEFT).isCancelled() && viewer.open == main,
+                "opening Trails is deferred beyond the protected click");
+        viewer.runNavigation();
+        check(viewer.open != main && viewer.open.getSize() == 27, "Trails has its own 27-slot menu");
+        return viewer.open;
+    }
+
+    private static void backToGadgets(Viewer viewer) {
+        click(viewer, viewer.open, 22, ClickType.LEFT);
+        viewer.runNavigation();
+        check(plain(viewer.title).equals("Gadgets"), "back returns to the main Gadgets menu");
+    }
+
+    private static void armTrail(Viewer viewer) {
+        click(viewer, openTrails(viewer), 10, ClickType.LEFT);
+        backToGadgets(viewer);
+    }
+
+    private static void stride(Viewer viewer, int ticks) {
+        viewer.tick += ticks;
+        var from = new Location(viewer.world, 0, 65, 0);
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone().add(0.35, 0, 0)));
+    }
+
+    private static void expectSilentStride(Viewer viewer, String reason) {
+        int before = viewer.emissions.size();
+        stride(viewer, 4);
+        check(viewer.emissions.size() == before, reason);
+    }
+
+    private static Viewer otherViewer(World world, double x) {
+        var viewer = new Viewer();
+        viewer.player = viewer.delegate;
+        viewer.world = world;
+        viewer.positionX = x;
+        return viewer;
+    }
+
+    private static void exerciseTrails(Viewer viewer, LobbyItemRegistryFixture fixture, PlayerService players, SocialService social) {
+        var main = viewer.open;
+        viewer.allowTrails = false;
+        click(viewer, main, 14, ClickType.LEFT);
+        check(viewer.open == main && viewer.tasks.isEmpty()
+                && plain(main.getItem(14).getItemMeta().lore().getLast()).equals("Locked")
+                && viewer.chat.removeLast().equals("You cannot use trails."), "denied entry stays in the main menu");
+        viewer.allowTrails = true;
+        click(viewer, main, 14, ClickType.LEFT);
+        viewer.allowTrails = false;
+        viewer.runNavigation();
+        check(viewer.open == main, "trails navigation rechecks permissions");
+        viewer.allowTrails = true;
+        click(viewer, main, 14, ClickType.LEFT);
+        viewer.close();
+        viewer.runNavigation();
+        check(viewer.open == viewer.bottom, "a closed view cannot open the deferred submenu");
+        fixture.click(fixture.storage[4], Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND);
+        main = viewer.open;
+        var submenu = openTrails(viewer);
+        check(plain(viewer.title).equals("Trails")
+                && plain(submenu.getItem(16).getItemMeta().lore().getFirst()).equals("Selected"), "None is highlighted by default");
+
+        var peer = viewer.peer;
+        peer.positionX = 3;
+        var far = otherViewer(viewer.world, 33);
+        var unloaded = otherViewer(viewer.world, 5);
+        World other = proxy(World.class, (name, args) -> name.equals("getName") ? "elsewhere" : null);
+        var elsewhere = otherViewer(other, 5);
+        var unavailable = otherViewer(viewer.world, 5);
+        unavailable.failVisibility = true;
+        players.loadPlayer(far.id, "FarTrailViewer");
+        players.loadPlayer(elsewhere.id, "OtherWorldViewer");
+        players.loadPlayer(unavailable.id, "FailedVisibilityViewer");
+        viewer.nearby = List.of(viewer.player, peer.player, far.player, unloaded.player, elsewhere.player, unavailable.player);
+
+        var hotbar = fixture.storage.clone();
+        Particle[] effects = {Particle.HEART, Particle.FLAME, Particle.CLOUD, Particle.END_ROD, Particle.HAPPY_VILLAGER};
+        String[] labels = {"Hearts", "Flame", "Cloud", "End Rod", "Happy Villager"};
+        for (int i = 0; i < effects.length; i++) {
+            int slot = 10 + i;
+            click(viewer, submenu, slot, ClickType.LEFT);
+            check(plain(submenu.getItem(slot).getItemMeta().displayName()).equals(labels[i])
+                    && plain(submenu.getItem(slot).getItemMeta().lore().getFirst()).equals("Selected"),
+                    "selected Trail is highlighted: " + labels[i]);
+            check(viewer.chat.removeLast().equals(labels[i] + " trail selected."), "localized prefix-free trail feedback");
+            check(dev.vapee.core.message.MessageColorAssertions.hasTextColor(viewer.lastChat, labels[i],
+                    dev.vapee.core.message.MessageStyle.accent()), "selected Trail uses central accent");
+            if (i == 0) {
+                stride(viewer, 3);
+                check(viewer.emissions.isEmpty(), "first emission waits four ticks");
+                stride(viewer, 1);
+            } else {
+                int count = viewer.emissions.size();
+                stride(viewer, 3);
+                check(viewer.emissions.size() == count, "switching Trail preserves the existing cooldown");
+                stride(viewer, 1);
+            }
+            var emission = viewer.emissions.getLast();
+            check(emission.particle() == effects[i] && emission.source() == viewer.player && emission.count() <= 2
+                    && !emission.force() && emission.x() == 0 && Math.abs(emission.y() - 65.15) < 0.00001,
+                    "correct bounded particle at the previous feet position");
+        }
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player, peer.player)),
+                "receiver list excludes other worlds, range misses, unloaded viewers and failed visibility checks");
+        int before = viewer.emissions.size();
+        stride(viewer, 0);
+        check(viewer.emissions.size() == before, "multiple moves in the same tick cannot emit twice");
+        var from = new Location(viewer.world, 0, 65, 0);
+        var rotation = from.clone();
+        rotation.setYaw(90);
+        viewer.tick += 4;
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone()));
+        dispatch(new PlayerMoveEvent(viewer.player, from, rotation));
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone().add(0.01, 0, 0)));
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone().add(8, 0, 0)));
+        dispatch(new PlayerMoveEvent(viewer.player, from, new Location(other, 0.5, 65, 0)));
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone().add(Double.NaN, 0, 0)));
+        var cancelledMove = new PlayerMoveEvent(viewer.player, from, from.clone().add(0.35, 0, 0));
+        cancelledMove.setCancelled(true);
+        dispatch(cancelledMove);
+        check(viewer.emissions.size() == before, "stillness, rotation, jitter, jumps, other worlds, invalid values and cancelled moves do not emit");
+
+        var preferences = players.getPlayer(peer.id).orElseThrow().getSettings().getVisibility();
+        preferences.setMode(VisibilityMode.HIDDEN);
+        stride(viewer, 0);
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player)), "visibility change applies to the next emission");
+        preferences.setMode(VisibilityMode.ALL);
+        peer.canSee = false;
+        stride(viewer, 4);
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player)), "Paper hides veto a Trail even in ALL mode");
+        peer.canSee = true;
+        social.ignore(peer.id, viewer.id);
+        stride(viewer, 4);
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player)), "viewer ignoring source gets no Trail");
+        social.unignore(peer.id, viewer.id);
+        social.ignore(viewer.id, peer.id);
+        stride(viewer, 4);
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player)), "source ignoring viewer also blocks the Trail");
+        social.unignore(viewer.id, peer.id);
+        stride(viewer, 4);
+        check(viewer.emissions.getLast().viewers().equals(List.of(viewer.player, peer.player)), "eligible viewer returns without reselecting");
+
+        click(peer, submenu, 10, ClickType.LEFT);
+        click(viewer, main, 10, ClickType.LEFT);
+        check(Arrays.equals(hotbar, fixture.storage), "foreign and stale menu clicks cannot equip gear or change slots");
+        viewer.allowTrails = false;
+        click(viewer, submenu, 11, ClickType.LEFT);
+        check(viewer.chat.removeLast().equals("You cannot use trails."), "selection rechecks a revoked permission");
+        expectSilentStride(viewer, "revoked Trail permission clears emission");
+        viewer.allowTrails = true;
+        click(viewer, submenu, 11, ClickType.LEFT);
+        viewer.allowGadgets = false;
+        expectSilentStride(viewer, "movement reconciles the general Gadgets permission");
+        viewer.allowGadgets = true;
+        expectSilentStride(viewer, "permission restoration does not reactivate a Trail");
+        click(viewer, submenu, 10, ClickType.LEFT);
+        click(viewer, submenu, 16, ClickType.LEFT);
+        check(viewer.chat.removeLast().equals("Trails disabled.")
+                && plain(submenu.getItem(16).getItemMeta().lore().getFirst()).equals("Selected"), "None deactivates and is highlighted");
+        expectSilentStride(viewer, "None is silent");
+
+        viewer.messagePrefix = "<gray>[Lobby]</gray> ";
+        click(viewer, submenu, 10, ClickType.LEFT);
+        check(viewer.chat.removeLast().equals("[Lobby] Hearts trail selected."), "operator prefix is preserved");
+        viewer.messagePrefix = "";
+        backToGadgets(viewer);
+        check(Arrays.equals(hotbar, fixture.storage) && plain(viewer.open.getItem(22).getItemMeta().displayName()).equals("0/3 equipped"),
+                "Trail does not consume a hotbar slot or equipment capacity");
+        viewer.vehicle = peer.player;
+        expectSilentStride(viewer, "a rider cannot emit in transit");
+        viewer.vehicle = null;
+        stride(viewer, 4);
+        check(viewer.emissions.getLast().particle() == Particle.HEART, "Trail resumes after dismount");
+        dispatch(new PlayerTeleportEvent(viewer.player, from, from.clone().add(0.35, 0, 0)));
+        expectSilentStride(viewer, "even a short teleport ends the Trail session");
     }
 
     private static Inventory openSizes(Viewer viewer) {
@@ -933,6 +1148,11 @@ public final class GadgetsFoundationHarness {
         private boolean allowRiding = true;
         private boolean allowSize = true;
         private boolean allowGlow = true;
+        private boolean allowTrails = true;
+        private boolean failVisibility;
+        private double positionX;
+        private List<Player> nearby = List.of();
+        private final List<Emission> emissions = new java.util.ArrayList<>();
         private boolean externalFlag;
         private boolean vetoPotionWrite;
         private PotionEffect potion;
@@ -988,6 +1208,7 @@ public final class GadgetsFoundationHarness {
                 case "vapeecore.gadgets.player-riding" -> allowRiding;
                 case "vapeecore.gadgets.size-changer" -> allowSize;
                 case "vapeecore.gadgets.glow" -> allowGlow;
+                case "vapeecore.gadgets.trails" -> allowTrails;
                 default -> false;
             };
             case "isGlowing" -> externalFlag || potion != null;
@@ -1000,7 +1221,11 @@ public final class GadgetsFoundationHarness {
             case "setSneaking" -> { sneaking = (boolean) args[0]; yield null; }
             case "getWorld" -> world;
             case "isFlying" -> flying;
-            case "canSee" -> canSee;
+            case "getLocation" -> new Location(world, positionX, 65, 0);
+            case "canSee" -> {
+                if (failVisibility) throw new IllegalStateException("visibility lookup failed");
+                yield canSee;
+            }
             case "getVehicle" -> vehicle;
             case "getPassengers" -> List.copyOf(passengers);
             case "getCurrentInput" -> proxy(org.bukkit.Input.class, (method, params) -> false);
@@ -1031,6 +1256,21 @@ public final class GadgetsFoundationHarness {
             case "closeInventory" -> { close(); yield null; }
             default -> null;
         });
+
+        private Object worldCall(String name, Object[] args) {
+            return switch (name) {
+                case "getNearbyPlayers" -> nearby;
+                case "spawnParticle" -> {
+                    if (args.length != 13 || !(args[1] instanceof List<?> recipients) || !(args[2] instanceof Player source)) {
+                        throw new AssertionError("Trail must send with an explicit receiver list and source");
+                    }
+                    emissions.add(new Emission((Particle) args[0], List.copyOf(recipients), source,
+                            (double) args[3], (double) args[4], (int) args[6], (boolean) args[12]));
+                    yield null;
+                }
+                default -> null;
+            };
+        }
 
         private boolean changePotion(PotionEffect next) {
             var action = next == null ? EntityPotionEffectEvent.Action.REMOVED

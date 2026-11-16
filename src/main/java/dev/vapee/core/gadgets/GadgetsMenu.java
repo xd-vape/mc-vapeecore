@@ -42,10 +42,20 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private static final MenuLayout<SizeChanger.Size> SIZES = MenuLayout.builder(27, SizeChanger.Size.class)
             .content(List.of(10, 11, 12, 13, 14))
             .build();
+    private static final MenuLayout<ParticleTrails.Trail> TRAILS = MenuLayout.builder(27, ParticleTrails.Trail.class)
+            .content(List.of(10, 11, 12, 13, 14, 16))
+            .build();
     private static final int EQUIPMENT_STATUS_SLOT = 22;
     private static final int BACK_SLOT = 22;
 
     private enum Type { ITEM, DIRECT_MENU, DIRECT }
+
+    private enum Page {
+        MAIN("gadgets.title"), SIZES("gadgets.categories.size-changer"), TRAILS("gadgets.categories.trails");
+
+        private final String title;
+        Page(String title) { this.title = title; }
+    }
 
     private enum Category {
         PLAYER_RIDING("player-riding", Material.SADDLE, Type.ITEM),
@@ -73,12 +83,13 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private final GadgetEquipment equipment;
     private final SizeChanger sizeChanger;
     private final GlowGadget glow;
+    private final ParticleTrails trails;
     private final Map<UUID, BukkitTask> navigation = new HashMap<>();
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
     GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding,
-                GadgetEquipment equipment, SizeChanger sizeChanger, GlowGadget glow) {
+                GadgetEquipment equipment, SizeChanger sizeChanger, GlowGadget glow, ParticleTrails trails) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
@@ -86,29 +97,38 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         this.equipment = equipment;
         this.sizeChanger = sizeChanger;
         this.glow = glow;
+        this.trails = trails;
     }
 
     boolean open(Player player) {
         riding.reconcile(player);
         sizeChanger.reconcile(player);
         glow.reconcile(player);
+        trails.reconcile(player);
         if (!canOpen(player) || openInventories.get(player.getUniqueId()) == player.getOpenInventory().getTopInventory()) {
             return false;
         }
-        return open(player, false);
+        return open(player, Page.MAIN);
     }
 
-    private boolean open(Player player, boolean sizes) {
+    private boolean open(Player player, Page page) {
         long openedGeneration = generation;
-        var holder = new Holder(player.getUniqueId(), sizes);
-        var inventory = plugin.getServer().createInventory(holder, sizes ? SIZES.size() : LAYOUT.size(),
-                messages.localize(player, tr(sizes ? "gadgets.categories.size-changer" : "gadgets.title")));
+        var holder = new Holder(player.getUniqueId(), page);
+        int size = switch (page) {
+            case MAIN -> LAYOUT.size();
+            case SIZES -> SIZES.size();
+            case TRAILS -> TRAILS.size();
+        };
+        var inventory = plugin.getServer().createInventory(holder, size, messages.localize(player, tr(page.title)));
         holder.inventory = inventory;
-        if (sizes) renderSizes(player, inventory);
-        else renderMain(player, inventory);
+        switch (page) {
+            case MAIN -> renderMain(player, inventory);
+            case SIZES -> renderSizes(player, inventory);
+            case TRAILS -> renderTrails(player, inventory);
+        }
         var opened = player.openInventory(inventory);
         if (opened == null || player.getOpenInventory().getTopInventory() != inventory) return false;
-        if (openedGeneration != generation || !canOpen(player) || (sizes && !sizeChanger.permitted(player))) {
+        if (openedGeneration != generation || !canOpen(player, page)) {
             closeOwned(player, inventory);
             return false;
         }
@@ -128,14 +148,20 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
                 renderGlow(player, inventory);
                 continue;
             }
-            Component status = category == Category.SIZE_CHANGER
-                    ? sizeChanger.permitted(player) ? tr("gadgets.size.open") : MessageStyle.error(tr("gadgets.locked"))
-                    : tr("gadgets.unavailable").color(MessageStyle.MUTED);
+            Component status = switch (category) {
+                case SIZE_CHANGER -> entryStatus(sizeChanger.permitted(player), "gadgets.size.open");
+                case TRAILS -> entryStatus(trails.permitted(player), "gadgets.trails.open");
+                default -> tr("gadgets.unavailable").color(MessageStyle.MUTED);
+            };
             var item = UiItems.literal(category.icon, tr("gadgets.categories." + category.key),
                     MessageStyle.TEXT, List.of(tr("gadgets.description." + category.key), status));
             inventory.setItem(LAYOUT.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
         }
         renderCount(player, inventory);
+    }
+
+    private Component entryStatus(boolean permitted, String key) {
+        return permitted ? tr(key) : MessageStyle.error(tr("gadgets.locked"));
     }
 
     private void renderSizes(Player player, Inventory inventory) {
@@ -149,8 +175,30 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
                     tr("gadgets.size." + size.key), MessageStyle.TEXT, lore);
             inventory.setItem(SIZES.contentSlot(size.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
         }
-        var back = UiItems.literal(Material.ARROW, tr("gadgets.size.back"), MessageStyle.TEXT, List.of());
+        renderBack(player, inventory, "gadgets.size.back");
+    }
+
+    private void renderTrails(Player player, Inventory inventory) {
+        var selected = trails.selected(player);
+        for (var trail : ParticleTrails.Trail.values()) {
+            var status = trail == selected ? MessageStyle.success(tr("gadgets.trails.active")) : tr("gadgets.trails.apply");
+            var item = UiItems.literal(trail.icon, tr("gadgets.trails." + trail.key), MessageStyle.TEXT, List.of(status));
+            inventory.setItem(TRAILS.contentSlot(trail.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
+        }
+        renderBack(player, inventory, "gadgets.trails.back");
+    }
+
+    private void renderBack(Player player, Inventory inventory, String label) {
+        var back = UiItems.literal(Material.ARROW, tr(label), MessageStyle.TEXT, List.of());
         inventory.setItem(BACK_SLOT, UiItems.render(UiItems.localize(back, messages, player)));
+    }
+
+    private boolean canOpen(Player player, Page page) {
+        return canOpen(player) && switch (page) {
+            case MAIN -> true;
+            case SIZES -> sizeChanger.permitted(player);
+            case TRAILS -> trails.permitted(player);
+        };
     }
 
     private boolean canOpen(Player player) {
@@ -196,17 +244,22 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         riding.reconcile(player);
         sizeChanger.reconcile(player);
         glow.reconcile(player);
-        if (!holder.sizes && event.getRawSlot() == LAYOUT.contentSlot(Category.GLOW.ordinal()) && access.test(player)) {
+        trails.reconcile(player);
+        if (holder.page == Page.MAIN && event.getRawSlot() == LAYOUT.contentSlot(Category.GLOW.ordinal()) && access.test(player)) {
             glow.toggle(player);
             renderGlow(player, top);
             return;
         }
         if (!canOpen(player)) return;
-        if (holder.sizes) {
-            if (event.getRawSlot() == BACK_SLOT) {
-                navigate(player, holder, false);
-                return;
-            }
+        if (holder.page != Page.MAIN && event.getRawSlot() == BACK_SLOT) {
+            navigate(player, holder, Page.MAIN);
+            return;
+        }
+        if (holder.page == Page.TRAILS) {
+            selectTrail(player, top, event.getRawSlot());
+            return;
+        }
+        if (holder.page == Page.SIZES) {
             int index = SIZES.contentSlots().indexOf(event.getRawSlot());
             if (index < 0) return;
             var result = sizeChanger.select(player, SizeChanger.Size.values()[index]);
@@ -223,9 +276,15 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         if (index < 0) return;
         var category = Category.values()[index];
         if (category == Category.SIZE_CHANGER) {
-            if (sizeChanger.permitted(player)) navigate(player, holder, true);
+            if (sizeChanger.permitted(player)) navigate(player, holder, Page.SIZES);
             else {
                 messages.send(player, tr("gadgets.size.denied"));
+                renderMain(player, top);
+            }
+        } else if (category == Category.TRAILS) {
+            if (trails.permitted(player)) navigate(player, holder, Page.TRAILS);
+            else {
+                messages.send(player, tr("gadgets.trails.denied"));
                 renderMain(player, top);
             }
         } else if (category.type == Type.ITEM) {
@@ -235,13 +294,28 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         }
     }
 
-    private void navigate(Player player, Holder from, boolean sizes) {
+    private void selectTrail(Player player, Inventory inventory, int rawSlot) {
+        int index = TRAILS.contentSlots().indexOf(rawSlot);
+        if (index < 0) return;
+        var trail = ParticleTrails.Trail.values()[index];
+        var previous = trails.selected(player);
+        if (!trails.select(player, trail)) {
+            messages.send(player, tr("gadgets.trails.denied"));
+        } else if (trail != previous) {
+            if (trail == ParticleTrails.Trail.NONE) messages.send(player, tr("gadgets.trails.disabled"));
+            else messages.send(player, tr("gadgets.trails.selected",
+                    Map.of("trail", tr("gadgets.trails." + trail.key).color(MessageStyle.accent()))));
+        }
+        renderTrails(player, inventory);
+    }
+
+    private void navigate(Player player, Holder from, Page page) {
         // Bukkit forbids opening another inventory in the click callback.
         navigation.computeIfAbsent(from.owner, owner -> plugin.getServer().getScheduler().runTask(plugin, () -> {
             navigation.remove(owner);
             if (openInventories.get(owner) != from.inventory || player.getOpenInventory().getTopInventory() != from.inventory
-                    || !canOpen(player) || (sizes && !sizeChanger.permitted(player))) return;
-            open(player, sizes);
+                    || !canOpen(player, page)) return;
+            open(player, page);
         }));
     }
 
@@ -278,10 +352,10 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     public void onKick(PlayerKickEvent event) { closeFor(event.getPlayer()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onTeleport(PlayerTeleportEvent event) { closeSizeMenu(event.getPlayer()); }
+    public void onTeleport(PlayerTeleportEvent event) { closeSubmenu(event.getPlayer()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPortal(PlayerPortalEvent event) { closeSizeMenu(event.getPlayer()); }
+    public void onPortal(PlayerPortalEvent event) { closeSubmenu(event.getPlayer()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDeath(PlayerDeathEvent event) { closeFor(event.getEntity()); }
@@ -291,10 +365,10 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     @Override public void beforeJoin(Player player) { closeFor(player); }
     @Override public void membershipChanged(UUID id) { }
 
-    private void closeSizeMenu(Player player) {
+    private void closeSubmenu(Player player) {
         var inventory = openInventories.get(player.getUniqueId());
         if (inventory != null && inventory.getHolder() instanceof Holder holder
-                && (holder.sizes || navigation.containsKey(holder.owner))) closeFor(player);
+                && (holder.page != Page.MAIN || navigation.containsKey(holder.owner))) closeFor(player);
     }
 
     private void closeFor(Player player) {
@@ -325,12 +399,12 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
 
     private static final class Holder implements InventoryHolder {
         private final UUID owner;
-        private final boolean sizes;
+        private final Page page;
         private Inventory inventory;
 
-        private Holder(UUID owner, boolean sizes) {
+        private Holder(UUID owner, Page page) {
             this.owner = owner;
-            this.sizes = sizes;
+            this.page = page;
         }
 
         @Override

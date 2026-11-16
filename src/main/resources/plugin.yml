@@ -187,6 +187,9 @@ permissions:
   vapeecore.gadgets.use:
     description: Open the Gadgets menu and use gadgets
     default: true
+  vapeecore.gadgets.trails:
+    description: Select a temporary lobby particle trail
+    default: true
   vapeecore.gadgets.glow:
     description: Toggle the temporary lobby glow gadget
     default: true

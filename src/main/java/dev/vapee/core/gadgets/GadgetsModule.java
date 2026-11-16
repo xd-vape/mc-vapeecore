@@ -32,10 +32,12 @@ public final class GadgetsModule implements CoreModule {
     private PlayerRiding riding;
     private SizeChanger sizeChanger;
     private GlowGadget glow;
+    private ParticleTrails trails;
     private final Runnable reload = () -> {
         if (menu != null) menu.closeAll();
         if (sizeChanger != null) sizeChanger.reset();
         if (glow != null) glow.reset();
+        if (trails != null) trails.reset();
         if (riding != null) riding.reset();
     };
 
@@ -77,12 +79,14 @@ public final class GadgetsModule implements CoreModule {
                         && !socialService.isIgnoring(second.getUniqueId(), first.getUniqueId()));
         var candidateSize = new SizeChanger(plugin, eligible);
         var candidateGlow = new GlowGadget(plugin, messages, eligible);
-        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment, candidateSize, candidateGlow);
+        var candidateTrails = new ParticleTrails(plugin, eligible, visibilityService);
+        var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment, candidateSize, candidateGlow, candidateTrails);
         var states = lobby.getLobbyPlayerStateService();
         var activity = activities.getActivityService();
         java.util.function.Consumer<Player> refreshItems = player -> {
             candidateSize.reconcile(player);
             candidateGlow.reconcile(player);
+            candidateTrails.reconcile(player);
             candidateRiding.afterHotbarRefresh(player);
         };
         Runnable unsubscribe = () -> {
@@ -90,9 +94,11 @@ public final class GadgetsModule implements CoreModule {
             states.removeStateListener(candidateRiding);
             states.removeStateListener(candidateSize);
             states.removeStateListener(candidateGlow);
+            states.removeStateListener(candidateTrails);
             states.removeStateListener(candidate);
             activity.removeMembershipListener(candidateSize);
             activity.removeMembershipListener(candidateGlow);
+            activity.removeMembershipListener(candidateTrails);
             activity.removeMembershipListener(candidate);
             activity.removeMembershipListener(candidateRiding);
             utilityService.removeFlightListener(candidateRiding);
@@ -103,12 +109,15 @@ public final class GadgetsModule implements CoreModule {
             plugin.getServer().getPluginManager().registerEvents(candidateRiding, plugin);
             plugin.getServer().getPluginManager().registerEvents(candidateSize, plugin);
             plugin.getServer().getPluginManager().registerEvents(candidateGlow, plugin);
+            plugin.getServer().getPluginManager().registerEvents(candidateTrails, plugin);
             states.addStateListener(candidateRiding);
             states.addStateListener(candidateSize);
             states.addStateListener(candidateGlow);
+            states.addStateListener(candidateTrails);
             states.addStateListener(candidate);
             activity.addMembershipListener(candidateSize);
             activity.addMembershipListener(candidateGlow);
+            activity.addMembershipListener(candidateTrails);
             activity.addMembershipListener(candidate);
             activity.addMembershipListener(candidateRiding);
             utilityService.addFlightListener(candidateRiding);
@@ -119,6 +128,7 @@ public final class GadgetsModule implements CoreModule {
             unsubscribeRuntime = unsubscribe;
             sizeChanger = candidateSize;
             glow = candidateGlow;
+            trails = candidateTrails;
             riding = candidateRiding;
             menu = candidate;
         } catch (RuntimeException failure) {
@@ -128,6 +138,7 @@ public final class GadgetsModule implements CoreModule {
             HandlerList.unregisterAll(candidateRiding);
             HandlerList.unregisterAll(candidateSize);
             HandlerList.unregisterAll(candidateGlow);
+            HandlerList.unregisterAll(candidateTrails);
             throw failure;
         }
     }
@@ -151,13 +162,19 @@ public final class GadgetsModule implements CoreModule {
         var previousRiding = riding;
         var previousSize = sizeChanger;
         var previousGlow = glow;
+        var previousTrails = trails;
         menu = null;
         riding = null;
         sizeChanger = null;
         glow = null;
+        trails = null;
         lobby.removeReloadListener(reload);
         unsubscribeRuntime.run();
         unsubscribeRuntime = () -> { };
+        if (previousTrails != null) {
+            previousTrails.reset();
+            HandlerList.unregisterAll(previousTrails);
+        }
         if (previousGlow != null) {
             try {
                 previousGlow.reset();
