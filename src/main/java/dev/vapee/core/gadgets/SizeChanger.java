@@ -102,6 +102,14 @@ final class SizeChanger implements Listener, LobbyPlayerStateListener, ActivityM
     }
 
     Result select(Player player, Size size) {
+        return select(player, size, false);
+    }
+
+    Result restoreAtTeleportDestination(Player player, Size size) {
+        return select(player, size, true);
+    }
+
+    private Result select(Player player, Size size, boolean teleportRestore) {
         if (!plugin.getServer().isPrimaryThread()) return Result.UNAVAILABLE;
         if (!access.test(player) || !permitted(player)) {
             clear(player);
@@ -122,7 +130,7 @@ final class SizeChanger implements Listener, LobbyPlayerStateListener, ActivityM
         var replacement = new AttributeModifier(key, size.factor - 1.0, AttributeModifier.Operation.MULTIPLY_SCALAR_1);
         var previous = scale.getModifier(key);
         if (!replacement.equals(previous)) {
-            if (size.tier != Tier.STANDARD) {
+            if (teleportRestore || size.tier != Tier.STANDARD) {
                 if (managedFlight.test(player.getUniqueId())) return Result.INCOMPATIBLE;
                 var clearance = checkClearance(player, scale.getValue(), previous, size.factor);
                 if (clearance != Result.APPLIED) return clearance;

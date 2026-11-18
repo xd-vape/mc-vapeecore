@@ -144,3 +144,30 @@
 - **Ergebnis** PENDING
 - **Screenshot/Video (optional)** —
 - **Abweichungen** —
+
+
+## Nutzerbestätigte manuelle Persistenz-Abnahme · 6/6 PASS
+
+Der Nutzer hat die folgenden Beobachtungen mit echten Minecraft-Clients beziehungsweise dem echten Testserver bestätigt. Die Ergebnisse gelten für die genannten Schritte. Das Protokoll enthält keine weiteren Angaben zu Zeitpunkt, Umgebung oder Bildbelegen.
+
+| Fall | Bestätigte Beobachtung | Ergebnis |
+| --- | --- | --- |
+| Persistenz 01 | 3×-Größe, Glow und Cloud-Trail gleichzeitig aktiviert. | PASS |
+| Persistenz 02 | Nach Logout und Rejoin waren alle drei Einstellungen wieder aktiv. | PASS |
+| Persistenz 03 | Nach einem Neustart des Testservers wurden die Einstellungen wiederhergestellt. | PASS |
+| Persistenz 04 | Nach Entzug der VIP-Permission blieb die gespeicherte 3×-Größe inaktiv. | PASS |
+| Persistenz 05 | Die gespeicherte 5×-Größe wurde an einem zu engen Spawnpunkt sicher blockiert. | PASS |
+| Persistenz 06 | Auf freier Fläche wurde 5× erneut manuell ausgewählt und angewendet. | PASS |
+
+Die 14 ursprünglichen QA-Fälle bleiben offen. Player Riding wurde noch nicht vollständig abgenommen. Der zweite Client verlor beim Fensterwechsel den Sneak-Zustand.
+
+## Step 09E.4 · Client-Abnahme der Teleport-Wiederherstellung
+
+| Fall | Durchführung | Erwartung | Ergebnis |
+| --- | --- | --- | --- |
+| TP-01 · Gleiche Lobby | 3×, Glow und Cloud aktivieren, innerhalb derselben Lobby teleportieren und am Ziel kurz stehen bleiben. Danach laufen und das Gadget-Menü öffnen. Zweite Clientperspektive prüfen. | Effekte werden am Ziel wieder aktiv. Die Cloud-Spur beginnt erst bei Bewegung am Ziel. Das Menü zeigt den wirksamen Zustand und der Chat bleibt ruhig. | PENDING |
+| TP-02 · Enge, Rechte und schnelle Folge | Colossal auf freier Fläche wählen. Zuerst auf eine enge und dann mehrfach zwischen markierten Zielen teleportieren. Eine Runde mit entzogenem Team-Recht wiederholen. | Eine blockierte 5×-Auswahl bleibt gespeichert und zeigt sich im Menü als inaktiv. Nur ein gültiges letztes Ziel mit ausreichendem Platz und wirksamen Rechten erlaubt 5×. | PENDING |
+| TP-03 · Abbruch und Weltgrenze | Einen Teleport auf dem isolierten Testserver abbrechen lassen. Danach aus der Lobby teleportieren und wieder zurückkehren. | Abbruch löst keinen Restore aus. Außerhalb der Lobby bleiben die Effekte aus. Rückkehr nutzt die bestehende Wiederherstellung beim Weltwechsel. | PENDING |
+| TP-04 · Sichtbarkeit und Riding | Mit zweitem Client eine Riding-Verbindung aufbauen und innerhalb der Lobby teleportieren. Den Trail am Ziel separat mit ALL, HIDDEN und Ignore beobachten. | Riding bleibt beendet und das Hotbar-Item wird durch Restore nicht neu vergeben. Nur berechtigte Beobachter sehen neue Partikel am Ziel. | PENDING |
+
+Belege und Abweichungen zu TP-01 bis TP-04 beim tatsächlichen Client-Testlauf ergänzen.

@@ -76,7 +76,7 @@ public final class LobbyItemRegistryFixture implements AutoCloseable {
         UUID id = UUID.randomUUID();
         player = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[]{Player.class}, (ignored, method, args) -> {
             return switch (method.getName()) {
-                case "getWorld" -> world;
+                case "getWorld" -> delegate != null && delegate.getWorld() != null ? delegate.getWorld() : world;
                 case "getInventory" -> inventory;
                 case "getPlayerProfile" -> profile;
                 case "getUniqueId" -> delegate == null ? id : delegate.getUniqueId();

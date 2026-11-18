@@ -127,7 +127,7 @@ public final class GadgetsFoundationHarness {
         });
         var server = proxy(Server.class, (name, args) -> switch (name) {
             case "getWorld" -> world;
-            case "getPlayer" -> viewer.player;
+            case "getPlayer" -> viewer.serverReplacement == null ? viewer.player : viewer.serverReplacement;
             case "getCurrentTick" -> viewer.tick;
             case "getPluginManager" -> manager;
             case "isPrimaryThread" -> true;
@@ -444,6 +444,8 @@ public final class GadgetsFoundationHarness {
                     && fixture.storage[2] == null && !gadgets.openMenu(viewer.player), "Activity handoff clears equipment and blocks Gadgets");
             check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.open == viewer.bottom && viewer.potion == null, "Activity clears size, Glow and submenu");
             expectSilentStride(viewer, "Activity clears trail selection");
+            teleport(viewer, viewer.player.getLocation().add(1, 0, 0), true);
+            check(viewer.restores.isEmpty(), "teleport within an Activity does not queue a restore");
             activity.leaveCurrentSession(viewer.player, dev.vapee.core.activity.ActivityLeaveReason.VOLUNTARY);
             check(fixture.storage[2] == null, "leaving Activity does not resurrect equipment");
             viewer.close();
@@ -464,6 +466,7 @@ public final class GadgetsFoundationHarness {
             check(!viewer.modifiers.containsKey(SIZE_KEY) && countMenuListeners() == 1 && gadgets.openMenu(viewer.player),
                     "reenable recovers a leftover modifier and owns a fresh view");
             exercisePersistence(viewer, gadgets, lobby, playerService, settings, profiles, state, fixture, social);
+            exerciseTeleportRestore(viewer, gadgets, lobby, playerService, settings, state, fixture, social);
         } finally {
             gadgets.disable();
             activities.disable();
@@ -629,6 +632,236 @@ public final class GadgetsFoundationHarness {
             throw new AssertionError("preference reload fixture failed", failure);
         }
         viewer.modifiers.remove(foreignKey);
+    }
+
+    private static void exerciseTeleportRestore(Viewer viewer, GadgetsModule gadgets, LobbyModule lobby,
+                                                PlayerService players, PlayerSettingsService settings, LobbyPlayerStateService state,
+                                                LobbyItemRegistryFixture fixture, SocialService social) throws Exception {
+        var player = viewer.player;
+        var id = viewer.id;
+        var world = viewer.world;
+        var pending = viewer.restores;
+        var massive = new GadgetPreferences(GadgetPreferences.Size.MASSIVE, true, GadgetPreferences.Trail.CLOUD);
+        settings.updateGadgetPreferences(id, old -> massive);
+        int saves = viewer.profileSaves;
+        viewer.close();
+        check(gadgets.openMenu(player), "main menu opens before a lobby teleport");
+        var main = viewer.open;
+        click(viewer, main, 10, ClickType.LEFT);
+        for (int slot = 0; slot < 9; slot++) {
+            if (fixture.storage[slot] != null && fixture.storage[slot].getType() == Material.SADDLE) fixture.heldSlot = slot;
+        }
+        viewer.peer.sneaking = true;
+        viewer.peer.positionX = viewer.positionX + 1;
+        viewer.tick += 3;
+        dispatch(new PlayerInteractEntityEvent(player, viewer.peer.player, EquipmentSlot.HAND));
+        check(viewer.peer.vehicle == player, "a managed Riding session is active before teleport");
+        var items = fixture.storage.clone();
+        var start = player.getLocation();
+        var target = start.clone().add(8, 0, 0);
+        int emissions = viewer.emissions.size();
+        viewer.chat.clear();
+
+        var cancelled = new PlayerTeleportEvent(player, start, target);
+        cancelled.setCancelled(true);
+        dispatch(cancelled);
+        check(pending.isEmpty() && viewer.potion != null, "cancelled teleport preserves effects and queues no restore");
+        teleport(viewer, target, false);
+        check(pending.size() == 1 && viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY),
+                "existing cleanup runs and restore is deferred");
+        viewer.runRestores();
+        check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY), "an uncancelled event without arrival cannot restore");
+        teleport(viewer, target, true);
+        check(viewer.emissions.size() == emissions, "no particles are emitted along the teleport");
+        viewer.runRestores();
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 2.0 && viewer.potion != null && viewer.renewals.size() == 1,
+                "arrived player restores Massive and one owned Glow");
+        check(viewer.peer.vehicle == null && viewer.passengers.isEmpty(), "teleport ends Riding and restore does not remount");
+        check(viewer.open == main && plain(main.getItem(12).getItemMeta().lore().getFirst()).equals("Enabled")
+                        && Arrays.equals(fixture.storage, items) && viewer.chat.isEmpty() && viewer.profileSaves == saves,
+                "restore refreshes only the owned menu and preserves hotbar, chat and profile");
+        moveAtPlayer(viewer, 3);
+        check(viewer.emissions.size() == emissions, "a fresh Trail observes the four-tick interval");
+        viewer.nearby = List.of(viewer.peer.player);
+        viewer.peer.positionX = viewer.positionX + 1;
+        var visibility = players.getPlayer(viewer.peer.id).orElseThrow().getSettings().getVisibility();
+        visibility.setMode(VisibilityMode.ALL);
+        moveAtPlayer(viewer, 1);
+        var emitted = viewer.emissions.getLast();
+        check(emitted.particle() == Particle.CLOUD && emitted.x() == viewer.positionX && emitted.count() == 2
+                && emitted.viewers().contains(viewer.peer.player), "restored Trail starts at the destination");
+        visibility.setMode(VisibilityMode.HIDDEN);
+        moveAtPlayer(viewer, 4);
+        check(!viewer.emissions.getLast().viewers().contains(viewer.peer.player), "restored Trail still checks Hidden");
+        visibility.setMode(VisibilityMode.ALL);
+        social.ignore(viewer.peer.id, id);
+        moveAtPlayer(viewer, 4);
+        check(!viewer.emissions.getLast().viewers().contains(viewer.peer.player), "restored Trail still checks Ignore");
+        social.unignore(viewer.peer.id, id);
+
+        var foreign = new NamespacedKey("fixture", "teleport_scale");
+        var modifier = new AttributeModifier(foreign, 0.1, AttributeModifier.Operation.MULTIPLY_SCALAR_1);
+        viewer.modifiers.put(foreign, modifier);
+        var colossal = new GadgetPreferences(GadgetPreferences.Size.COLOSSAL, true, GadgetPreferences.Trail.CLOUD);
+        settings.updateGadgetPreferences(id, old -> colossal);
+        saves = viewer.profileSaves;
+        teleport(viewer, target.clone().add(2, 0, 0), true);
+        var stale = pending.getFirst();
+        teleport(viewer, target.clone().add(4, 0, 0), true);
+        stale.run();
+        check(pending.size() == 1 && viewer.potion == null, "new rapid teleport invalidates its predecessor");
+        viewer.runRestores();
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 4.0 && viewer.modifiers.get(foreign) == modifier
+                        && viewer.checkedBox.getCenterX() == viewer.positionX, "Colossal checks and uses only the latest destination");
+        teleport(viewer, target.clone().add(5, 0, 0), true);
+        var lateCancelled = teleport(viewer, target.clone().add(6, 0, 0), false);
+        lateCancelled.setCancelled(true);
+        viewer.runRestores();
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 4.0, "late cancellation leaves the preceding verified arrival eligible");
+        viewer.collision = true;
+        teleport(viewer, target.clone().add(7, 0, 0), true);
+        viewer.runRestores();
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && viewer.modifiers.get(foreign) == modifier
+                && settings.getGadgetPreferences(id).orElseThrow().equals(colossal) && viewer.profileSaves == saves,
+                "blocked Colossal preserves the preference and foreign attribute without saving");
+        viewer.close();
+        gadgets.openMenu(player);
+        click(viewer, viewer.open, 24, ClickType.LEFT);
+        viewer.runNavigation();
+        click(viewer, viewer.open, 13, ClickType.LEFT);
+        viewer.runNavigation();
+        check(viewer.open.getItem(15).getType() != Material.LIME_DYE
+                && plain(viewer.open.getItem(15).getItemMeta().lore().getLast()).equals("Saved, currently inactive"),
+                "destination collision leaves Colossal marked as saved but inactive");
+        viewer.collision = false;
+        moveAtPlayer(viewer, 4);
+        check(pending.isEmpty() && !viewer.modifiers.containsKey(SIZE_KEY), "movement never retries a blocked size");
+        teleport(viewer, target.clone().add(8, 0, 0), true);
+        viewer.allowExtreme = false;
+        viewer.runRestores();
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "queued restore rechecks Team permission");
+        viewer.allowExtreme = true;
+        viewer.loadedCollisionChunks = false;
+        settings.updateGadgetPreferences(id, old -> new GadgetPreferences(GadgetPreferences.Size.TALL, true, old.trail()));
+        teleport(viewer, target.clone().add(10, 0, 0), true);
+        viewer.runRestores();
+        check(!viewer.modifiers.containsKey(SIZE_KEY), "standard enlargement also requires loaded destination geometry");
+        viewer.loadedCollisionChunks = true;
+        settings.updateGadgetPreferences(id, old -> massive);
+
+        var elsewhere = proxy(World.class, (name, args) -> name.equals("getName") ? "teleport_fixture_world" : null);
+        teleport(viewer, target.clone().add(11, 0, 0), true);
+        var beforeExit = pending.getFirst();
+        teleport(viewer, new Location(elsewhere, 4, 65, 0), true);
+        dispatch(new org.bukkit.event.player.PlayerChangedWorldEvent(player, world));
+        beforeExit.run();
+        viewer.runRestores();
+        check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY), "foreign world cannot inherit a queued lobby restore");
+        teleport(viewer, target.clone().add(12, 0, 0), true);
+        check(pending.isEmpty(), "cross-world teleport itself schedules no second restore");
+        dispatch(new org.bukkit.event.player.PlayerChangedWorldEvent(player, elsewhere));
+        check(pending.size() == 1, "return uses the existing world-change path");
+        viewer.runRestores();
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 2.0 && viewer.potion != null, "world-change restore remains functional");
+
+        state.enterBuildMode(player);
+        teleport(viewer, target.clone().add(13, 0, 0), true);
+        viewer.runRestores();
+        check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY), "BUILD blocks restore");
+        state.exitBuildMode(player);
+        viewer.runRestores();
+
+        teleport(viewer, target.clone().add(14, 0, 0), true);
+        viewer.close();
+        gadgets.openMenu(player);
+        click(viewer, openSizes(viewer), 6, ClickType.LEFT);
+        saves = viewer.profileSaves;
+        viewer.runRestores();
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 0.25 && viewer.profileSaves == saves,
+                "restore reads the latest manual size without saving");
+
+        teleport(viewer, target.clone().add(15, 0, 0), true);
+        var quit = new PlayerQuitEvent(player, Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED);
+        var logoutTask = pending.getFirst();
+        dispatch(quit);
+        logoutTask.run();
+        check(pending.isEmpty() && viewer.potion == null, "logout invalidates queued restore");
+
+        teleport(viewer, target.clone().add(16, 0, 0), true);
+        var replacement = proxy(Player.class, (name, args) -> name.equals("getUniqueId") ? id : null);
+        viewer.serverReplacement = replacement;
+        viewer.runRestores();
+        viewer.serverReplacement = null;
+        check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY), "same UUID with a different Player cannot reuse an old task");
+        teleport(viewer, target.clone().add(17, 0, 0), true);
+        players.unloadPlayer(id);
+        players.loadPlayer(id, "RegularPlayer");
+        viewer.runRestores();
+        check(viewer.potion == null, "the new profile object invalidates even the same Player's task");
+
+        var external = new PotionEffect(PotionEffectType.GLOWING, 600, 1, false, true, true);
+        viewer.potion = external;
+        teleport(viewer, target.clone().add(18, 0, 0), true);
+        viewer.runRestores();
+        check(viewer.potion == external && viewer.glowRetries.isEmpty() && viewer.renewals.isEmpty(),
+                "foreign Glow is untouched at the destination");
+        var residual = new PotionEffect(PotionEffectType.GLOWING, 20, 0, false, false, false);
+        viewer.potion = residual;
+        teleport(viewer, target.clone().add(19, 0, 0), true);
+        viewer.runRestores();
+        check(viewer.potion == residual && viewer.glowRetries.size() == 1, "short residual Glow creates one bounded retry");
+        var oldRetry = viewer.glowRetries.getFirst();
+        teleport(viewer, target.clone().add(20, 0, 0), true);
+        viewer.potion = null;
+        oldRetry.run();
+        check(viewer.potion == null, "a newer teleport invalidates the old Glow retry");
+        viewer.runRestores();
+        check(viewer.potion != null && viewer.renewals.size() == 1 && viewer.glowRetries.isEmpty(),
+                "the latest arrival owns exactly one Glow renewal");
+        teleport(viewer, target.clone().add(20.5, 0, 0), true);
+        viewer.potion = residual;
+        viewer.runRestores();
+        var retry = viewer.glowRetries.removeFirst();
+        viewer.potion = null;
+        retry.run();
+        retry.run();
+        check(viewer.potion != null && viewer.renewals.size() == 1 && viewer.glowRetries.isEmpty(),
+                "a residual expires into one owned Glow at the verified destination");
+        teleport(viewer, target.clone().add(21, 0, 0), true);
+        var beforeReload = pending.getFirst();
+        var reload = lobby.prepareReload();
+        reload.apply();
+        beforeReload.run();
+        var duringReload = pending.getFirst();
+        reload.rollback();
+        duringReload.run();
+        check(viewer.potion == null && pending.size() == 1, "reload and rollback invalidate earlier teleport and lifecycle callbacks");
+        viewer.runRestores();
+        check(viewer.potion != null, "post-rollback restore still runs");
+        teleport(viewer, target.clone().add(22, 0, 0), true);
+        var beforeDisable = pending.getFirst();
+        gadgets.disable();
+        beforeDisable.run();
+        check(pending.isEmpty() && viewer.glowRetries.isEmpty() && viewer.renewals.isEmpty() && viewer.potion == null
+                        && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.vehicle == null && viewer.passengers.isEmpty(),
+                "disable cancels old tasks and restores neither effects nor Riding");
+        viewer.modifiers.remove(foreign);
+    }
+
+    private static PlayerTeleportEvent teleport(Viewer viewer, Location destination, boolean complete) {
+        var event = new PlayerTeleportEvent(viewer.player, viewer.player.getLocation(), destination);
+        dispatch(event);
+        if (complete) {
+            viewer.world = destination.getWorld();
+            viewer.positionX = destination.getX();
+        }
+        return event;
+    }
+
+    private static void moveAtPlayer(Viewer viewer, int ticks) {
+        viewer.tick += ticks;
+        var from = viewer.player.getLocation();
+        dispatch(new PlayerMoveEvent(viewer.player, from, from.clone().add(0.35, 0, 0)));
     }
 
     private static void enableGlow(Viewer viewer) {
@@ -1446,6 +1679,7 @@ public final class GadgetsFoundationHarness {
         private Component lastChat;
         private Component title;
         private Player player;
+        private Player serverReplacement;
         private boolean sneaking;
         private boolean allowGadgets = true;
         private boolean allowRiding = true;

@@ -84,7 +84,9 @@ public final class GadgetsModule implements CoreModule {
         var candidateGlow = new GlowGadget(plugin, eligible);
         var candidateTrails = new ParticleTrails(plugin, eligible, visibilityService);
         var candidatePreferences = new GadgetPreferenceLifecycle(plugin, players.getPlayerSettingsService(), eligible,
-                candidateSize, candidateGlow, candidateTrails);
+                candidateSize, candidateGlow, candidateTrails, player -> {
+                    if (menu != null) menu.refresh(player);
+                });
         var candidate = new GadgetsMenu(plugin, messages, eligible, candidateRiding, equipment, candidateSize,
                 candidateGlow, candidateTrails, candidatePreferences);
         var states = lobby.getLobbyPlayerStateService();

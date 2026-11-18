@@ -141,13 +141,7 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         };
         var inventory = plugin.getServer().createInventory(holder, size, messages.localize(player, tr(page.title)));
         holder.inventory = inventory;
-        switch (page) {
-            case MAIN -> renderMain(player, inventory);
-            case SIZES -> renderSizes(player, inventory, Page.SIZES);
-            case TRAILS -> renderTrails(player, inventory);
-            case TEAM -> renderTeam(player, inventory);
-            case EXTREME -> renderSizes(player, inventory, Page.EXTREME);
-        }
+        renderPage(player, inventory, page);
         var opened = player.openInventory(inventory);
         if (opened == null || player.getOpenInventory().getTopInventory() != inventory) return false;
         if (openedGeneration != generation || !canOpen(player, page)) {
@@ -156,6 +150,24 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         }
         openInventories.put(holder.owner, inventory);
         return true;
+    }
+
+    void refresh(Player player) {
+        var inventory = openInventories.get(player.getUniqueId());
+        if (inventory == null || inventory != player.getOpenInventory().getTopInventory()
+                || !(inventory.getHolder() instanceof Holder holder) || holder.invalidated
+                || holder.inventory != inventory || !holder.owner.equals(player.getUniqueId())
+                || !canOpen(player, holder.page)) return;
+        renderPage(player, inventory, holder.page);
+    }
+
+    private void renderPage(Player player, Inventory inventory, Page page) {
+        switch (page) {
+            case MAIN -> renderMain(player, inventory);
+            case SIZES, EXTREME -> renderSizes(player, inventory, page);
+            case TRAILS -> renderTrails(player, inventory);
+            case TEAM -> renderTeam(player, inventory);
+        }
     }
 
     private void renderMain(Player player, Inventory inventory) {

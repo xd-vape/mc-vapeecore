@@ -8,9 +8,11 @@ import dev.vapee.core.player.settings.PlayerSettingsService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.logging.Level;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -33,17 +35,19 @@ final class GadgetPreferenceLifecycle implements Listener, LobbyPlayerStateListe
     private final SizeChanger size;
     private final GlowGadget glow;
     private final ParticleTrails trails;
+    private final Consumer<Player> refreshMenu;
     private final Map<UUID, Restore> pending = new HashMap<>();
     private final Map<UUID, Restore> glowRetries = new HashMap<>();
 
     GadgetPreferenceLifecycle(JavaPlugin plugin, PlayerSettingsService settings, Predicate<Player> access,
-                              SizeChanger size, GlowGadget glow, ParticleTrails trails) {
+                              SizeChanger size, GlowGadget glow, ParticleTrails trails, Consumer<Player> refreshMenu) {
         this.plugin = plugin;
         this.settings = settings;
         this.access = access;
         this.size = size;
         this.glow = glow;
         this.trails = trails;
+        this.refreshMenu = refreshMenu;
     }
 
     GadgetPreferences preferences(Player player) {
@@ -69,19 +73,29 @@ final class GadgetPreferenceLifecycle implements Listener, LobbyPlayerStateListe
     }
 
     private void schedule(Player player) {
+        schedule(player, null);
+    }
+
+    private void schedule(Player player, PlayerTeleportEvent teleport) {
         // Join can still be outside the lobby until the existing spawn task runs.
         if (player == null || !player.isOnline()) return;
         UUID id = player.getUniqueId();
         var profile = settings.getSettings(id).orElse(null);
         if (profile == null) return;
         var previous = pending.get(id);
-        if (previous != null && previous.player == player && previous.profile == profile) return;
+        boolean sameSession = previous != null && previous.player == player && previous.profile == profile;
+        if (sameSession && teleport == null && previous.teleport == null) return;
+        boolean lifecycleRequested = teleport == null || sameSession && previous.lifecycleRequested;
+        // If a later request fails, a preceding arrival can still be valid at the player's current position.
+        var preceding = teleport != null && sameSession ? previous.confirmedArrival() : null;
         cancel(id);
-        var restore = new Restore(player, profile);
+        var restore = new Restore(player, profile, teleport, preceding, lifecycleRequested);
         restore.task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (pending.get(id) != restore) return;
             try {
-                if (valid(restore)) apply(restore);
+                if (!valid(restore)) return;
+                var arrival = restore.confirmedArrival();
+                if (arrival != null || restore.lifecycleRequested) apply(restore, arrival);
             } finally {
                 pending.remove(id, restore);
             }
@@ -99,32 +113,37 @@ final class GadgetPreferenceLifecycle implements Listener, LobbyPlayerStateListe
                 && settings.getSettings(player.getUniqueId()).orElse(null) == restore.profile;
     }
 
-    private void apply(Restore restore) {
+    private void apply(Restore restore, Location arrival) {
         var player = restore.player;
         var desired = restore.profile.getGadgetPreferences();
         if (desired.size() != GadgetPreferences.Size.NORMAL) {
-            size.select(player, SizeChanger.Size.valueOf(desired.size().name()));
+            var desiredSize = SizeChanger.Size.valueOf(desired.size().name());
+            if (arrival == null) size.select(player, desiredSize);
+            else size.restoreAtTeleportDestination(player, desiredSize);
         }
         if (!current(restore)) return;
         if (restore.profile.getGadgetPreferences().glow() && glow.setEnabled(player, true) == GlowGadget.Result.EXTERNAL) {
-            scheduleGlowRetry(restore);
+            scheduleGlowRetry(restore, arrival);
         }
         if (!current(restore)) return;
         var trail = restore.profile.getGadgetPreferences().trail();
         if (trail != GadgetPreferences.Trail.NONE) trails.select(player, ParticleTrails.Trail.valueOf(trail.name()));
+        if (arrival != null && current(restore)) refreshMenu.accept(player);
     }
 
-    private void scheduleGlowRetry(Restore session) {
+    private void scheduleGlowRetry(Restore session, Location arrival) {
         var player = session.player;
         int remaining = glow.residualTicks(player);
         if (remaining <= 0 || !current(session)) return;
         UUID id = player.getUniqueId();
         cancelGlowRetry(player);
-        var retry = new Restore(player, session.profile);
+        var retry = new Restore(player, session.profile, null, null, false);
         // A matching short-lived potion could be a saved remnant. It is never adopted or removed.
         retry.task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (glowRetries.remove(id, retry) && valid(retry) && retry.profile.getGadgetPreferences().glow()) {
+                if (arrival != null && !samePosition(arrival, player.getLocation())) return;
                 glow.setEnabled(player, true); // Still refuses all foreign flags and potions.
+                if (arrival != null && valid(retry)) refreshMenu.accept(player);
             }
         }, remaining + 1L);
         glowRetries.put(id, retry);
@@ -185,16 +204,46 @@ final class GadgetPreferenceLifecycle implements Listener, LobbyPlayerStateListe
     public void onDeath(PlayerDeathEvent event) { cancel(event.getEntity()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onTeleport(PlayerTeleportEvent event) { cancelGlowRetry(event.getPlayer()); }
+    public void onTeleport(PlayerTeleportEvent event) {
+        var player = event.getPlayer();
+        cancelGlowRetry(player);
+        var to = event.getTo();
+        // Paper fires this event before the position changes. Cross-world arrivals have their own listener.
+        if (to != null && to.getWorld() == event.getFrom().getWorld() && to.getWorld() == player.getWorld()
+                && access.test(player) && !player.isDead()) {
+            schedule(player, event);
+        }
+    }
+
+    private static boolean samePosition(Location first, Location second) {
+        return first.getWorld() == second.getWorld() && first.getX() == second.getX()
+                && first.getY() == second.getY() && first.getZ() == second.getZ();
+    }
 
     private static final class Restore {
         final Player player;
         final PlayerSettings profile;
+        final PlayerTeleportEvent teleport;
+        final Location precedingArrival;
+        final boolean lifecycleRequested;
         BukkitTask task;
 
-        Restore(Player player, PlayerSettings profile) {
+        Restore(Player player, PlayerSettings profile, PlayerTeleportEvent teleport,
+                Location precedingArrival, boolean lifecycleRequested) {
             this.player = player;
             this.profile = profile;
+            this.teleport = teleport;
+            this.precedingArrival = precedingArrival;
+            this.lifecycleRequested = lifecycleRequested;
+        }
+
+        Location confirmedArrival() {
+            if (teleport == null) return null;
+            var here = player.getLocation();
+            var to = teleport.getTo();
+            if (!teleport.isCancelled() && to != null && to.getWorld() == teleport.getFrom().getWorld()
+                    && !samePosition(teleport.getFrom(), to) && samePosition(to, here)) return here;
+            return precedingArrival != null && samePosition(precedingArrival, here) ? here : null;
         }
     }
 }
