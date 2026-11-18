@@ -8,6 +8,7 @@ public final class PlayerSettings {
     private static final boolean DEFAULT_FRIEND_REQUESTS_ENABLED = true;
     private static final boolean DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED = true;
 
+    private GadgetPreferences gadgetPreferences = GadgetPreferences.DEFAULT;
     private boolean scoreboardEnabled;
     private boolean soundsEnabled;
     private boolean privateMessagesEnabled;
@@ -38,6 +39,14 @@ public final class PlayerSettings {
                 DEFAULT_FRIEND_REQUESTS_ENABLED,
                 DEFAULT_FRIEND_PRESENCE_NOTIFICATIONS_ENABLED
         );
+    }
+
+    public GadgetPreferences getGadgetPreferences() {
+        return gadgetPreferences;
+    }
+
+    public void setGadgetPreferences(GadgetPreferences preferences) {
+        gadgetPreferences = java.util.Objects.requireNonNull(preferences, "preferences");
     }
 
     public boolean isScoreboardEnabled() {

@@ -1,5 +1,6 @@
 package dev.vapee.core.player.repository;
 
+import dev.vapee.core.player.settings.GadgetPreferences;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerVisibilitySettings;
 import dev.vapee.core.player.settings.VisibilityMode;
@@ -15,6 +16,10 @@ final class PlayerSettingsYamlCodec {
     private PlayerSettingsYamlCodec() {}
 
     static void write(PlayerSettings settings, YamlConfiguration configuration) {
+        var gadgets = settings.getGadgetPreferences();
+        configuration.set("settings.gadgets.size", gadgets.size().name());
+        configuration.set("settings.gadgets.glow", gadgets.glow());
+        configuration.set("settings.gadgets.trail", gadgets.trail().name());
         configuration.set("settings.scoreboard", settings.isScoreboardEnabled());
         configuration.set("settings.sounds", settings.isSoundsEnabled());
         configuration.set("settings.private-messages", settings.isPrivateMessagesEnabled());
@@ -98,6 +103,7 @@ final class PlayerSettingsYamlCodec {
                         configuration,
                         "settings.lobby-players-visible",
                         settings.isLobbyPlayersVisible()));
+        readGadgetSettings(logger, uniqueId, playerFile, configuration, settings);
         boolean modePresent =
                 source.get("settings") instanceof Map<?, ?> rawSettings
                         && rawSettings.get("visibility") instanceof Map<?, ?> rawVisibility
@@ -105,6 +111,33 @@ final class PlayerSettingsYamlCodec {
         readVisibilitySettings(
                 logger, uniqueId, playerFile, configuration, settings.getVisibility(), modePresent);
         return settings;
+    }
+
+    private static void readGadgetSettings(Logger logger, UUID owner, Path file,
+                                           YamlConfiguration configuration, PlayerSettings settings) {
+        String path = "settings.gadgets";
+        if (!configuration.contains(path)) return;
+        var section = configuration.getConfigurationSection(path);
+        if (section == null) {
+            logInvalidSetting(logger, owner, file, path, "expected a YAML section");
+            return;
+        }
+        var defaults = GadgetPreferences.DEFAULT;
+        settings.setGadgetPreferences(new GadgetPreferences(
+                readGadgetChoice(logger, owner, file, path + ".size", section.get("size"), defaults.size()),
+                readBooleanSetting(logger, owner, file, configuration, path + ".glow", defaults.glow()),
+                readGadgetChoice(logger, owner, file, path + ".trail", section.get("trail"), defaults.trail())));
+    }
+
+    private static <E extends Enum<E>> E readGadgetChoice(Logger logger, UUID owner, Path file,
+                                                          String key, Object raw, E fallback) {
+        if (raw instanceof String name) {
+            for (E choice : fallback.getDeclaringClass().getEnumConstants()) {
+                if (choice.name().equals(name)) return choice;
+            }
+        }
+        if (raw != null) logInvalidSetting(logger, owner, file, key, "unknown gadget choice");
+        return fallback;
     }
 
     private static void readVisibilitySettings(

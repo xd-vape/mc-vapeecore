@@ -5,6 +5,7 @@ import dev.vapee.core.persistence.PersistenceFaults.Fault;
 import dev.vapee.core.persistence.SafeFileWriter;
 import dev.vapee.core.player.CorePlayer;
 import dev.vapee.core.player.PlayerService;
+import dev.vapee.core.player.settings.GadgetPreferences;
 import dev.vapee.core.player.settings.PlayerSettings;
 import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.player.settings.VisibilityMode;
@@ -40,6 +41,10 @@ public final class PlayerSettingsYamlCodecHarness {
               friend-requests: false
               friend-presence-notifications: true
               lobby-players-visible: false
+              gadgets:
+                size: NORMAL
+                glow: false
+                trail: NONE
               visibility:
                 mode: HIDDEN
                 show-friends: true
@@ -71,6 +76,7 @@ public final class PlayerSettingsYamlCodecHarness {
             if (mode.equals("all") || mode.equals("defaults"))
                 defaultsAndBooleans(root.resolve("defaults"));
             if (mode.equals("all") || mode.equals("write")) canonicalWrite();
+            if (mode.equals("all") || mode.equals("gadgets")) gadgets(root.resolve("gadgets"));
             if (mode.equals("all") || mode.equals("legacy") || mode.equals("invalid-mode"))
                 visibility(root.resolve("visibility"));
             if (mode.equals("all") || mode.equals("uuid")) uuidPolicy(root.resolve("uuid"));
@@ -167,6 +173,56 @@ public final class PlayerSettingsYamlCodecHarness {
                         && !value.getVisibility().isShowGameParticipants()
                         && value.getVisibility().getAddedPlayers().isEmpty(),
                 context + ": filters=false selection=empty");
+    }
+
+    private static void gadgets(Path directory) throws Exception {
+        var capture = new Capture();
+        check(read(directory, "", capture).getGadgetPreferences().equals(GadgetPreferences.DEFAULT),
+                "older profile loads with safe gadget defaults");
+        for (var size : GadgetPreferences.Size.values()) {
+            for (var trail : GadgetPreferences.Trail.values()) {
+                for (boolean glow : List.of(false, true)) {
+                    var expected = new GadgetPreferences(size, glow, trail);
+                    var settings = PlayerSettings.defaults();
+                    settings.setGadgetPreferences(expected);
+                    var yaml = new YamlConfiguration();
+                    PlayerSettingsYamlCodec.write(settings, yaml);
+                    check(read(directory, yaml.saveToString(), capture).getGadgetPreferences().equals(expected)
+                            && capture.messages.isEmpty(), "gadget codec round trip: " + expected);
+                }
+            }
+        }
+        var invalid = read(directory, """
+                settings:
+                  gadgets:
+                    size: EXTRA_LARGE
+                    glow: 'true'
+                    trail: [dust]
+                """, capture);
+        check(invalid.getGadgetPreferences().equals(GadgetPreferences.DEFAULT), "invalid gadget fields fall back independently");
+        check(capture.messages.size() == 3 && capture.messages.stream().allMatch(line -> line.contains("settings.gadgets.")),
+                "invalid gadget fields report contextual diagnostics");
+        check(read(directory, "settings:\n  gadgets: unsupported\n", capture).getGadgetPreferences().equals(GadgetPreferences.DEFAULT)
+                && capture.messages.size() == 1, "invalid gadget section is diagnosed without rejecting the profile");
+
+        Path file = directory.resolve(OWNER + ".yml");
+        Files.writeString(file, CURRENT + """
+                settings:
+                  gadgets:
+                    custom-extension:
+                      label: operator-owned
+                    glow: false
+                """);
+        var files = new FilePlayerRepository(directory, quiet());
+        files.initialize();
+        var service = new PlayerService(files, quiet());
+        service.loadPlayer(OWNER, "CodecProbe");
+        var intended = new GadgetPreferences(GadgetPreferences.Size.HUGE, true, GadgetPreferences.Trail.HEARTS);
+        check(new PlayerSettingsService(service).updateGadgetPreferences(OWNER, ignored -> intended)
+                        && files.findByUniqueId(OWNER).orElseThrow().getSettings().getGadgetPreferences().equals(intended),
+                "full aggregate save writes gadget leaves to a fresh repository read");
+        check(yaml(Files.readString(file)).getString("settings.gadgets.custom-extension.label").equals("operator-owned"),
+                "gadget overlay preserves unknown nested operator values");
     }
 
     private static void canonicalWrite() throws Exception {

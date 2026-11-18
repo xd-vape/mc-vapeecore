@@ -12,8 +12,11 @@ import dev.vapee.core.lobby.config.LobbyConfig;
 import dev.vapee.core.lobby.player.LobbyPlayerStateService;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.player.CorePlayer;
+import dev.vapee.core.player.settings.GadgetPreferences;
+import dev.vapee.core.player.settings.PlayerSettingsService;
 import dev.vapee.core.player.PlayerModule;
 import dev.vapee.core.player.PlayerService;
+import dev.vapee.core.player.repository.FilePlayerRepository;
 import dev.vapee.core.player.repository.PlayerRepository;
 import dev.vapee.core.player.settings.PlayerVisibilitySettings;
 import dev.vapee.core.player.settings.VisibilityMode;
@@ -115,7 +118,8 @@ public final class GadgetsFoundationHarness {
                     || args[0].getClass().getSimpleName().equals("PlayerRiding")
                     || args[0].getClass().getSimpleName().equals("SizeChanger")
                     || args[0].getClass().getSimpleName().equals("GlowGadget")
-                    || args[0].getClass().getSimpleName().equals("ParticleTrails"))) {
+                    || args[0].getClass().getSimpleName().equals("ParticleTrails")
+                    || args[0].getClass().getSimpleName().equals("GadgetPreferenceLifecycle"))) {
                 registerMenuEvents((Listener) args[0], fixture.plugin);
                 if (viewer.failRegistration) throw new IllegalStateException("fixture registration failure");
             }
@@ -140,12 +144,22 @@ public final class GadgetsFoundationHarness {
         inject(JavaPlugin.class, fixture.plugin, "dataFolder", root.toFile());
         var messages = new MessageService(() -> viewer.messagePrefix, LocalizationService.bundled(fixture.logger));
         var players = new PlayerModule(fixture.plugin, new ConfigService(fixture.plugin), messages);
+        var profiles = new FilePlayerRepository(root.resolve("profiles"), fixture.logger);
+        profiles.initialize();
         var playerService = new PlayerService(new PlayerRepository() {
-            public Optional<CorePlayer> findByUniqueId(UUID id) { return Optional.empty(); }
-            public void save(CorePlayer player) { }
-            public boolean exists(UUID id) { return false; }
+            public Optional<CorePlayer> findByUniqueId(UUID id) {
+                return profiles.findByUniqueId(id);
+            }
+            public void save(CorePlayer player) {
+                if (viewer.failSave) throw new IllegalStateException("test storage failure");
+                profiles.save(player);
+                viewer.profileSaves++;
+            }
+            public boolean exists(UUID id) { return profiles.exists(id); }
         }, fixture.logger);
         inject(PlayerModule.class, players, "playerService", playerService);
+        var settings = new PlayerSettingsService(playerService);
+        inject(PlayerModule.class, players, "playerSettingsService", settings);
         var lobby = new LobbyModule(fixture.plugin, players, messages);
         Path configPath = root.resolve("lobby.yml");
         var config = new LobbyConfig(configPath, fixture.logger);
@@ -449,6 +463,7 @@ public final class GadgetsFoundationHarness {
             gadgets.enable();
             check(!viewer.modifiers.containsKey(SIZE_KEY) && countMenuListeners() == 1 && gadgets.openMenu(viewer.player),
                     "reenable recovers a leftover modifier and owns a fresh view");
+            exercisePersistence(viewer, gadgets, lobby, playerService, settings, profiles, state, fixture, social);
         } finally {
             gadgets.disable();
             activities.disable();
@@ -457,6 +472,164 @@ public final class GadgetsFoundationHarness {
         expectSilentStride(viewer, "disable leaves no trail session or emitter");
     }
 
+
+    private static void exercisePersistence(Viewer viewer, GadgetsModule gadgets, LobbyModule lobby,
+                                            PlayerService players, PlayerSettingsService settings, FilePlayerRepository files,
+                                            LobbyPlayerStateService state, LobbyItemRegistryFixture fixture, SocialService social) {
+        viewer.locale = Locale.US;
+        viewer.allowGadgets = true;
+        viewer.allowSize = true;
+        viewer.allowSizeVip = true;
+        viewer.allowTeam = true;
+        viewer.allowExtreme = true;
+        viewer.allowGlow = true;
+        viewer.allowTrails = true;
+        var scheduler = viewer.restores;
+        var player = viewer.player;
+        var id = viewer.id;
+        var join = new org.bukkit.event.player.PlayerJoinEvent(player, Component.empty());
+        var quit = new PlayerQuitEvent(player, Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED);
+        var where = player.getLocation();
+        var teleport = new org.bukkit.event.player.PlayerTeleportEvent(player, where, where.clone().add(1, 0, 0));
+        var stored = new GadgetPreferences(GadgetPreferences.Size.COLOSSAL, true, GadgetPreferences.Trail.CLOUD);
+
+        settings.updateGadgetPreferences(id, ignored -> GadgetPreferences.DEFAULT);
+        viewer.runRestores();
+        viewer.close();
+        check(gadgets.openMenu(player), "manual preferences begin in a protected lobby menu");
+        int before = viewer.profileSaves;
+        click(viewer, viewer.open, 12, ClickType.LEFT);
+        var sizes = openSizes(viewer);
+        click(viewer, sizes, 11, ClickType.LEFT);
+        click(viewer, sizes, 11, ClickType.LEFT);
+        viewer.collision = true;
+        click(viewer, sizes, 15, ClickType.LEFT);
+        viewer.collision = false;
+        check(viewer.profileSaves == before + 2 && viewer.potion != null
+                && files.findByUniqueId(id).orElseThrow().getSettings().getGadgetPreferences()
+                        .equals(new GadgetPreferences(GadgetPreferences.Size.HUGE, true, GadgetPreferences.Trail.NONE)),
+                "only successful changed choices persist, duplicate and collision do not write");
+        viewer.failSave = true;
+        click(viewer, sizes, 15, ClickType.LEFT);
+        viewer.failSave = false;
+        check(viewer.modifiers.get(SIZE_KEY).getAmount() == 1.0
+                && settings.getGadgetPreferences(id).orElseThrow().size() == GadgetPreferences.Size.HUGE,
+                "failed save restores the effective size and desired size");
+        var saveFailure = viewer.chat.removeLast();
+        check(saveFailure.equals("Your gadget preference could not be saved."),
+                "failed save message is prefix-free: " + saveFailure);
+
+        for (var choice : List.of(GadgetPreferences.Size.HUGE, GadgetPreferences.Size.MASSIVE, GadgetPreferences.Size.COLOSSAL)) {
+            var chosen = new GadgetPreferences(choice, true, GadgetPreferences.Trail.CLOUD);
+            settings.updateGadgetPreferences(id, ignored -> chosen);
+            dispatch(quit);
+            players.unloadPlayer(id);
+            dispatch(join);
+            check(scheduler.isEmpty() && !viewer.modifiers.containsKey(SIZE_KEY) && viewer.potion == null,
+                    "unloaded profile and quit cleanup cannot leave an active effect");
+            check(players.loadPlayer(id, "RegularPlayer").getSettings().getGadgetPreferences().equals(chosen),
+                    "freshly loaded file preserves " + choice);
+            dispatch(join);
+            dispatch(join);
+            check(scheduler.size() == 1 && viewer.potion == null, "duplicate join defers once past cleanup");
+            int afterJoin = viewer.profileSaves;
+            viewer.chat.clear();
+            viewer.runRestores();
+            int factor = switch (choice) { case HUGE -> 2; case MASSIVE -> 3; default -> 5; };
+            check(viewer.modifiers.get(SIZE_KEY).getAmount() == factor - 1 && viewer.potion != null
+                    && viewer.chat.isEmpty() && viewer.profileSaves == afterJoin && viewer.vehicle == null && fixture.storage[2] == null,
+                    "join restores " + choice + " and Glow without chat, writes or Riding");
+            var recipients = viewer.nearby;
+            viewer.nearby = List.of(viewer.peer.player);
+            viewer.peer.positionX = viewer.positionX;
+            var policy = players.getPlayer(viewer.peer.id).orElseThrow().getSettings().getVisibility();
+            policy.setMode(VisibilityMode.ALL);
+            stride(viewer, 4);
+            check(viewer.emissions.getLast().particle() == Particle.CLOUD
+                    && viewer.emissions.getLast().viewers().contains(viewer.peer.player),
+                    "restored Trail emits for eligible viewers after its interval");
+            social.ignore(viewer.peer.id, viewer.id);
+            stride(viewer, 4);
+            check(!viewer.emissions.getLast().viewers().contains(viewer.peer.player) && viewer.profileSaves == afterJoin + 1,
+                    "restored Trail still checks Ignore and emission makes no profile write");
+            social.unignore(viewer.peer.id, viewer.id);
+            viewer.nearby = recipients;
+            int savesAfterIgnore = viewer.profileSaves;
+            viewer.potion = viewer.potion.withDuration(40);
+            viewer.renewals.removeFirst().run();
+            check(viewer.profileSaves == savesAfterIgnore, "Glow renewal makes no profile write");
+        }
+
+        var foreignKey = new NamespacedKey("fixture", "preference_probe");
+        var foreignScale = new AttributeModifier(foreignKey, 0.1, AttributeModifier.Operation.MULTIPLY_SCALAR_1);
+        viewer.modifiers.put(foreignKey, foreignScale);
+        dispatch(teleport);
+        viewer.collision = true;
+        dispatch(join);
+        viewer.runRestores();
+        check(viewer.modifiers.get(foreignKey) == foreignScale && !viewer.modifiers.containsKey(SIZE_KEY)
+                && settings.getGadgetPreferences(id).orElseThrow().equals(stored),
+                "blocked Colossal preserves external SCALE and the stored preference");
+        viewer.collision = false;
+        stride(viewer, 4);
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && scheduler.isEmpty(), "moving out of collision does not poll or retry size");
+        viewer.close();
+        gadgets.openMenu(player);
+        click(viewer, viewer.open, 24, ClickType.LEFT);
+        viewer.runNavigation();
+        click(viewer, viewer.open, 13, ClickType.LEFT);
+        viewer.runNavigation();
+        check(viewer.open.getItem(15).getType() != Material.LIME_DYE
+                && plain(viewer.open.getItem(15).getItemMeta().lore().getLast()).equals("Saved, currently inactive"),
+                "blocked saved Colossal is identified separately from active Normal");
+
+        viewer.allowExtreme = false;
+        dispatch(teleport);
+        dispatch(join);
+        viewer.runRestores();
+        check(!viewer.modifiers.containsKey(SIZE_KEY) && settings.getGadgetPreferences(id).orElseThrow().equals(stored),
+                "revoked extreme permission cannot reactivate the saved size");
+        viewer.allowExtreme = true;
+        dispatch(teleport);
+        var external = new PotionEffect(PotionEffectType.GLOWING, 600, 1, false, true, true);
+        viewer.potion = external;
+        dispatch(join);
+        viewer.runRestores();
+        check(viewer.potion == external && viewer.glowRetries.isEmpty() && viewer.renewals.isEmpty(),
+                "restore does not adopt or schedule renewal for an unrelated Glow effect");
+        var residual = new PotionEffect(PotionEffectType.GLOWING, 20, 0, false, false, false);
+        viewer.potion = residual;
+        dispatch(join);
+        viewer.runRestores();
+        check(viewer.potion == residual && viewer.renewals.isEmpty() && viewer.glowRetries.size() == 1,
+                "a matching finite Glow effect is untouched and schedules one retry");
+        viewer.potion = null;
+        viewer.glowRetries.removeFirst().run();
+        check(viewer.potion != null && viewer.renewals.size() == 1 && viewer.glowRetries.isEmpty(),
+                "one checked retry enables fresh Glow after expiration");
+
+        state.enterBuildMode(player);
+        viewer.runRestores();
+        check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY)
+                && settings.getGadgetPreferences(id).orElseThrow().equals(stored), "BUILD cleans runtime only");
+        state.exitBuildMode(player);
+        viewer.runRestores();
+        check(viewer.potion != null && viewer.modifiers.containsKey(SIZE_KEY), "leaving BUILD restores after transition");
+
+        try {
+            var reload = lobby.prepareReload();
+            reload.apply();
+            var stale = scheduler.getFirst();
+            reload.rollback();
+            stale.run();
+            check(viewer.potion == null && !viewer.modifiers.containsKey(SIZE_KEY), "rollback invalidates old queued callbacks");
+            viewer.runRestores();
+            check(viewer.potion != null && viewer.modifiers.containsKey(SIZE_KEY), "completed rollback restores latest profile once");
+        } catch (Exception failure) {
+            throw new AssertionError("preference reload fixture failed", failure);
+        }
+        viewer.modifiers.remove(foreignKey);
+    }
 
     private static void enableGlow(Viewer viewer) {
         check(click(viewer, viewer.open, 12, ClickType.LEFT).isCancelled() && viewer.potion != null,
@@ -1318,10 +1491,21 @@ public final class GadgetsFoundationHarness {
             default -> throw new AssertionError("unexpected scale operation " + name);
         });
         private final java.util.List<Runnable> tasks = new java.util.ArrayList<>();
+        private final List<Runnable> restores = new java.util.ArrayList<>();
+        private void runRestores() {
+            while (!restores.isEmpty()) restores.removeFirst().run();
+        }
+        private final List<Runnable> glowRetries = new java.util.ArrayList<>();
+        private int profileSaves;
+        private boolean failSave;
         private final BukkitScheduler scheduler = proxy(BukkitScheduler.class, (name, args) -> {
             var queue = switch (name) {
                 case "runTask" -> tasks;
-                case "runTaskLater" -> renewals;
+                case "runTaskLater" -> switch (((Number) args[2]).intValue()) {
+                    case 1 -> restores;
+                    case 60 -> renewals;
+                    default -> glowRetries;
+                };
                 default -> throw new AssertionError("unexpected scheduler operation " + name);
             };
             Runnable runnable = (Runnable) args[1];

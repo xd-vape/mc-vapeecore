@@ -6,10 +6,13 @@ import dev.vapee.core.activity.ActivityMembershipListener;
 import dev.vapee.core.lobby.player.LobbyPlayerStateListener;
 import dev.vapee.core.message.MessageService;
 import dev.vapee.core.message.MessageStyle;
+import dev.vapee.core.player.settings.GadgetPreferences;
 import dev.vapee.core.ui.MenuLayout;
 import dev.vapee.core.ui.UiItems;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -96,12 +99,14 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
     private final SizeChanger sizeChanger;
     private final GlowGadget glow;
     private final ParticleTrails trails;
+    private final GadgetPreferenceLifecycle preferences;
     private final Map<UUID, BukkitTask> navigation = new HashMap<>();
     private final Map<UUID, Inventory> openInventories = new HashMap<>();
     private long generation;
 
     GadgetsMenu(JavaPlugin plugin, MessageService messages, Predicate<Player> access, PlayerRiding riding,
-                GadgetEquipment equipment, SizeChanger sizeChanger, GlowGadget glow, ParticleTrails trails) {
+                GadgetEquipment equipment, SizeChanger sizeChanger, GlowGadget glow, ParticleTrails trails,
+                GadgetPreferenceLifecycle preferences) {
         this.plugin = plugin;
         this.messages = messages;
         this.access = access;
@@ -110,6 +115,7 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         this.sizeChanger = sizeChanger;
         this.glow = glow;
         this.trails = trails;
+        this.preferences = preferences;
     }
 
     boolean open(Player player) {
@@ -187,6 +193,7 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
 
     private void renderSizes(Player player, Inventory inventory, Page page) {
         var selected = sizeChanger.selected(player);
+        var saved = preferences.preferences(player).size();
         var choices = page == Page.EXTREME ? EXTREME_CHOICES : SIZE_CHOICES;
         var layout = page == Page.EXTREME ? EXTREME : SIZES;
         for (int index = 0; index < choices.size(); index++) {
@@ -195,7 +202,8 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
             boolean active = allowed && size == selected;
             var multiplier = Component.text(Double.toString(size.factor), MessageStyle.accent());
             var status = active ? MessageStyle.success(tr("gadgets.size.selected")) : entryStatus(allowed, "gadgets.size.apply");
-            var lore = List.of(tr("gadgets.size.multiplier", Map.of("factor", multiplier)), status);
+            List<Component> lore = new ArrayList<>(List.of(tr("gadgets.size.multiplier", Map.of("factor", multiplier)), status));
+            if (!active && saved.name().equals(size.name())) lore.add(tr("gadgets.preference.saved-inactive"));
             var item = UiItems.literal(active ? Material.LIME_DYE : allowed ? Material.GRAY_DYE : Material.GRAY_STAINED_GLASS_PANE,
                     tr("gadgets.size." + size.key), MessageStyle.TEXT, lore);
             inventory.setItem(layout.contentSlot(index), UiItems.render(UiItems.localize(item, messages, player)));
@@ -261,7 +269,9 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         var description = tr("gadgets.description.glow");
         var lore = !glow.permitted(player) ? List.of(description, MessageStyle.error(tr("gadgets.locked")))
                 : glow.active(player) ? List.of(MessageStyle.success(tr("gadgets.glow.active")), tr("gadgets.glow.disable"))
-                : List.of(description, tr("gadgets.glow.enable"));
+                : preferences.preferences(player).glow()
+                        ? List.of(tr("gadgets.preference.saved-inactive"), tr("gadgets.glow.enable"), tr("gadgets.glow.clear-saved"))
+                        : List.of(description, tr("gadgets.glow.enable"));
         var item = UiItems.literal(Category.GLOW.icon, tr("gadgets.categories.glow"), MessageStyle.TEXT, lore);
         inventory.setItem(LAYOUT.contentSlot(Category.GLOW.ordinal()), UiItems.render(UiItems.localize(item, messages, player)));
     }
@@ -280,16 +290,20 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         if (!(top.getHolder() instanceof Holder holder)) return;
         boolean wasCancelled = event.isCancelled();
         event.setCancelled(true);
+        boolean glowClick = holder.page == Page.MAIN && event.getRawSlot() == LAYOUT.contentSlot(Category.GLOW.ordinal());
         if (wasCancelled || !(event.getWhoClicked() instanceof Player player) || event.getClickedInventory() != top
-                || event.getClick() != ClickType.LEFT
+                || (event.getClick() != ClickType.LEFT && !(glowClick && event.getClick() == ClickType.RIGHT))
                 || holder.invalidated || holder.inventory != top || !holder.owner.equals(player.getUniqueId())
                 || openInventories.get(holder.owner) != top || player.getOpenInventory().getTopInventory() != top) return;
         riding.reconcile(player);
         sizeChanger.reconcile(player);
         glow.reconcile(player);
         trails.reconcile(player);
-        if (holder.page == Page.MAIN && event.getRawSlot() == LAYOUT.contentSlot(Category.GLOW.ordinal()) && access.test(player)) {
-            glow.toggle(player);
+        if (glowClick && access.test(player)) {
+            boolean active = glow.active(player);
+            if (event.getClick() == ClickType.LEFT || (!active && preferences.preferences(player).glow())) {
+                changeGlow(player, event.getClick() == ClickType.LEFT && !active);
+            }
             renderGlow(player, top);
             return;
         }
@@ -348,18 +362,42 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         }
     }
 
+    private void changeGlow(Player player, boolean enable) {
+        boolean previous = glow.active(player);
+        var result = glow.setEnabled(player, enable);
+        if (result == GlowGadget.Result.ENABLED || result == GlowGadget.Result.DISABLED) {
+            preferences.cancelGlowRetry(player);
+            if (!preferences.save(player, saved -> new GadgetPreferences(saved.size(), enable, saved.trail()),
+                    () -> glow.setEnabled(player, previous))) {
+                messages.send(player, tr("gadgets.preference.save-failed"));
+                return;
+            }
+        }
+        messages.send(player, tr("gadgets.glow." + result.name().toLowerCase(Locale.ROOT)));
+    }
+
     private void selectSize(Player player, Inventory inventory, Page page, int rawSlot) {
         var layout = page == Page.EXTREME ? EXTREME : SIZES;
         var choices = page == Page.EXTREME ? EXTREME_CHOICES : SIZE_CHOICES;
         int index = layout.contentSlots().indexOf(rawSlot);
         if (index < 0) return;
-        switch (sizeChanger.select(player, choices.get(index))) {
+        var previous = sizeChanger.selected(player);
+        var choice = choices.get(index);
+        switch (sizeChanger.select(player, choice)) {
             case DENIED -> messages.send(player, tr("gadgets.size.denied"));
             case UNAVAILABLE -> messages.send(player, tr("gadgets.size.missing-scale"));
             case INCOMPATIBLE -> messages.send(player, tr("gadgets.size.incompatible"));
             case NO_SPACE -> messages.send(player, tr("gadgets.size.no-space"));
             case SCALE_LIMIT -> messages.send(player, tr("gadgets.size.scale-limit"));
-            case APPLIED -> { }
+            case APPLIED -> {
+                if (!preferences.save(player,
+                        saved -> new GadgetPreferences(GadgetPreferences.Size.valueOf(choice.name()), saved.glow(), saved.trail()),
+                        () -> {
+                            if (sizeChanger.select(player, previous) != SizeChanger.Result.APPLIED) sizeChanger.clear(player);
+                        })) {
+                    messages.send(player, tr("gadgets.preference.save-failed"));
+                }
+            }
         }
         renderSizes(player, inventory, page);
     }
@@ -371,6 +409,10 @@ final class GadgetsMenu implements Listener, LobbyPlayerStateListener, ActivityM
         var previous = trails.selected(player);
         if (!trails.select(player, trail)) {
             messages.send(player, tr("gadgets.trails.denied"));
+        } else if (!preferences.save(player,
+                saved -> new GadgetPreferences(saved.size(), saved.glow(), GadgetPreferences.Trail.valueOf(trail.name())),
+                () -> trails.select(player, previous))) {
+            messages.send(player, tr("gadgets.preference.save-failed"));
         } else if (trail != previous) {
             if (trail == ParticleTrails.Trail.NONE) messages.send(player, tr("gadgets.trails.disabled"));
             else messages.send(player, tr("gadgets.trails.selected",

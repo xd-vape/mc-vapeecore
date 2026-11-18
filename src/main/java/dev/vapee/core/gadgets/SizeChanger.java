@@ -189,7 +189,7 @@ final class SizeChanger implements Listener, LobbyPlayerStateListener, ActivityM
         }
     }
 
-    private void clear(Player player) {
+    void clear(Player player) {
         if (!plugin.getServer().isPrimaryThread()) return;
         var scale = player.getAttribute(Attribute.SCALE);
         if (scale != null && scale.getModifier(key) != null) scale.removeModifier(key);

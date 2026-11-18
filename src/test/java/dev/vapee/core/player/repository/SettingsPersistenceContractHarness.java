@@ -134,6 +134,9 @@ public final class SettingsPersistenceContractHarness {
                         "friend-requests",
                         "friend-presence-notifications",
                         "lobby-players-visible",
+                        "gadgets.size",
+                        "gadgets.glow",
+                        "gadgets.trail",
                         "visibility.mode",
                         "visibility.show-friends",
                         "visibility.show-staff",
@@ -147,7 +150,11 @@ public final class SettingsPersistenceContractHarness {
                         .collect(java.util.stream.Collectors.toSet());
         check(
                 leaves.equals(expected),
-                "exact existing YAML preference paths, no synthetic property");
+                "exact YAML preference paths, including only the three gadget leaves");
+        check("NORMAL".equals(yaml.get("settings.gadgets.size"))
+                        && Boolean.FALSE.equals(yaml.get("settings.gadgets.glow"))
+                        && "NONE".equals(yaml.get("settings.gadgets.trail")),
+                "new profile fields use the exact safe defaults and types");
         check(yaml.getInt("schema-version") == 1, "player schema remains version one");
         var changed = yaml(file);
         changed.set(PRESENCE, false);
@@ -167,6 +174,7 @@ public final class SettingsPersistenceContractHarness {
                 BASE
                         + "settings:\n  scoreboard: false\n  sounds: false\n"
                         + "  private-messages: false\n  friend-requests: false\n  friend-presence-notifications: false\n"
+                        + "  gadgets: {size: COLOSSAL, glow: true, trail: CLOUD}\n"
                         + "  custom: {keep: value}\n  visibility: {mode: FILTERED, show-friends: true, added-players: ['"
                         + VISIBLE
                         + "']}\n"
@@ -326,6 +334,10 @@ public final class SettingsPersistenceContractHarness {
                         && !player.getSettings().isPrivateMessagesEnabled()
                         && !player.getSettings().isFriendRequestsEnabled(),
                 "other Boolean settings preserved");
+        check("COLOSSAL".equals(yaml.get("settings.gadgets.size"))
+                        && Boolean.TRUE.equals(yaml.get("settings.gadgets.glow"))
+                        && "CLOUD".equals(yaml.get("settings.gadgets.trail")),
+                "other preferences preserve all gadget wishes");
         check(
                 player.getSettings().getVisibility().getMode() == VisibilityMode.FILTERED
                         && player.getSettings().getVisibility().isShowFriends()

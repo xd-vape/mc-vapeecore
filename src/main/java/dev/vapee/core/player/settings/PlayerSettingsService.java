@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 public final class PlayerSettingsService {
     private final java.util.Set<PlayerSettingsChangeListener> changeListeners = new java.util.LinkedHashSet<>();
@@ -22,6 +23,28 @@ public final class PlayerSettingsService {
 
     public Optional<PlayerSettings> getSettings(UUID uniqueId) {
         return playerService.getPlayer(uniqueId).map(CorePlayer::getSettings);
+    }
+
+    public Optional<GadgetPreferences> getGadgetPreferences(UUID uniqueId) {
+        return getSettings(uniqueId).map(PlayerSettings::getGadgetPreferences);
+    }
+
+    public boolean updateGadgetPreferences(UUID uniqueId, UnaryOperator<GadgetPreferences> update) {
+        var found = getSettings(Objects.requireNonNull(uniqueId, "uniqueId"));
+        if (found.isEmpty()) return false;
+        var settings = found.get();
+        var previous = settings.getGadgetPreferences();
+        var next = Objects.requireNonNull(update.apply(previous), "preferences");
+        if (next.equals(previous)) return true;
+        settings.setGadgetPreferences(next);
+        try {
+            playerService.savePlayer(uniqueId);
+        } catch (RuntimeException exception) {
+            settings.setGadgetPreferences(previous);
+            throw exception;
+        }
+        notifyChanged(uniqueId);
+        return true;
     }
 
     public Optional<Boolean> isScoreboardEnabled(UUID uniqueId) {

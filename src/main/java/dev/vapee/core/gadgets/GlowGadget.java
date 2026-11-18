@@ -1,10 +1,7 @@
 package dev.vapee.core.gadgets;
 
-import static dev.vapee.core.i18n.Translations.tr;
-
 import dev.vapee.core.activity.ActivityMembershipListener;
 import dev.vapee.core.lobby.player.LobbyPlayerStateListener;
-import dev.vapee.core.message.MessageService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,13 +33,13 @@ final class GlowGadget implements Listener, LobbyPlayerStateListener, ActivityMe
     private static final int RENEW_AFTER = 60;
 
     private final JavaPlugin plugin;
-    private final MessageService messages;
     private final Predicate<Player> access;
     private final Map<UUID, Session> sessions = new HashMap<>();
 
-    GlowGadget(JavaPlugin plugin, MessageService messages, Predicate<Player> access) {
+    enum Result { ENABLED, DISABLED, DENIED, EXTERNAL, UNAVAILABLE }
+
+    GlowGadget(JavaPlugin plugin, Predicate<Player> access) {
         this.plugin = plugin;
-        this.messages = messages;
         this.access = access;
     }
 
@@ -54,22 +51,28 @@ final class GlowGadget implements Listener, LobbyPlayerStateListener, ActivityMe
         return session(player) != null;
     }
 
-    void toggle(Player player) {
-        if (!plugin.getServer().isPrimaryThread()) return;
+    Result setEnabled(Player player, boolean enabled) {
+        if (!plugin.getServer().isPrimaryThread()) return Result.UNAVAILABLE;
         reconcile(player);
-        if (!eligible(player)) {
-            tell(player, "denied");
-        } else if (active(player)) {
+        if (!eligible(player)) return Result.DENIED;
+        if (!enabled) {
+            if (!active(player)) return Result.DISABLED;
             clear(player);
-            tell(player, effect(player) == null ? "disabled" : "unavailable");
-        } else if (player.isGlowing() || effect(player) != null || sessions.containsKey(player.getUniqueId())) {
-            // Paper's isGlowing also observes potion glow, so consult it only before taking ownership.
-            tell(player, "external");
-        } else {
-            var session = new Session(player);
-            sessions.put(player.getUniqueId(), session);
-            tell(player, renew(session) ? "enabled" : "unavailable");
+            return effect(player) == null ? Result.DISABLED : Result.UNAVAILABLE;
         }
+        if (active(player)) return Result.ENABLED;
+        // Paper's isGlowing also observes potion glow, so consult it only before taking ownership.
+        if (player.isGlowing() || effect(player) != null || sessions.containsKey(player.getUniqueId())) {
+            return Result.EXTERNAL;
+        }
+        var session = new Session(player);
+        sessions.put(player.getUniqueId(), session);
+        return renew(session) ? Result.ENABLED : Result.UNAVAILABLE;
+    }
+
+    int residualTicks(Player player) {
+        var current = effect(player);
+        return matches(current) ? current.getDuration() : 0;
     }
 
     private boolean eligible(Player player) {
@@ -178,10 +181,6 @@ final class GlowGadget implements Listener, LobbyPlayerStateListener, ActivityMe
                 && !effect.isAmbient() && !effect.hasParticles() && !effect.hasIcon() && effect.getHiddenPotionEffect() == null;
     }
 
-    private void tell(Player player, String key) {
-        messages.send(player, tr("gadgets.glow." + key));
-    }
-
     void reset() {
         for (var session : List.copyOf(sessions.values())) {
             try {
@@ -199,7 +198,7 @@ final class GlowGadget implements Listener, LobbyPlayerStateListener, ActivityMe
 
     @EventHandler public void onJoin(PlayerJoinEvent event) {
         var previous = sessions.get(event.getPlayer().getUniqueId());
-        if (previous != null) forget(previous);
+        if (previous != null && previous.player != event.getPlayer()) forget(previous);
     }
     @EventHandler public void onMove(PlayerMoveEvent event) { reconcile(event.getPlayer()); }
     @EventHandler public void onQuit(PlayerQuitEvent event) { clear(event.getPlayer()); }

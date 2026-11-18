@@ -22,6 +22,7 @@ final class PlayerFileSchema {
             "name", "first-join", "last-join",
             "settings.scoreboard", "settings.sounds", "settings.private-messages",
             "settings.friend-requests", "settings.friend-presence-notifications", "settings.lobby-players-visible",
+            "settings.gadgets.size", "settings.gadgets.glow", "settings.gadgets.trail",
             "settings.visibility.mode", "settings.visibility.show-friends", "settings.visibility.show-staff",
             "settings.visibility.show-added-users", "settings.visibility.show-game-participants",
             "settings.visibility.added-players", "economy.coins", "social.ignored",

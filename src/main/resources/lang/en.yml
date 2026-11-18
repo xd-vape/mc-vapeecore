@@ -241,6 +241,9 @@ gadgets:
   title: "Gadgets"
   unavailable: "Not yet available"
   locked: "<vc_error>Locked</vc_error>"
+  preference:
+    saved-inactive: "<vc_muted>Saved, currently inactive</vc_muted>"
+    save-failed: "<vc_error>Your gadget preference could not be saved.</vc_error>"
   equipped-count: "<count>/<limit> equipped"
   description:
     size-changer: "Change your size."
@@ -263,6 +266,7 @@ gadgets:
     disabled: "Trails disabled."
     denied: "<vc_error>You cannot use trails.</vc_error>"
   glow:
+    clear-saved: "<accent>Right-click</accent> to turn off the saved preference."
     active: "Enabled"
     enable: "<accent>Left-click</accent> to enable."
     disable: "<accent>Left-click</accent> to disable."

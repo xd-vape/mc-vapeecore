@@ -241,6 +241,9 @@ gadgets:
   title: "Gadgets"
   unavailable: "Noch nicht verfügbar"
   locked: "<vc_error>Gesperrt</vc_error>"
+  preference:
+    saved-inactive: "<vc_muted>Gespeichert, derzeit inaktiv</vc_muted>"
+    save-failed: "<vc_error>Deine Gadget-Einstellung konnte nicht gespeichert werden.</vc_error>"
   equipped-count: "<count>/<limit> ausgerüstet"
   description:
     size-changer: "Ändere deine Größe."
@@ -263,6 +266,7 @@ gadgets:
     disabled: "Partikelspuren deaktiviert."
     denied: "<vc_error>Du kannst keine Partikelspuren verwenden.</vc_error>"
   glow:
+    clear-saved: "<accent>Rechtsklick</accent> zum Deaktivieren der gespeicherten Auswahl."
     active: "Aktiv"
     enable: "<accent>Linksklick</accent> zum Aktivieren."
     disable: "<accent>Linksklick</accent> zum Deaktivieren."
